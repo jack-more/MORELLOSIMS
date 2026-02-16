@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MORELLO SIMS: NBA + MLB</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:wght@400;600&family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-matte: #9E9E9E;
+            --card-dark: #0a0a0a;
+            --card-white: #FFFFFF;
+            --accent-nba: #00FF55;
+            --accent-mlb: #FFEA00;
+            --accent-atlas: #FF6B00;
+            --text-on-dark: #FFFFFF;
+            --text-on-light: #000000;
+            --text-muted-dark: rgba(255, 255, 255, 0.6);
+            --text-muted-light: rgba(0, 0, 0, 0.6);
+            --border-dark: #080808;
+            --border-light: rgba(255, 255, 255, 0.15);
+
+            --font-display: 'Anton', sans-serif;
+            --font-header: 'Bebas Neue', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-body: 'Inter', sans-serif;
+
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 40px;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: var(--bg-matte);
+            color: var(--text-on-dark);
+            font-family: var(--font-body);
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            width: 100%;
+            min-height: 100vh;
+
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+        .mono { font-family: var(--font-mono); }
+        .bebas { font-family: var(--font-header); }
+        .anton { font-family: var(--font-display); }
+        .uppercase { text-transform: uppercase; }
+
+
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: var(--bg-matte);
+            border-bottom: 1px solid var(--border-dark);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--spacing-md);
+        }
+        .brand-lockup {
+            display: flex;
+            align-items: baseline;
+            gap: var(--spacing-sm);
+        }
+        .logo {
+            font-size: 20px;
+            color: #000;
+            transform: skewX(-5deg);
+            letter-spacing: 2px;
+            line-height: 1;
+        }
+        .logo-tag {
+            font-size: 10px;
+            color: #000;
+            letter-spacing: 0.5px;
+        }
+        .status-indicators {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .status-group {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .status-emoji {
+            font-size: 12px;
+            line-height: 1;
+        }
+        .status-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            border: 1px solid rgba(0,0,0,0.3);
+        }
+        .status-dot.mlb-sim {
+            background: var(--accent-mlb);
+            animation-delay: 0s;
+        }
+        .status-dot.mlb-atlas {
+            background: var(--accent-atlas);
+            animation-delay: 0.3s;
+        }
+        .status-dot.nba-sim {
+            background: var(--accent-nba);
+            animation-delay: 0.6s;
+        }
+        .status-tooltip {
+            position: relative;
+            cursor: default;
+        }
+        .status-tooltip::after {
+            content: attr(data-label);
+            position: absolute;
+            top: 16px;
+            right: 0;
+            background: #000;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 8px;
+            padding: 2px 6px;
+            border-radius: 2px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .status-tooltip:hover::after {
+            opacity: 1;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+        .hero-subtitle {
+            margin-top: 70px;
+            margin-bottom: var(--spacing-md);
+            text-align: center;
+            font-size: 10px;
+            color: #000;
+            letter-spacing: 1px;
+            opacity: 0.8;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+        }
+        @media (min-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        .card {
+            position: relative;
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 380px;
+            transition: transform 0.2s ease;
+        }
+        .card:hover {
+            transform: scale(1.01);
+            z-index: 2;
+        }
+        .card-header {
+            margin-bottom: var(--spacing-lg);
+        }
+        .card-title {
+            font-size: 42px;
+            line-height: 0.9;
+            margin-bottom: var(--spacing-xs);
+        }
+        .card-meta {
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            line-height: 1.4;
+            max-width: 80%;
+        }
+        .last-updated {
+            position: absolute;
+            top: var(--spacing-lg);
+            right: var(--spacing-lg);
+            font-size: 8px;
+            letter-spacing: 1px;
+        }
+
+        .card-nba {
+            background: var(--card-dark);
+            border-left: 4px solid var(--accent-nba);
+            border-radius: 12px;
+            color: var(--text-on-dark);
+
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
+        }
+
+        .card-nba:hover {
+            box-shadow: 0 0 20px rgba(0, 255, 85, 0.15);
+            border-left-color: #4dff88;
+        }
+        .card-nba .card-meta { color: var(--accent-nba); }
+        .card-nba .last-updated { color: rgba(255,255,255,0.3); }
+
+        .card-mlb {
+            background: var(--card-white);
+            border: 2px solid var(--border-dark);
+            box-shadow: 6px 6px 0px var(--border-dark);
+            color: var(--text-on-light);
+            border-radius: 0;
+
+            background-image: radial-gradient(#000 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .card-mlb:hover {
+            box-shadow: 8px 8px 0px var(--accent-mlb);
+        }
+        .card-mlb .card-title {
+            transform: skewX(-5deg);
+        }
+        .card-mlb .card-meta { color: rgba(0,0,0,0.6); background: #fff; display: inline-block; padding-right: 4px; }
+        .card-mlb .last-updated { color: rgba(0,0,0,0.4); background: #fff; padding: 2px; }
+
+        .data-preview {
+            margin-top: auto;
+            margin-bottom: var(--spacing-lg);
+            font-size: 12px;
+            width: 100%;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid;
+        }
+        .card-nba .data-row { border-color: rgba(255,255,255,0.1); }
+        .card-mlb .data-row { border-color: rgba(0,0,0,0.1); background: rgba(255,255,255,0.9); padding: 8px 4px; }
+        .team-pair {
+            display: flex;
+            gap: 8px;
+            font-size: 16px;
+        }
+
+        .stat-val {
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        .grade-badge {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        .grade-a { background: var(--accent-nba); color: black; }
+        .grade-b { background: #FFD600; color: black; }
+        .grade-c { background: rgba(255,255,255,0.2); color: white; }
+
+        .mlb-badge {
+            font-size: 9px;
+            padding: 2px 6px;
+            border: 1px solid #000;
+            text-transform: uppercase;
+        }
+
+        .btn-action {
+            display: inline-block;
+            text-decoration: none;
+            padding: 12px 20px;
+            font-size: 12px;
+            transition: all 0.1s;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+        }
+        .btn-nba {
+            background: var(--accent-nba);
+            color: #000;
+            border-radius: 4px;
+            box-shadow: 4px 4px 0px rgba(0,0,0,0.5);
+        }
+        .btn-nba:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+        }
+        .btn-mlb {
+            background: var(--accent-mlb);
+            color: #000;
+            border: 2px solid #000;
+            box-shadow: 4px 4px 0px #000;
+            font-family: var(--font-display);
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn-mlb:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px #000;
+        }
+
+        .log-divider {
+            position: relative;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #000, transparent);
+            margin: var(--spacing-xl) 0;
+            text-align: center;
+            overflow: visible;
+        }
+        .log-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-matte);
+            padding: 0 10px;
+            font-size: 9px;
+            color: #000;
+            letter-spacing: 3px;
+            border: 1px solid #000;
+        }
+
+        .blog-feed {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            padding-bottom: 80px;
+        }
+        .blog-card {
+            background: var(--card-dark);
+            padding: 0;
+            display: block;
+            transition: transform 0.2s ease;
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .blog-card > summary {
+            padding: var(--spacing-lg);
+            cursor: pointer;
+            list-style: none;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+            position: relative;
+        }
+        .blog-card > summary::-webkit-details-marker { display: none; }
+        .blog-card > summary::marker { display: none; content: ''; }
+        .blog-card > summary::after {
+            content: '+';
+            position: absolute;
+            bottom: var(--spacing-md);
+            right: var(--spacing-lg);
+            font-family: var(--font-mono);
+            font-size: 18px;
+            color: rgba(255,255,255,0.25);
+            transition: transform 0.3s, color 0.3s;
+            line-height: 1;
+        }
+        .blog-card[open] > summary::after {
+            content: '\2212';
+            color: rgba(255,255,255,0.5);
+        }
+        .blog-card > summary:hover::after {
+            color: rgba(255,255,255,0.6);
+        }
+        .blog-card-body {
+            padding: 0 var(--spacing-lg) var(--spacing-lg) var(--spacing-lg);
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .blog-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent-nba), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .blog-card.post-mlb::before {
+            background: linear-gradient(90deg, var(--accent-mlb), var(--accent-atlas), transparent);
+        }
+        .blog-card.post-nba::before {
+            background: linear-gradient(90deg, var(--accent-nba), transparent);
+        }
+        .blog-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255,255,255,0.2);
+        }
+        .blog-card[open] {
+            border-color: rgba(255,255,255,0.15);
+        }
+        .blog-card[open]::before {
+            opacity: 1;
+        }
+
+        .blog-card:hover::before {
+            opacity: 1;
+        }
+        .blog-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .blog-date {
+            color: rgba(255,255,255,0.3);
+            font-size: 9px;
+        }
+        .blog-system-dots {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .blog-system-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .blog-system-dot.dot-mlb-sim { background: var(--accent-mlb); }
+        .blog-system-dot.dot-mlb-atlas { background: var(--accent-atlas); }
+        .blog-system-dot.dot-nba-sim { background: var(--accent-nba); }
+        .blog-title {
+            color: #FFF;
+            font-size: 24px;
+            line-height: 1.1;
+            margin-bottom: var(--spacing-sm);
+        }
+        .blog-preview {
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: var(--spacing-md);
+        }
+        .blog-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .tag {
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #FFF;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: background 0.2s;
+        }
+        .tag:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #FFF;
+        }
+
+        /* System diagram styles */
+        .system-diagram {
+            width: 100%;
+            margin: var(--spacing-md) 0;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .system-diagram svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .diagram-label {
+            font-size: 9px;
+            color: rgba(255,255,255,0.3);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .blog-section-header {
+            font-size: 16px;
+            color: #FFF;
+            margin: var(--spacing-lg) 0 var(--spacing-sm) 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .blog-body-text {
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+            line-height: 1.7;
+            margin-bottom: var(--spacing-md);
+        }
+        .blog-body-text strong {
+            color: rgba(255,255,255,0.9);
+        }
+        .blog-body-text code {
+            background: rgba(255,255,255,0.08);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-nba);
+        }
+        .blog-body-text.mlb code {
+            color: var(--accent-mlb);
+        }
+
+        .pipeline-step {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding: 10px;
+            background: rgba(255,255,255,0.03);
+            border-left: 2px solid rgba(255,255,255,0.1);
+        }
+        .pipeline-step .step-num {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-nba);
+            min-width: 24px;
+            font-weight: bold;
+        }
+        .pipeline-step.mlb .step-num {
+            color: var(--accent-mlb);
+        }
+        .pipeline-step .step-text {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            line-height: 1.5;
+        }
+        .pipeline-step .step-text strong {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .flowchart-block {
+            border: 1px dashed rgba(255,255,255,0.2);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 10px;
+            color: rgba(255,255,255,0.3);
+            font-size: 10px;
+        }
+
+        footer {
+            background: #080808;
+            padding: 40px var(--spacing-md);
+            margin-top: var(--spacing-xl);
+            color: #FFF;
+            border-top: 2px solid #000;
+        }
+        .footer-content {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .footer-links {
+            display: flex;
+            gap: 20px;
+        }
+        .footer-links a {
+            color: rgba(255,255,255,0.5);
+            text-decoration: none;
+            font-size: 10px;
+        }
+
+        .footer-links a:hover {
+            color: var(--accent-nba);
+            text-decoration: underline;
+        }
+        .barcode {
+            height: 30px;
+            width: 140px;
+            background-image: linear-gradient(90deg,
+                #fff 2px, transparent 2px,
+                transparent 4px, #fff 4px,
+                #fff 6px, transparent 6px,
+                transparent 7px, #fff 7px,
+                #fff 12px, transparent 12px,
+                transparent 14px, #fff 14px,
+                #fff 18px, transparent 18px,
+                transparent 19px, #fff 19px,
+                #fff 24px, transparent 24px
+            );
+            opacity: 0.4;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand-lockup">
+            <div class="logo anton">MORELLO SIMS</div>
+            <div class="logo-tag mono">NBA + MLB</div>
+        </div>
+        <div class="status-indicators">
+            <div class="status-group">
+                <span class="status-emoji">&#9918;</span>
+                <div class="status-tooltip" data-label="MLB SIM">
+                    <div class="status-dot mlb-sim"></div>
+                </div>
+                <div class="status-tooltip" data-label="MLB ATLAS">
+                    <div class="status-dot mlb-atlas"></div>
+                </div>
+            </div>
+            <div class="status-group">
+                <span class="status-emoji">&#127936;</span>
+                <div class="status-tooltip" data-label="NBA SIM">
+                    <div class="status-dot nba-sim"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+    <div class="container">
+        <div class="hero-subtitle mono">
+            sports simulation &times; design &times; methodology
+        </div>
+
+        <div class="dashboard-grid">
+
+            <article class="card card-nba">
+                <div class="last-updated mono">UPDATED: FEB 16</div>
+                <div class="card-header">
+                    <h2 class="card-title bebas">NBA SIM</h2>
+                    <p class="card-meta mono">DAILY MATCHUP SIMULATIONS &times; PLAYER PROPS &times; SCHEME ANALYSIS</p>
+                </div>
+                <div class="data-preview mono">
+                    <div class="data-row">
+                        <div class="team-pair bebas">
+                            <span>LAL</span> <span style="color:var(--accent-nba)">@</span> <span>GSW</span>
+                        </div>
+                        <div class="stat-val">O/U 234.5</div>
+                        <div class="grade-badge grade-a">A</div>
+                    </div>
+                    <div class="data-row">
+                        <div class="team-pair bebas">
+                            <span>BOS</span> <span style="color:var(--accent-nba)">@</span> <span>MIA</span>
+                        </div>
+                        <div class="stat-val">BOS -4.5</div>
+                        <div class="grade-badge grade-b">B</div>
+                    </div>
+                    <div class="data-row" style="border-bottom:none;">
+                        <div class="team-pair bebas">
+                            <span>PHX</span> <span style="color:var(--accent-nba)">@</span> <span>DAL</span>
+                        </div>
+                        <div class="stat-val">PHX ML</div>
+                        <div class="grade-badge grade-c">C</div>
+                    </div>
+                </div>
+                <a href="https://jack-more.github.io/nbasim/" class="btn-action btn-nba mono">OPEN DASHBOARD &rarr;</a>
+            </article>
+
+            <article class="card card-mlb">
+                <div class="last-updated mono">UPDATED: FEB 16</div>
+                <div class="card-header">
+                    <h2 class="card-title anton">MLB SIM</h2>
+                    <p class="card-meta mono">PITCHING MATCHUPS &times; BATTING PROPS &times; SITUATIONAL EDGES</p>
+                </div>
+                <div class="data-preview mono">
+                    <div class="data-row">
+                        <div class="team-pair">
+                            <span style="font-weight:bold">NYY</span> vs <span style="font-weight:bold">BOS</span>
+                        </div>
+                        <div class="stat-val">Cole (R)</div>
+                        <div class="mlb-badge">EV+</div>
+                    </div>
+                    <div class="data-row">
+                        <div class="team-pair">
+                            <span style="font-weight:bold">LAD</span> vs <span style="font-weight:bold">SDP</span>
+                        </div>
+                        <div class="stat-val">Glasnow (R)</div>
+                        <div class="mlb-badge" style="background:#ddd">N/A</div>
+                    </div>
+                    <div class="data-row" style="border-bottom:none;">
+                        <div class="team-pair">
+                            <span style="font-weight:bold">ATL</span> vs <span style="font-weight:bold">PHI</span>
+                        </div>
+                        <div class="stat-val">Strider (R)</div>
+                        <div class="mlb-badge" style="background:var(--accent-mlb)">HOT</div>
+                    </div>
+                </div>
+                <a href="https://jack-more.github.io/MLB_PitcherChart/mlbsim.html" class="btn-action btn-mlb">OPEN DASHBOARD &rarr;</a>
+            </article>
+        </div>
+        <div class="log-divider">
+            <span class="log-label mono uppercase">DISPATCH_LOG</span>
+        </div>
+
+        <div class="blog-feed">
+
+            <!-- ═══════════════════════════════════════════════════ -->
+            <!-- BLOG POST 1: MLB SIM + ATLAS                      -->
+            <!-- ═══════════════════════════════════════════════════ -->
+            <details class="blog-card post-mlb" id="post-mlb-system">
+                <summary>
+                    <div class="blog-meta mono">
+                        <span class="blog-date">FEB 16, 2026</span>
+                        <div class="blog-system-dots">
+                            <div class="blog-system-dot dot-mlb-sim" title="MLB SIM"></div>
+                            <div class="blog-system-dot dot-mlb-atlas" title="MLB ATLAS"></div>
+                        </div>
+                    </div>
+                    <h3 class="blog-title bebas">BUILDING THE MLB PITCHER ARCHETYPE ENGINE: DATA DESIGN &amp; SYSTEM ARCHITECTURE</h3>
+                    <p class="blog-preview">
+                        A deep dive into how we designed the 8-step data pipeline that transforms raw Statcast pitch-level telemetry into a 3D galaxy of pitcher archetypes. From SV reclassification to K-Means clustering, hitter-vs-cluster matchup matrices, and the Three.js cosmos visualization.
+                    </p>
+                </summary>
+                <div class="blog-card-body">
+                <!-- MLB SYSTEM DIAGRAM: FULL PIPELINE -->
+                <div class="diagram-label mono">FIG. 01: MLB PIPELINE &mdash; END-TO-END DATA FLOW</div>
+                <div class="system-diagram">
+                    <svg viewBox="0 0 860 620" xmlns="http://www.w3.org/2000/svg" style="background:#0d0d0d">
+                        <defs>
+                            <marker id="mlb-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <polygon points="0 0, 8 3, 0 6" fill="#FFEA00"/>
+                            </marker>
+                            <marker id="atlas-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <polygon points="0 0, 8 3, 0 6" fill="#FF6B00"/>
+                            </marker>
+                            <linearGradient id="mlb-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#FFEA00" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="#FF6B00" stop-opacity="0.15"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Title -->
+                        <text x="430" y="28" fill="#FFEA00" font-family="monospace" font-size="11" text-anchor="middle" letter-spacing="3">MLB PITCHER ARCHETYPE PIPELINE</text>
+                        <line x1="100" y1="38" x2="760" y2="38" stroke="#333" stroke-width="1"/>
+
+                        <!-- LAYER 1: External Data Sources -->
+                        <text x="30" y="68" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">LAYER 1: INGESTION</text>
+
+                        <rect x="30" y="78" width="160" height="50" rx="3" fill="none" stroke="#FFEA00" stroke-width="1.5"/>
+                        <text x="110" y="99" fill="#FFEA00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">STATCAST API</text>
+                        <text x="110" y="118" fill="#999" font-family="monospace" font-size="8" text-anchor="middle">pybaseball &bull; pitch-level</text>
+
+                        <rect x="210" y="78" width="160" height="50" rx="3" fill="none" stroke="#FF6B00" stroke-width="1.5"/>
+                        <text x="290" y="99" fill="#FF6B00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">BASEBALL SAVANT</text>
+                        <text x="290" y="118" fill="#999" font-family="monospace" font-size="8" text-anchor="middle">2015-2026 &bull; ~700K/yr</text>
+
+                        <rect x="390" y="78" width="160" height="50" rx="3" fill="none" stroke="#888" stroke-width="1"/>
+                        <text x="470" y="99" fill="#ccc" font-family="monospace" font-size="10" text-anchor="middle">ROSTER DATA</text>
+                        <text x="470" y="118" fill="#999" font-family="monospace" font-size="8" text-anchor="middle">Teams, Rosters, WBC</text>
+
+                        <!-- Arrow down from sources -->
+                        <line x1="190" y1="128" x2="190" y2="158" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+
+                        <!-- Storage: Parquet -->
+                        <rect x="100" y="160" width="200" height="36" rx="3" fill="url(#mlb-grad)" stroke="#555" stroke-width="1"/>
+                        <text x="200" y="183" fill="#fff" font-family="monospace" font-size="10" text-anchor="middle">statcast_{year}.parquet</text>
+                        <text x="350" y="183" fill="#666" font-family="monospace" font-size="8">~150MB/season &bull; Snappy</text>
+
+                        <!-- LAYER 2: Feature Engineering -->
+                        <line x1="200" y1="196" x2="200" y2="218" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+                        <text x="30" y="236" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">LAYER 2: FEATURE ENGINEERING</text>
+
+                        <!-- Step boxes in feature engineering -->
+                        <rect x="30" y="248" width="125" height="62" rx="3" fill="rgba(255,234,0,0.06)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="92" y="264" fill="#FFEA00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">01 FETCH</text>
+                        <text x="92" y="278" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Month-chunked pulls</text>
+                        <text x="92" y="290" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Retry w/ backoff</text>
+                        <text x="92" y="302" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">59 columns kept</text>
+
+                        <rect x="165" y="248" width="125" height="62" rx="3" fill="rgba(255,234,0,0.06)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="227" y="264" fill="#FFEA00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">02 ROLES</text>
+                        <text x="227" y="278" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">SP/RP classification</text>
+                        <text x="227" y="290" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Games started ratio</text>
+                        <text x="227" y="302" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Binary: is_sp</text>
+
+                        <rect x="300" y="248" width="125" height="62" rx="3" fill="rgba(255,234,0,0.06)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="362" y="264" fill="#FFEA00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">03 FEATURES</text>
+                        <text x="362" y="278" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Pitch mix (10 types)</text>
+                        <text x="362" y="290" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Velo, spin, whiff</text>
+                        <text x="362" y="302" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">SV reclassification</text>
+
+                        <rect x="435" y="248" width="125" height="62" rx="3" fill="rgba(255,234,0,0.06)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="497" y="264" fill="#FFEA00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">ZONE LOC</text>
+                        <text x="497" y="278" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Same/opp side splits</text>
+                        <text x="497" y="290" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">9-quad entropy</text>
+                        <text x="497" y="302" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">13 zone features</text>
+
+                        <!-- Arrows between feature steps -->
+                        <line x1="155" y1="279" x2="165" y2="279" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+                        <line x1="290" y1="279" x2="300" y2="279" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+                        <line x1="425" y1="279" x2="435" y2="279" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+
+                        <!-- Feature vector output -->
+                        <line x1="300" y1="310" x2="300" y2="340" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+                        <rect x="150" y="342" width="340" height="30" rx="3" fill="rgba(255,234,0,0.1)" stroke="#FFEA00" stroke-width="1.5" stroke-dasharray="4,2"/>
+                        <text x="320" y="362" fill="#FFEA00" font-family="monospace" font-size="10" text-anchor="middle">PITCHER-SEASON FEATURE VECTOR (14D)</text>
+
+                        <!-- Feature vector details -->
+                        <text x="570" y="350" fill="#666" font-family="monospace" font-size="7">pct_FF, pct_SI, pct_FC, pct_SL,</text>
+                        <text x="570" y="360" fill="#666" font-family="monospace" font-size="7">pct_CH, pct_CU, pct_FS, pct_KC,</text>
+                        <text x="570" y="370" fill="#666" font-family="monospace" font-size="7">pct_ST, pct_KN, avg_velo_FF,</text>
+                        <text x="570" y="380" fill="#666" font-family="monospace" font-size="7">spin_overall, gb_rate, whiff_rate</text>
+
+                        <!-- LAYER 3: Clustering -->
+                        <line x1="320" y1="372" x2="320" y2="402" stroke="#FF6B00" stroke-width="1" marker-end="url(#atlas-arrow)"/>
+                        <text x="30" y="416" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">LAYER 3: CLUSTERING &amp; CLASSIFICATION</text>
+
+                        <rect x="30" y="428" width="180" height="70" rx="3" fill="rgba(255,107,0,0.08)" stroke="#FF6B00" stroke-width="1.5"/>
+                        <text x="120" y="446" fill="#FF6B00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">04 K-MEANS</text>
+                        <text x="120" y="460" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">RHP/LHP split clustering</text>
+                        <text x="120" y="472" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">StandardScaler &rarr; silhouette</text>
+                        <text x="120" y="484" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Min K=8 &bull; 3D PCA projection</text>
+                        <text x="120" y="494" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">X-offset: RHP +5 / LHP -5</text>
+
+                        <rect x="225" y="428" width="180" height="70" rx="3" fill="rgba(255,107,0,0.08)" stroke="#FF6B00" stroke-width="1.5"/>
+                        <text x="315" y="446" fill="#FF6B00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">05 NAMING</text>
+                        <text x="315" y="460" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Geometric medoid selection</text>
+                        <text x="315" y="472" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Rule-based trait scoring</text>
+                        <text x="315" y="484" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">17 archetype names</text>
+                        <text x="315" y="494" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Snake, Barnburner, Ghost...</text>
+
+                        <line x1="210" y1="463" x2="225" y2="463" stroke="#FF6B00" stroke-width="1" marker-end="url(#atlas-arrow)"/>
+
+                        <!-- LAYER 4: Matchup Analytics -->
+                        <rect x="420" y="428" width="200" height="70" rx="3" fill="rgba(255,234,0,0.06)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="520" y="446" fill="#FFEA00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">06-08 MATCHUPS</text>
+                        <text x="520" y="460" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Hitter vs Cluster (wOBA, K%, BB%)</text>
+                        <text x="520" y="472" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Hitter vs Pitcher (head-to-head)</text>
+                        <text x="520" y="484" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Hitter Timing Archetypes</text>
+                        <text x="520" y="494" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">PA-level + pitch-level agg</text>
+
+                        <line x1="405" y1="463" x2="420" y2="463" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+
+                        <!-- LAYER 5: Frontend Export -->
+                        <line x1="320" y1="498" x2="320" y2="528" stroke="#FF6B00" stroke-width="1" marker-end="url(#atlas-arrow)"/>
+                        <text x="30" y="546" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">LAYER 4: FRONTEND DELIVERY</text>
+
+                        <rect x="30" y="555" width="160" height="44" rx="3" fill="rgba(255,107,0,0.08)" stroke="#FF6B00" stroke-width="1"/>
+                        <text x="110" y="572" fill="#FF6B00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">COSMOS (ATLAS)</text>
+                        <text x="110" y="586" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Three.js &bull; 3D Galaxy View</text>
+                        <text x="110" y="596" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">clusters.json + pitcher_seasons.json</text>
+
+                        <rect x="210" y="555" width="160" height="44" rx="3" fill="rgba(255,234,0,0.08)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="290" y="572" fill="#FFEA00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">MLB SIM</text>
+                        <text x="290" y="586" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">React &bull; Matchup Dashboard</text>
+                        <text x="290" y="596" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">hitter_vs_cluster.json + batters.json</text>
+
+                        <rect x="390" y="555" width="160" height="44" rx="3" fill="rgba(255,255,255,0.03)" stroke="#555" stroke-width="1"/>
+                        <text x="470" y="572" fill="#ccc" font-family="monospace" font-size="9" text-anchor="middle">EXPORT ENGINE</text>
+                        <text x="470" y="586" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">export_frontend.py</text>
+                        <text x="470" y="596" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Vite build &rarr; GitHub Pages</text>
+
+                        <!-- Tech stack badges -->
+                        <rect x="620" y="428" width="70" height="18" rx="9" fill="none" stroke="#FFEA00" stroke-width="0.5"/>
+                        <text x="655" y="441" fill="#FFEA00" font-family="monospace" font-size="8" text-anchor="middle">Python</text>
+                        <rect x="700" y="428" width="70" height="18" rx="9" fill="none" stroke="#FF6B00" stroke-width="0.5"/>
+                        <text x="735" y="441" fill="#FF6B00" font-family="monospace" font-size="8" text-anchor="middle">sklearn</text>
+                        <rect x="620" y="452" width="70" height="18" rx="9" fill="none" stroke="#888" stroke-width="0.5"/>
+                        <text x="655" y="465" fill="#aaa" font-family="monospace" font-size="8" text-anchor="middle">pandas</text>
+                        <rect x="700" y="452" width="70" height="18" rx="9" fill="none" stroke="#888" stroke-width="0.5"/>
+                        <text x="735" y="465" fill="#aaa" font-family="monospace" font-size="8" text-anchor="middle">React</text>
+                        <rect x="620" y="476" width="70" height="18" rx="9" fill="none" stroke="#888" stroke-width="0.5"/>
+                        <text x="655" y="489" fill="#aaa" font-family="monospace" font-size="8" text-anchor="middle">Three.js</text>
+                        <rect x="700" y="476" width="70" height="18" rx="9" fill="none" stroke="#888" stroke-width="0.5"/>
+                        <text x="735" y="489" fill="#aaa" font-family="monospace" font-size="8" text-anchor="middle">Parquet</text>
+                    </svg>
+                </div>
+
+                <h4 class="blog-section-header bebas">THE 8-STEP PIPELINE</h4>
+                <p class="blog-body-text mlb">
+                    The MLB system is an <strong>8-step sequential pipeline</strong> built in Python, orchestrated by <code>run_all.py</code>. Each step reads the previous step's output and writes its own artifacts. The entire pipeline can be resumed from any step with <code>--from N</code>.
+                </p>
+
+                <div class="pipeline-step mlb">
+                    <span class="step-num">01</span>
+                    <span class="step-text"><strong>Fetch Statcast</strong> &mdash; Pulls pitch-level telemetry from Baseball Savant via <code>pybaseball</code>. Data is chunked by month (Mar-Oct) with retry logic and polite 2s delays. Each season yields ~700K pitches across 59 columns including release speed, spin rate, pitch movement (pfx_x/pfx_z), plate location, and batted ball outcomes. Saved as compressed Parquet files (~150MB/season).</span>
+                </div>
+                <div class="pipeline-step mlb">
+                    <span class="step-num">02</span>
+                    <span class="step-text"><strong>Classify SP/RP Roles</strong> &mdash; Determines whether each pitcher-season is a Starter or Reliever based on games-started ratio. Produces a binary <code>is_sp</code> flag used downstream for role-aware archetype naming.</span>
+                </div>
+                <div class="pipeline-step mlb">
+                    <span class="step-num">03</span>
+                    <span class="step-text"><strong>Feature Engineering</strong> &mdash; The heaviest step. Aggregates pitch-level data into pitcher-season feature vectors. Computes: <strong>pitch mix usage rates</strong> (10 types), <strong>SV reclassification</strong> (SV pitches mapped to CU/SL/ST per pitcher based on velocity and vertical break), spin rates, arm angle (derived from release point geometry), whiff rate, fastball velocity, groundball rate, zone rate, pitch movement vectors, and a <strong>13-feature zone location layer</strong> with same-side/opposite-side splits, platoon shifts, and Shannon entropy of 9-quadrant distributions.</span>
+                </div>
+                <div class="pipeline-step mlb">
+                    <span class="step-num">04</span>
+                    <span class="step-text"><strong>K-Means Clustering</strong> &mdash; Pitchers are split by handedness (RHP/LHP) and clustered independently. Features are StandardScaled, then K-Means is run across K=2-15 with silhouette score optimization (minimum K=8 enforced for meaningful granularity). Each hand produces ~8-12 clusters. A 3D PCA projection is computed for the Atlas galaxy view, with RHP offset +5 on the X axis and LHP offset -5 to create visual separation.</span>
+                </div>
+                <div class="pipeline-step mlb">
+                    <span class="step-num">05</span>
+                    <span class="step-text"><strong>Archetype Naming</strong> &mdash; Each cluster's geometric medoid (the real pitcher minimizing sum of distances to all cluster members) is identified. A rule-based trait scorer examines the medoid's pitch mix, velocity, spin, and outcomes to assign one of 17 archetype names: Snake, Barnburner, Ghost, Earthworm, Swordfighter, Kitchen Sink, and more. Each archetype gets a consistent color and emoji for the frontend.</span>
+                </div>
+                <div class="pipeline-step mlb">
+                    <span class="step-num">06</span>
+                    <span class="step-text"><strong>Hitter vs Cluster</strong> &mdash; Every pitch is tagged with its pitcher's cluster ID. Plate appearance outcomes are aggregated per batter &times; cluster &times; year &times; batter-side, producing wOBA, BA, SLG, K%, BB%, and whiff% for each matchup combination.</span>
+                </div>
+                <div class="pipeline-step mlb">
+                    <span class="step-num">07</span>
+                    <span class="step-text"><strong>Hitter vs Pitcher</strong> &mdash; Direct head-to-head stats between individual batters and pitchers, providing granular matchup data beyond the cluster-level aggregations.</span>
+                </div>
+                <div class="pipeline-step mlb">
+                    <span class="step-num">08</span>
+                    <span class="step-text"><strong>Hitter Timing Archetypes</strong> &mdash; Classifies hitters by their timing and approach patterns against different pitch types and velocities, adding another dimension to the matchup analysis.</span>
+                </div>
+
+                <!-- MLB ATLAS DIAGRAM -->
+                <div class="diagram-label mono" style="margin-top:24px">FIG. 02: COSMOS ATLAS &mdash; 3D VISUALIZATION ARCHITECTURE</div>
+                <div class="system-diagram">
+                    <svg viewBox="0 0 860 380" xmlns="http://www.w3.org/2000/svg" style="background:#0d0d0d">
+                        <text x="430" y="28" fill="#FF6B00" font-family="monospace" font-size="11" text-anchor="middle" letter-spacing="3">COSMOS ATLAS &mdash; 3D PITCHER GALAXY</text>
+                        <line x1="100" y1="38" x2="760" y2="38" stroke="#333" stroke-width="1"/>
+
+                        <!-- Data Layer -->
+                        <rect x="30" y="55" width="180" height="55" rx="3" fill="rgba(255,107,0,0.08)" stroke="#FF6B00" stroke-width="1"/>
+                        <text x="120" y="73" fill="#FF6B00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">clusters.json</text>
+                        <text x="120" y="86" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Archetype profiles</text>
+                        <text x="120" y="97" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Medoid PCA positions</text>
+                        <text x="120" y="106" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Color, emoji, traits</text>
+
+                        <rect x="230" y="55" width="180" height="55" rx="3" fill="rgba(255,107,0,0.08)" stroke="#FF6B00" stroke-width="1"/>
+                        <text x="320" y="73" fill="#FF6B00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">pitcher_seasons.json</text>
+                        <text x="320" y="86" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">All pitcher-seasons (2015-26)</text>
+                        <text x="320" y="97" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">PCA x,y,z coordinates</text>
+                        <text x="320" y="106" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Velo, whiff, movement</text>
+
+                        <rect x="430" y="55" width="180" height="55" rx="3" fill="rgba(255,234,0,0.06)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="520" y="73" fill="#FFEA00" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">hitter_vs_cluster.json</text>
+                        <text x="520" y="86" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Batter performance by</text>
+                        <text x="520" y="97" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">archetype (wOBA, K%, SLG)</text>
+                        <text x="520" y="106" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Min 10 PA threshold</text>
+
+                        <!-- Processing Layer -->
+                        <line x1="320" y1="110" x2="320" y2="145" stroke="#FF6B00" stroke-width="1" marker-end="url(#atlas-arrow)"/>
+
+                        <rect x="130" y="148" width="400" height="40" rx="3" fill="rgba(255,107,0,0.06)" stroke="#FF6B00" stroke-width="1.5"/>
+                        <text x="330" y="166" fill="#FF6B00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">React App (Vite) &mdash; State Management</text>
+                        <text x="330" y="180" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Batter search &bull; Year filter &bull; Min PA &bull; Stat selector &bull; Cluster visibility toggles</text>
+
+                        <!-- Render Layer -->
+                        <line x1="230" y1="188" x2="230" y2="220" stroke="#FF6B00" stroke-width="1" marker-end="url(#atlas-arrow)"/>
+                        <line x1="430" y1="188" x2="430" y2="220" stroke="#FFEA00" stroke-width="1" marker-end="url(#mlb-arrow)"/>
+
+                        <rect x="80" y="222" width="300" height="70" rx="3" fill="rgba(255,107,0,0.06)" stroke="#FF6B00" stroke-width="1.5"/>
+                        <text x="230" y="240" fill="#FF6B00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">GalaxyScene.jsx</text>
+                        <text x="230" y="254" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Three.js WebGL Canvas</text>
+                        <text x="230" y="266" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Pitcher dots &rarr; PCA (x,y,z) positions</text>
+                        <text x="230" y="278" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Archetype nebula clusters (color-coded)</text>
+                        <text x="230" y="290" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Batter lines connect to each cluster</text>
+
+                        <rect x="400" y="222" width="230" height="70" rx="3" fill="rgba(255,234,0,0.06)" stroke="#FFEA00" stroke-width="1"/>
+                        <text x="515" y="240" fill="#FFEA00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">StatPanel.jsx</text>
+                        <text x="515" y="254" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Matchup stat overlay</text>
+                        <text x="515" y="266" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Color gradient: red &rarr; green</text>
+                        <text x="515" y="278" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">by selected stat (wOBA, K%, etc.)</text>
+                        <text x="515" y="290" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Up to 5 batters simultaneously</text>
+
+                        <!-- Output -->
+                        <line x1="330" y1="292" x2="330" y2="325" stroke="#FF6B00" stroke-width="1" marker-end="url(#atlas-arrow)"/>
+                        <rect x="150" y="328" width="380" height="36" rx="3" fill="none" stroke="#FF6B00" stroke-width="1.5"/>
+                        <text x="340" y="346" fill="#FF6B00" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">GitHub Pages &mdash; cosmos.html</text>
+                        <text x="340" y="358" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Static deploy &bull; No server required &bull; All data baked into JSON</text>
+
+                        <!-- Legend -->
+                        <rect x="660" y="150" width="10" height="10" rx="2" fill="#FFEA00"/>
+                        <text x="676" y="159" fill="#FFEA00" font-family="monospace" font-size="8">MLB SIM</text>
+                        <rect x="660" y="168" width="10" height="10" rx="2" fill="#FF6B00"/>
+                        <text x="676" y="177" fill="#FF6B00" font-family="monospace" font-size="8">ATLAS</text>
+                    </svg>
+                </div>
+
+                <h4 class="blog-section-header bebas">KEY DESIGN DECISIONS</h4>
+                <p class="blog-body-text mlb">
+                    <strong>SV Reclassification:</strong> Statcast's "SV" (sweeper) classification is inconsistent across seasons. We built a per-pitcher mapping that examines career-average SV velocity and vertical break to reclassify each pitcher's SV as curveball (pfx_z &lt; -0.50), slider (speed &gt; 84 mph), or sweeper (everything else). This ensures clustering stability across the 2015-2026 dataset.
+                </p>
+                <p class="blog-body-text mlb">
+                    <strong>Separate RHP/LHP Clustering:</strong> Rather than clustering all pitchers together, we split by handedness first. This prevents the dominant handedness signal from overwhelming the pitch-mix features. Each hand gets its own StandardScaler, K-Means model, and PCA projection. The X-axis offset (+5/-5) in PCA space creates the visual "galaxy" separation in the Atlas view.
+                </p>
+                <p class="blog-body-text mlb">
+                    <strong>Medoid over Centroid:</strong> Archetype representatives are chosen as the geometric medoid (the real pitcher that minimizes total distance to all cluster members), not the mathematical centroid. This means every archetype profile references an actual pitcher's stats, not a phantom average that no real pitcher matches.
+                </p>
+                <p class="blog-body-text mlb">
+                    <strong>Zone Location Entropy:</strong> The 13-feature zone location layer captures not just where pitchers throw, but how predictable their patterns are. Shannon entropy across a 9-quadrant grid (3 lateral &times; 3 vertical) measures location unpredictability, and platoon shift features capture how much a pitcher adjusts against same-side vs opposite-side batters.
+                </p>
+
+                <div class="blog-tags mono">
+                    <span class="tag">METHODOLOGY</span>
+                    <span class="tag">MLB</span>
+                    <span class="tag">ATLAS</span>
+                    <span class="tag">DATA ARCHITECTURE</span>
+                    <span class="tag">DEVLOG</span>
+                </div>
+                </div>
+            </details>
+
+
+            <!-- ═══════════════════════════════════════════════════ -->
+            <!-- BLOG POST 2: NBA SIM                              -->
+            <!-- ═══════════════════════════════════════════════════ -->
+            <details class="blog-card post-nba" id="post-nba-system">
+                <summary>
+                    <div class="blog-meta mono">
+                        <span class="blog-date">FEB 16, 2026</span>
+                        <div class="blog-system-dots">
+                            <div class="blog-system-dot dot-nba-sim" title="NBA SIM"></div>
+                        </div>
+                    </div>
+                    <h3 class="blog-title bebas">NBA SIM: MULTI-LAYER PREDICTION ENGINE &mdash; FROM NBA API TO GAME PREDICTIONS</h3>
+                    <p class="blog-preview">
+                        How we built a 4-phase pipeline that ingests NBA player tracking data, classifies coaching schemes via percentile-rank play type analysis, clusters players into position-specific archetypes using weighted K-Means, computes multi-level synergy scores, and generates spread/total predictions against live betting lines.
+                    </p>
+                </summary>
+                <div class="blog-card-body">
+                <!-- NBA SYSTEM DIAGRAM: FULL PIPELINE -->
+                <div class="diagram-label mono">FIG. 03: NBA SIM &mdash; COMPLETE SYSTEM ARCHITECTURE</div>
+                <div class="system-diagram">
+                    <svg viewBox="0 0 860 720" xmlns="http://www.w3.org/2000/svg" style="background:#0d0d0d">
+                        <defs>
+                            <marker id="nba-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                                <polygon points="0 0, 8 3, 0 6" fill="#00FF55"/>
+                            </marker>
+                            <linearGradient id="nba-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#00FF55" stop-opacity="0.12"/>
+                                <stop offset="100%" stop-color="#00FF55" stop-opacity="0.03"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Title -->
+                        <text x="430" y="28" fill="#00FF55" font-family="monospace" font-size="11" text-anchor="middle" letter-spacing="3">NBA SIM &mdash; MULTI-LAYER PREDICTION ENGINE</text>
+                        <line x1="100" y1="38" x2="760" y2="38" stroke="#333" stroke-width="1"/>
+
+                        <!-- PHASE 1: COLLECT -->
+                        <text x="30" y="62" fill="#00FF55" font-family="monospace" font-size="9" letter-spacing="2" font-weight="bold">PHASE 1: COLLECT</text>
+
+                        <!-- Data sources -->
+                        <rect x="30" y="74" width="130" height="55" rx="3" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="95" y="92" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">nba_api</text>
+                        <text x="95" y="105" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Teams, Rosters</text>
+                        <text x="95" y="116" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Season Stats</text>
+                        <text x="95" y="125" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Rate limited: 2s delay</text>
+
+                        <rect x="175" y="74" width="130" height="55" rx="3" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="240" y="92" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">GAME DATA</text>
+                        <text x="240" y="105" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Scores, Box Scores</text>
+                        <text x="240" y="116" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">27 stat columns/game</text>
+                        <text x="240" y="125" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Per-game + advanced</text>
+
+                        <rect x="320" y="74" width="130" height="55" rx="3" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="385" y="92" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">LINEUPS</text>
+                        <text x="385" y="105" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">2-man through 5-man</text>
+                        <text x="385" y="116" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Net rating, possessions</text>
+                        <text x="385" y="125" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Min poss thresholds</text>
+
+                        <rect x="465" y="74" width="130" height="55" rx="3" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="530" y="92" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">PLAY TYPES</text>
+                        <text x="530" y="105" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">SynergyPlayTypes API</text>
+                        <text x="530" y="116" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">11 play types &times; Off/Def</text>
+                        <text x="530" y="125" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">PPP, freq%, TO%, FG%</text>
+
+                        <rect x="610" y="74" width="130" height="55" rx="3" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="675" y="92" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">ODDS API</text>
+                        <text x="675" y="105" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">the-odds-api.com</text>
+                        <text x="675" y="116" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Spreads + Totals</text>
+                        <text x="675" y="125" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Multi-book consensus</text>
+
+                        <!-- Database -->
+                        <line x1="385" y1="129" x2="385" y2="155" stroke="#00FF55" stroke-width="1" marker-end="url(#nba-arrow)"/>
+
+                        <rect x="180" y="158" width="420" height="40" rx="6" fill="url(#nba-grad)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="390" y="176" fill="#00FF55" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">SQLite Database &mdash; nba_sim.db</text>
+                        <text x="390" y="190" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">17 tables &bull; Teams, Players, Games, Box Scores, Lineups, Play Types, Odds, Predictions</text>
+
+                        <!-- Schema detail -->
+                        <text x="640" y="170" fill="#444" font-family="monospace" font-size="7">player_game_stats</text>
+                        <text x="640" y="180" fill="#444" font-family="monospace" font-size="7">lineup_stats (2-5 man)</text>
+                        <text x="640" y="190" fill="#444" font-family="monospace" font-size="7">team/player_playtypes</text>
+
+                        <!-- PHASE 2: ANALYZE -->
+                        <line x1="390" y1="198" x2="390" y2="228" stroke="#00FF55" stroke-width="1" marker-end="url(#nba-arrow)"/>
+                        <text x="30" y="245" fill="#00FF55" font-family="monospace" font-size="9" letter-spacing="2" font-weight="bold">PHASE 2: ANALYZE</text>
+
+                        <!-- Coaching Schemes -->
+                        <rect x="30" y="258" width="380" height="120" rx="3" fill="rgba(0,255,85,0.04)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="220" y="276" fill="#00FF55" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">COACHING SCHEME CLASSIFIER</text>
+
+                        <text x="50" y="296" fill="#ddd" font-family="monospace" font-size="8">OFFENSIVE SCHEMES</text>
+                        <text x="50" y="310" fill="#888" font-family="monospace" font-size="7">PnR-Heavy, ISO-Heavy, Motion</text>
+                        <text x="50" y="322" fill="#888" font-family="monospace" font-size="7">Run-and-Gun, Spot-Up, Post-Oriented</text>
+                        <text x="50" y="336" fill="#666" font-family="monospace" font-size="7">Scored via percentile rank weighting</text>
+                        <text x="50" y="348" fill="#666" font-family="monospace" font-size="7">+ Pace modifier (Fast/Mid/Slow)</text>
+
+                        <line x1="220" y1="292" x2="220" y2="368" stroke="#333" stroke-width="1" stroke-dasharray="2,2"/>
+
+                        <text x="240" y="296" fill="#ddd" font-family="monospace" font-size="8">DEFENSIVE SCHEMES</text>
+                        <text x="240" y="310" fill="#888" font-family="monospace" font-size="7">Switch-Everything, Drop-Coverage</text>
+                        <text x="240" y="322" fill="#888" font-family="monospace" font-size="7">Rim-Protect, Trans-Defense, Blitz</text>
+                        <text x="240" y="336" fill="#666" font-family="monospace" font-size="7">PPP inversion: low PPP = good D</text>
+                        <text x="240" y="348" fill="#666" font-family="monospace" font-size="7">+ Quality (Elite/Good/Avg/Poor)</text>
+
+                        <text x="50" y="368" fill="#555" font-family="monospace" font-size="7">Method: Team play-type freq/PPP pivoted &rarr; percentile-ranked across 30 teams &rarr; weighted scheme scoring</text>
+
+                        <!-- Player Archetypes -->
+                        <rect x="430" y="258" width="390" height="120" rx="3" fill="rgba(0,255,85,0.04)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="625" y="276" fill="#00FF55" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">PLAYER ARCHETYPE CLUSTERER</text>
+
+                        <text x="450" y="296" fill="#ddd" font-family="monospace" font-size="8">PER-POSITION K-MEANS</text>
+                        <text x="450" y="310" fill="#888" font-family="monospace" font-size="7">PG: Floor General, Scoring Guard,</text>
+                        <text x="450" y="322" fill="#888" font-family="monospace" font-size="7">     Combo Guard, Def. Specialist</text>
+                        <text x="450" y="336" fill="#888" font-family="monospace" font-size="7">C:  Rim Protector, Stretch 5,</text>
+                        <text x="450" y="348" fill="#888" font-family="monospace" font-size="7">     Traditional, Versatile Big</text>
+
+                        <text x="650" y="296" fill="#ddd" font-family="monospace" font-size="8">METHODOLOGY</text>
+                        <text x="650" y="310" fill="#888" font-family="monospace" font-size="7">Position-weighted features</text>
+                        <text x="650" y="322" fill="#888" font-family="monospace" font-size="7">StandardScaler &rarr; PCA (8D)</text>
+                        <text x="650" y="336" fill="#888" font-family="monospace" font-size="7">K=3-6 via silhouette</text>
+                        <text x="650" y="348" fill="#888" font-family="monospace" font-size="7">K=4 bias for richness</text>
+
+                        <text x="450" y="368" fill="#555" font-family="monospace" font-size="7">Labels: Hungarian algorithm matches cluster centroids to archetype profile templates (z-score direction vectors)</text>
+
+                        <!-- PHASE 3: SCORES -->
+                        <line x1="390" y1="378" x2="390" y2="408" stroke="#00FF55" stroke-width="1" marker-end="url(#nba-arrow)"/>
+                        <text x="30" y="425" fill="#00FF55" font-family="monospace" font-size="9" letter-spacing="2" font-weight="bold">PHASE 3: VALUE SCORES</text>
+
+                        <rect x="30" y="438" width="790" height="95" rx="3" fill="rgba(0,255,85,0.04)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="425" y="456" fill="#00FF55" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">COMPOSITE VALUE SCORE ENGINE</text>
+
+                        <!-- Synergy breakdown -->
+                        <rect x="50" y="465" width="100" height="56" rx="2" fill="rgba(0,255,85,0.08)" stroke="#00FF55" stroke-width="0.5"/>
+                        <text x="100" y="479" fill="#00FF55" font-family="monospace" font-size="8" text-anchor="middle" font-weight="bold">SOLO</text>
+                        <text x="100" y="491" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Individual impact</text>
+                        <text x="100" y="503" fill="#00FF55" font-family="monospace" font-size="8" text-anchor="middle">w = 0.21</text>
+                        <text x="100" y="515" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Prior: 500 min</text>
+
+                        <rect x="160" y="465" width="100" height="56" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="0.5"/>
+                        <text x="210" y="479" fill="#0f0" font-family="monospace" font-size="8" text-anchor="middle" font-weight="bold">2-MAN</text>
+                        <text x="210" y="491" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Pair synergy</text>
+                        <text x="210" y="503" fill="#0f0" font-family="monospace" font-size="8" text-anchor="middle">w = 0.196</text>
+                        <text x="210" y="515" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Prior: 30 poss</text>
+
+                        <rect x="270" y="465" width="100" height="56" rx="2" fill="rgba(0,255,85,0.05)" stroke="#00FF55" stroke-width="0.5"/>
+                        <text x="320" y="479" fill="#0d0" font-family="monospace" font-size="8" text-anchor="middle" font-weight="bold">3-MAN</text>
+                        <text x="320" y="491" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Trio combos</text>
+                        <text x="320" y="503" fill="#0d0" font-family="monospace" font-size="8" text-anchor="middle">w = 0.14</text>
+                        <text x="320" y="515" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Prior: 50 poss</text>
+
+                        <rect x="380" y="465" width="100" height="56" rx="2" fill="rgba(0,255,85,0.04)" stroke="#00FF55" stroke-width="0.5"/>
+                        <text x="430" y="479" fill="#0b0" font-family="monospace" font-size="8" text-anchor="middle" font-weight="bold">4-MAN</text>
+                        <text x="430" y="491" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Quad combos</text>
+                        <text x="430" y="503" fill="#0b0" font-family="monospace" font-size="8" text-anchor="middle">w = 0.091</text>
+                        <text x="430" y="515" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Prior: 75 poss</text>
+
+                        <rect x="490" y="465" width="100" height="56" rx="2" fill="rgba(0,255,85,0.03)" stroke="#00FF55" stroke-width="0.5"/>
+                        <text x="540" y="479" fill="#090" font-family="monospace" font-size="8" text-anchor="middle" font-weight="bold">5-MAN</text>
+                        <text x="540" y="491" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Full lineup</text>
+                        <text x="540" y="503" fill="#090" font-family="monospace" font-size="8" text-anchor="middle">w = 0.063</text>
+                        <text x="540" y="515" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Prior: 100 poss</text>
+
+                        <text x="615" y="479" fill="#555" font-family="monospace" font-size="7">Synergy total: 70%</text>
+                        <text x="615" y="493" fill="#555" font-family="monospace" font-size="7">Base value:    25%</text>
+                        <text x="615" y="507" fill="#555" font-family="monospace" font-size="7">Archetype fit:  5%</text>
+                        <text x="615" y="521" fill="#00FF55" font-family="monospace" font-size="7">Bayesian shrinkage priors</text>
+
+                        <!-- PHASE 4: PREDICT -->
+                        <line x1="390" y1="533" x2="390" y2="558" stroke="#00FF55" stroke-width="1" marker-end="url(#nba-arrow)"/>
+                        <text x="30" y="575" fill="#00FF55" font-family="monospace" font-size="9" letter-spacing="2" font-weight="bold">PHASE 4: PREDICT &amp; DISPLAY</text>
+
+                        <rect x="30" y="588" width="250" height="55" rx="3" fill="rgba(0,255,85,0.04)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="155" y="606" fill="#00FF55" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">PREDICTION ENGINE</text>
+                        <text x="155" y="620" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Feature matrix from value scores</text>
+                        <text x="155" y="632" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Spread + Total predictions</text>
+                        <text x="155" y="640" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Edge = predicted - market line</text>
+
+                        <line x1="280" y1="615" x2="310" y2="615" stroke="#00FF55" stroke-width="1" marker-end="url(#nba-arrow)"/>
+
+                        <rect x="310" y="588" width="250" height="55" rx="3" fill="rgba(0,255,85,0.04)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="435" y="606" fill="#00FF55" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">BACKTESTER</text>
+                        <text x="435" y="620" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Train on season N-1</text>
+                        <text x="435" y="632" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Test on season N</text>
+                        <text x="435" y="640" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Spread/total correct %</text>
+
+                        <line x1="560" y1="615" x2="590" y2="615" stroke="#00FF55" stroke-width="1" marker-end="url(#nba-arrow)"/>
+
+                        <rect x="590" y="588" width="230" height="55" rx="3" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="705" y="606" fill="#00FF55" font-family="monospace" font-size="10" text-anchor="middle" font-weight="bold">FRONTEND</text>
+                        <text x="705" y="620" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">generate_frontend.py</text>
+                        <text x="705" y="632" fill="#999" font-family="monospace" font-size="7" text-anchor="middle">Single-file HTML dashboard</text>
+                        <text x="705" y="640" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">GitHub Pages &bull; Live odds</text>
+
+                        <!-- Bottom: DB schema overview -->
+                        <line x1="390" y1="643" x2="390" y2="668" stroke="#333" stroke-width="1"/>
+                        <rect x="100" y="670" width="620" height="35" rx="3" fill="none" stroke="#333" stroke-width="1"/>
+                        <text x="410" y="688" fill="#555" font-family="monospace" font-size="8" text-anchor="middle">
+                            teams &rarr; players &rarr; roster_assignments &rarr; games &rarr; player_game_stats &rarr; lineup_stats &rarr; team_playtypes &rarr; coaching_profiles &rarr; player_archetypes &rarr; player_value_scores &rarr; predictions
+                        </text>
+                        <text x="410" y="700" fill="#444" font-family="monospace" font-size="7" text-anchor="middle">SQLite schema: 17 tables with foreign keys and indexed lookups</text>
+
+                        <!-- Tech stack -->
+                        <rect x="690" y="258" width="60" height="18" rx="9" fill="none" stroke="#00FF55" stroke-width="0.5"/>
+                        <text x="720" y="271" fill="#00FF55" font-family="monospace" font-size="8" text-anchor="middle">Python</text>
+                        <rect x="756" y="258" width="60" height="18" rx="9" fill="none" stroke="#00FF55" stroke-width="0.5"/>
+                        <text x="786" y="271" fill="#00FF55" font-family="monospace" font-size="8" text-anchor="middle">sklearn</text>
+                        <rect x="690" y="282" width="60" height="18" rx="9" fill="none" stroke="#888" stroke-width="0.5"/>
+                        <text x="720" y="295" fill="#aaa" font-family="monospace" font-size="8" text-anchor="middle">nba_api</text>
+                        <rect x="756" y="282" width="60" height="18" rx="9" fill="none" stroke="#888" stroke-width="0.5"/>
+                        <text x="786" y="295" fill="#aaa" font-family="monospace" font-size="8" text-anchor="middle">SQLite</text>
+                    </svg>
+                </div>
+
+                <h4 class="blog-section-header bebas">THE 4-PHASE ARCHITECTURE</h4>
+                <p class="blog-body-text">
+                    The NBA SIM operates as a <strong>4-phase CLI pipeline</strong> (<code>python main.py [collect|analyze|scores|predict|all]</code>). Each phase builds on the previous, with all data persisted to a 17-table SQLite database.
+                </p>
+
+                <div class="pipeline-step">
+                    <span class="step-num">P1</span>
+                    <span class="step-text"><strong>Collect</strong> &mdash; Six collectors run in sequence: <code>PlayerCollector</code> pulls teams, rosters, and season stats from <code>nba_api</code>. <code>GameCollector</code> fetches game results. <code>LineupCollector</code> pulls 2-through-5-man lineup combinations with net rating and possession counts (with minimum possession thresholds: 30 for 5-man, 50 for 4-man, 75 for 3-man, 100 for 2-man). <code>PlayTypeCollector</code> calls <code>SynergyPlayTypes</code> for all 11 play types in both offensive and defensive groupings. <code>BoxScoreCollector</code> ingests per-game player stats with 27 columns (points, rebounds, assists, plus advanced metrics like usage rate, true shooting, offensive/defensive rating, PIE). <code>OddsCollector</code> pulls live spreads and totals from The Odds API across multiple bookmakers.</span>
+                </div>
+                <div class="pipeline-step">
+                    <span class="step-num">P2</span>
+                    <span class="step-text"><strong>Analyze</strong> &mdash; Two parallel analysis engines. The <strong>Coaching Scheme Classifier</strong> builds per-team offensive and defensive profiles by pivoting play type frequencies and PPP values, computing percentile ranks across all 30 teams, then scoring each team against scheme templates (PnR-Heavy, ISO-Heavy, Motion, Run-and-Gun, Spot-Up Heavy, Post-Oriented for offense; Switch-Everything, Drop-Coverage, Rim-Protect, Trans-Defense, Blitz for defense). The <strong>Player Archetype Clusterer</strong> runs K-Means independently for each of the 5 position groups (PG, SG, SF, PF, C) using position-weighted features, StandardScaler normalization, PCA reduction to 8 components, silhouette-optimized K selection (range 3-6 with a K=4 bias when silhouette delta &lt; 0.05), and Hungarian algorithm label assignment that optimally matches cluster centroids to archetype profile templates defined as z-score direction vectors.</span>
+                </div>
+                <div class="pipeline-step">
+                    <span class="step-num">P3</span>
+                    <span class="step-text"><strong>Value Scores</strong> &mdash; The <strong>Composite Value Score</strong> for each player is a weighted blend of 6 components. <strong>Solo impact</strong> (21% weight) measures individual on-court effect. <strong>2-man synergy</strong> (19.6%) through <strong>5-man synergy</strong> (6.3%) capture how well a player performs in specific lineup combinations, with Bayesian shrinkage priors that pull small-sample estimates toward league average (prior strengths: 500 minutes for solo, 30-100 possessions for multi-man). <strong>Base value</strong> (25%) covers raw per-36 production. <strong>Archetype fit</strong> (5%) rewards players whose on-court tendencies match their team's coaching scheme. The synergy portion (70% total) is the core innovation.</span>
+                </div>
+                <div class="pipeline-step">
+                    <span class="step-num">P4</span>
+                    <span class="step-text"><strong>Predict</strong> &mdash; A <code>FeatureEngineer</code> builds training matrices from the value scores and team-level features. A <code>GamePredictor</code> trains models for spread and total predictions. A <code>ModelEvaluator</code> backtests by training on season N-1 and evaluating on season N, measuring spread/total accuracy. The <code>generate_frontend.py</code> script produces a self-contained HTML dashboard that fetches live odds, computes consensus lines across bookmakers, grades matchup edges (A/B/C), and displays today's games with full scheme and archetype context.</span>
+                </div>
+
+                <!-- NBA DATA SCHEMA DIAGRAM -->
+                <div class="diagram-label mono" style="margin-top:24px">FIG. 04: NBA SIM &mdash; DATABASE SCHEMA &amp; DATA RELATIONSHIPS</div>
+                <div class="system-diagram">
+                    <svg viewBox="0 0 860 420" xmlns="http://www.w3.org/2000/svg" style="background:#0d0d0d">
+                        <text x="430" y="28" fill="#00FF55" font-family="monospace" font-size="11" text-anchor="middle" letter-spacing="3">DATABASE SCHEMA &mdash; 17 TABLES</text>
+                        <line x1="100" y1="38" x2="760" y2="38" stroke="#333" stroke-width="1"/>
+
+                        <!-- Reference Tables -->
+                        <text x="30" y="62" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">REFERENCE</text>
+
+                        <rect x="30" y="70" width="120" height="45" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="90" y="87" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">teams</text>
+                        <text x="90" y="101" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">team_id PK</text>
+                        <text x="90" y="111" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">abbr, conf, div</text>
+
+                        <rect x="165" y="70" width="120" height="45" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="225" y="87" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">players</text>
+                        <text x="225" y="101" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">player_id PK</text>
+                        <text x="225" y="111" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">name, pos, ht, wt</text>
+
+                        <rect x="300" y="70" width="150" height="45" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="375" y="87" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">roster_assignments</text>
+                        <text x="375" y="101" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">player+team+season PK</text>
+                        <text x="375" y="111" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">jersey, position</text>
+
+                        <!-- Game Tables -->
+                        <text x="30" y="140" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">GAME DATA</text>
+
+                        <rect x="30" y="148" width="120" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="90" y="165" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">games</text>
+                        <text x="90" y="178" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">game_id PK</text>
+                        <text x="90" y="190" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">date, teams, scores</text>
+
+                        <rect x="165" y="148" width="155" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="242" y="165" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">player_game_stats</text>
+                        <text x="242" y="178" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">game+player PK</text>
+                        <text x="242" y="190" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">27 stat cols (pts,ast...pie)</text>
+
+                        <rect x="335" y="148" width="120" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="395" y="165" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">lineup_stats</text>
+                        <text x="395" y="178" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">lineup+season PK</text>
+                        <text x="395" y="190" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">2-5 man, net rtg, poss</text>
+
+                        <rect x="470" y="148" width="130" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="535" y="165" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">lineup_players</text>
+                        <text x="535" y="178" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">lineup+season+player</text>
+                        <text x="535" y="190" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Junction table</text>
+
+                        <!-- Play Type + Season Tables -->
+                        <text x="30" y="222" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">PLAY TYPES &amp; SEASON STATS</text>
+
+                        <rect x="30" y="230" width="135" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="97" y="247" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">team_playtypes</text>
+                        <text x="97" y="260" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">team+season+type PK</text>
+                        <text x="97" y="272" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">freq%, PPP, eFG%, TO%</text>
+
+                        <rect x="180" y="230" width="140" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="250" y="247" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">player_playtypes</text>
+                        <text x="250" y="260" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">player+season+type PK</text>
+                        <text x="250" y="272" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">Off/Def, freq%, PPP</text>
+
+                        <rect x="335" y="230" width="145" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="407" y="247" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">player_season_stats</text>
+                        <text x="407" y="260" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">player+season PK</text>
+                        <text x="407" y="272" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">30 cols: per-game + per36</text>
+
+                        <rect x="495" y="230" width="135" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="562" y="247" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">team_season_stats</text>
+                        <text x="562" y="260" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">team+season PK</text>
+                        <text x="562" y="272" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">pace, ratings, rates</text>
+
+                        <!-- Derived Tables -->
+                        <text x="30" y="305" fill="#666" font-family="monospace" font-size="9" letter-spacing="1">DERIVED &amp; OUTPUT</text>
+
+                        <rect x="30" y="313" width="135" height="50" rx="2" fill="rgba(0,255,85,0.08)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="97" y="330" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">coaching_profiles</text>
+                        <text x="97" y="343" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">off/def scheme labels</text>
+                        <text x="97" y="355" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">pace, top 3 playstyles</text>
+
+                        <rect x="180" y="313" width="140" height="50" rx="2" fill="rgba(0,255,85,0.08)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="250" y="330" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">player_archetypes</text>
+                        <text x="250" y="343" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">archetype_label</text>
+                        <text x="250" y="355" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">confidence, feature vec</text>
+
+                        <rect x="335" y="313" width="145" height="50" rx="2" fill="rgba(0,255,85,0.08)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="407" y="330" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">player_value_scores</text>
+                        <text x="407" y="343" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">composite_value</text>
+                        <text x="407" y="355" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">solo + 2/3/4/5-man synergy</text>
+
+                        <rect x="495" y="313" width="120" height="50" rx="2" fill="rgba(0,255,85,0.08)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="555" y="330" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">pair_synergy</text>
+                        <text x="555" y="343" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">player_a + player_b</text>
+                        <text x="555" y="355" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">net rtg, archetypes</text>
+
+                        <rect x="630" y="313" width="110" height="50" rx="2" fill="rgba(0,255,85,0.08)" stroke="#00FF55" stroke-width="1.5"/>
+                        <text x="685" y="330" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">predictions</text>
+                        <text x="685" y="343" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">spread, total</text>
+                        <text x="685" y="355" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">edge, confidence</text>
+
+                        <!-- Betting Lines -->
+                        <rect x="630" y="148" width="140" height="50" rx="2" fill="rgba(0,255,85,0.06)" stroke="#00FF55" stroke-width="1"/>
+                        <text x="700" y="165" fill="#00FF55" font-family="monospace" font-size="9" text-anchor="middle" font-weight="bold">betting_lines</text>
+                        <text x="700" y="178" fill="#888" font-family="monospace" font-size="7" text-anchor="middle">game+book+market PK</text>
+                        <text x="700" y="190" fill="#666" font-family="monospace" font-size="7" text-anchor="middle">price, point, timestamp</text>
+
+                        <!-- Relationship arrows -->
+                        <line x1="90" y1="115" x2="90" y2="148" stroke="#333" stroke-width="1" marker-end="url(#nba-arrow)"/>
+                        <line x1="225" y1="115" x2="225" y2="148" stroke="#333" stroke-width="1"/>
+                        <line x1="242" y1="198" x2="242" y2="230" stroke="#333" stroke-width="1"/>
+                        <line x1="97" y1="280" x2="97" y2="313" stroke="#00FF55" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#nba-arrow)"/>
+                        <line x1="250" y1="280" x2="250" y2="313" stroke="#00FF55" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#nba-arrow)"/>
+                        <line x1="407" y1="280" x2="407" y2="313" stroke="#00FF55" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#nba-arrow)"/>
+
+                        <!-- Flow label -->
+                        <text x="430" y="398" fill="#333" font-family="monospace" font-size="8" text-anchor="middle">collect &rarr; analyze &rarr; scores &rarr; predict &bull; Each phase reads from and writes to the same SQLite database</text>
+                        <text x="430" y="412" fill="#444" font-family="monospace" font-size="7" text-anchor="middle">Dashed lines = derived tables (output of analysis phases)</text>
+                    </svg>
+                </div>
+
+                <h4 class="blog-section-header bebas">KEY DESIGN DECISIONS</h4>
+                <p class="blog-body-text">
+                    <strong>Percentile-Rank Scheme Classification:</strong> Instead of using raw play type frequencies, we rank each team's values against all 30 teams to compute percentile scores (0-1). This ensures meaningful differentiation regardless of season-level shifts in play style trends. A team running 18% isolation isn't inherently "ISO-Heavy" unless they're in the top percentile of the league.
+                </p>
+                <p class="blog-body-text">
+                    <strong>Position-Weighted Clustering:</strong> Not all stats matter equally for every position. Centers are weighted toward blocks and rebounds; guards toward assists and three-point attempts. The <code>POSITION_FEATURE_WEIGHTS</code> dictionary applies multipliers before StandardScaler normalization, ensuring PCA captures position-relevant variance. The K=4 bias (accepting K=4 over K=3 when silhouette delta &lt; 0.05) prevents oversimplification.
+                </p>
+                <p class="blog-body-text">
+                    <strong>Hungarian Algorithm for Label Assignment:</strong> Each archetype label (e.g., "Floor General", "Rim Protector") is defined as a z-score direction vector. After clustering, we build a cost matrix scoring how well each cluster centroid matches each label template, then use the Hungarian algorithm for optimal bipartite matching. This guarantees the most appropriate label assignment without manual intervention.
+                </p>
+                <p class="blog-body-text">
+                    <strong>Bayesian Shrinkage in Synergy Scores:</strong> Small-sample lineup data is unreliable. A 5-man lineup with 35 possessions and +20 net rating shouldn't dominate a player's value. We apply Bayesian priors that shrink estimates toward league average, with prior strength proportional to data granularity (100 possessions for 5-man, 30 for 2-man). This balances signal extraction with noise reduction.
+                </p>
+
+                <div class="blog-tags mono">
+                    <span class="tag">METHODOLOGY</span>
+                    <span class="tag">NBA</span>
+                    <span class="tag">DATA ARCHITECTURE</span>
+                    <span class="tag">DEVLOG</span>
+                </div>
+                </div>
+            </details>
+
+
+            <!-- ═══════════════════════════════════════════════════ -->
+            <!-- EXISTING BLOG POSTS                               -->
+            <!-- ═══════════════════════════════════════════════════ -->
+            <details class="blog-card">
+                <summary>
+                    <div class="blog-meta mono">
+                        <span class="blog-date">FEB 14, 2024</span>
+                        <div class="blog-system-dots">
+                            <div class="blog-system-dot dot-nba-sim" title="NBA SIM"></div>
+                        </div>
+                    </div>
+                    <h3 class="blog-title bebas">HOW THE SCHEME DETECTION MODEL WORKS</h3>
+                    <p class="blog-preview">
+                        We've overhauled the defensive classification engine. Instead of relying on raw box scores, we now track possession-based player tracking data to identify zone tendencies in real-time.
+                    </p>
+                </summary>
+                <div class="blog-card-body">
+                    <div class="flowchart-block mono">
+                        [ FIG. 01: DATA INGESTION PIPELINE ]
+                    </div>
+                    <div class="blog-tags mono">
+                        <span class="tag">METHODOLOGY</span>
+                        <span class="tag">NBA</span>
+                        <span class="tag">DEVLOG</span>
+                    </div>
+                </div>
+            </details>
+            <details class="blog-card">
+                <summary>
+                    <div class="blog-meta mono">
+                        <span class="blog-date">FEB 10, 2024</span>
+                    </div>
+                    <h3 class="blog-title bebas">WHY TRADITIONAL PROPS MODELS ARE BROKEN</h3>
+                    <p class="blog-preview">
+                        Most public models fail to account for rotation changes due to mid-game injuries. Our new variance calculator adjusts confidence intervals dynamically based on live roster updates.
+                    </p>
+                </summary>
+                <div class="blog-card-body">
+                    <div class="blog-tags mono">
+                        <span class="tag">METHODOLOGY</span>
+                        <span class="tag">ANALYSIS</span>
+                    </div>
+                </div>
+            </details>
+            <details class="blog-card">
+                <summary>
+                    <div class="blog-meta mono">
+                        <span class="blog-date">FEB 02, 2024</span>
+                    </div>
+                    <h3 class="blog-title bebas">DESIGN SYSTEM V2: MOVING FROM GREY TO BLACK</h3>
+                    <p class="blog-preview">
+                        A look into the UI refactor. We needed higher contrast ratios for the simulation terminal. The new dark mode isn't just aesthetic&mdash;it reduces eye strain during long trading sessions.
+                    </p>
+                </summary>
+                <div class="blog-card-body">
+                    <div class="blog-tags mono">
+                        <span class="tag">DESIGN</span>
+                        <span class="tag">UI/UX</span>
+                    </div>
+                </div>
+            </details>
+            <details class="blog-card">
+                <summary>
+                    <div class="blog-meta mono">
+                        <span class="blog-date">JAN 28, 2024</span>
+                        <div class="blog-system-dots">
+                            <div class="blog-system-dot dot-mlb-sim" title="MLB SIM"></div>
+                        </div>
+                    </div>
+                    <h3 class="blog-title bebas">ADDING PITCHER HANDEDNESS SPLITS TO MLB SIM</h3>
+                    <p class="blog-preview">
+                        Left-handed batters against slider-heavy RHP at Coors Field. We break down the specific edge cases where our previous model was underpricing the over.
+                    </p>
+                </summary>
+                <div class="blog-card-body">
+                    <div class="blog-tags mono">
+                        <span class="tag">MLB</span>
+                        <span class="tag">UPDATE</span>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+    <footer>
+        <div class="footer-content">
+            <div class="brand-lockup">
+                <div class="logo anton" style="color:#FFF; font-size:16px;">MORELLO SIMS</div>
+            </div>
+            <div class="footer-links mono uppercase">
+                <a href="#">Twitter</a>
+                <a href="#">About</a>
+                <a href="#">Contact</a>
+            </div>
+            <div class="barcode"></div>
+            <div class="mono" style="font-size: 8px; color: #444;">
+                &copy; 2026 MORELLO ANALYTICS. ALL RIGHTS RESERVED. <br>
+                SYSTEM STATUS: OPERATIONAL
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
