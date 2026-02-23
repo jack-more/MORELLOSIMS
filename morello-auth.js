@@ -17,14 +17,14 @@
   };
 
   // ── Stripe Config ──
-  // TODO: Replace with your Stripe publishable key + price IDs
+  // ── Stripe Config ──
   const STRIPE_CONFIG = {
-    publishableKey: 'pk_test_YOUR_STRIPE_KEY',
+    publishableKey: 'pk_test_YOUR_STRIPE_KEY', // TODO: Replace with your Stripe publishable key
     prices: {
-      pickmaker_nba: 'price_NBA_MONTHLY',
-      pickmaker_mlb: 'price_MLB_MONTHLY',
-      pickmaker_dual: 'price_DUAL_MONTHLY',
-      all_access: 'price_ALL_ACCESS_ONETIME'
+      pickmaker_nba: 'price_1T3rqNA9KGX7mrlmCQi4QcnU',
+      pickmaker_mlb: 'price_1T3rqqA9KGX7mrlmHncjyPlp',
+      pickmaker_dual: 'price_1T3rvjA9KGX7mrlmxJI5V00r',
+      all_access: 'price_1T3s0qA9KGX7mrlmA8KljtHG'
     },
     // Cloud Function endpoint for creating checkout sessions
     checkoutUrl: 'https://us-central1-morello-sims.cloudfunctions.net/createCheckoutSession'

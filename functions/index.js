@@ -12,12 +12,11 @@ const stripe = new Stripe(functions.config().stripe?.secret || process.env.STRIP
 const WEBHOOK_SECRET = functions.config().stripe?.webhook_secret || process.env.STRIPE_WEBHOOK_SECRET;
 
 // ── Price ID → Tier mapping ──
-// TODO: Replace with your actual Stripe Price IDs
 const PRICE_TO_TIER = {
-  'price_NBA_MONTHLY': 'pickmaker_nba',
-  'price_MLB_MONTHLY': 'pickmaker_mlb',
-  'price_DUAL_MONTHLY': 'pickmaker_dual',
-  'price_ALL_ACCESS_ONETIME': 'all_access'
+  'price_1T3rqNA9KGX7mrlmCQi4QcnU': 'pickmaker_nba',
+  'price_1T3rqqA9KGX7mrlmHncjyPlp': 'pickmaker_mlb',
+  'price_1T3rvjA9KGX7mrlmxJI5V00r': 'pickmaker_dual',
+  'price_1T3s0qA9KGX7mrlmA8KljtHG': 'all_access'
 };
 
 // ══════════════════════════════════════════════════
