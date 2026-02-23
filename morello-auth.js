@@ -64,10 +64,14 @@
   function detectPage() {
     const path = window.location.pathname;
     const host = window.location.hostname;
-    if (host === 'morellosims.com' || host === 'www.morellosims.com' || path.endsWith('MORELLOSIMS/index.html')) return 'home';
+    // All sites now under morellosims.com — detect by path
+    if (path.startsWith('/atlas')) return 'atlas';
+    if (path.startsWith('/mlbsim')) return 'mlbsim';
+    if (path.startsWith('/nbasim')) return 'nbasim';
+    // Legacy detection for old URLs / local dev
     if (path.includes('cosmos.html') || path.includes('cosmos')) return 'atlas';
-    if (path.includes('mlbsim.html') || path.includes('mlbsim')) return 'mlbsim';
-    if (path.includes('nbasim') || host.includes('nbasim')) return 'nbasim';
+    if (path.includes('mlbsim.html')) return 'mlbsim';
+    if (host.includes('nbasim')) return 'nbasim';
     return 'home';
   }
 
