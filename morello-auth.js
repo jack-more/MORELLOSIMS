@@ -38,7 +38,8 @@
   const EMAIL_WHITELIST = {
     'jaidanmorello@gmail.com': 'admin',
     'webb.little19@gmail.com': 'fnf',
-    'samlittle2@gmail.com': 'fnf'
+    'samlittle2@gmail.com': 'fnf',
+    'kynanbarer@gmail.com': 'fnf'
   };
 
   const TIER_LABELS = {
