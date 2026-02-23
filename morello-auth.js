@@ -32,6 +32,15 @@
 
   const ADMIN_EMAIL = 'jaidanmorello@gmail.com';
 
+  // ── Pre-assigned email → tier whitelist ──
+  // These users get their tier immediately on sign-up/sign-in,
+  // even before Firestore or Cloud Functions are fully deployed.
+  const EMAIL_WHITELIST = {
+    'jaidanmorello@gmail.com': 'admin',
+    'webb.little19@gmail.com': 'fnf',
+    'samlittle2@gmail.com': 'fnf'
+  };
+
   const TIER_LABELS = {
     free: 'FREE',
     fnf: 'FnF',
@@ -111,20 +120,22 @@
     firebase.auth().onAuthStateChanged(async (user) => {
       if (user) {
         currentUser = user;
-        // Check admin
-        if (user.email === ADMIN_EMAIL) {
-          currentTier = 'admin';
+        const email = (user.email || '').toLowerCase();
+
+        // 1) Check hardcoded whitelist first (works without Firestore)
+        if (EMAIL_WHITELIST[email]) {
+          currentTier = EMAIL_WHITELIST[email];
         } else {
-          // Fetch tier from Firestore
+          // 2) Try Firestore for Stripe-managed tiers
           try {
             const doc = await firebase.firestore().collection('users').doc(user.uid).get();
-            if (doc.exists) {
-              currentTier = doc.data().tier || 'free';
+            if (doc.exists && doc.data().tier) {
+              currentTier = doc.data().tier;
             } else {
-              // Check FnF whitelist
-              const fnfDoc = await firebase.firestore().collection('fnf_whitelist').doc(user.email).get();
-              currentTier = fnfDoc.exists ? 'fnf' : 'free';
-              // Create user doc
+              currentTier = 'free';
+            }
+            // Ensure user doc exists
+            if (!doc.exists) {
               await firebase.firestore().collection('users').doc(user.uid).set({
                 email: user.email,
                 tier: currentTier,
@@ -132,8 +143,9 @@
               });
             }
           } catch (e) {
-            console.warn('[morello-auth] Firestore error:', e);
-            currentTier = 'free';
+            console.warn('[morello-auth] Firestore error, falling back to whitelist:', e);
+            // Firestore failed — whitelist already checked above, default to free
+            currentTier = EMAIL_WHITELIST[email] || 'free';
           }
         }
       } else {
