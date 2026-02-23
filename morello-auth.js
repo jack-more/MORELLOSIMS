@@ -658,30 +658,60 @@
 
   // ── Pricing tooltips on dashboard cards (home page) ──
   function addPricingTooltips() {
+    const tier = getEffectiveTier();
     const atlasCard = document.querySelector('.card-atlas');
     const nbaCard = document.querySelector('.card-nba');
     const mlbCard = document.querySelector('.card-mlb');
 
-    if (atlasCard && !atlasCard.querySelector('.ma-card-price')) {
+    // Clear any existing tooltips (so admin view-as refresh works)
+    document.querySelectorAll('.ma-card-price').forEach(el => el.remove());
+
+    // ATLAS — always free, always clickable. Show "FREE" badge for everyone.
+    if (atlasCard) {
       const tip = document.createElement('div');
       tip.className = 'ma-card-price price-free';
       tip.textContent = 'FREE';
       atlasCard.appendChild(tip);
     }
 
-    if (nbaCard && !nbaCard.querySelector('.ma-card-price')) {
-      const tip = document.createElement('div');
-      tip.className = 'ma-card-price price-pickmaker';
-      tip.innerHTML = '$11.99/mo<br><span style="font-size:8px;opacity:0.6">DUAL: $19.99/mo</span>';
-      nbaCard.appendChild(tip);
+    // NBA — show price only if user does NOT have NBA access
+    if (nbaCard) {
+      if (!hasAccess('pickmaker_nba')) {
+        const tip = document.createElement('div');
+        tip.className = 'ma-card-price price-pickmaker';
+        tip.innerHTML = '$11.99/mo<br><span style="font-size:8px;opacity:0.6">DUAL: $19.99/mo</span>';
+        nbaCard.appendChild(tip);
+      }
+      // Gate the button — one-time listener that checks access dynamically
+      gateCardButton(nbaCard, 'pickmaker_nba');
     }
 
-    if (mlbCard && !mlbCard.querySelector('.ma-card-price')) {
-      const tip = document.createElement('div');
-      tip.className = 'ma-card-price price-pickmaker-mlb';
-      tip.innerHTML = '$11.99/mo<br><span style="font-size:8px;opacity:0.6">DUAL: $19.99/mo</span>';
-      mlbCard.appendChild(tip);
+    // MLB — show price only if user does NOT have MLB access
+    if (mlbCard) {
+      if (!hasAccess('pickmaker_mlb')) {
+        const tip = document.createElement('div');
+        tip.className = 'ma-card-price price-pickmaker-mlb';
+        tip.innerHTML = '$11.99/mo<br><span style="font-size:8px;opacity:0.6">DUAL: $19.99/mo</span>';
+        mlbCard.appendChild(tip);
+      }
+      // Gate the button — one-time listener that checks access dynamically
+      gateCardButton(mlbCard, 'pickmaker_mlb');
     }
+  }
+
+  // ── Gate a card's button: if no access at click-time, show pricing instead ──
+  function gateCardButton(card, requiredTier) {
+    const btn = card.querySelector('.btn-action');
+    if (!btn || btn.dataset.maGateListenerSet) return;
+    btn.dataset.maGateListenerSet = 'true';
+    btn.addEventListener('click', function(e) {
+      // Check access at the moment of click (respects admin view-as)
+      if (!hasAccess(requiredTier)) {
+        e.preventDefault();
+        openModal(currentUser ? 'pricing' : 'signup');
+      }
+      // If hasAccess → event proceeds normally, <a> navigates
+    });
   }
 
   // ══════════════════════════════════════════════════
