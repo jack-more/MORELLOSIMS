@@ -1,0 +1,671 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* MORELLO AUTH — Profile, Tiers, Blur, Admin Toolbar         */
+/* ═══════════════════════════════════════════════════════════ */
+
+/* ── Profile Button (header) ── */
+.ma-profile-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 4px 10px;
+    border: 1px solid rgba(0,0,0,0.25);
+    border-radius: 20px;
+    background: rgba(0,0,0,0.06);
+    transition: all 0.2s;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: #000;
+    text-transform: uppercase;
+    margin-left: 12px;
+}
+.ma-profile-btn:hover {
+    background: rgba(0,0,0,0.12);
+    border-color: rgba(0,0,0,0.4);
+}
+.ma-profile-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #000;
+    background: #ccc;
+}
+.ma-profile-avatar.tier-fnf { background: #00FF55; }
+.ma-profile-avatar.tier-pickmaker_nba,
+.ma-profile-avatar.tier-pickmaker_mlb,
+.ma-profile-avatar.tier-pickmaker_dual { background: #FFEA00; }
+.ma-profile-avatar.tier-all_access { background: #FF6B00; color: #fff; }
+.ma-profile-avatar.tier-admin { background: #FF0040; color: #fff; }
+
+.ma-tier-badge {
+    font-size: 7px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+}
+.ma-tier-badge.tier-free { background: rgba(0,0,0,0.1); color: #555; }
+.ma-tier-badge.tier-fnf { background: #00FF55; color: #000; }
+.ma-tier-badge.tier-pickmaker_nba,
+.ma-tier-badge.tier-pickmaker_mlb,
+.ma-tier-badge.tier-pickmaker_dual { background: #FFEA00; color: #000; }
+.ma-tier-badge.tier-all_access { background: #FF6B00; color: #fff; }
+.ma-tier-badge.tier-admin { background: #FF0040; color: #fff; }
+
+/* ── Dark theme variant (for NBA SIM, MLB SIM dark pages) ── */
+[data-ma-theme="dark"] .ma-profile-btn {
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+}
+[data-ma-theme="dark"] .ma-profile-btn:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.4);
+}
+
+/* ── Modal Overlay ── */
+.ma-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s, visibility 0.25s;
+}
+.ma-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+.ma-modal {
+    background: #0a0a0a;
+    border: 1px solid rgba(255,255,255,0.1);
+    max-width: 480px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 32px;
+    position: relative;
+    transform: translateY(10px);
+    transition: transform 0.25s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.ma-modal-overlay.active .ma-modal {
+    transform: translateY(0);
+}
+.ma-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    font-size: 18px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px;
+    line-height: 1;
+}
+.ma-modal-close:hover { color: #fff; }
+
+.ma-modal h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: #fff;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+}
+.ma-modal .ma-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+}
+
+/* ── Auth Form ── */
+.ma-form-group {
+    margin-bottom: 16px;
+}
+.ma-form-group label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+.ma-form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.ma-form-group input:focus {
+    border-color: rgba(255,255,255,0.4);
+}
+.ma-form-group input::placeholder {
+    color: rgba(255,255,255,0.2);
+}
+.ma-btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: #00FF55;
+    color: #000;
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 8px;
+}
+.ma-btn-primary:hover {
+    background: #4dff88;
+}
+.ma-btn-primary:active {
+    transform: translateY(1px);
+}
+.ma-toggle-link {
+    display: block;
+    text-align: center;
+    margin-top: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    cursor: pointer;
+    text-decoration: underline;
+    background: none;
+    border: none;
+}
+.ma-toggle-link:hover { color: #fff; }
+
+.ma-error {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #FF4444;
+    margin-top: 8px;
+    display: none;
+}
+.ma-error.visible { display: block; }
+
+/* ── Pricing Tiers (inside modal) ── */
+.ma-pricing-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+}
+.ma-pricing-card {
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.2s;
+    position: relative;
+}
+.ma-pricing-card:hover {
+    border-color: rgba(255,255,255,0.25);
+}
+.ma-pricing-card.highlight {
+    border-color: #00FF55;
+    background: rgba(0,255,85,0.04);
+}
+.ma-pricing-card.limited {
+    border-color: #FF6B00;
+    background: rgba(255,107,0,0.04);
+}
+.ma-pricing-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    color: #fff;
+    letter-spacing: 1px;
+}
+.ma-pricing-desc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+.ma-pricing-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: #00FF55;
+    font-weight: 700;
+}
+.ma-pricing-card.limited .ma-pricing-amount {
+    color: #FF6B00;
+}
+.ma-pricing-period {
+    font-size: 8px;
+    color: rgba(255,255,255,0.3);
+    font-weight: 400;
+}
+.ma-pricing-btn {
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: transparent;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+}
+.ma-pricing-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: #fff;
+}
+.ma-pricing-card.highlight .ma-pricing-btn {
+    background: #00FF55;
+    color: #000;
+    border-color: #00FF55;
+}
+.ma-pricing-card.highlight .ma-pricing-btn:hover {
+    background: #4dff88;
+}
+.ma-pricing-card.limited .ma-pricing-btn {
+    background: #FF6B00;
+    color: #000;
+    border-color: #FF6B00;
+}
+.ma-pricing-card.limited .ma-pricing-btn:hover {
+    background: #ff8533;
+}
+.ma-limited-tag {
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7px;
+    letter-spacing: 1.5px;
+    color: #FF6B00;
+    background: #0a0a0a;
+    padding: 0 6px;
+    text-transform: uppercase;
+}
+.ma-invite-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 1px;
+}
+
+/* ── Signed-in Profile View ── */
+.ma-profile-info {
+    margin-bottom: 20px;
+}
+.ma-profile-email {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 4px;
+}
+.ma-profile-tier-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+}
+.ma-btn-secondary {
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    color: rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.15);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    margin-top: 8px;
+}
+.ma-btn-secondary:hover {
+    color: #fff;
+    border-color: rgba(255,255,255,0.4);
+}
+.ma-btn-danger {
+    color: #FF4444;
+    border-color: rgba(255,68,68,0.3);
+}
+.ma-btn-danger:hover {
+    color: #FF4444;
+    border-color: #FF4444;
+    background: rgba(255,68,68,0.06);
+}
+
+/* ── Dashboard Card Pricing Tooltips ── */
+.ma-card-price {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 4px 12px;
+    border-radius: 2px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 5;
+    text-align: center;
+    line-height: 1.6;
+}
+.card:hover .ma-card-price {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+.ma-card-price.price-free {
+    background: #ff4400;
+    color: #fff;
+}
+.ma-card-price.price-pickmaker {
+    background: #000;
+    color: #00FF55;
+    border: 1px solid rgba(0,255,85,0.3);
+}
+.ma-card-price.price-pickmaker-mlb {
+    background: #000;
+    color: var(--accent-mlb, #FFEA00);
+    border: 1px solid rgba(255,234,0,0.3);
+}
+
+/* ── Content Blur ── */
+.ma-blur {
+    filter: blur(5px);
+    user-select: none;
+    pointer-events: none;
+    transition: filter 0.3s;
+}
+.ma-blur-heavy {
+    filter: blur(6px);
+    user-select: none;
+    pointer-events: none;
+    transition: filter 0.3s;
+}
+.ma-unblurred {
+    filter: none !important;
+    user-select: auto !important;
+    pointer-events: auto !important;
+}
+
+/* ── Methodology Lock Overlay ── */
+.ma-lock-overlay {
+    position: relative;
+}
+.ma-lock-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,10,0.6);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+}
+.ma-lock-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+}
+.ma-lock-message .lock-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+.ma-lock-message .lock-title {
+    font-size: 11px;
+    color: #fff;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+.ma-lock-message .lock-price {
+    font-size: 10px;
+    color: #FF6B00;
+    letter-spacing: 1px;
+}
+.ma-lock-message .lock-btn {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 6px 16px;
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    background: transparent;
+    text-transform: uppercase;
+    transition: all 0.15s;
+}
+.ma-lock-message .lock-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: #fff;
+}
+
+/* ── Full Page Access Gate ── */
+.ma-access-gate {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+.ma-access-gate.active {
+    opacity: 1;
+    visibility: visible;
+}
+.ma-access-gate h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    color: #fff;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+}
+.ma-access-gate .gate-desc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1px;
+    margin-bottom: 24px;
+    max-width: 400px;
+}
+.ma-access-gate .gate-price {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    color: #00FF55;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.ma-access-gate .gate-period {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 20px;
+}
+.ma-access-gate .gate-dual {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 20px;
+}
+.ma-gate-btn {
+    padding: 14px 32px;
+    background: #00FF55;
+    color: #000;
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.ma-gate-btn:hover { background: #4dff88; }
+.ma-gate-btn:active { transform: translateY(1px); }
+
+.ma-gate-signin {
+    margin-top: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.3);
+}
+.ma-gate-signin a {
+    color: rgba(255,255,255,0.5);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.ma-gate-signin a:hover { color: #fff; }
+
+/* ── Blog Expand Lock ── */
+.blog-card.ma-locked > summary::after {
+    content: '[ ALL-ACCESS ]' !important;
+    color: #FF6B00 !important;
+    border-color: rgba(255,107,0,0.3) !important;
+}
+.blog-card.ma-locked > summary:hover::after {
+    color: #ff8533 !important;
+    border-color: #FF6B00 !important;
+    background: rgba(255,107,0,0.08) !important;
+}
+
+/* ── Admin Floating Toolbar ── */
+.ma-admin-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: rgba(10,10,10,0.92);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 16px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.ma-admin-toolbar.active {
+    transform: translateY(0);
+}
+.ma-admin-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7px;
+    color: #FF0040;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-right: 8px;
+    font-weight: 700;
+}
+.ma-admin-btn {
+    padding: 4px 12px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.5);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+}
+.ma-admin-btn:hover {
+    color: #fff;
+    border-color: rgba(255,255,255,0.4);
+}
+.ma-admin-btn.active {
+    background: #FF0040;
+    color: #fff;
+    border-color: #FF0040;
+}
+.ma-admin-btn[data-tier="free"].active { background: #666; border-color: #666; }
+.ma-admin-btn[data-tier="fnf"].active { background: #00FF55; color: #000; border-color: #00FF55; }
+.ma-admin-btn[data-tier="pickmaker_dual"].active { background: #FFEA00; color: #000; border-color: #FFEA00; }
+.ma-admin-btn[data-tier="all_access"].active { background: #FF6B00; color: #000; border-color: #FF6B00; }
+.ma-admin-btn[data-tier="admin"].active { background: #FF0040; color: #fff; border-color: #FF0040; }
+
+/* ── Info Tab Blur Container ── */
+.ma-info-blur-container {
+    position: relative;
+}
+.ma-info-blur-container .ma-info-lock {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    background: rgba(255,255,255,0.02);
+    pointer-events: auto;
+}
+.ma-info-lock .lock-icon { font-size: 28px; margin-bottom: 10px; }
+.ma-info-lock .lock-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #000;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.ma-info-lock .lock-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #555;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+.ma-info-lock .lock-btn {
+    padding: 8px 20px;
+    background: #FF6B00;
+    color: #fff;
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.15s;
+}
+.ma-info-lock .lock-btn:hover { background: #ff8533; }
+
+/* dark variant for dark-bg pages */
+[data-ma-theme="dark"] .ma-info-lock .lock-title { color: #fff; }
+[data-ma-theme="dark"] .ma-info-lock .lock-subtitle { color: rgba(255,255,255,0.5); }

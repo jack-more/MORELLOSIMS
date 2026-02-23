@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can read their own document
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Only Cloud Functions can write (admin SDK bypasses rules)
+      allow write: if false;
+    }
+
+    // FnF whitelist — read-only, managed via Firebase console
+    match /fnf_whitelist/{email} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}
