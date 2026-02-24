@@ -1601,7 +1601,7 @@
             <details class="blog-card post-nba" id="post-nba-system">
                 <summary>
                     <div class="blog-meta mono">
-                        <span class="blog-date">FEB 16, 2026</span>
+                        <span class="blog-date">FEB 24, 2026</span>
                         <div class="blog-system-dots">
                             <span style="font-size:14px; margin-right:2px;">🏀</span>
                             <div class="blog-system-dot dot-nba-sim" title="NBA SIM"></div>
@@ -1609,7 +1609,7 @@
                     </div>
                     <h3 class="blog-title bebas">NBA SIM: MULTI-LAYER PREDICTION ENGINE &mdash; FROM NBA API TO GAME PREDICTIONS</h3>
                     <p class="blog-preview">
-                        How we built a 4-phase pipeline that ingests NBA player tracking data, classifies coaching schemes via percentile-rank play type analysis, clusters players into position-specific archetypes using weighted K-Means, computes multi-level synergy scores, and generates spread/total predictions against live betting lines.
+                        How we built a 4-phase pipeline that ingests NBA player tracking data, classifies coaching schemes via percentile-rank play type analysis, clusters players into position-specific archetypes using weighted K-Means, computes multi-level synergy scores, and generates spread/total predictions against live betting lines. Now featuring the DSI spread model, Dynamic Score ratings, and a daily-refreshing trends engine with hot/cold lineup combo tracking.
                     </p>
                 </summary>
                 <div class="blog-card-body">
@@ -2042,6 +2042,39 @@
                 </p>
                 <p class="blog-body-text">
                     <strong>Bayesian Shrinkage in Synergy Scores:</strong> Small-sample lineup data is unreliable. A 5-man lineup with 35 possessions and +20 net rating shouldn't dominate a player's value. We apply Bayesian priors that shrink estimates toward league average, with prior strength proportional to data granularity (100 possessions for 5-man, 30 for 2-man). This balances signal extraction with noise reduction.
+                </p>
+
+                <h4 class="blog-section-header bebas">DYNAMIC SCORE (DS)</h4>
+                <p class="blog-body-text">
+                    Every player on the dashboard receives a <strong>Dynamic Score</strong> (40-99), a single-number composite rating that blends offensive and defensive production into one sortable metric. The formula weights offense at 75% and defense at 25%, reflecting the NBA's offensive-skewing landscape.
+                </p>
+                <p class="blog-body-text">
+                    <strong>Offensive sub-score</strong> compounds scoring (pts &times; 1.2), playmaking (ast &times; 1.8), efficiency (TS% &times; 40), and usage (USG% &times; 15). <strong>Defensive sub-score</strong> combines stocks (STL &times; 8.0 + BLK &times; 6.0) with defensive rating impact (max(0, (115 &minus; DRtg) &times; 2.5)). Both sub-scores are clamped 0-99. The final blend adds shared components: rebounding (reb &times; 0.8), net rating impact (NRtg &times; 0.8), and minutes load (mpg &times; 0.3), then clamps the result to the 40-99 range. This floor prevents garbage-time players from showing misleadingly low scores.
+                </p>
+
+                <h4 class="blog-section-header bebas">DSI SPREAD MODEL</h4>
+                <p class="blog-body-text">
+                    The <strong>Dynamic Score Index (DSI)</strong> is a team-level aggregate that drives the spread prediction engine. For each team, DSI sums the Dynamic Scores of all available starters and rotation players, adjusted for injury absences and usage decay. The spread is computed as a <strong>50/50 blend</strong> of DSI-based power rating and adjusted net rating:
+                </p>
+                <p class="blog-body-text">
+                    <code>Spread = -((DSI_power &times; 0.50 + NRtg_power &times; 0.50) + HCA)</code>
+                </p>
+                <p class="blog-body-text">
+                    Where HCA (home court advantage) = 3.0 points. The model also applies a <strong>3.0 point back-to-back penalty</strong> for teams playing consecutive days, and a <strong>usage decay</strong> factor (0.995 per 1% excess usage for offensive archetypes, 0.985 for defensive archetypes) that taxes players with unsustainably high usage rates. A <strong>stocks penalty</strong> (0.8 per lost stock) accounts for missing defensive playmakers. The DSI spread is then compared against the market consensus line to generate edge values.
+                </p>
+
+                <h4 class="blog-section-header bebas">DAILY TRENDS ENGINE</h4>
+                <p class="blog-body-text">
+                    The <strong>Trends tab</strong> on the dashboard surfaces two layers of daily-refreshing intelligence, both powered by an automated GitHub Actions pipeline that runs every morning at 8 AM PST.
+                </p>
+                <p class="blog-body-text">
+                    <strong>Trending Players:</strong> Compares each player's PRA (Points + Rebounds + Assists) over the last 14 days against their PRA from the prior 14 days (28-day total window). Players must have at least 2 games with 15+ minutes in each window to qualify. The top 4 risers and top 4 fallers are surfaced with direction badges: Hot, Trending Up, Cooling Down, Trending Down, or Steady.
+                </p>
+                <p class="blog-body-text">
+                    <strong>Hot &amp; Cold Lineup Combos:</strong> Queries the <code>lineup_stats</code> table for 5-man, 3-man, and 2-man combinations that have played at least 5 games and 8 minutes together. Hot combos are ranked by highest net rating, with badges for elite performance: <em>HEATING UP</em> (net &gt; +15, 10+ GP), <em>ELITE FLOOR</em> (net &gt; +10), <em>MORE MINUTES</em> (15+ min, 15+ GP). Cold combos surface the worst-performing lineups with severity badges: <em>DISASTERCLASS</em> (net &lt; &minus;15), <em>COOKED</em> (net &lt; &minus;10), or <em>FADE</em>. Each combo card displays every player's Dynamic Score and archetype for full context.
+                </p>
+                <p class="blog-body-text">
+                    The daily pipeline uses incremental boxscore collection (only missing games, not the full season), refreshes lineup stats from the NBA.com API with browser-spoofed headers to avoid rate limiting, regenerates the static HTML, and auto-syncs to the live dashboard.
                 </p>
 
                 <div class="blog-tags mono">
