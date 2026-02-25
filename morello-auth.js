@@ -19,7 +19,7 @@
   // ── Stripe Config ──
   // ── Stripe Config ──
   const STRIPE_CONFIG = {
-    publishableKey: 'pk_test_YOUR_STRIPE_KEY', // TODO: Replace with your Stripe publishable key
+    publishableKey: 'pk_live_51IgymQA9KGX7mrlm4mMSnHke0kSV7SkFtrJOMDat2cffozI5Y0Ih5V4sqawFIhnEWpuJ18WTtItxBmvUsCSb95y100kulsQoe8',
     prices: {
       pickmaker_nba: 'price_1T3rqNA9KGX7mrlmCQi4QcnU',
       pickmaker_mlb: 'price_1T3rqqA9KGX7mrlmHncjyPlp',
@@ -563,13 +563,29 @@
   // ── MLB SIM ──
   function applyMlbSimAccess() {
     const tier = getEffectiveTier();
-    const hasDashboardAccess = hasAccess('pickmaker_mlb');
+    const hasPickAccess = hasAccess('pickmaker_mlb');
     const isMethodologyUnlocked = tier === 'all_access' || tier === 'admin';
 
-    // 1) Full-page access gate for non-authorized users
-    applyPageGate(hasDashboardAccess, 'MLB SIM', 'PICKMAKER ACCESS REQUIRED', '$11.99', '/mo', 'DUAL: $19.99/mo for both NBA + MLB', 'pickmaker_mlb');
+    // 1) Selective blur on premium elements (replaces full-page gate)
+    document.querySelectorAll('.ma-premium').forEach(el => {
+      if (hasPickAccess) {
+        el.classList.remove('ma-blur');
+        el.classList.add('ma-unblurred');
+      } else {
+        el.classList.add('ma-blur');
+        el.classList.remove('ma-unblurred');
+      }
+    });
 
-    // 2) Blur INFO tab cards
+    // 2) CTA banner for free users
+    if (!hasPickAccess) {
+      addPremiumOverlay('MLB');
+    } else {
+      const existing = document.getElementById('ma-premium-banner');
+      if (existing) existing.remove();
+    }
+
+    // 3) Blur INFO tab cards (methodology — all_access only)
     const infoTab = document.getElementById('tab-info');
     if (infoTab) {
       const infoCards = infoTab.querySelectorAll('.info-card');
@@ -607,13 +623,29 @@
   // ── NBA SIM ──
   function applyNbaSimAccess() {
     const tier = getEffectiveTier();
-    const hasDashboardAccess = hasAccess('pickmaker_nba');
+    const hasPickAccess = hasAccess('pickmaker_nba');
     const isMethodologyUnlocked = tier === 'all_access' || tier === 'admin';
 
-    // 1) Full-page access gate
-    applyPageGate(hasDashboardAccess, 'NBA SIM', 'PICKMAKER ACCESS REQUIRED', '$11.99', '/mo', 'DUAL: $19.99/mo for both NBA + MLB', 'pickmaker_nba');
+    // 1) Selective blur on premium elements (replaces full-page gate)
+    document.querySelectorAll('.ma-premium').forEach(el => {
+      if (hasPickAccess) {
+        el.classList.remove('ma-blur');
+        el.classList.add('ma-unblurred');
+      } else {
+        el.classList.add('ma-blur');
+        el.classList.remove('ma-unblurred');
+      }
+    });
 
-    // 2) Blur INFO sections (look for common info containers)
+    // 2) CTA banner for free users
+    if (!hasPickAccess) {
+      addPremiumOverlay('NBA');
+    } else {
+      const existing = document.getElementById('ma-premium-banner');
+      if (existing) existing.remove();
+    }
+
+    // 3) Blur INFO sections (methodology — all_access only)
     const infoSections = document.querySelectorAll('.info-card, .info-section, [data-section="info"]');
     infoSections.forEach(el => {
       if (isMethodologyUnlocked) {
@@ -655,6 +687,41 @@
     }
 
     gate.classList.add('active');
+  }
+
+  // ── Premium upgrade CTA banner (selective blur model) ──
+  function addPremiumOverlay(sport) {
+    // Don't duplicate
+    if (document.getElementById('ma-premium-banner')) return;
+
+    const isNBA = sport === 'NBA';
+    const singlePrice = '$11.99';
+    const singleProduct = isNBA ? 'pickmaker_nba' : 'pickmaker_mlb';
+    const accentColor = isNBA ? 'var(--accent-nba, #00FF55)' : 'var(--accent-mlb, #FFEA00)';
+
+    const banner = document.createElement('div');
+    banner.id = 'ma-premium-banner';
+    banner.className = 'ma-premium-banner';
+    banner.innerHTML = `
+      <div class="premium-banner-text">
+        <span class="premium-banner-lock">&#128274;</span>
+        <strong>UNLOCK ${sport} PICKS</strong> — Projected spreads, confidence scores, edge calculations & pick recommendations
+      </div>
+      <div class="premium-banner-actions">
+        <button class="cta-btn" onclick="window.morelloAuth.openModal(currentUser ? 'pricing' : 'signup')" style="background:${accentColor}">
+          ${singlePrice}/mo
+        </button>
+        <button class="cta-btn cta-btn-dual" onclick="window.morelloAuth.openModal(currentUser ? 'pricing' : 'signup')">
+          DUAL $19.99/mo
+        </button>
+      </div>
+    `;
+
+    // Insert at top of main content area
+    const main = document.querySelector('main, .container, .sim-container, body');
+    if (main) {
+      main.insertBefore(banner, main.firstChild);
+    }
   }
 
   // ── Pricing tooltips on dashboard cards (home page) ──
