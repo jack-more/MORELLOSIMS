@@ -171,6 +171,62 @@
   }
 
   // ══════════════════════════════════════════════════
+  // SITE NAVIGATION (cross-site nav in header)
+  // ══════════════════════════════════════════════════
+
+  function renderSiteNav() {
+    // Only render once
+    if (document.getElementById('ma-site-nav')) return;
+
+    const nav = document.createElement('div');
+    nav.id = 'ma-site-nav';
+    nav.className = 'ma-site-nav';
+
+    const sites = [
+      { label: 'HOME',  path: '/',        color: '#AAAAAA', page: 'home' },
+      { label: 'NBA',   path: '/nbasim/', color: '#00FF55', page: 'nbasim' },
+      { label: 'MLB',   path: '/mlbsim/', color: '#FFEA00', page: 'mlbsim' },
+      { label: 'ATLAS', path: '/atlas/',  color: '#FF6B00', page: 'atlas' }
+    ];
+
+    sites.forEach(site => {
+      const link = document.createElement('a');
+      link.href = site.path;
+      link.className = 'ma-site-link' + (PAGE === site.page ? ' active' : '');
+      link.innerHTML = '<span class="ma-site-dot" style="background:' + site.color + '"></span>' + site.label;
+      nav.appendChild(link);
+    });
+
+    // Find insertion point — look for .status-indicators first
+    const indicators = document.querySelector('.status-indicators');
+    if (indicators) {
+      indicators.prepend(nav);
+      return;
+    }
+
+    // Fallback: find header right-side area
+    const header = document.querySelector('header') || document.querySelector('.header');
+    if (header) {
+      const brandRow = header.querySelector('.brand-row');
+      if (brandRow) {
+        // MLB SIM layout: insert into the right-side div
+        const rightDiv = brandRow.querySelector('div:last-child');
+        if (rightDiv) {
+          rightDiv.prepend(nav);
+          return;
+        }
+      }
+      // Generic fallback: absolute position in header
+      nav.style.position = 'absolute';
+      nav.style.right = '16px';
+      nav.style.top = '50%';
+      nav.style.transform = 'translateY(-50%)';
+      header.style.position = header.style.position || 'relative';
+      header.appendChild(nav);
+    }
+  }
+
+  // ══════════════════════════════════════════════════
   // PROFILE BUTTON (Header)
   // ══════════════════════════════════════════════════
 
@@ -876,6 +932,9 @@
   // ══════════════════════════════════════════════════
 
   function init() {
+    // Render site navigation immediately (no auth needed)
+    renderSiteNav();
+
     initFirebase();
 
     // Intercept blog expand on home page after DOM is ready
