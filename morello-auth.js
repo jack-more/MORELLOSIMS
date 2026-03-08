@@ -626,19 +626,30 @@
     const hasPickAccess = hasAccess('pickmaker_nba');
     const isMethodologyUnlocked = tier === 'all_access' || tier === 'admin';
 
-    // 1) Selective blur on premium elements (replaces full-page gate)
+    // 1) Freemium model: only gate picks with confidence >= 9
+    //    Lower-confidence picks are visible to everyone to showcase the product.
     document.querySelectorAll('.ma-premium').forEach(el => {
       if (hasPickAccess) {
         el.classList.remove('ma-blur');
         el.classList.add('ma-unblurred');
       } else {
-        el.classList.add('ma-blur');
-        el.classList.remove('ma-unblurred');
+        const card = el.closest('.matchup-card');
+        const conf = card ? parseInt(card.getAttribute('data-conf') || '0', 10) : 0;
+        if (conf >= 9) {
+          el.classList.add('ma-blur');
+          el.classList.remove('ma-unblurred');
+        } else {
+          el.classList.remove('ma-blur');
+          el.classList.add('ma-unblurred');
+        }
       }
     });
 
-    // 2) CTA banner for free users
-    if (!hasPickAccess) {
+    // 2) CTA banner only if there are locked (conf >= 9) picks today
+    const hasLockedPicks = !hasPickAccess &&
+      document.querySelectorAll('.matchup-card').length > 0 &&
+      [...document.querySelectorAll('.matchup-card')].some(c => parseInt(c.getAttribute('data-conf') || '0', 10) >= 9);
+    if (hasLockedPicks) {
       addPremiumOverlay('NBA');
     } else {
       const existing = document.getElementById('ma-premium-banner');
