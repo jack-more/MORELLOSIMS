@@ -825,11 +825,6 @@ function updateCategoryTotals() {
     document.getElementById('cat-ops').textContent = hitters.length ? opsAvg.toFixed(3) : '—';
 
     // Color code hitting
-    colorCat('cat-r', r, 800, 600);
-    colorCat('cat-hr', hr, 220, 150);
-    colorCat('cat-rbi', rbi, 750, 550);
-    colorCat('cat-sb', sb, 120, 70);
-
     // Pitching
     let k = 0, qs = 0, w = 0, saves = 0;
     let eraNum = 0, eraIp = 0, whipNum = 0, whipIp = 0;
@@ -853,9 +848,103 @@ function updateCategoryTotals() {
     document.getElementById('cat-era').textContent = pitchers.length && eraIp ? (eraNum / eraIp).toFixed(2) : '—';
     document.getElementById('cat-whip').textContent = pitchers.length && whipIp ? (whipNum / whipIp).toFixed(2) : '—';
 
-    colorCat('cat-k', k, 1200, 900);
-    colorCat('cat-w', w, 70, 45);
-    colorCat('cat-s', saves, 40, 20);
+    // Color code relative to league averages (dynamic) or fallback thresholds
+    const leagueAvgs = computeLeagueAverages();
+    if (leagueAvgs) {
+        // Higher is better for these cats
+        colorCatVsLeague('cat-r', r, leagueAvgs.r);
+        colorCatVsLeague('cat-hr', hr, leagueAvgs.hr);
+        colorCatVsLeague('cat-rbi', rbi, leagueAvgs.rbi);
+        colorCatVsLeague('cat-sb', sb, leagueAvgs.sb);
+        colorCatVsLeague('cat-k', k, leagueAvgs.k);
+        colorCatVsLeague('cat-w', w, leagueAvgs.w);
+        colorCatVsLeague('cat-s', saves, leagueAvgs.s);
+        // Lower is better for ERA/WHIP
+        const era = pitchers.length && eraIp ? eraNum / eraIp : 0;
+        const whip = pitchers.length && whipIp ? whipNum / whipIp : 0;
+        colorCatVsLeague('cat-era', era, leagueAvgs.era, true);
+        colorCatVsLeague('cat-whip', whip, leagueAvgs.whip, true);
+        colorCatVsLeague('cat-avg', avg, leagueAvgs.avg);
+        colorCatVsLeague('cat-ops', opsAvg, leagueAvgs.ops);
+    } else {
+        // Fallback: hardcoded thresholds
+        colorCat('cat-r', r, 800, 600);
+        colorCat('cat-hr', hr, 220, 150);
+        colorCat('cat-rbi', rbi, 750, 550);
+        colorCat('cat-sb', sb, 120, 70);
+        colorCat('cat-k', k, 1200, 900);
+        colorCat('cat-w', w, 70, 45);
+        colorCat('cat-s', saves, 40, 20);
+    }
+}
+
+// Compute projected category averages across all league teams using our projection data
+function computeLeagueAverages() {
+    if (!leagueTeams || leagueTeams.length === 0) return null;
+
+    const teamTotals = [];
+    leagueTeams.forEach(team => {
+        const totals = { r:0, hr:0, rbi:0, sb:0, avg:0, ops:0, k:0, qs:0, w:0, s:0, era:0, whip:0, hCount:0, pCount:0, eraIp:0, whipIp:0, hSum:0, abSum:0, opsSum:0 };
+        team.players.forEach(tp => {
+            // Match to our projection data by name
+            const proj = allPlayers.find(p => p.name === tp.name || p.id === tp.id);
+            if (!proj || !proj.yearly) return;
+            const y = proj.yearly;
+            if (proj.playerType === 'hitter') {
+                totals.r += y.r || 0;
+                totals.hr += y.hr || 0;
+                totals.rbi += y.rbi || 0;
+                totals.sb += y.sb || 0;
+                totals.hSum += (y.avg || 0.250) * (y.games || 162) * 4;
+                totals.abSum += (y.games || 162) * 4;
+                totals.opsSum += y.ops || 0;
+                totals.hCount++;
+            } else {
+                totals.k += y.k || 0;
+                totals.qs += y.qs || 0;
+                totals.w += y.w || 0;
+                totals.s += y.s || 0;
+                const ip = y.ip || 100;
+                totals.eraIp += ip;
+                totals.whipIp += ip;
+                totals.era += (y.era || 4.00) * ip;
+                totals.whip += (y.whip || 1.30) * ip;
+                totals.pCount++;
+            }
+        });
+        totals.avgCalc = totals.abSum > 0 ? totals.hSum / totals.abSum : 0.250;
+        totals.opsCalc = totals.hCount > 0 ? totals.opsSum / totals.hCount : 0.750;
+        totals.eraCalc = totals.eraIp > 0 ? totals.era / totals.eraIp : 4.00;
+        totals.whipCalc = totals.whipIp > 0 ? totals.whip / totals.whipIp : 1.30;
+        teamTotals.push(totals);
+    });
+
+    if (teamTotals.length === 0) return null;
+    const n = teamTotals.length;
+    return {
+        r: teamTotals.reduce((s,t) => s + t.r, 0) / n,
+        hr: teamTotals.reduce((s,t) => s + t.hr, 0) / n,
+        rbi: teamTotals.reduce((s,t) => s + t.rbi, 0) / n,
+        sb: teamTotals.reduce((s,t) => s + t.sb, 0) / n,
+        avg: teamTotals.reduce((s,t) => s + t.avgCalc, 0) / n,
+        ops: teamTotals.reduce((s,t) => s + t.opsCalc, 0) / n,
+        k: teamTotals.reduce((s,t) => s + t.k, 0) / n,
+        qs: teamTotals.reduce((s,t) => s + t.qs, 0) / n,
+        w: teamTotals.reduce((s,t) => s + t.w, 0) / n,
+        s: teamTotals.reduce((s,t) => s + t.s, 0) / n,
+        era: teamTotals.reduce((s,t) => s + t.eraCalc, 0) / n,
+        whip: teamTotals.reduce((s,t) => s + t.whipCalc, 0) / n,
+    };
+}
+
+// Color a category relative to league average (green = top third, red = bottom third)
+function colorCatVsLeague(id, val, leagueAvg, lowerIsBetter = false) {
+    const el = document.getElementById(id);
+    el.classList.remove('strong', 'weak');
+    if (val === 0 || val === '—') return;
+    const pct = lowerIsBetter ? (leagueAvg / val) : (val / leagueAvg);
+    if (pct >= 1.10) el.classList.add('strong');      // 10%+ above avg
+    else if (pct <= 0.85) el.classList.add('weak');    // 15%+ below avg
 }
 
 function colorCat(id, val, goodThresh, badThresh) {
