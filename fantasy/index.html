@@ -796,17 +796,19 @@ function renderLeaders() {
 
     // Pitcher stat leaders
     const pitchers = getAllPlayers('pitcher');
+    const starters = pitchers.filter(p => (p.espn_pos || p.pos) === 'SP');
+    const relievers = pitchers.filter(p => (p.espn_pos || p.pos) === 'RP');
     const pitcherStats = [
-        { key: 'k', label: 'STRIKEOUTS', desc: 'K', fmt: fmtStat, hotFn: v => v >= 8, coldFn: () => false, sort: 'desc' },
-        { key: 'w', label: 'WINS', desc: 'W', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc' },
-        { key: 'qs', label: 'QUALITY STARTS', desc: 'QS', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc' },
-        { key: 's', label: 'SAVES', desc: 'S', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc' },
-        { key: 'era', label: 'ERA', desc: 'ERA', fmt: fmtEra, hotFn: v => v <= 3.00, coldFn: v => v >= 5.00, sort: 'asc' },
-        { key: 'whip', label: 'WHIP', desc: 'WHIP', fmt: fmtWhip, hotFn: v => v <= 1.10, coldFn: v => v >= 1.40, sort: 'asc' },
+        { key: 'k', label: 'STRIKEOUTS', desc: 'K', fmt: fmtStat, hotFn: v => v >= 8, coldFn: () => false, sort: 'desc', pool: pitchers },
+        { key: 'w', label: 'WINS', desc: 'W', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc', pool: starters },
+        { key: 'qs', label: 'QUALITY STARTS', desc: 'QS', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc', pool: starters },
+        { key: 's', label: 'SAVES', desc: 'S', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc', pool: relievers },
+        { key: 'era', label: 'ERA', desc: 'ERA', fmt: fmtEra, hotFn: v => v <= 3.00, coldFn: v => v >= 5.00, sort: 'asc', pool: pitchers },
+        { key: 'whip', label: 'WHIP', desc: 'WHIP', fmt: fmtWhip, hotFn: v => v <= 1.10, coldFn: v => v >= 1.40, sort: 'asc', pool: pitchers },
     ];
 
     pitcherStats.forEach(stat => {
-        const sorted = pitchers
+        const sorted = (stat.pool || pitchers)
             .map(p => {
                 const stats = getPlayerStats(p, tf);
                 return { ...p, _val: stats?.[stat.key] ?? null };
