@@ -549,6 +549,48 @@ function fmtEra(v) { return v != null ? v.toFixed(2) : '—'; }
 function fmtWhip(v) { return v != null ? v.toFixed(2) : '—'; }
 function fmtStat(v) { return v != null ? (Number.isInteger(v) ? v : v.toFixed(1)) : '—'; }
 
+// ═══ ROS PROJECTIONS ═══
+// Compute Rest-of-Year by multiplying weekly counting stats × remaining weeks
+function getRosWeeks() {
+    // MLB season: ~late March to late September (~26 weeks)
+    const seasonEnd = new Date(2026, 8, 27); // Sep 27, 2026
+    const now = new Date();
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const weeksLeft = Math.max(1, Math.round((seasonEnd - now) / msPerWeek));
+    return weeksLeft;
+}
+
+function getPlayerStats(player, tf) {
+    if (tf === 'yearly') return player.yearly;
+    if (tf === 'weekly') return player.weekly;
+    // ROS: multiply weekly counting stats by remaining weeks, keep rate stats
+    const w = player.weekly;
+    if (!w) return null;
+    const weeks = getRosWeeks();
+    const isPitcher = w.k !== undefined && w.era !== undefined;
+    if (isPitcher) {
+        return {
+            k: Math.round((w.k || 0) * weeks),
+            qs: +((w.qs || 0) * weeks).toFixed(1),
+            w: +((w.w || 0) * weeks).toFixed(1),
+            s: +((w.s || 0) * weeks).toFixed(1),
+            era: w.era,
+            whip: w.whip,
+            games: (w.games || 0) * weeks
+        };
+    } else {
+        return {
+            r: Math.round((w.r || 0) * weeks),
+            hr: Math.round((w.hr || 0) * weeks),
+            rbi: Math.round((w.rbi || 0) * weeks),
+            sb: Math.round((w.sb || 0) * weeks),
+            avg: w.avg,
+            ops: w.ops,
+            games: (w.games || 0) * weeks
+        };
+    }
+}
+
 // ═══ SORT HELPERS ═══
 function sortPlayers(players, key, tf) {
     if (!sortState.key) return players;
@@ -557,8 +599,8 @@ function sortPlayers(players, key, tf) {
     // ERA/WHIP: lower is better so default sort is ascending
     const lowerIsBetter = ['era', 'whip'];
     sorted.sort((a, b) => {
-        const sa = (tf === 'yearly' ? a.yearly : a.weekly) || {};
-        const sb2 = (tf === 'yearly' ? b.yearly : b.weekly) || {};
+        const sa = getPlayerStats(a, tf) || {};
+        const sb2 = getPlayerStats(b, tf) || {};
         const va = sa[key] ?? (asc ? 999 : -999);
         const vb = sb2[key] ?? (asc ? 999 : -999);
         return asc ? va - vb : vb - va;
@@ -589,7 +631,7 @@ function renderHitterGroup(pos, players) {
     if (!players || players.length === 0) return '';
     const tf = currentTimeframe;
     const gamesLabel = tf === 'weekly' ? (players[0]?.weekly?.games || 0) + ' games' :
-                       tf === 'yearly' ? '162 games' : 'ROS';
+                       tf === 'yearly' ? '162 games' : getRosWeeks() + ' weeks remaining';
 
     // Apply sort if active
     if (sortState.key && ['r','hr','rbi','sb','avg','ops'].includes(sortState.key)) {
@@ -598,7 +640,7 @@ function renderHitterGroup(pos, players) {
 
     let rows = '';
     players.forEach((p, i) => {
-        const stats = tf === 'yearly' ? p.yearly : p.weekly;
+        const stats = getPlayerStats(p, tf);
         if (!stats) return;
         const ms = p.avg_ms || 60;
         const opps = (p.opponents || []).join(', ');
@@ -650,7 +692,7 @@ function renderPitcherGroup(pos, players) {
 
     let rows = '';
     players.forEach((p, i) => {
-        const stats = tf === 'yearly' ? p.yearly : p.weekly;
+        const stats = getPlayerStats(p, tf);
         if (!stats) return;
         const opps = (p.opponents || []).join(', ');
         const tier = p.tier || '';
@@ -742,7 +784,7 @@ function renderLeaders() {
     hitterStats.forEach(stat => {
         const sorted = hitters
             .map(p => {
-                const stats = tf === 'yearly' ? p.yearly : p.weekly;
+                const stats = getPlayerStats(p, tf);
                 return { ...p, _val: stats?.[stat.key] ?? null };
             })
             .filter(p => p._val != null && p._val !== 0)
@@ -766,7 +808,7 @@ function renderLeaders() {
     pitcherStats.forEach(stat => {
         const sorted = pitchers
             .map(p => {
-                const stats = tf === 'yearly' ? p.yearly : p.weekly;
+                const stats = getPlayerStats(p, tf);
                 return { ...p, _val: stats?.[stat.key] ?? null };
             })
             .filter(p => p._val != null && (stat.sort === 'asc' ? true : p._val !== 0))
