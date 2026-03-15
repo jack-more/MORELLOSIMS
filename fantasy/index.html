@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FANTASY — Pitcher DNA Projections</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ═══ RESET ═══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;font-size:16px}
+body{font-family:'Inter',sans-serif;background:var(--color-bg);color:var(--color-text);min-height:100vh;overflow-x:hidden;padding-bottom:80px}
+
+/* ═══ DESIGN TOKENS ═══ */
+:root{
+    --color-bg:#9E9E9E;
+    --color-card:#FFFFFF;
+    --color-accent:#FFEA00;
+    --color-black:#080808;
+    --color-text:#000000;
+    --color-meta:#4A4A4A;
+    --color-elite:#00A334;
+    --color-favorable:#2D8B4E;
+    --color-neutral:#D4C000;
+    --color-tough:#FF3333;
+    --font-display:'Anton',sans-serif;
+    --font-body:'Inter',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+    --shadow:4px 4px 0px var(--color-black);
+    --border:2px solid var(--color-black);
+}
+
+/* ═══ BACKGROUND ═══ */
+body::before{
+    content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+    background-image:radial-gradient(circle,rgba(0,0,0,0.12) 1px,transparent 1px);
+    background-size:20px 20px;
+    pointer-events:none;z-index:0;
+}
+body::after{
+    content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+    background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+    pointer-events:none;z-index:0;opacity:0.5;
+}
+
+/* ═══ HEADER ═══ */
+.header{position:sticky;top:0;z-index:200;background:var(--color-bg);isolation:isolate}
+.header::before{content:'';position:absolute;inset:0;background:var(--color-bg);z-index:-1}
+.brand-row{display:flex;align-items:center;justify-content:space-between;padding:10px 16px}
+.logo{font-family:var(--font-display);font-size:28px;color:var(--color-accent);background:var(--color-black);padding:4px 14px;transform:skewX(-5deg);display:inline-block;letter-spacing:2px;line-height:1.1}
+.byline{font-family:var(--font-body);font-size:11px;font-weight:400;color:#555;letter-spacing:0.5px;font-style:italic}
+.status-dot{width:12px;height:12px;border-radius:50%;background:var(--color-accent);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(255,234,0,0.4)}50%{opacity:0.7;box-shadow:0 0 0 8px rgba(255,234,0,0)}}
+
+/* ═══ CONTAINER ═══ */
+.container{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 16px}
+
+/* ═══ LEADERS GRID ═══ */
+.leaders-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+.leader-card{background:var(--color-card);border:var(--border);box-shadow:var(--shadow);overflow:hidden}
+.leader-card-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--color-black);color:var(--color-accent);font-family:var(--font-display);font-size:15px;letter-spacing:2px;text-transform:uppercase}
+.leader-card-header .stat-label{font-family:var(--font-mono);font-size:9px;color:rgba(255,234,0,0.6)}
+.leader-row{display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid #eee;gap:8px}
+.leader-row:last-child{border-bottom:none}
+.leader-row:hover{background:#fafafa}
+.leader-row.on-roster{background:rgba(255,234,0,0.08);border-left:3px solid var(--color-accent)}
+.leader-num{font-family:var(--font-mono);font-size:10px;color:var(--color-meta);min-width:18px;text-align:right}
+.leader-name{font-family:var(--font-body);font-size:12px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leader-team{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);min-width:28px}
+.leader-pos{font-family:var(--font-mono);font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:#eee;color:var(--color-meta);min-width:24px;text-align:center}
+.leader-val{font-family:var(--font-mono);font-size:13px;font-weight:700;min-width:44px;text-align:right}
+.leader-val.stat-hot{color:var(--color-elite)}
+.leader-val.stat-cold{color:var(--color-tough)}
+
+/* ═══ VIEW TOGGLE ═══ */
+.view-bar{background:var(--color-bg);padding:0 16px 8px;display:flex;gap:6px;justify-content:center}
+.view-btn{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:5px 14px;border-radius:14px;border:1.5px solid rgba(0,0,0,0.15);background:transparent;color:var(--color-meta);cursor:pointer;transition:all 0.15s}
+.view-btn.active{background:var(--color-accent);color:var(--color-black);border-color:var(--color-black)}
+
+/* ═══ TIME FRAME TOGGLE ═══ */
+.timeframe-bar{background:var(--color-bg);padding:0 16px 8px;position:sticky;top:48px;z-index:99}
+.timeframe-inner{display:flex;gap:6px;justify-content:center}
+.tf-btn{font-family:var(--font-mono);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:8px 20px;border-radius:20px;border:2px solid var(--color-black);background:transparent;color:var(--color-meta);cursor:pointer;transition:all 0.15s}
+.tf-btn.active{background:var(--color-accent);color:var(--color-black);border-color:var(--color-black)}
+
+/* ═══ POSITION FILTER ═══ */
+.pos-bar{background:var(--color-bg);padding:0 16px 12px;position:sticky;top:92px;z-index:98}
+.pos-inner{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;justify-content:center;flex-wrap:wrap}
+.pos-inner::-webkit-scrollbar{display:none}
+.pos-btn{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:6px 14px;border-radius:16px;border:1.5px solid rgba(0,0,0,0.15);background:transparent;color:var(--color-meta);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.pos-btn.active{background:var(--color-black);color:var(--color-accent);border-color:var(--color-black)}
+
+/* ═══ WEEK SELECTOR ═══ */
+.week-selector{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px;font-family:var(--font-mono);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--color-text)}
+.week-arrow{background:none;border:none;font-size:18px;cursor:pointer;color:var(--color-meta);padding:4px 8px;transition:color 0.15s}
+.week-arrow:hover{color:var(--color-text)}
+
+/* ═══ SECTION HEADERS ═══ */
+.section-title{font-family:var(--font-display);font-size:22px;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px}
+.section-sub{font-family:var(--font-mono);font-size:10px;color:var(--color-meta);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
+
+/* ═══ POSITION GROUP ═══ */
+.pos-group{margin-bottom:16px}
+.pos-group-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--color-black);color:var(--color-accent);font-family:var(--font-display);font-size:16px;letter-spacing:2px;text-transform:uppercase;border:var(--border);border-bottom:none}
+.pos-group-meta{font-family:var(--font-mono);font-size:9px;color:rgba(255,234,0,0.6);letter-spacing:0.5px}
+
+/* ═══ STAT TABLE ═══ */
+.stat-table{width:100%;background:var(--color-card);border:var(--border);box-shadow:var(--shadow);border-collapse:collapse;overflow:hidden}
+.stat-table thead{background:#f5f5f5;border-bottom:2px solid var(--color-black)}
+.stat-table th{font-family:var(--font-mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:8px 4px;color:var(--color-meta);text-align:center;white-space:nowrap;cursor:pointer;user-select:none;transition:color 0.15s}
+.stat-table th:hover{color:var(--color-text)}
+.stat-table th.sort-active{color:var(--color-black)}
+.stat-table th.sort-active::after{content:' ▼';font-size:7px}
+.stat-table th.sort-active.sort-asc::after{content:' ▲'}
+.stat-table th:first-child{cursor:default}
+.stat-table th:first-child{text-align:left;padding-left:10px;width:36%}
+.stat-table td{font-family:var(--font-mono);font-size:11px;font-weight:500;padding:6px 4px;text-align:center;border-bottom:1px solid #eee}
+.stat-table td:first-child{text-align:left;padding-left:10px}
+.stat-table tr:last-child td{border-bottom:none}
+.stat-table tr:hover{background:#fafafa}
+
+/* ═══ PLAYER CELL ═══ */
+.player-cell{display:flex;align-items:center;gap:6px}
+.player-rank{font-family:var(--font-mono);font-size:10px;color:var(--color-meta);min-width:18px}
+.player-info{display:flex;flex-direction:column;min-width:0}
+.player-name{font-family:var(--font-body);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-meta{font-family:var(--font-mono);font-size:8px;color:var(--color-meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ═══ MS DOT ═══ */
+.ms-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ms-dot.elite{background:var(--color-elite)}
+.ms-dot.favorable{background:var(--color-favorable)}
+.ms-dot.neutral{background:var(--color-neutral)}
+.ms-dot.tough{background:var(--color-tough)}
+
+/* ═══ TIER BADGE ═══ */
+.tier-badge{font-family:var(--font-mono);font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:0.5px}
+.tier-t1{background:#00A334;color:#fff}
+.tier-t2{background:#2D8B4E;color:#fff}
+.tier-t3{background:#D4C000;color:#000}
+.tier-t4{background:#FF3333;color:#fff}
+
+/* ═══ STAT HIGHLIGHTS ═══ */
+.stat-hot{color:var(--color-elite);font-weight:700}
+.stat-cold{color:var(--color-tough)}
+
+/* ═══ EMPTY STATE ═══ */
+.empty-state{text-align:center;padding:40px 20px;font-family:var(--font-mono);font-size:11px;color:var(--color-meta);text-transform:uppercase;letter-spacing:1px}
+
+/* ═══ BACK LINK ═══ */
+.back-link{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;color:var(--color-meta);text-decoration:none;text-transform:uppercase;letter-spacing:0.5px;padding:4px 0}
+.back-link:hover{color:var(--color-text)}
+
+/* ═══ BOTTOM NAV ═══ */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--color-black);display:flex;z-index:200;border-top:2px solid rgba(255,255,255,0.1);padding:4px 0;padding-bottom:env(safe-area-inset-bottom, 8px)}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;background:none;border:none;color:rgba(255,255,255,0.35);font-family:var(--font-mono);font-size:10px;font-weight:700;cursor:pointer;transition:color 0.15s;letter-spacing:0.5px;text-decoration:none}
+.nav-btn.active{color:var(--color-accent)}
+
+/* ═══ LOADING ═══ */
+.loading{text-align:center;padding:60px 20px}
+.loading-spinner{width:32px;height:32px;border:3px solid #ddd;border-top-color:var(--color-accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:var(--font-mono);font-size:11px;color:var(--color-meta);text-transform:uppercase;letter-spacing:1px}
+
+/* ═══ LEAGUE CONNECT BUTTON ═══ */
+.league-btn{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:6px 12px;border-radius:4px;border:2px solid var(--color-accent);background:transparent;color:var(--color-accent);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.league-btn:hover{background:var(--color-accent);color:var(--color-black)}
+.league-btn.connected{background:var(--color-accent);color:var(--color-black)}
+.league-info{font-family:var(--font-mono);font-size:9px;color:rgba(255,234,0,0.7);margin-top:2px}
+
+/* ═══ MODAL ═══ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--color-card);border:var(--border);box-shadow:8px 8px 0 var(--color-black);max-width:400px;width:90%;padding:24px;position:relative}
+.modal-title{font-family:var(--font-display);font-size:20px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.modal-sub{font-family:var(--font-mono);font-size:10px;color:var(--color-meta);margin-bottom:16px}
+.modal-close{position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--color-meta);padding:4px}
+.form-group{margin-bottom:12px}
+.form-label{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-meta);display:block;margin-bottom:4px}
+.form-input{font-family:var(--font-mono);font-size:13px;padding:8px 10px;border:2px solid #ddd;width:100%;background:#f9f9f9;transition:border-color 0.15s}
+.form-input:focus{outline:none;border-color:var(--color-accent)}
+.form-row{display:flex;gap:8px}
+.form-row .form-group{flex:1}
+.form-submit{font-family:var(--font-mono);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:10px 20px;background:var(--color-black);color:var(--color-accent);border:var(--border);cursor:pointer;width:100%;transition:all 0.15s;margin-top:4px}
+.form-submit:hover{background:#222}
+.form-error{font-family:var(--font-mono);font-size:10px;color:var(--color-tough);margin-top:8px;display:none}
+.form-hint{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);margin-top:12px;line-height:1.6}
+.disconnect-btn{font-family:var(--font-mono);font-size:10px;color:var(--color-tough);background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
+
+/* ═══ ROSTER HIGHLIGHT ═══ */
+.stat-table tr.on-roster{background:rgba(255,234,0,0.08)}
+.stat-table tr.on-roster td:first-child{border-left:3px solid var(--color-accent)}
+.roster-tag{font-family:var(--font-mono);font-size:7px;font-weight:700;background:var(--color-accent);color:var(--color-black);padding:1px 4px;border-radius:2px;margin-left:4px;vertical-align:middle}
+
+/* ═══ MY TEAM FILTER ═══ */
+.pos-btn.my-team{border-color:var(--color-accent);color:var(--color-accent)}
+.pos-btn.my-team.active{background:var(--color-accent);color:var(--color-black)}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="brand-row">
+        <div>
+            <span class="logo">FANTASY</span>
+            <div class="byline">Pitcher DNA-powered projections</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+            <div id="league-status" style="text-align:right">
+                <button class="league-btn" id="league-btn" onclick="openLeagueModal()">Connect League</button>
+            </div>
+            <div class="status-dot"></div>
+        </div>
+    </div>
+</div>
+
+<!-- League Connect Modal -->
+<div class="modal-overlay" id="league-modal">
+    <div class="modal">
+        <button class="modal-close" onclick="closeLeagueModal()">&times;</button>
+        <div class="modal-title">Connect ESPN League</div>
+        <div class="modal-sub">Link your fantasy league to highlight your roster and find edges</div>
+        <div class="form-group">
+            <label class="form-label">League ID</label>
+            <input class="form-input" id="input-league-id" type="text" placeholder="e.g. 96345">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Team ID</label>
+                <input class="form-input" id="input-team-id" type="text" placeholder="e.g. 12">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Season</label>
+                <input class="form-input" id="input-season" type="text" placeholder="2026" value="2026">
+            </div>
+        </div>
+        <div class="form-group" style="margin-top:16px;padding-top:12px;border-top:1px dashed #ddd">
+            <label class="form-label">Auth (private leagues only)</label>
+            <input class="form-input" id="input-espn-s2" type="password" placeholder="espn_s2 cookie" style="margin-bottom:6px">
+            <input class="form-input" id="input-swid" type="text" placeholder="SWID cookie (e.g. {XXXXXXXX-...})">
+        </div>
+        <button class="form-submit" id="connect-submit" onclick="connectLeague()">Connect</button>
+        <div class="form-error" id="connect-error"></div>
+        <div class="form-hint">
+            Find your League ID in your ESPN Fantasy URL:<br>
+            fantasy.espn.com/baseball/league?leagueId=<strong>XXXXX</strong><br><br>
+            <strong>Public leagues:</strong> Just enter League ID + Team ID.<br>
+            <strong>Private leagues:</strong> Also enter your espn_s2 and SWID cookies.<br>
+            Find them in your browser: DevTools &gt; Application &gt; Cookies &gt; espn.com
+        </div>
+        <button class="disconnect-btn" id="disconnect-btn" style="display:none" onclick="disconnectLeague()">Disconnect League</button>
+    </div>
+</div>
+
+<!-- Time Frame Toggle -->
+<div class="timeframe-bar">
+    <div class="timeframe-inner">
+        <button class="tf-btn active" data-tf="weekly">Weekly</button>
+        <button class="tf-btn" data-tf="yearly">Yearly</button>
+        <button class="tf-btn" data-tf="ros">Rest of Year</button>
+    </div>
+</div>
+
+<!-- View Toggle -->
+<div class="view-bar">
+    <button class="view-btn active" data-view="position">By Position</button>
+    <button class="view-btn" data-view="leaders">Stat Leaders</button>
+</div>
+
+<!-- Position Filter -->
+<div class="pos-bar">
+    <div class="pos-inner">
+        <button class="pos-btn active" data-pos="all">All</button>
+        <button class="pos-btn" data-pos="C">C</button>
+        <button class="pos-btn" data-pos="1B">1B</button>
+        <button class="pos-btn" data-pos="2B">2B</button>
+        <button class="pos-btn" data-pos="3B">3B</button>
+        <button class="pos-btn" data-pos="SS">SS</button>
+        <button class="pos-btn" data-pos="OF">OF</button>
+        <button class="pos-btn" data-pos="UTIL">UTIL</button>
+        <button class="pos-btn" data-pos="SP">SP</button>
+        <button class="pos-btn" data-pos="RP">RP</button>
+        <button class="pos-btn my-team" data-pos="myteam" id="myteam-btn" style="display:none">My Team</button>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="container">
+
+    <!-- Week Selector (weekly mode only) -->
+    <div class="week-selector" id="week-selector">
+        <button class="week-arrow" id="week-prev">&lt;</button>
+        <span id="week-label">WEEK 1 — MAR 25 – 31</span>
+        <button class="week-arrow" id="week-next">&gt;</button>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading projections...</div>
+    </div>
+
+    <!-- Content Container -->
+    <div id="content" style="display:none"></div>
+
+</div>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav">
+    <a class="nav-btn" href="/mlbsim/">
+        <span style="font-size:18px">&#9776;</span>
+        <span>MLB SIM</span>
+    </a>
+    <a class="nav-btn active" href="/fantasy/">
+        <span style="font-size:18px">&#9918;</span>
+        <span>FANTASY</span>
+    </a>
+    <a class="nav-btn" href="/fantasy/draft.html">
+        <span style="font-size:18px">&#9889;</span>
+        <span>DRAFT</span>
+    </a>
+    <a class="nav-btn" href="/">
+        <span style="font-size:18px">&#127968;</span>
+        <span>HOME</span>
+    </a>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://morellosims.com/morello-auth.js" data-ma-theme="mlb"></script>
+
+<script>
+// ═══ STATE ═══
+let projData = null;
+let currentTimeframe = 'weekly';
+let currentPos = 'all';
+let currentView = 'position';  // 'position' or 'leaders'
+let sortState = { key: null, asc: false }; // column sort state
+let leagueRoster = null;  // Set of player names on user's team
+let leagueConfig = null;  // {leagueId, teamId, season, teamName}
+
+// ═══ LOAD DATA ═══
+async function loadProjections() {
+    try {
+        const resp = await fetch('/atlas/fantasy_projections.json');
+        projData = await resp.json();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+        if (projData.week_label) {
+            document.getElementById('week-label').textContent = projData.week_label;
+        }
+        // Restore saved league connection
+        loadSavedLeague();
+        render();
+    } catch (e) {
+        document.getElementById('loading').innerHTML =
+            '<div class="empty-state">PROJECTIONS NOT YET AVAILABLE — RUN THE PIPELINE FIRST</div>';
+    }
+}
+
+// ═══ LEAGUE INTEGRATION ═══
+function openLeagueModal() {
+    document.getElementById('league-modal').classList.add('open');
+    if (leagueConfig) {
+        document.getElementById('input-league-id').value = leagueConfig.leagueId;
+        document.getElementById('input-team-id').value = leagueConfig.teamId;
+        document.getElementById('input-season').value = leagueConfig.season;
+        document.getElementById('disconnect-btn').style.display = 'block';
+    }
+}
+function closeLeagueModal() {
+    document.getElementById('league-modal').classList.remove('open');
+}
+
+async function connectLeague() {
+    const leagueId = document.getElementById('input-league-id').value.trim();
+    const teamId = document.getElementById('input-team-id').value.trim();
+    const season = document.getElementById('input-season').value.trim() || '2026';
+    const espnS2 = document.getElementById('input-espn-s2').value.trim();
+    const swid = document.getElementById('input-swid').value.trim();
+    const errEl = document.getElementById('connect-error');
+    const submitBtn = document.getElementById('connect-submit');
+
+    if (!leagueId || !teamId) {
+        errEl.textContent = 'League ID and Team ID are required';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    errEl.style.display = 'none';
+    submitBtn.textContent = 'Connecting...';
+    submitBtn.disabled = true;
+
+    try {
+        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/${season}/segments/0/leagues/${leagueId}?view=mRoster&view=mTeam`;
+        const headers = {};
+        if (espnS2 || swid) {
+            // For private leagues, cookies need to be sent
+            // Since we can't set cookies cross-origin, we'll use headers
+            headers['X-ESPN-S2'] = espnS2;
+            headers['X-SWID'] = swid;
+        }
+
+        const resp = await fetch(url, {
+            headers,
+            credentials: espnS2 ? 'include' : 'omit'
+        });
+
+        if (!resp.ok) {
+            throw new Error(resp.status === 401
+                ? 'League is private. Enter your espn_s2 and SWID cookies, or make the league public.'
+                : `ESPN API error (${resp.status})`);
+        }
+
+        const data = await resp.json();
+        const teams = data.teams || [];
+        const myTeam = teams.find(t => t.id === parseInt(teamId));
+
+        if (!myTeam) {
+            throw new Error(`Team ID ${teamId} not found. Available: ${teams.map(t => t.id + '=' + (t.name || t.abbrev)).join(', ')}`);
+        }
+
+        // Extract roster player names
+        const rosterEntries = myTeam.roster?.entries || [];
+        const playerNames = new Set();
+        const playerIds = new Set();
+        rosterEntries.forEach(entry => {
+            const player = entry.playerPoolEntry?.player;
+            if (player) {
+                playerNames.add(player.fullName?.toLowerCase());
+                playerIds.add(player.id);
+            }
+        });
+
+        leagueRoster = playerNames;
+        leagueConfig = {
+            leagueId, teamId, season,
+            teamName: myTeam.name || myTeam.abbrev || `Team ${teamId}`,
+            playerCount: playerNames.size,
+            espnS2: espnS2 ? '***' : '',
+            swid: swid || '',
+        };
+
+        // Save to localStorage
+        localStorage.setItem('fantasy_league', JSON.stringify({
+            leagueId, teamId, season,
+            teamName: leagueConfig.teamName,
+            playerNames: Array.from(playerNames),
+            espnS2, swid,
+        }));
+
+        // Update UI
+        updateLeagueUI();
+        closeLeagueModal();
+        render();
+
+    } catch (e) {
+        errEl.textContent = e.message;
+        errEl.style.display = 'block';
+    } finally {
+        submitBtn.textContent = 'Connect';
+        submitBtn.disabled = false;
+    }
+}
+
+function disconnectLeague() {
+    leagueRoster = null;
+    leagueConfig = null;
+    localStorage.removeItem('fantasy_league');
+    updateLeagueUI();
+    closeLeagueModal();
+    if (currentPos === 'myteam') {
+        currentPos = 'all';
+        document.querySelectorAll('.pos-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-pos') === 'all'));
+    }
+    render();
+}
+
+function loadSavedLeague() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('fantasy_league'));
+        if (saved && saved.playerNames) {
+            leagueRoster = new Set(saved.playerNames);
+            leagueConfig = {
+                leagueId: saved.leagueId,
+                teamId: saved.teamId,
+                season: saved.season,
+                teamName: saved.teamName,
+                playerCount: saved.playerNames.length,
+            };
+            updateLeagueUI();
+        }
+    } catch (e) {}
+}
+
+function updateLeagueUI() {
+    const btn = document.getElementById('league-btn');
+    const myTeamBtn = document.getElementById('myteam-btn');
+
+    if (leagueConfig) {
+        btn.textContent = leagueConfig.teamName;
+        btn.classList.add('connected');
+        myTeamBtn.style.display = '';
+    } else {
+        btn.textContent = 'Connect League';
+        btn.classList.remove('connected');
+        myTeamBtn.style.display = 'none';
+    }
+}
+
+function isOnRoster(playerName) {
+    if (!leagueRoster) return false;
+    return leagueRoster.has(playerName?.toLowerCase());
+}
+
+// ═══ MS CLASS ═══
+function msClass(ms) {
+    if (ms >= 85) return 'elite';
+    if (ms >= 70) return 'favorable';
+    if (ms >= 55) return 'neutral';
+    return 'tough';
+}
+
+// ═══ TIER CLASS ═══
+function tierClass(tier) {
+    if (!tier) return '';
+    if (tier.includes('T1')) return 'tier-t1';
+    if (tier.includes('T2')) return 'tier-t2';
+    if (tier.includes('T3')) return 'tier-t3';
+    return 'tier-t4';
+}
+
+function tierLabel(tier) {
+    if (!tier) return '';
+    if (tier.includes('T1')) return 'T1';
+    if (tier.includes('T2')) return 'T2';
+    if (tier.includes('T3')) return 'T3';
+    return 'T4';
+}
+
+// ═══ FORMAT HELPERS ═══
+function fmtAvg(v) { return v ? ('.' + Math.round(v * 1000).toString().padStart(3, '0')) : '.000'; }
+function fmtOps(v) { return v ? v.toFixed(3) : '.000'; }
+function fmtEra(v) { return v != null ? v.toFixed(2) : '—'; }
+function fmtWhip(v) { return v != null ? v.toFixed(2) : '—'; }
+function fmtStat(v) { return v != null ? (Number.isInteger(v) ? v : v.toFixed(1)) : '—'; }
+
+// ═══ SORT HELPERS ═══
+function sortPlayers(players, key, tf) {
+    if (!sortState.key) return players;
+    const sorted = [...players];
+    const asc = sortState.asc;
+    // ERA/WHIP: lower is better so default sort is ascending
+    const lowerIsBetter = ['era', 'whip'];
+    sorted.sort((a, b) => {
+        const sa = (tf === 'yearly' ? a.yearly : a.weekly) || {};
+        const sb2 = (tf === 'yearly' ? b.yearly : b.weekly) || {};
+        const va = sa[key] ?? (asc ? 999 : -999);
+        const vb = sb2[key] ?? (asc ? 999 : -999);
+        return asc ? va - vb : vb - va;
+    });
+    return sorted;
+}
+
+function sortHeader(key, label) {
+    const isActive = sortState.key === key;
+    const cls = isActive ? `sort-active${sortState.asc ? ' sort-asc' : ''}` : '';
+    return `<th class="${cls}" onclick="toggleSort('${key}')">${label}</th>`;
+}
+
+function toggleSort(key) {
+    if (sortState.key === key) {
+        sortState.asc = !sortState.asc;
+    } else {
+        // ERA/WHIP default to ascending (lower is better)
+        const lowerIsBetter = ['era', 'whip'];
+        sortState.key = key;
+        sortState.asc = lowerIsBetter.includes(key);
+    }
+    render();
+}
+
+// ═══ RENDER HITTER TABLE ═══
+function renderHitterGroup(pos, players) {
+    if (!players || players.length === 0) return '';
+    const tf = currentTimeframe;
+    const gamesLabel = tf === 'weekly' ? (players[0]?.weekly?.games || 0) + ' games' :
+                       tf === 'yearly' ? '162 games' : 'ROS';
+
+    // Apply sort if active
+    if (sortState.key && ['r','hr','rbi','sb','avg','ops'].includes(sortState.key)) {
+        players = sortPlayers(players, sortState.key, tf);
+    }
+
+    let rows = '';
+    players.forEach((p, i) => {
+        const stats = tf === 'yearly' ? p.yearly : p.weekly;
+        if (!stats) return;
+        const ms = p.avg_ms || 60;
+        const opps = (p.opponents || []).join(', ');
+
+        const owned = isOnRoster(p.name);
+        rows += `<tr class="${owned ? 'on-roster' : ''}">
+            <td>
+                <div class="player-cell">
+                    <span class="player-rank">${i + 1}</span>
+                    <span class="ms-dot ${msClass(ms)}"></span>
+                    <div class="player-info">
+                        <span class="player-name">${p.name}${owned ? '<span class="roster-tag">MINE</span>' : ''}</span>
+                        <span class="player-meta">${p.team} · ${p.pos}${opps ? ' · vs ' + opps : ''}</span>
+                    </div>
+                </div>
+            </td>
+            <td>${fmtStat(stats.r)}</td>
+            <td class="${stats.hr >= 2 ? 'stat-hot' : ''}">${fmtStat(stats.hr)}</td>
+            <td>${fmtStat(stats.rbi)}</td>
+            <td>${fmtStat(stats.sb)}</td>
+            <td>${fmtAvg(stats.avg)}</td>
+            <td class="${stats.ops >= 0.900 ? 'stat-hot' : stats.ops < 0.650 ? 'stat-cold' : ''}">${fmtOps(stats.ops)}</td>
+        </tr>`;
+    });
+
+    return `<div class="pos-group" data-pos-group="${pos}">
+        <div class="pos-group-header">
+            <span>${pos === 'UTIL' ? 'UTILITY' : pos === 'OF' ? 'OUTFIELD' : posLabel(pos)}</span>
+            <span class="pos-group-meta">${gamesLabel}</span>
+        </div>
+        <table class="stat-table">
+            <thead><tr>
+                <th>Player</th>${sortHeader('r','R')}${sortHeader('hr','HR')}${sortHeader('rbi','RBI')}${sortHeader('sb','SB')}${sortHeader('avg','AVG')}${sortHeader('ops','OPS')}
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    </div>`;
+}
+
+// ═══ RENDER PITCHER TABLE ═══
+function renderPitcherGroup(pos, players) {
+    if (!players || players.length === 0) return '';
+    const tf = currentTimeframe;
+
+    // Apply sort if active
+    if (sortState.key && ['k','qs','w','s','era','whip'].includes(sortState.key)) {
+        players = sortPlayers(players, sortState.key, tf);
+    }
+
+    let rows = '';
+    players.forEach((p, i) => {
+        const stats = tf === 'yearly' ? p.yearly : p.weekly;
+        if (!stats) return;
+        const opps = (p.opponents || []).join(', ');
+        const tier = p.tier || '';
+
+        const owned = isOnRoster(p.name);
+        rows += `<tr class="${owned ? 'on-roster' : ''}">
+            <td>
+                <div class="player-cell">
+                    <span class="player-rank">${i + 1}</span>
+                    ${tier ? `<span class="tier-badge ${tierClass(tier)}">${tierLabel(tier)}</span>` : ''}
+                    <div class="player-info">
+                        <span class="player-name">${p.name}${owned ? '<span class="roster-tag">MINE</span>' : ''}</span>
+                        <span class="player-meta">${p.team}${p.archetype ? ' · ' + p.archetype : ''}${opps ? ' · vs ' + opps : ''}</span>
+                    </div>
+                </div>
+            </td>
+            <td class="${stats.k >= 8 ? 'stat-hot' : ''}">${fmtStat(stats.k)}</td>
+            <td>${fmtStat(stats.qs)}</td>
+            <td>${fmtStat(stats.w)}</td>
+            <td>${fmtStat(stats.s)}</td>
+            <td class="${stats.era <= 3.00 ? 'stat-hot' : stats.era >= 5.00 ? 'stat-cold' : ''}">${fmtEra(stats.era)}</td>
+            <td class="${stats.whip <= 1.10 ? 'stat-hot' : stats.whip >= 1.40 ? 'stat-cold' : ''}">${fmtWhip(stats.whip)}</td>
+        </tr>`;
+    });
+
+    return `<div class="pos-group" data-pos-group="${pos}">
+        <div class="pos-group-header">
+            <span>${pos === 'SP' ? 'STARTING PITCHERS' : 'RELIEF PITCHERS'}</span>
+            <span class="pos-group-meta">${pos === 'SP' ? 'projected starts' : 'projected apps'}</span>
+        </div>
+        <table class="stat-table">
+            <thead><tr>
+                <th>Player</th>${sortHeader('k','K')}${sortHeader('qs','QS')}${sortHeader('w','W')}${sortHeader('s','S')}${sortHeader('era','ERA')}${sortHeader('whip','WHIP')}
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    </div>`;
+}
+
+// ═══ POSITION LABEL ═══
+function posLabel(pos) {
+    const labels = {
+        'C': 'CATCHERS', '1B': 'FIRST BASE', '2B': 'SECOND BASE',
+        '3B': 'THIRD BASE', 'SS': 'SHORTSTOP', 'OF': 'OUTFIELD',
+        'SP': 'STARTING PITCHERS', 'RP': 'RELIEF PITCHERS', 'UTIL': 'UTILITY'
+    };
+    return labels[pos] || pos;
+}
+
+// ═══ GATHER ALL PLAYERS ═══
+function getAllPlayers(type) {
+    if (!projData) return [];
+    const positions = projData.positions || {};
+    const groups = type === 'hitter'
+        ? ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL']
+        : ['SP', 'RP'];
+
+    const seen = new Set();
+    const all = [];
+    groups.forEach(pos => {
+        (positions[pos] || []).forEach(p => {
+            const key = p.id || p.name;
+            if (!seen.has(key)) {
+                seen.add(key);
+                all.push({ ...p, espn_pos: p.espn_pos || pos });
+            }
+        });
+    });
+    return all;
+}
+
+// ═══ RENDER LEADERS ═══
+function renderLeaders() {
+    const tf = currentTimeframe;
+    const TOP = 15;
+    let html = '<div class="leaders-grid">';
+
+    // Hitter stat leaders
+    const hitters = getAllPlayers('hitter');
+    const hitterStats = [
+        { key: 'hr', label: 'HOME RUNS', desc: 'HR', fmt: fmtStat, hotFn: v => v >= 2, coldFn: () => false, sort: 'desc' },
+        { key: 'r', label: 'RUNS', desc: 'R', fmt: fmtStat, hotFn: v => v >= 5, coldFn: () => false, sort: 'desc' },
+        { key: 'rbi', label: 'RBI', desc: 'RBI', fmt: fmtStat, hotFn: v => v >= 5, coldFn: () => false, sort: 'desc' },
+        { key: 'sb', label: 'STOLEN BASES', desc: 'SB', fmt: fmtStat, hotFn: v => v >= 2, coldFn: () => false, sort: 'desc' },
+        { key: 'avg', label: 'BATTING AVG', desc: 'AVG', fmt: fmtAvg, hotFn: v => v >= 0.300, coldFn: v => v < 0.230, sort: 'desc' },
+        { key: 'ops', label: 'OPS', desc: 'OPS', fmt: fmtOps, hotFn: v => v >= 0.900, coldFn: v => v < 0.650, sort: 'desc' },
+    ];
+
+    hitterStats.forEach(stat => {
+        const sorted = hitters
+            .map(p => {
+                const stats = tf === 'yearly' ? p.yearly : p.weekly;
+                return { ...p, _val: stats?.[stat.key] ?? null };
+            })
+            .filter(p => p._val != null && p._val !== 0)
+            .sort((a, b) => stat.sort === 'desc' ? b._val - a._val : a._val - b._val)
+            .slice(0, TOP);
+
+        html += renderLeaderCard(stat.label, stat.desc, sorted, stat.fmt, stat.hotFn, stat.coldFn);
+    });
+
+    // Pitcher stat leaders
+    const pitchers = getAllPlayers('pitcher');
+    const pitcherStats = [
+        { key: 'k', label: 'STRIKEOUTS', desc: 'K', fmt: fmtStat, hotFn: v => v >= 8, coldFn: () => false, sort: 'desc' },
+        { key: 'w', label: 'WINS', desc: 'W', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc' },
+        { key: 'qs', label: 'QUALITY STARTS', desc: 'QS', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc' },
+        { key: 's', label: 'SAVES', desc: 'S', fmt: fmtStat, hotFn: v => v >= 1, coldFn: () => false, sort: 'desc' },
+        { key: 'era', label: 'ERA', desc: 'ERA', fmt: fmtEra, hotFn: v => v <= 3.00, coldFn: v => v >= 5.00, sort: 'asc' },
+        { key: 'whip', label: 'WHIP', desc: 'WHIP', fmt: fmtWhip, hotFn: v => v <= 1.10, coldFn: v => v >= 1.40, sort: 'asc' },
+    ];
+
+    pitcherStats.forEach(stat => {
+        const sorted = pitchers
+            .map(p => {
+                const stats = tf === 'yearly' ? p.yearly : p.weekly;
+                return { ...p, _val: stats?.[stat.key] ?? null };
+            })
+            .filter(p => p._val != null && (stat.sort === 'asc' ? true : p._val !== 0))
+            .sort((a, b) => stat.sort === 'desc' ? b._val - a._val : a._val - b._val)
+            .slice(0, TOP);
+
+        html += renderLeaderCard(stat.label, stat.desc, sorted, stat.fmt, stat.hotFn, stat.coldFn);
+    });
+
+    html += '</div>';
+    return html;
+}
+
+function renderLeaderCard(title, statDesc, players, fmt, hotFn, coldFn) {
+    if (!players.length) return '';
+    let rows = '';
+    players.forEach((p, i) => {
+        const owned = isOnRoster(p.name);
+        const valClass = hotFn(p._val) ? 'stat-hot' : coldFn(p._val) ? 'stat-cold' : '';
+        rows += `<div class="leader-row${owned ? ' on-roster' : ''}">
+            <span class="leader-num">${i + 1}</span>
+            <span class="leader-name">${p.name}${owned ? '<span class="roster-tag">MINE</span>' : ''}</span>
+            <span class="leader-pos">${p.espn_pos || p.pos}</span>
+            <span class="leader-team">${p.team}</span>
+            <span class="leader-val ${valClass}">${fmt(p._val)}</span>
+        </div>`;
+    });
+
+    return `<div class="leader-card">
+        <div class="leader-card-header">
+            <span>${title}</span>
+            <span class="stat-label">${statDesc}</span>
+        </div>
+        ${rows}
+    </div>`;
+}
+
+// ═══ MAIN RENDER ═══
+function render() {
+    if (!projData) return;
+    const positions = projData.positions || {};
+    const content = document.getElementById('content');
+    let html = '';
+
+    const hitterPositions = ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL'];
+    const pitcherPositions = ['SP', 'RP'];
+    const showAll = currentPos === 'all';
+    const showMyTeam = currentPos === 'myteam';
+
+    // Week selector visibility
+    document.getElementById('week-selector').style.display =
+        currentTimeframe === 'weekly' ? 'flex' : 'none';
+
+    // Position bar visibility (hide when in leaders view)
+    document.querySelector('.pos-bar').style.display =
+        currentView === 'leaders' ? 'none' : '';
+
+    if (currentView === 'leaders') {
+        html = renderLeaders();
+    } else if (showMyTeam && leagueRoster) {
+        [...hitterPositions, ...pitcherPositions].forEach(pos => {
+            const players = (positions[pos] || []).filter(p => isOnRoster(p.name));
+            if (players.length > 0) {
+                if (['SP', 'RP'].includes(pos)) {
+                    html += renderPitcherGroup(pos, players);
+                } else {
+                    html += renderHitterGroup(pos, players);
+                }
+            }
+        });
+    } else {
+        hitterPositions.forEach(pos => {
+            if (showAll || currentPos === pos) {
+                html += renderHitterGroup(pos, positions[pos]);
+            }
+        });
+        pitcherPositions.forEach(pos => {
+            if (showAll || currentPos === pos) {
+                html += renderPitcherGroup(pos, positions[pos]);
+            }
+        });
+    }
+
+    if (!html) {
+        html = showMyTeam
+            ? '<div class="empty-state">CONNECT YOUR ESPN LEAGUE TO SEE YOUR ROSTER</div>'
+            : '<div class="empty-state">NO DATA AVAILABLE FOR THIS POSITION</div>';
+    }
+
+    content.innerHTML = html;
+}
+
+// ═══ EVENT LISTENERS ═══
+
+// Time frame toggle
+document.querySelectorAll('.tf-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentTimeframe = btn.getAttribute('data-tf');
+        render();
+    });
+});
+
+// View toggle
+document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentView = btn.getAttribute('data-view');
+        render();
+    });
+});
+
+// Position filter
+document.querySelectorAll('.pos-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPos = btn.getAttribute('data-pos');
+        render();
+    });
+});
+
+// ═══ MODAL CLOSE ON OVERLAY CLICK ═══
+document.getElementById('league-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeLeagueModal();
+});
+
+// ═══ URL PARAMS ═══
+// Support ?leagueId=X&teamId=Y&seasonId=Z for direct linking
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('leagueId') && urlParams.get('teamId')) {
+    document.getElementById('input-league-id').value = urlParams.get('leagueId');
+    document.getElementById('input-team-id').value = urlParams.get('teamId');
+    document.getElementById('input-season').value = urlParams.get('seasonId') || '2026';
+}
+
+// ═══ INIT ═══
+loadProjections();
+</script>
+
+</body>
+</html>

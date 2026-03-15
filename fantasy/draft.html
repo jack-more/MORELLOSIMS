@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRAFT ASSISTANT — Pitcher DNA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ═══ RESET ═══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;font-size:16px}
+body{font-family:'Inter',sans-serif;background:var(--color-bg);color:var(--color-text);height:100vh;overflow:hidden}
+
+/* ═══ DESIGN TOKENS ═══ */
+:root{
+    --color-bg:#9E9E9E;
+    --color-card:#FFFFFF;
+    --color-accent:#FFEA00;
+    --color-black:#080808;
+    --color-text:#000000;
+    --color-meta:#4A4A4A;
+    --color-elite:#00A334;
+    --color-favorable:#2D8B4E;
+    --color-neutral:#D4C000;
+    --color-tough:#FF3333;
+    --font-display:'Anton',sans-serif;
+    --font-body:'Inter',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+    --shadow:4px 4px 0px var(--color-black);
+    --border:2px solid var(--color-black);
+}
+
+/* ═══ BACKGROUND ═══ */
+body::before{
+    content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+    background-image:radial-gradient(circle,rgba(0,0,0,0.12) 1px,transparent 1px);
+    background-size:20px 20px;pointer-events:none;z-index:0;
+}
+
+/* ═══ HEADER ═══ */
+.header{position:sticky;top:0;z-index:200;background:var(--color-black);display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:2px solid rgba(255,255,255,0.1)}
+.logo{font-family:var(--font-display);font-size:22px;color:var(--color-accent);letter-spacing:2px}
+.header-meta{display:flex;align-items:center;gap:12px}
+.round-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--color-accent);background:rgba(255,234,0,0.1);padding:4px 12px;border-radius:4px;border:1px solid rgba(255,234,0,0.3);letter-spacing:0.5px}
+.league-btn{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:6px 12px;border-radius:4px;border:2px solid var(--color-accent);background:transparent;color:var(--color-accent);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.league-btn:hover{background:var(--color-accent);color:var(--color-black)}
+.league-btn.connected{background:var(--color-accent);color:var(--color-black)}
+.back-link{font-family:var(--font-mono);font-size:10px;color:rgba(255,255,255,0.5);text-decoration:none;letter-spacing:0.5px}
+.back-link:hover{color:var(--color-accent)}
+
+/* ═══ 3-PANEL LAYOUT ═══ */
+.panels{display:grid;grid-template-columns:320px 1fr 320px;height:calc(100vh - 48px);position:relative;z-index:1}
+.panel{overflow-y:auto;border-right:1px solid rgba(0,0,0,0.15)}
+.panel:last-child{border-right:none}
+.panel-header{position:sticky;top:0;z-index:10;background:var(--color-bg);padding:10px 12px 8px;border-bottom:var(--border)}
+.panel-title{font-family:var(--font-display);font-size:16px;letter-spacing:2px;text-transform:uppercase}
+.panel-sub{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.5px}
+
+/* ═══ SEARCH BAR ═══ */
+.search-bar{padding:8px 12px}
+.search-input{font-family:var(--font-mono);font-size:11px;padding:6px 10px;border:1.5px solid rgba(0,0,0,0.15);border-radius:4px;width:100%;background:#f5f5f5;transition:border-color 0.15s}
+.search-input:focus{outline:none;border-color:var(--color-accent)}
+
+/* ═══ SORT CONTROLS ═══ */
+.sort-controls{display:flex;gap:3px;padding:0 12px 6px}
+.sort-btn{font-family:var(--font-mono);font-size:8px;font-weight:700;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid rgba(0,0,0,0.12);background:transparent;color:var(--color-meta);cursor:pointer;transition:all 0.15s;letter-spacing:0.3px}
+.sort-btn.active{background:var(--color-accent);color:var(--color-black);border-color:var(--color-accent)}
+
+/* ═══ POSITION TABS ═══ */
+.pos-tabs{display:flex;gap:3px;padding:0 12px 8px;flex-wrap:wrap}
+.pos-tab{font-family:var(--font-mono);font-size:9px;font-weight:700;text-transform:uppercase;padding:4px 8px;border-radius:10px;border:1px solid rgba(0,0,0,0.12);background:transparent;color:var(--color-meta);cursor:pointer;transition:all 0.15s}
+.pos-tab.active{background:var(--color-black);color:var(--color-accent);border-color:var(--color-black)}
+
+/* ═══ CATEGORY WEIGHTS ═══ */
+.weights-bar{border-bottom:1px solid #ddd;margin:0 12px 6px}
+.weights-toggle{font-family:var(--font-mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-meta);cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:4px;user-select:none}
+.weights-toggle::before{content:'▸';font-size:8px;transition:transform 0.2s;display:inline-block}
+.weights-toggle.open::before{transform:rotate(90deg)}
+.weights-grid{display:none;grid-template-columns:repeat(6,1fr);gap:3px;padding:6px 0 8px}
+.weights-grid.open{display:grid}
+.weight-item{text-align:center}
+.weight-label{font-family:var(--font-mono);font-size:7px;font-weight:700;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.3px;display:block;margin-bottom:2px}
+.weight-input{font-family:var(--font-mono);font-size:11px;font-weight:700;width:100%;text-align:center;padding:3px 0;border:1.5px solid #ddd;border-radius:3px;background:#f9f9f9;transition:border-color 0.15s}
+.weight-input:focus{outline:none;border-color:var(--color-accent)}
+.weight-input.boosted{border-color:var(--color-elite);background:rgba(0,163,52,0.06)}
+.weight-input.zeroed{border-color:#eee;background:#f0f0f0;color:#bbb}
+.weights-section-label{font-family:var(--font-mono);font-size:7px;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.5px;grid-column:1/-1;padding:4px 0 0;border-top:1px dashed #ddd;margin-top:2px}
+.weights-apply{font-family:var(--font-mono);font-size:8px;font-weight:700;text-transform:uppercase;padding:4px 10px;border-radius:3px;border:1.5px solid var(--color-black);background:var(--color-accent);color:var(--color-black);cursor:pointer;grid-column:1/-1;margin-top:2px;letter-spacing:0.5px}
+.weights-apply:hover{background:#ffe100}
+.weights-reset{font-family:var(--font-mono);font-size:7px;color:var(--color-meta);background:none;border:none;cursor:pointer;text-decoration:underline;grid-column:1/-1;text-align:center}
+
+/* ═══ AVAILABLE PLAYER ROW ═══ */
+.avail-row{display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid #e8e8e8;cursor:pointer;transition:background 0.1s;gap:6px}
+.avail-row:hover{background:rgba(255,234,0,0.12)}
+.avail-rank{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);min-width:20px;text-align:right}
+.avail-pos{font-family:var(--font-mono);font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;background:#eee;color:var(--color-meta);min-width:22px;text-align:center}
+.avail-info{flex:1;min-width:0}
+.avail-name{font-family:var(--font-body);font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.avail-meta{font-family:var(--font-mono);font-size:8px;color:var(--color-meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.avail-ranks{display:flex;gap:3px;align-items:center}
+.rank-badge{font-family:var(--font-mono);font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;min-width:24px;text-align:center;line-height:1.3}
+.rank-badge.dna{background:var(--color-accent);color:var(--color-black)}
+.rank-badge.espn{background:#006aff;color:#fff}
+.rank-badge.weighted{background:var(--color-elite);color:#fff}
+.avail-val{font-family:var(--font-mono);font-size:12px;font-weight:700;min-width:36px;text-align:right}
+.avail-val.elite{color:var(--color-elite)}
+.avail-val.good{color:var(--color-favorable)}
+.avail-val.ok{color:var(--color-neutral)}
+.avail-draft-btn{font-family:var(--font-mono);font-size:8px;font-weight:700;padding:3px 6px;border-radius:3px;border:1.5px solid var(--color-elite);background:transparent;color:var(--color-elite);cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;opacity:0;transition:opacity 0.15s}
+.avail-row:hover .avail-draft-btn{opacity:1}
+
+/* ═══ LEAGUE BOARD ═══ */
+.league-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:12px}
+.team-card{background:var(--color-card);border:var(--border);box-shadow:2px 2px 0 var(--color-black);overflow:hidden}
+.team-card.is-mine{border-color:var(--color-accent);box-shadow:2px 2px 0 var(--color-accent)}
+.team-card-header{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--color-black);color:#fff;font-family:var(--font-body);font-size:11px;font-weight:700}
+.team-card-header .slots{font-family:var(--font-mono);font-size:9px;color:rgba(255,255,255,0.5)}
+.team-needs{padding:6px 10px;display:flex;flex-wrap:wrap;gap:3px}
+.need-chip{font-family:var(--font-mono);font-size:8px;font-weight:700;padding:2px 6px;border-radius:8px;background:var(--color-tough);color:#fff;text-transform:uppercase}
+.need-chip.filled{background:#ddd;color:var(--color-meta)}
+.team-pred{padding:4px 10px 8px;font-family:var(--font-mono);font-size:9px;color:var(--color-meta);border-top:1px dashed #ddd}
+.team-pred strong{color:var(--color-text)}
+
+/* ═══ MY TEAM PANEL ═══ */
+.slot-group{padding:4px 12px}
+.slot-group-title{font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.5px;padding:6px 0 2px;border-bottom:1px solid #ddd;margin-bottom:2px}
+.slot-row{display:flex;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;gap:6px;min-height:28px}
+.slot-label{font-family:var(--font-mono);font-size:8px;font-weight:700;color:var(--color-meta);min-width:24px;text-transform:uppercase}
+.slot-player{flex:1;font-family:var(--font-body);font-size:11px;font-weight:600}
+.slot-empty{flex:1;font-family:var(--font-mono);font-size:9px;color:rgba(0,0,0,0.2);font-style:italic}
+.slot-remove{font-size:12px;color:var(--color-tough);cursor:pointer;background:none;border:none;padding:2px 4px;opacity:0.5;transition:opacity 0.15s}
+.slot-remove:hover{opacity:1}
+.slot-stat{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);min-width:28px;text-align:right}
+
+/* ═══ CATEGORY TOTALS ═══ */
+.cat-section{position:sticky;bottom:0;background:var(--color-card);border-top:var(--border);padding:8px 12px}
+.cat-title{font-family:var(--font-display);font-size:13px;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.cat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.cat-cell{text-align:center;padding:4px 2px;background:#f5f5f5;border-radius:3px}
+.cat-label{font-family:var(--font-mono);font-size:7px;font-weight:700;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.3px}
+.cat-value{font-family:var(--font-mono);font-size:12px;font-weight:700}
+.cat-value.strong{color:var(--color-elite)}
+.cat-value.weak{color:var(--color-tough)}
+
+/* ═══ MODAL ═══ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--color-card);border:var(--border);box-shadow:8px 8px 0 var(--color-black);max-width:400px;width:90%;padding:24px;position:relative}
+.modal-title{font-family:var(--font-display);font-size:20px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.modal-sub{font-family:var(--font-mono);font-size:10px;color:var(--color-meta);margin-bottom:16px}
+.modal-close{position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--color-meta);padding:4px}
+.form-group{margin-bottom:12px}
+.form-label{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-meta);display:block;margin-bottom:4px}
+.form-input{font-family:var(--font-mono);font-size:13px;padding:8px 10px;border:2px solid #ddd;width:100%;background:#f9f9f9;transition:border-color 0.15s}
+.form-input:focus{outline:none;border-color:var(--color-accent)}
+.form-row{display:flex;gap:8px}
+.form-row .form-group{flex:1}
+.form-submit{font-family:var(--font-mono);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:10px 20px;background:var(--color-black);color:var(--color-accent);border:var(--border);cursor:pointer;width:100%;transition:all 0.15s;margin-top:4px}
+.form-submit:hover{background:#222}
+.form-error{font-family:var(--font-mono);font-size:10px;color:var(--color-tough);margin-top:8px;display:none}
+.form-hint{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);margin-top:12px;line-height:1.6}
+.disconnect-btn{font-family:var(--font-mono);font-size:10px;color:var(--color-tough);background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
+
+/* ═══ EMPTY / LOADING ═══ */
+.empty-state{text-align:center;padding:40px 20px;font-family:var(--font-mono);font-size:11px;color:var(--color-meta);text-transform:uppercase;letter-spacing:1px}
+.loading-spinner{width:24px;height:24px;border:3px solid #ddd;border-top-color:var(--color-accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══ SCROLLBAR ═══ */
+.panel::-webkit-scrollbar{width:6px}
+.panel::-webkit-scrollbar-track{background:transparent}
+.panel::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px}
+
+/* ═══ RESPONSIVE ═══ */
+@media(max-width:900px){
+    .panels{grid-template-columns:1fr;height:auto}
+    body{overflow:auto}
+    .panel{max-height:70vh;border-right:none;border-bottom:var(--border)}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div style="display:flex;align-items:center;gap:12px">
+        <a class="back-link" href="/fantasy/">&larr; Projections</a>
+        <span class="logo">DRAFT ASSISTANT</span>
+    </div>
+    <div class="header-meta">
+        <span class="round-badge" id="round-badge">ROUND 1</span>
+        <button class="league-btn" id="league-btn" onclick="openModal()">Connect League</button>
+    </div>
+</div>
+
+<!-- League Connect Modal -->
+<div class="modal-overlay" id="league-modal">
+    <div class="modal">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div class="modal-title">Connect ESPN League</div>
+        <div class="modal-sub">Link your league to see all teams and predict picks</div>
+        <div class="form-group">
+            <label class="form-label">League ID</label>
+            <input class="form-input" id="input-league-id" type="text" placeholder="e.g. 96345">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Team ID (yours)</label>
+                <input class="form-input" id="input-team-id" type="text" placeholder="e.g. 12">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Season</label>
+                <input class="form-input" id="input-season" type="text" placeholder="2026" value="2026">
+            </div>
+        </div>
+        <div class="form-group" style="margin-top:16px;padding-top:12px;border-top:1px dashed #ddd">
+            <label class="form-label">Auth (private leagues only)</label>
+            <input class="form-input" id="input-espn-s2" type="password" placeholder="espn_s2 cookie" style="margin-bottom:6px">
+            <input class="form-input" id="input-swid" type="text" placeholder="SWID cookie (e.g. {XXXXXXXX-...})">
+        </div>
+        <button class="form-submit" id="connect-submit" onclick="connectLeague()">Connect</button>
+        <div class="form-error" id="connect-error"></div>
+        <div class="form-hint">
+            Find your League ID in your ESPN Fantasy URL:<br>
+            fantasy.espn.com/baseball/league?leagueId=<strong>XXXXX</strong><br><br>
+            <strong>Private leagues:</strong> Enter espn_s2 and SWID cookies.<br>
+            DevTools &gt; Application &gt; Cookies &gt; espn.com
+        </div>
+        <button class="disconnect-btn" id="disconnect-btn" style="display:none" onclick="disconnectLeague()">Disconnect League</button>
+    </div>
+</div>
+
+<!-- 3-Panel Layout -->
+<div class="panels">
+
+    <!-- LEFT: Best Available -->
+    <div class="panel" id="panel-available">
+        <div class="panel-header">
+            <div class="panel-title">Best Available</div>
+            <div class="panel-sub" id="avail-count">Loading...</div>
+        </div>
+        <div class="search-bar">
+            <input class="search-input" id="search-input" type="text" placeholder="Search player name...">
+        </div>
+        <div class="sort-controls">
+            <button class="sort-btn active" data-sort="dna" onclick="setSortMode('dna')">DNA</button>
+            <button class="sort-btn" data-sort="espn" onclick="setSortMode('espn')">ESPN</button>
+            <button class="sort-btn" data-sort="weighted" onclick="setSortMode('weighted')">Weighted</button>
+        </div>
+        <div class="pos-tabs" id="pos-tabs">
+            <button class="pos-tab active" data-pos="all">All</button>
+            <button class="pos-tab" data-pos="C">C</button>
+            <button class="pos-tab" data-pos="1B">1B</button>
+            <button class="pos-tab" data-pos="2B">2B</button>
+            <button class="pos-tab" data-pos="3B">3B</button>
+            <button class="pos-tab" data-pos="SS">SS</button>
+            <button class="pos-tab" data-pos="OF">OF</button>
+            <button class="pos-tab" data-pos="SP">SP</button>
+            <button class="pos-tab" data-pos="RP">RP</button>
+        </div>
+        <div class="weights-bar">
+            <div class="weights-toggle" id="weights-toggle" onclick="toggleWeights()">Category Weights</div>
+            <div class="weights-grid" id="weights-grid">
+                <div class="weight-item"><span class="weight-label">R</span><input class="weight-input" data-cat="R" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">HR</span><input class="weight-input" data-cat="HR" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">RBI</span><input class="weight-input" data-cat="RBI" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">SB</span><input class="weight-input" data-cat="SB" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">AVG</span><input class="weight-input" data-cat="AVG" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">OPS</span><input class="weight-input" data-cat="OPS" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weights-section-label">Pitching</div>
+                <div class="weight-item"><span class="weight-label">K</span><input class="weight-input" data-cat="K" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">QS</span><input class="weight-input" data-cat="QS" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">W</span><input class="weight-input" data-cat="W" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">S</span><input class="weight-input" data-cat="S" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">ERA</span><input class="weight-input" data-cat="ERA" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <div class="weight-item"><span class="weight-label">WHIP</span><input class="weight-input" data-cat="WHIP" type="number" value="1" min="0" max="5" step="0.5"></div>
+                <button class="weights-apply" onclick="applyWeights()">Apply Weights</button>
+                <button class="weights-reset" onclick="resetWeights()">Reset to equal</button>
+            </div>
+        </div>
+        <div id="avail-list"></div>
+    </div>
+
+    <!-- CENTER: League Board -->
+    <div class="panel" id="panel-league">
+        <div class="panel-header">
+            <div class="panel-title">League Board</div>
+            <div class="panel-sub" id="league-sub">Connect league to see teams</div>
+        </div>
+        <div id="league-content">
+            <div class="empty-state">CONNECT YOUR ESPN LEAGUE<br>TO SEE ALL TEAMS AND PREDICTED PICKS</div>
+        </div>
+    </div>
+
+    <!-- RIGHT: My Team -->
+    <div class="panel" id="panel-myteam">
+        <div class="panel-header">
+            <div class="panel-title">My Team</div>
+            <div class="panel-sub" id="myteam-sub">0 / 21 slots filled</div>
+        </div>
+        <div id="myteam-slots"></div>
+        <div class="cat-section" id="cat-section">
+            <div class="cat-title">Hitting Projections</div>
+            <div class="cat-grid" id="cat-hitting">
+                <div class="cat-cell"><div class="cat-label">R</div><div class="cat-value" id="cat-r">—</div></div>
+                <div class="cat-cell"><div class="cat-label">HR</div><div class="cat-value" id="cat-hr">—</div></div>
+                <div class="cat-cell"><div class="cat-label">RBI</div><div class="cat-value" id="cat-rbi">—</div></div>
+                <div class="cat-cell"><div class="cat-label">SB</div><div class="cat-value" id="cat-sb">—</div></div>
+                <div class="cat-cell"><div class="cat-label">AVG</div><div class="cat-value" id="cat-avg">—</div></div>
+                <div class="cat-cell"><div class="cat-label">OPS</div><div class="cat-value" id="cat-ops">—</div></div>
+            </div>
+            <div class="cat-title" style="margin-top:8px">Pitching Projections</div>
+            <div class="cat-grid" id="cat-pitching">
+                <div class="cat-cell"><div class="cat-label">K</div><div class="cat-value" id="cat-k">—</div></div>
+                <div class="cat-cell"><div class="cat-label">QS</div><div class="cat-value" id="cat-qs">—</div></div>
+                <div class="cat-cell"><div class="cat-label">W</div><div class="cat-value" id="cat-w">—</div></div>
+                <div class="cat-cell"><div class="cat-label">S</div><div class="cat-value" id="cat-s">—</div></div>
+                <div class="cat-cell"><div class="cat-label">ERA</div><div class="cat-value" id="cat-era">—</div></div>
+                <div class="cat-cell"><div class="cat-label">WHIP</div><div class="cat-value" id="cat-whip">—</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══ STATE ═══
+let projData = null;
+let allPlayers = [];        // master list from projections
+let availablePlayers = [];  // not yet drafted
+let draftedPlayers = [];    // my drafted players with slot assignments
+let leagueTeams = [];       // ESPN league teams
+let leagueConfig = null;
+let myTeamId = null;
+let currentPosFilter = 'all';
+let searchQuery = '';
+let sortMode = 'dna';       // 'dna' | 'espn' | 'weighted'
+let espnAdpMap = {};         // playerId → ESPN ADP rank
+let statZScores = {};        // playerId → { R: z, HR: z, ... }
+let weightedScores = {};     // playerId → weighted score
+let categoryWeights = { R:1, HR:1, RBI:1, SB:1, AVG:1, OPS:1, K:1, QS:1, W:1, S:1, ERA:1, WHIP:1 };
+
+// ESPN roster slot structure
+const ROSTER_SLOTS = [
+    { slot: 'C', label: 'C', type: 'hitter', max: 1 },
+    { slot: '1B', label: '1B', type: 'hitter', max: 1 },
+    { slot: '2B', label: '2B', type: 'hitter', max: 1 },
+    { slot: '3B', label: '3B', type: 'hitter', max: 1 },
+    { slot: 'SS', label: 'SS', type: 'hitter', max: 1 },
+    { slot: 'OF', label: 'OF', type: 'hitter', max: 3 },
+    { slot: 'UTIL', label: 'UTIL', type: 'hitter', max: 1 },
+    { slot: 'SP', label: 'SP', type: 'pitcher', max: 5 },
+    { slot: 'RP', label: 'RP', type: 'pitcher', max: 4 },
+    { slot: 'BN', label: 'BN', type: 'any', max: 3 },
+];
+
+// Flatten to individual slot entries
+function buildSlotList() {
+    const slots = [];
+    ROSTER_SLOTS.forEach(s => {
+        for (let i = 0; i < s.max; i++) {
+            slots.push({ ...s, idx: i, player: null });
+        }
+    });
+    return slots;
+}
+let mySlots = buildSlotList();
+
+// ═══ LOAD PROJECTIONS ═══
+async function loadProjections() {
+    try {
+        const resp = await fetch('/atlas/fantasy_projections.json');
+        projData = await resp.json();
+
+        // Build flat player list from all positions
+        const positions = projData.positions || {};
+        const seen = new Set();
+        const hitterPos = ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL'];
+        const pitcherPos = ['SP', 'RP'];
+
+        [...hitterPos, ...pitcherPos].forEach(pos => {
+            (positions[pos] || []).forEach(p => {
+                const key = p.id || p.name;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    allPlayers.push({
+                        ...p,
+                        espn_pos: p.espn_pos || pos,
+                        playerType: hitterPos.includes(pos) ? 'hitter' : 'pitcher',
+                    });
+                }
+            });
+        });
+
+        // Sort by fantasy value
+        allPlayers.sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
+        availablePlayers = [...allPlayers];
+
+        // Compute z-scores and weighted scores for category weighting
+        computeStatZScores();
+        computeAllWeightedScores();
+
+        // Try restoring saved league
+        loadSavedLeague();
+
+        renderAvailable();
+        renderMyTeam();
+    } catch (e) {
+        document.getElementById('avail-list').innerHTML =
+            '<div class="empty-state">PROJECTIONS NOT AVAILABLE — RUN THE PIPELINE FIRST</div>';
+    }
+}
+
+// ═══ SORT MODE & WEIGHTS ═══
+function setSortMode(mode) {
+    sortMode = mode;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.sort-btn[data-sort="${mode}"]`).classList.add('active');
+    sortAvailablePlayers();
+    renderAvailable();
+}
+
+function toggleWeights() {
+    const toggle = document.getElementById('weights-toggle');
+    const grid = document.getElementById('weights-grid');
+    toggle.classList.toggle('open');
+    grid.classList.toggle('open');
+}
+
+function applyWeights() {
+    document.querySelectorAll('.weight-input').forEach(inp => {
+        const cat = inp.getAttribute('data-cat');
+        categoryWeights[cat] = parseFloat(inp.value) || 0;
+        inp.classList.remove('boosted', 'zeroed');
+        if (categoryWeights[cat] > 1) inp.classList.add('boosted');
+        if (categoryWeights[cat] === 0) inp.classList.add('zeroed');
+    });
+    computeAllWeightedScores();
+    setSortMode('weighted');
+}
+
+function resetWeights() {
+    Object.keys(categoryWeights).forEach(k => categoryWeights[k] = 1);
+    document.querySelectorAll('.weight-input').forEach(inp => {
+        inp.value = '1';
+        inp.classList.remove('boosted', 'zeroed');
+    });
+    computeAllWeightedScores();
+    if (sortMode === 'weighted') {
+        sortAvailablePlayers();
+        renderAvailable();
+    }
+}
+
+// ═══ Z-SCORE COMPUTATION ═══
+function computeStatZScores() {
+    // Compute mean & stdev for each stat across all players (by type)
+    const hitters = allPlayers.filter(p => p.playerType === 'hitter');
+    const pitchers = allPlayers.filter(p => p.playerType === 'pitcher');
+
+    const hitterStats = ['r', 'hr', 'rbi', 'sb', 'avg', 'ops'];
+    const pitcherStats = ['k', 'qs', 'w', 's', 'era', 'whip'];
+
+    function zScoresForGroup(players, stats, catMap) {
+        const means = {}, stdevs = {};
+        stats.forEach(stat => {
+            const vals = players.map(p => (p.yearly || {})[stat] || 0);
+            const mean = vals.reduce((a, b) => a + b, 0) / Math.max(1, vals.length);
+            const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(1, vals.length);
+            means[stat] = mean;
+            stdevs[stat] = Math.sqrt(variance) || 1;
+        });
+        players.forEach(p => {
+            const key = p.id || p.name;
+            if (!statZScores[key]) statZScores[key] = {};
+            stats.forEach(stat => {
+                const val = (p.yearly || {})[stat] || 0;
+                let z = (val - means[stat]) / stdevs[stat];
+                // ERA and WHIP: lower is better, so invert
+                if (stat === 'era' || stat === 'whip') z = -z;
+                const catKey = catMap[stat];
+                statZScores[key][catKey] = z;
+            });
+        });
+    }
+
+    zScoresForGroup(hitters, hitterStats, { r: 'R', hr: 'HR', rbi: 'RBI', sb: 'SB', avg: 'AVG', ops: 'OPS' });
+    zScoresForGroup(pitchers, pitcherStats, { k: 'K', qs: 'QS', w: 'W', s: 'S', era: 'ERA', whip: 'WHIP' });
+}
+
+function computeAllWeightedScores() {
+    allPlayers.forEach(p => {
+        const key = p.id || p.name;
+        const z = statZScores[key] || {};
+        let score = 0;
+        let totalWeight = 0;
+
+        if (p.playerType === 'hitter') {
+            ['R', 'HR', 'RBI', 'SB', 'AVG', 'OPS'].forEach(cat => {
+                if (z[cat] !== undefined) {
+                    score += (z[cat] || 0) * (categoryWeights[cat] || 0);
+                    totalWeight += categoryWeights[cat] || 0;
+                }
+            });
+        } else {
+            ['K', 'QS', 'W', 'S', 'ERA', 'WHIP'].forEach(cat => {
+                if (z[cat] !== undefined) {
+                    score += (z[cat] || 0) * (categoryWeights[cat] || 0);
+                    totalWeight += categoryWeights[cat] || 0;
+                }
+            });
+        }
+        weightedScores[key] = totalWeight > 0 ? score / totalWeight : 0;
+    });
+}
+
+function sortAvailablePlayers() {
+    if (sortMode === 'dna') {
+        availablePlayers.sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
+    } else if (sortMode === 'espn') {
+        availablePlayers.sort((a, b) => {
+            const aRank = espnAdpMap[a.id || a.name] || 9999;
+            const bRank = espnAdpMap[b.id || b.name] || 9999;
+            return aRank - bRank;
+        });
+    } else if (sortMode === 'weighted') {
+        availablePlayers.sort((a, b) => {
+            const aKey = a.id || a.name;
+            const bKey = b.id || b.name;
+            return (weightedScores[bKey] || 0) - (weightedScores[aKey] || 0);
+        });
+    }
+}
+
+// ═══ ESPN ADP FETCH ═══
+async function fetchEspnAdp(season, leagueId, espnS2, swid) {
+    try {
+        // Fetch ESPN player rankings via the league's kona_player_info view
+        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/${season}/segments/0/leagues/${leagueId}?view=kona_player_info`;
+        const headers = {};
+        if (espnS2 || swid) {
+            headers['X-ESPN-S2'] = espnS2;
+            headers['X-SWID'] = swid;
+        }
+        const resp = await fetch(url, { headers, credentials: espnS2 ? 'include' : 'omit' });
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        const players = data.players || [];
+        // Build ADP map: lower ADP = better
+        players.forEach((p, i) => {
+            const adp = p.player?.ownership?.averageDraftPosition || p.draftAuctionValue || null;
+            const name = p.player?.fullName;
+            const id = p.player?.id;
+            if (adp && adp > 0) {
+                // Try to match to our players by name
+                const match = allPlayers.find(ap =>
+                    ap.name === name || ap.id === id || ap.name?.toLowerCase() === name?.toLowerCase()
+                );
+                if (match) {
+                    espnAdpMap[match.id || match.name] = Math.round(adp);
+                }
+            }
+        });
+
+        // If we got ADP data, also rank by it
+        const sorted = [...allPlayers]
+            .filter(p => espnAdpMap[p.id || p.name])
+            .sort((a, b) => (espnAdpMap[a.id || a.name] || 9999) - (espnAdpMap[b.id || b.name] || 9999));
+
+        // Fill in rank numbers
+        sorted.forEach((p, i) => {
+            espnAdpMap[p.id || p.name] = espnAdpMap[p.id || p.name]; // keep ADP value
+        });
+
+        renderAvailable();
+    } catch (e) {
+        console.log('ESPN ADP fetch failed (CORS or auth):', e.message);
+    }
+}
+
+// ═══ FORMAT HELPERS ═══
+function fmtAvg(v) { return v ? ('.' + Math.round(v * 1000).toString().padStart(3, '0')) : '.000'; }
+function fmtStat(v) { return v != null ? (Number.isInteger(v) ? v : v.toFixed(1)) : '—'; }
+function fmtEra(v) { return v != null ? v.toFixed(2) : '—'; }
+
+function valClass(fv) {
+    if (fv >= 90) return 'elite';
+    if (fv >= 70) return 'good';
+    if (fv >= 50) return 'ok';
+    return '';
+}
+
+// ═══ RENDER AVAILABLE ═══
+function renderAvailable() {
+    const list = document.getElementById('avail-list');
+    const query = searchQuery.toLowerCase();
+
+    // Sort before rendering
+    sortAvailablePlayers();
+
+    let filtered = availablePlayers;
+
+    // Position filter
+    if (currentPosFilter !== 'all') {
+        filtered = filtered.filter(p => p.espn_pos === currentPosFilter);
+    }
+
+    // Search filter
+    if (query) {
+        filtered = filtered.filter(p => p.name.toLowerCase().includes(query));
+    }
+
+    document.getElementById('avail-count').textContent =
+        `${availablePlayers.length} players available`;
+
+    if (!filtered.length) {
+        list.innerHTML = '<div class="empty-state">NO PLAYERS MATCH</div>';
+        return;
+    }
+
+    // Pre-compute DNA ranks for all available (for badge display)
+    const dnaRanked = [...availablePlayers].sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
+    const dnaRankMap = {};
+    dnaRanked.forEach((p, i) => dnaRankMap[p.id || p.name] = i + 1);
+
+    let html = '';
+    filtered.slice(0, 100).forEach((p, i) => {
+        const fv = p.fantasy_value || 0;
+        const yearly = p.yearly || {};
+        const pKey = p.id || p.name;
+        let statLine = '';
+        if (p.playerType === 'hitter') {
+            statLine = `${fmtStat(yearly.hr)} HR · ${fmtStat(yearly.rbi)} RBI · ${fmtAvg(yearly.avg)}`;
+        } else {
+            statLine = `${fmtStat(yearly.k)} K · ${fmtEra(yearly.era)} ERA`;
+        }
+
+        // Rank badges
+        const dnaRank = dnaRankMap[pKey] || '—';
+        const espnRank = espnAdpMap[pKey] || '—';
+        const wScore = weightedScores[pKey];
+        const wDisplay = wScore !== undefined ? wScore.toFixed(1) : '—';
+
+        // Display value based on sort mode
+        let displayVal, displayClass;
+        if (sortMode === 'dna') {
+            displayVal = Math.round(fv);
+            displayClass = valClass(fv);
+        } else if (sortMode === 'espn') {
+            displayVal = espnRank !== '—' ? '#' + espnRank : '—';
+            displayClass = '';
+        } else {
+            displayVal = wScore !== undefined ? wScore.toFixed(1) : '—';
+            displayClass = wScore > 1 ? 'elite' : wScore > 0 ? 'good' : wScore > -0.5 ? 'ok' : '';
+        }
+
+        html += `<div class="avail-row" onclick="draftPlayer('${pKey.toString().replace(/'/g, "\\'")}')">
+            <span class="avail-rank">${i + 1}</span>
+            <span class="avail-pos">${p.espn_pos}</span>
+            <div class="avail-info">
+                <div class="avail-name">${p.name}</div>
+                <div class="avail-meta">${p.team} · ${statLine}</div>
+            </div>
+            <div class="avail-ranks">
+                <span class="rank-badge dna" title="DNA Rank">${dnaRank}</span>
+                <span class="rank-badge espn" title="ESPN ADP">${espnRank}</span>
+            </div>
+            <span class="avail-val ${displayClass}">${displayVal}</span>
+            <button class="avail-draft-btn" onclick="event.stopPropagation();draftPlayer('${pKey.toString().replace(/'/g, "\\'")}')">Draft</button>
+        </div>`;
+    });
+
+    list.innerHTML = html;
+}
+
+// ═══ DRAFT / UNDRAFT ═══
+function draftPlayer(playerId) {
+    const idx = availablePlayers.findIndex(p => (p.id || p.name).toString() === playerId.toString());
+    if (idx === -1) return;
+
+    const player = availablePlayers[idx];
+
+    // Find best open slot
+    const slotIdx = findBestSlot(player);
+    if (slotIdx === -1) {
+        alert('No open roster slot for ' + player.name);
+        return;
+    }
+
+    // Move player
+    availablePlayers.splice(idx, 1);
+    mySlots[slotIdx].player = player;
+    draftedPlayers.push(player);
+
+    updateRound();
+    renderAvailable();
+    renderMyTeam();
+    renderLeagueBoard();
+}
+
+function undraftPlayer(slotIdx) {
+    const player = mySlots[slotIdx].player;
+    if (!player) return;
+
+    mySlots[slotIdx].player = null;
+
+    // Re-insert into available list sorted by fantasy value
+    const dpIdx = draftedPlayers.findIndex(p => (p.id || p.name) === (player.id || player.name));
+    if (dpIdx !== -1) draftedPlayers.splice(dpIdx, 1);
+
+    availablePlayers.push(player);
+    availablePlayers.sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
+
+    updateRound();
+    renderAvailable();
+    renderMyTeam();
+    renderLeagueBoard();
+}
+
+function findBestSlot(player) {
+    const pos = player.espn_pos;
+    const type = player.playerType;
+
+    // First try exact position match
+    for (let i = 0; i < mySlots.length; i++) {
+        if (!mySlots[i].player && mySlots[i].slot === pos) return i;
+    }
+
+    // Then try UTIL for hitters
+    if (type === 'hitter') {
+        for (let i = 0; i < mySlots.length; i++) {
+            if (!mySlots[i].player && mySlots[i].slot === 'UTIL') return i;
+        }
+    }
+
+    // Then try bench
+    for (let i = 0; i < mySlots.length; i++) {
+        if (!mySlots[i].player && mySlots[i].slot === 'BN') return i;
+    }
+
+    return -1;
+}
+
+function updateRound() {
+    const filled = mySlots.filter(s => s.player).length;
+    const round = Math.floor(filled / 1) + 1; // each pick = 1 round for now
+    document.getElementById('round-badge').textContent = `ROUND ${Math.min(round, 21)}`;
+}
+
+// ═══ RENDER MY TEAM ═══
+function renderMyTeam() {
+    const container = document.getElementById('myteam-slots');
+    const filled = mySlots.filter(s => s.player).length;
+    document.getElementById('myteam-sub').textContent = `${filled} / ${mySlots.length} slots filled`;
+
+    let html = '';
+    let currentGroup = '';
+
+    mySlots.forEach((s, i) => {
+        const groupName = s.slot === 'BN' ? 'Bench' :
+            ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL'].includes(s.slot) ? 'Hitters' : 'Pitchers';
+
+        if (groupName !== currentGroup) {
+            currentGroup = groupName;
+            html += `<div class="slot-group"><div class="slot-group-title">${groupName}</div>`;
+        }
+
+        if (s.player) {
+            const p = s.player;
+            const yearly = p.yearly || {};
+            let stat = '';
+            if (p.playerType === 'hitter') {
+                stat = `${fmtStat(yearly.hr)} HR`;
+            } else {
+                stat = `${fmtStat(yearly.k)} K`;
+            }
+            html += `<div class="slot-row">
+                <span class="slot-label">${s.label}</span>
+                <span class="slot-player">${p.name}</span>
+                <span class="slot-stat">${stat}</span>
+                <button class="slot-remove" onclick="undraftPlayer(${i})">&times;</button>
+            </div>`;
+        } else {
+            html += `<div class="slot-row">
+                <span class="slot-label">${s.label}</span>
+                <span class="slot-empty">Empty</span>
+            </div>`;
+        }
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Update category totals
+    updateCategoryTotals();
+}
+
+// ═══ CATEGORY TOTALS ═══
+function updateCategoryTotals() {
+    const hitters = mySlots.filter(s => s.player && s.player.playerType === 'hitter' && s.slot !== 'BN');
+    const pitchers = mySlots.filter(s => s.player && s.player.playerType === 'pitcher' && s.slot !== 'BN');
+
+    // Hitting
+    let r = 0, hr = 0, rbi = 0, sb = 0, hSum = 0, abSum = 0, obpSum = 0, slgSum = 0;
+    hitters.forEach(s => {
+        const y = s.player.yearly || {};
+        r += y.r || 0;
+        hr += y.hr || 0;
+        rbi += y.rbi || 0;
+        sb += y.sb || 0;
+        hSum += (y.avg || 0.250) * (y.games || 162) * 4; // rough H estimate
+        abSum += (y.games || 162) * 4;
+    });
+    const avg = abSum > 0 ? hSum / abSum : 0;
+
+    document.getElementById('cat-r').textContent = hitters.length ? Math.round(r) : '—';
+    document.getElementById('cat-hr').textContent = hitters.length ? Math.round(hr) : '—';
+    document.getElementById('cat-rbi').textContent = hitters.length ? Math.round(rbi) : '—';
+    document.getElementById('cat-sb').textContent = hitters.length ? Math.round(sb) : '—';
+    document.getElementById('cat-avg').textContent = hitters.length ? fmtAvg(avg) : '—';
+
+    // OPS — sum of individual OPS / count
+    let opsTotal = 0;
+    hitters.forEach(s => { opsTotal += (s.player.yearly?.ops || 0); });
+    const opsAvg = hitters.length ? opsTotal / hitters.length : 0;
+    document.getElementById('cat-ops').textContent = hitters.length ? opsAvg.toFixed(3) : '—';
+
+    // Color code hitting
+    colorCat('cat-r', r, 800, 600);
+    colorCat('cat-hr', hr, 220, 150);
+    colorCat('cat-rbi', rbi, 750, 550);
+    colorCat('cat-sb', sb, 120, 70);
+
+    // Pitching
+    let k = 0, qs = 0, w = 0, saves = 0;
+    let eraNum = 0, eraIp = 0, whipNum = 0, whipIp = 0;
+    pitchers.forEach(s => {
+        const y = s.player.yearly || {};
+        k += y.k || 0;
+        qs += y.qs || 0;
+        w += y.w || 0;
+        saves += y.s || 0;
+        const ip = y.ip || 100;
+        eraNum += (y.era || 4.00) * ip;
+        eraIp += ip;
+        whipNum += (y.whip || 1.30) * ip;
+        whipIp += ip;
+    });
+
+    document.getElementById('cat-k').textContent = pitchers.length ? Math.round(k) : '—';
+    document.getElementById('cat-qs').textContent = pitchers.length ? Math.round(qs) : '—';
+    document.getElementById('cat-w').textContent = pitchers.length ? Math.round(w) : '—';
+    document.getElementById('cat-s').textContent = pitchers.length ? Math.round(saves) : '—';
+    document.getElementById('cat-era').textContent = pitchers.length && eraIp ? (eraNum / eraIp).toFixed(2) : '—';
+    document.getElementById('cat-whip').textContent = pitchers.length && whipIp ? (whipNum / whipIp).toFixed(2) : '—';
+
+    colorCat('cat-k', k, 1200, 900);
+    colorCat('cat-w', w, 70, 45);
+    colorCat('cat-s', saves, 40, 20);
+}
+
+function colorCat(id, val, goodThresh, badThresh) {
+    const el = document.getElementById(id);
+    el.classList.remove('strong', 'weak');
+    if (val >= goodThresh) el.classList.add('strong');
+    else if (val > 0 && val < badThresh) el.classList.add('weak');
+}
+
+// ═══ LEAGUE INTEGRATION ═══
+function openModal() {
+    document.getElementById('league-modal').classList.add('open');
+    if (leagueConfig) {
+        document.getElementById('input-league-id').value = leagueConfig.leagueId;
+        document.getElementById('input-team-id').value = leagueConfig.teamId;
+        document.getElementById('input-season').value = leagueConfig.season;
+        document.getElementById('disconnect-btn').style.display = 'block';
+    }
+}
+function closeModal() {
+    document.getElementById('league-modal').classList.remove('open');
+}
+
+async function connectLeague() {
+    const leagueId = document.getElementById('input-league-id').value.trim();
+    const teamId = document.getElementById('input-team-id').value.trim();
+    const season = document.getElementById('input-season').value.trim() || '2026';
+    const espnS2 = document.getElementById('input-espn-s2').value.trim();
+    const swid = document.getElementById('input-swid').value.trim();
+    const errEl = document.getElementById('connect-error');
+    const submitBtn = document.getElementById('connect-submit');
+
+    if (!leagueId || !teamId) {
+        errEl.textContent = 'League ID and Team ID are required';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    errEl.style.display = 'none';
+    submitBtn.textContent = 'Connecting...';
+    submitBtn.disabled = true;
+
+    try {
+        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/${season}/segments/0/leagues/${leagueId}?view=mRoster&view=mTeam`;
+        const headers = {};
+        if (espnS2 || swid) {
+            headers['X-ESPN-S2'] = espnS2;
+            headers['X-SWID'] = swid;
+        }
+
+        const resp = await fetch(url, {
+            headers,
+            credentials: espnS2 ? 'include' : 'omit'
+        });
+
+        if (!resp.ok) {
+            throw new Error(resp.status === 401
+                ? 'League is private. Enter espn_s2 and SWID cookies.'
+                : `ESPN API error (${resp.status})`);
+        }
+
+        const data = await resp.json();
+        leagueTeams = (data.teams || []).map(t => {
+            const entries = t.roster?.entries || [];
+            const players = entries.map(e => {
+                const pl = e.playerPoolEntry?.player;
+                return pl ? { name: pl.fullName, id: pl.id, pos: getEspnPos(pl.defaultPositionId) } : null;
+            }).filter(Boolean);
+
+            let managerName = 'Unknown';
+            if (t.owners && t.owners[0]) {
+                if (typeof t.owners[0] === 'object') {
+                    managerName = `${t.owners[0].firstName || ''} ${t.owners[0].lastName || ''}`.trim();
+                }
+            }
+
+            return {
+                id: t.id,
+                name: t.name || t.abbrev || `Team ${t.id}`,
+                manager: managerName,
+                players,
+                isMine: t.id === parseInt(teamId),
+            };
+        });
+
+        myTeamId = parseInt(teamId);
+        leagueConfig = { leagueId, teamId, season, espnS2, swid };
+
+        // Save to localStorage
+        localStorage.setItem('draft_league', JSON.stringify(leagueConfig));
+
+        // Update UI
+        document.getElementById('league-btn').textContent = 'Connected';
+        document.getElementById('league-btn').classList.add('connected');
+        document.getElementById('league-sub').textContent = `${leagueTeams.length} teams loaded`;
+
+        closeModal();
+        renderLeagueBoard();
+
+        // Also fetch ESPN ADP rankings
+        fetchEspnAdp(season, leagueId, espnS2, swid);
+
+    } catch (e) {
+        errEl.textContent = e.message;
+        errEl.style.display = 'block';
+    } finally {
+        submitBtn.textContent = 'Connect';
+        submitBtn.disabled = false;
+    }
+}
+
+function disconnectLeague() {
+    leagueTeams = [];
+    leagueConfig = null;
+    myTeamId = null;
+    localStorage.removeItem('draft_league');
+    document.getElementById('league-btn').textContent = 'Connect League';
+    document.getElementById('league-btn').classList.remove('connected');
+    document.getElementById('league-sub').textContent = 'Connect league to see teams';
+    document.getElementById('league-content').innerHTML =
+        '<div class="empty-state">CONNECT YOUR ESPN LEAGUE<br>TO SEE ALL TEAMS AND PREDICTED PICKS</div>';
+    closeModal();
+}
+
+function loadSavedLeague() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('draft_league'));
+        if (saved && saved.leagueId) {
+            document.getElementById('input-league-id').value = saved.leagueId;
+            document.getElementById('input-team-id').value = saved.teamId;
+            document.getElementById('input-season').value = saved.season;
+            if (saved.espnS2) document.getElementById('input-espn-s2').value = saved.espnS2;
+            if (saved.swid) document.getElementById('input-swid').value = saved.swid;
+            // Auto-connect
+            connectLeague();
+        }
+    } catch (e) {}
+}
+
+function getEspnPos(posId) {
+    const map = { 0: 'C', 1: 'C', 2: '1B', 3: '2B', 4: '3B', 5: 'SS', 6: 'OF', 7: 'OF',
+                  8: 'OF', 9: 'SP', 10: 'RP', 11: 'SP', 14: 'SP', 15: 'RP' };
+    return map[posId] || 'UTIL';
+}
+
+// ═══ RENDER LEAGUE BOARD ═══
+function renderLeagueBoard() {
+    if (!leagueTeams.length) return;
+    const container = document.getElementById('league-content');
+
+    let html = '<div class="league-grid">';
+    leagueTeams.forEach(team => {
+        const needs = analyzeNeeds(team);
+        const prediction = predictPick(team);
+
+        html += `<div class="team-card ${team.isMine ? 'is-mine' : ''}">
+            <div class="team-card-header">
+                <span>${team.name}</span>
+                <span class="slots">${team.players.length} rostered</span>
+            </div>
+            <div class="team-needs">
+                ${needs.map(n => `<span class="need-chip ${n.filled ? 'filled' : ''}">${n.pos}</span>`).join('')}
+            </div>
+            ${prediction ? `<div class="team-pred">Likely pick: <strong>${prediction.name}</strong> (${prediction.espn_pos})</div>` : ''}
+        </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function analyzeNeeds(team) {
+    const posCounts = { C: 0, '1B': 0, '2B': 0, '3B': 0, SS: 0, OF: 0, SP: 0, RP: 0 };
+    const posNeeds = { C: 1, '1B': 1, '2B': 1, '3B': 1, SS: 1, OF: 3, SP: 5, RP: 4 };
+
+    team.players.forEach(p => {
+        if (posCounts[p.pos] !== undefined) posCounts[p.pos]++;
+    });
+
+    return Object.keys(posNeeds).map(pos => ({
+        pos,
+        filled: posCounts[pos] >= posNeeds[pos],
+        count: posCounts[pos],
+        needed: posNeeds[pos],
+    }));
+}
+
+function predictPick(team) {
+    const needs = analyzeNeeds(team);
+    const openNeeds = needs.filter(n => !n.filled).map(n => n.pos);
+
+    if (!openNeeds.length) return null;
+
+    // Find best available player at a needed position
+    for (const player of availablePlayers) {
+        if (openNeeds.includes(player.espn_pos)) {
+            return player;
+        }
+    }
+    return availablePlayers[0] || null;
+}
+
+// ═══ EVENT LISTENERS ═══
+// Position tabs
+document.querySelectorAll('.pos-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.pos-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPosFilter = btn.getAttribute('data-pos');
+        renderAvailable();
+    });
+});
+
+// Search
+document.getElementById('search-input').addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    renderAvailable();
+});
+
+// Modal close on overlay
+document.getElementById('league-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+// URL params
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('leagueId') && urlParams.get('teamId')) {
+    document.getElementById('input-league-id').value = urlParams.get('leagueId');
+    document.getElementById('input-team-id').value = urlParams.get('teamId');
+    document.getElementById('input-season').value = urlParams.get('seasonId') || '2026';
+}
+
+// ═══ INIT ═══
+loadProjections();
+</script>
+
+</body>
+</html>
