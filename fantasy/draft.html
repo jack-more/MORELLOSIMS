@@ -121,6 +121,10 @@ body::before{
 .need-chip.filled{background:#ddd;color:var(--color-meta)}
 .team-pred{padding:4px 10px 8px;font-family:var(--font-mono);font-size:9px;color:var(--color-meta);border-top:1px dashed #ddd}
 .team-pred strong{color:var(--color-text)}
+.team-roster{padding:2px 8px 6px;max-height:180px;overflow-y:auto}
+.roster-player{display:flex;align-items:center;gap:6px;padding:1px 0;font-size:10px;font-family:var(--font-body);border-bottom:1px solid #f5f5f5}
+.roster-pos{font-family:var(--font-mono);font-size:8px;font-weight:700;color:var(--color-meta);min-width:20px}
+.roster-name{font-weight:600;color:var(--color-text)}
 
 /* ═══ MY TEAM PANEL ═══ */
 .slot-group{padding:4px 12px}
@@ -1093,7 +1097,28 @@ function renderLeagueBoard() {
     let html = '<div class="league-grid">';
     leagueTeams.forEach(team => {
         const needs = analyzeNeeds(team);
-        const prediction = predictPick(team);
+
+        // Build roster list grouped by position
+        let rosterHtml = '';
+        if (team.players.length > 0) {
+            const byPos = {};
+            team.players.forEach(p => {
+                const pos = p.pos || 'UTIL';
+                if (!byPos[pos]) byPos[pos] = [];
+                byPos[pos].push(p);
+            });
+            const posOrder = ['C','1B','2B','3B','SS','OF','SP','RP','UTIL'];
+            posOrder.forEach(pos => {
+                if (byPos[pos]) {
+                    byPos[pos].forEach(p => {
+                        const lastName = p.name.split(' ').slice(-1)[0];
+                        rosterHtml += `<div class="roster-player"><span class="roster-pos">${pos}</span><span class="roster-name">${lastName}</span></div>`;
+                    });
+                }
+            });
+        } else {
+            rosterHtml = '<div style="padding:4px 8px;color:#999;font-size:10px">No players</div>';
+        }
 
         html += `<div class="team-card ${team.isMine ? 'is-mine' : ''}">
             <div class="team-card-header">
@@ -1103,7 +1128,7 @@ function renderLeagueBoard() {
             <div class="team-needs">
                 ${needs.map(n => `<span class="need-chip ${n.filled ? 'filled' : ''}">${n.pos}</span>`).join('')}
             </div>
-            ${prediction ? `<div class="team-pred">Likely pick: <strong>${prediction.name}</strong> (${prediction.espn_pos})</div>` : ''}
+            <div class="team-roster">${rosterHtml}</div>
         </div>`;
     });
     html += '</div>';

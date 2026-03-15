@@ -650,15 +650,23 @@ def project_pitchers(players, games, pitcher_idx, batter_cluster_idx, batter_agg
             "ip": round(yearly_ip),
         }
 
-        # ── Fantasy value ──
-        tier_scores = {"T1_Apex": 92, "T2_Core": 78, "T3_Standard": 64, "T4_Fringe": 50}
-        base_score = tier_scores.get(tier, 64)
-        whiff_bonus = max(0, (whiff_rate - 0.22) * 50)
-
+        # ── Fantasy value (40-99 scale, same as hitters) ──
+        # SP: based on ERA + K rate + starts volume
+        # RP: based on ERA + saves potential (closers valued higher)
         if is_sp:
-            fv = (base_score + whiff_bonus) * max(1, n_starts)
+            # ERA component: 2.00 ERA → 99, 5.00 ERA → 40
+            era_score = max(40, min(99, 99 - (era - 2.00) / 3.00 * 59))
+            # K component: bonus for high K rate
+            k_bonus = max(0, min(10, (k_per_9 - 7.0) * 3))
+            # Starts volume: slight boost for more starts this week
+            starts_bonus = min(5, n_starts * 2)
+            fv = era_score + k_bonus + starts_bonus
         else:
-            fv = base_score + whiff_bonus + (sv_rate * 30)
+            # RP: ERA + closer role
+            era_score = max(40, min(90, 90 - (era - 2.00) / 3.50 * 50))
+            # Saves bonus: elite closers get a bump
+            sv_bonus = min(15, sv_rate * 40)
+            fv = era_score + sv_bonus
 
         results.append({
             "id": pid, "name": pinfo["name"], "team": pinfo["team"],
