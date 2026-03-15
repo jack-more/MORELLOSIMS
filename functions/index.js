@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
 const cors = require('cors')({ origin: true });
+const https = require('https');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -200,4 +201,73 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   });
 
   console.log(`Created user doc for ${email} with tier: ${tier}`);
+});
+
+// ══════════════════════════════════════════════════
+// ESPN API PROXY
+// Bypasses CORS for browser-based ESPN fantasy API calls
+// ══════════════════════════════════════════════════
+exports.espnProxy = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      const { leagueId, season, views, espnS2, swid } = req.query;
+
+      if (!leagueId || !season) {
+        res.status(400).json({ error: 'Missing required params: leagueId, season' });
+        return;
+      }
+
+      // Build ESPN API URL
+      let espnPath = `/apis/v3/games/flb/seasons/${encodeURIComponent(season)}/segments/0/leagues/${encodeURIComponent(leagueId)}`;
+      const viewList = views ? views.split(',') : ['mRoster', 'mTeam'];
+      const viewParams = viewList.map(v => `view=${encodeURIComponent(v)}`).join('&');
+      espnPath += `?${viewParams}`;
+
+      const headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'MorellosimsDraftAssistant/1.0',
+      };
+      if (espnS2) {
+        headers['Cookie'] = `espn_s2=${espnS2}${swid ? `; SWID=${swid}` : ''}`;
+      }
+
+      // Make server-side request to ESPN
+      const espnData = await new Promise((resolve, reject) => {
+        const options = {
+          hostname: 'lm-api-reads.fantasy.espn.com',
+          path: espnPath,
+          method: 'GET',
+          headers,
+        };
+
+        const request = https.request(options, (response) => {
+          let body = '';
+          response.on('data', chunk => { body += chunk; });
+          response.on('end', () => {
+            if (response.statusCode >= 400) {
+              reject(new Error(`ESPN API returned ${response.statusCode}`));
+            } else {
+              try {
+                resolve(JSON.parse(body));
+              } catch (e) {
+                reject(new Error('Invalid JSON from ESPN'));
+              }
+            }
+          });
+        });
+
+        request.on('error', reject);
+        request.setTimeout(15000, () => {
+          request.destroy();
+          reject(new Error('ESPN API timeout'));
+        });
+        request.end();
+      });
+
+      res.json(espnData);
+    } catch (err) {
+      console.error('ESPN proxy error:', err.message);
+      res.status(502).json({ error: err.message });
+    }
+  });
 });

@@ -260,8 +260,8 @@ body::before{
             <button class="pos-tab" data-pos="RP">RP</button>
         </div>
         <div class="weights-bar">
-            <div class="weights-toggle" id="weights-toggle" onclick="toggleWeights()">Category Weights</div>
-            <div class="weights-grid" id="weights-grid">
+            <div class="weights-toggle open" id="weights-toggle" onclick="toggleWeights()">Category Weights</div>
+            <div class="weights-grid open" id="weights-grid">
                 <div class="weight-item"><span class="weight-label">R</span><input class="weight-input" data-cat="R" type="number" value="1" min="0" max="5" step="0.5"></div>
                 <div class="weight-item"><span class="weight-label">HR</span><input class="weight-input" data-cat="HR" type="number" value="1" min="0" max="5" step="0.5"></div>
                 <div class="weight-item"><span class="weight-label">RBI</span><input class="weight-input" data-cat="RBI" type="number" value="1" min="0" max="5" step="0.5"></div>
@@ -535,14 +535,12 @@ function sortAvailablePlayers() {
 // ═══ ESPN ADP FETCH ═══
 async function fetchEspnAdp(season, leagueId, espnS2, swid) {
     try {
-        // Fetch ESPN player rankings via the league's kona_player_info view
-        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/${season}/segments/0/leagues/${leagueId}?view=kona_player_info`;
-        const headers = {};
-        if (espnS2 || swid) {
-            headers['X-ESPN-S2'] = espnS2;
-            headers['X-SWID'] = swid;
-        }
-        const resp = await fetch(url, { headers, credentials: espnS2 ? 'include' : 'omit' });
+        // Fetch ESPN player rankings via proxy to avoid CORS
+        const params = new URLSearchParams({ leagueId, season, views: 'kona_player_info' });
+        if (espnS2) params.set('espnS2', espnS2);
+        if (swid) params.set('swid', swid);
+        const url = `https://us-central1-morello-sims.cloudfunctions.net/espnProxy?${params}`;
+        const resp = await fetch(url);
         if (!resp.ok) return;
 
         const data = await resp.json();
@@ -901,17 +899,12 @@ async function connectLeague() {
     submitBtn.disabled = true;
 
     try {
-        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/${season}/segments/0/leagues/${leagueId}?view=mRoster&view=mTeam`;
-        const headers = {};
-        if (espnS2 || swid) {
-            headers['X-ESPN-S2'] = espnS2;
-            headers['X-SWID'] = swid;
-        }
+        const params = new URLSearchParams({ leagueId, season, views: 'mRoster,mTeam' });
+        if (espnS2) params.set('espnS2', espnS2);
+        if (swid) params.set('swid', swid);
+        const url = `https://us-central1-morello-sims.cloudfunctions.net/espnProxy?${params}`;
 
-        const resp = await fetch(url, {
-            headers,
-            credentials: espnS2 ? 'include' : 'omit'
-        });
+        const resp = await fetch(url);
 
         if (!resp.ok) {
             throw new Error(resp.status === 401
