@@ -42,7 +42,7 @@ SP_IP_PER_START = 5.8       # league avg
 RP_APP_PER_WEEK = 3         # average RP appearances per week
 RP_IP_PER_APP = 1.0
 RP_BF_PER_APP = 4.2
-TOP_N = 20
+TOP_N = 50
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
 
@@ -425,18 +425,26 @@ def project_hitters(players, games, batter_cluster_idx, batter_agg, pitcher_idx,
 
         # ── Yearly projection (full season) — use REAL API stats as anchor ──
         yearly_pa = FULL_SEASON_PA
-        if api and api.get("pa", 0) >= 100:
-            # Use actual MLB stats as primary source
+        if api and api.get("pa", 0) >= 200:
+            # Use actual MLB stats as primary source (need decent sample)
             yearly_hr = yearly_pa * api["hr_rate"]
             yearly_avg = api["avg"]
             yearly_ops = api["ops"]
             yearly_ab = yearly_pa * 0.905
-            yearly_h = yearly_pa * (api["avg"] * 0.905)  # avg × ab_rate
+            yearly_h = yearly_pa * (api["avg"] * 0.905)
+        elif api and api.get("pa", 0) >= 50:
+            # Blend API with league avg for smaller samples
+            sample_weight = min(1.0, api["pa"] / 400)
+            yearly_hr = yearly_pa * (api["hr_rate"] * sample_weight + 0.030 * (1 - sample_weight))
+            yearly_avg = api["avg"] * sample_weight + 0.255 * (1 - sample_weight)
+            yearly_ops = api["ops"] * sample_weight + 0.720 * (1 - sample_weight)
+            yearly_ab = yearly_pa * 0.905
+            yearly_h = yearly_pa * (yearly_avg * 0.905)
         elif agg and agg.get("pa", 0) >= 50:
-            # Fall back to cluster aggregate (but cap HR rate)
+            # Fall back to cluster aggregate (cap HR rate hard)
             yearly_ab = yearly_pa * agg["ab"] / max(1, agg["pa"])
             yearly_h = yearly_pa * agg["h_rate"]
-            yearly_hr = yearly_pa * min(agg["hr_rate"], 0.070)  # cap ~45 HR max
+            yearly_hr = yearly_pa * min(agg["hr_rate"], 0.055)  # cap ~36 HR max from cluster data
             yearly_avg = agg["avg"]
             yearly_ops = agg["ops"]
         else:
@@ -445,6 +453,9 @@ def project_hitters(players, games, batter_cluster_idx, batter_agg, pitcher_idx,
             yearly_hr = yearly_pa * 0.030
             yearly_avg = 0.250
             yearly_ops = 0.720
+
+        # Hard caps on yearly HR — realistic MLB range
+        yearly_hr = min(yearly_hr, 58)  # only Judge/Stanton territory
 
         # Cap weekly HR to be consistent with yearly pace
         # yearly_hr / 26 weeks = reasonable per-week cap (with 20% upside buffer)
@@ -530,11 +541,26 @@ def project_pitchers(players, games, pitcher_idx, batter_cluster_idx, batter_agg
             continue
 
         p_data = pitcher_idx.get(pid, {})
-        is_sp = p_data.get("is_sp", 0)
+        is_sp_dna = p_data.get("is_sp", 0)
         tier = p_data.get("tier", "T3_Standard")
         archetype = p_data.get("archetype", "Unknown")
         whiff_rate = p_data.get("whiff_rate", 0)
         api = pitcher_api_stats.get(pid, {})
+
+        # Determine SP vs RP — cross-check DNA flag with actual API stats
+        # If API shows gs/g > 0.5 → SP; gs/g < 0.3 → RP; else trust DNA
+        if api:
+            gs = api.get("gs", 0)
+            g = api.get("g", 1)
+            gs_ratio = gs / max(1, g)
+            if gs_ratio >= 0.5:
+                is_sp = True
+            elif gs_ratio < 0.3:
+                is_sp = False
+            else:
+                is_sp = bool(is_sp_dna)
+        else:
+            is_sp = bool(is_sp_dna)
 
         starts = pitcher_starts.get(pid, [])
         n_starts = len(starts)
@@ -554,23 +580,31 @@ def project_pitchers(players, games, pitcher_idx, batter_cluster_idx, batter_agg
             ip_per_gs = api.get("ip_per_gs", SP_IP_PER_START)
             if is_sp:
                 w_rate = api.get("w", 0) / max(1, api.get("gs", 1))
-                w_rate = min(w_rate, 0.65)  # cap: nobody wins >65% of starts
+                w_rate = min(w_rate, 0.55)  # cap: nobody wins >55% of starts
+                w_rate = max(w_rate, 0.15)  # floor: even bad SPs win sometimes
             else:
-                # RPs: wins are rare — use per-game rate, capped low
+                # RPs: wins are rare — use per-game rate, hard cap
                 w_rate = api.get("w", 0) / max(1, api.get("g", 1))
-                w_rate = min(w_rate, 0.10)  # cap: ~6 W per 60 games max
+                w_rate = min(w_rate, 0.06)  # cap: ~4 W per 60 games max for RP
             sv = api.get("sv", 0)
             sv_rate = sv / max(1, api.get("g", 1) or 1)
-            # QS: use actual data if available, otherwise estimate from ERA + IP/GS
-            if api.get("qs") is not None and api.get("gs", 0) > 0:
-                qs_pct = api["qs"] / max(1, api["gs"])
+            # QS: estimate from ERA + IP/GS — MLB API doesn't reliably return QS
+            if is_sp and api.get("gs", 0) >= 5:
+                # QS requires 6+ IP and ≤3 ER
+                # Probability based on how deep pitcher goes and how few runs they allow
+                avg_ip = ip_per_gs
+                avg_er_per_9 = era
+                # P(≥6 IP): sigmoid around ip_per_gs
+                ip_prob = min(0.95, max(0.05, (avg_ip - 4.5) / 3.0))
+                # P(≤3 ER | 6+ IP): lower ERA = higher chance
+                er_per_6ip = avg_er_per_9 * 6 / 9  # expected ER in 6 IP
+                er_prob = min(0.95, max(0.10, 1 - (er_per_6ip - 1.0) / 4.0))
+                qs_pct = ip_prob * er_prob
+                qs_pct = min(0.75, max(0.05, qs_pct))
             elif is_sp:
-                # Estimate QS probability from ERA and IP/GS
-                # Lower ERA + deeper into games = more QS
-                qs_era_factor = max(0, 1 - (era - 2.50) / 5.0)  # ERA 2.50 → 1.0, ERA 7.50 → 0.0
-                qs_ip_factor = min(1, ip_per_gs / 6.0)  # Need 6+ IP for QS
-                qs_pct = min(0.75, qs_era_factor * qs_ip_factor * 0.70)
-                qs_pct = max(0.05, qs_pct)
+                # Sparse data — use tier-based estimate
+                tier_qs = {"T1_Apex": 0.65, "T2_Core": 0.50, "T3_Standard": 0.35, "T4_Fringe": 0.20}
+                qs_pct = tier_qs.get(tier, 0.35)
             else:
                 qs_pct = 0
             k_per_ip = k_per_9 / 9
@@ -587,9 +621,9 @@ def project_pitchers(players, games, pitcher_idx, batter_cluster_idx, batter_agg
             era = td["era"]
             whip = td["whip"]
             ip_per_gs = SP_IP_PER_START
-            w_rate = 0.35
+            w_rate = 0.30 if is_sp else 0.04  # SP ~10 W/season, RP ~2-3
             sv_rate = 0
-            qs_pct = 0.45
+            qs_pct = 0.40 if is_sp else 0
             k_per_ip = k_per_9 / 9
 
         pos_label = "SP" if is_sp else "RP"
