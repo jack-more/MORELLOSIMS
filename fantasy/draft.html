@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DRAFT ASSISTANT — Pitcher DNA</title>
+<title>DRAFT ASSISTANT — Snake Draft</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -42,10 +42,10 @@ body::before{
 .header{position:sticky;top:0;z-index:200;background:var(--color-black);display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:2px solid rgba(255,255,255,0.1)}
 .logo{font-family:var(--font-display);font-size:22px;color:var(--color-accent);letter-spacing:2px}
 .header-meta{display:flex;align-items:center;gap:12px}
-.round-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--color-accent);background:rgba(255,234,0,0.1);padding:4px 12px;border-radius:4px;border:1px solid rgba(255,234,0,0.3);letter-spacing:0.5px}
-.league-btn{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:6px 12px;border-radius:4px;border:2px solid var(--color-accent);background:transparent;color:var(--color-accent);cursor:pointer;transition:all 0.15s;white-space:nowrap}
-.league-btn:hover{background:var(--color-accent);color:var(--color-black)}
-.league-btn.connected{background:var(--color-accent);color:var(--color-black)}
+.pick-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--color-accent);background:rgba(255,234,0,0.1);padding:4px 12px;border-radius:4px;border:1px solid rgba(255,234,0,0.3);letter-spacing:0.5px}
+.pick-badge .you{color:#fff;font-weight:400;margin-left:4px;font-size:9px}
+.undo-btn{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:6px 12px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;transition:all 0.15s}
+.undo-btn:hover{border-color:var(--color-accent);color:var(--color-accent)}
 .back-link{font-family:var(--font-mono);font-size:10px;color:rgba(255,255,255,0.5);text-decoration:none;letter-spacing:0.5px}
 .back-link:hover{color:var(--color-accent)}
 
@@ -93,40 +93,53 @@ body::before{
 /* ═══ AVAILABLE PLAYER ROW ═══ */
 .avail-row{display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid #e8e8e8;cursor:pointer;transition:background 0.1s;gap:6px}
 .avail-row:hover{background:rgba(255,234,0,0.12)}
+.avail-row.value-pick{background:rgba(0,163,52,0.06)}
 .avail-rank{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);min-width:20px;text-align:right}
 .avail-pos{font-family:var(--font-mono);font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;background:#eee;color:var(--color-meta);min-width:22px;text-align:center}
+.pos-rank-badge{font-family:var(--font-mono);font-size:7px;font-weight:700;color:var(--color-elite);margin-left:2px}
 .avail-info{flex:1;min-width:0}
 .avail-name{font-family:var(--font-body);font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .avail-meta{font-family:var(--font-mono);font-size:8px;color:var(--color-meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.avail-ranks{display:flex;gap:3px;align-items:center}
-.rank-badge{font-family:var(--font-mono);font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;min-width:24px;text-align:center;line-height:1.3}
-.rank-badge.dna{background:var(--color-accent);color:var(--color-black)}
-.rank-badge.espn{background:#006aff;color:#fff}
-.rank-badge.weighted{background:var(--color-elite);color:#fff}
 .avail-val{font-family:var(--font-mono);font-size:12px;font-weight:700;min-width:36px;text-align:right}
 .avail-val.elite{color:var(--color-elite)}
 .avail-val.good{color:var(--color-favorable)}
 .avail-val.ok{color:var(--color-neutral)}
-.avail-draft-btn{font-family:var(--font-mono);font-size:8px;font-weight:700;padding:3px 6px;border-radius:3px;border:1.5px solid var(--color-elite);background:transparent;color:var(--color-elite);cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;opacity:0;transition:opacity 0.15s}
-.avail-row:hover .avail-draft-btn{opacity:1}
+.avail-btns{display:flex;gap:3px;opacity:0;transition:opacity 0.15s}
+.avail-row:hover .avail-btns{opacity:1}
+.btn-mine{font-family:var(--font-mono);font-size:7px;font-weight:700;padding:3px 6px;border-radius:3px;border:1.5px solid var(--color-elite);background:transparent;color:var(--color-elite);cursor:pointer;text-transform:uppercase;letter-spacing:0.3px}
+.btn-mine:hover{background:var(--color-elite);color:#fff}
+.btn-taken{font-family:var(--font-mono);font-size:7px;font-weight:700;padding:3px 6px;border-radius:3px;border:1.5px solid var(--color-tough);background:transparent;color:var(--color-tough);cursor:pointer;text-transform:uppercase;letter-spacing:0.3px}
+.btn-taken:hover{background:var(--color-tough);color:#fff}
 
-/* ═══ LEAGUE BOARD ═══ */
-.league-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:12px}
-.team-card{background:var(--color-card);border:var(--border);box-shadow:2px 2px 0 var(--color-black);overflow:hidden}
-.team-card.is-mine{border-color:var(--color-accent);box-shadow:2px 2px 0 var(--color-accent)}
-.team-card-header{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--color-black);color:#fff;font-family:var(--font-body);font-size:11px;font-weight:700}
-.team-card-header .slots{font-family:var(--font-mono);font-size:9px;color:rgba(255,255,255,0.5)}
-.team-needs{padding:6px 10px;display:flex;flex-wrap:wrap;gap:3px}
-.need-chip{font-family:var(--font-mono);font-size:8px;font-weight:700;padding:2px 6px;border-radius:8px;background:var(--color-tough);color:#fff;text-transform:uppercase}
-.need-chip.filled{background:#ddd;color:var(--color-meta)}
-.team-pred{padding:4px 10px 8px;font-family:var(--font-mono);font-size:9px;color:var(--color-meta);border-top:1px dashed #ddd}
-.team-pred strong{color:var(--color-text)}
-.team-roster{padding:2px 8px 6px;max-height:180px;overflow-y:auto}
-.roster-player{display:flex;align-items:center;gap:6px;padding:1px 0;font-size:10px;font-family:var(--font-body);border-bottom:1px solid #f5f5f5}
-.roster-pos{font-family:var(--font-mono);font-size:8px;font-weight:700;color:var(--color-meta);min-width:20px}
-.roster-name{font-weight:600;color:var(--color-text)}
+/* ═══ DRAFT BOARD ═══ */
+.board-wrapper{padding:8px;overflow:auto;height:100%}
+.board-controls{display:flex;align-items:center;gap:8px;padding:0 4px 8px}
+.board-controls .advance-btn{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:6px 16px;border-radius:4px;border:var(--border);background:var(--color-accent);color:var(--color-black);cursor:pointer;transition:all 0.15s}
+.board-controls .advance-btn:hover{background:#ffe100;box-shadow:2px 2px 0 var(--color-black)}
+.board-controls .advance-btn:disabled{opacity:0.3;cursor:default}
+.draft-grid{display:grid;gap:2px;font-family:var(--font-mono);font-size:8px}
+.draft-cell{padding:4px 3px;border-radius:2px;text-align:center;min-height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all 0.1s;overflow:hidden;border:1px solid transparent}
+.draft-cell.empty{background:#e8e8e8;color:#aaa}
+.draft-cell.empty:hover{background:#ddd;border-color:var(--color-accent)}
+.draft-cell.filled{background:#fff;color:var(--color-text)}
+.draft-cell.mine{background:var(--color-accent);color:var(--color-black);font-weight:700}
+.draft-cell.current{border:2px solid var(--color-accent);box-shadow:0 0 8px rgba(255,234,0,0.5);animation:pulse-pick 1.5s ease-in-out infinite}
+.draft-cell.my-turn{background:rgba(255,234,0,0.15)}
+@keyframes pulse-pick{0%,100%{box-shadow:0 0 4px rgba(255,234,0,0.3)}50%{box-shadow:0 0 12px rgba(255,234,0,0.7)}}
+.draft-cell .pick-num{font-size:7px;color:#999;line-height:1}
+.draft-cell.mine .pick-num{color:rgba(0,0,0,0.5)}
+.draft-cell .pick-name{font-size:7px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.draft-cell .pick-pos{font-size:6px;color:#888;line-height:1}
+.draft-cell.mine .pick-pos{color:rgba(0,0,0,0.5)}
+.board-header{font-family:var(--font-mono);font-size:8px;font-weight:700;text-transform:uppercase;text-align:center;padding:4px 2px;background:var(--color-black);color:#fff;border-radius:2px;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.board-round{font-family:var(--font-mono);font-size:7px;font-weight:700;color:var(--color-meta);text-align:center;padding:4px 2px;white-space:nowrap}
 
 /* ═══ MY TEAM PANEL ═══ */
+.suggestion-box{margin:8px 12px;padding:8px 10px;background:rgba(255,234,0,0.1);border:1.5px solid var(--color-accent);border-radius:4px}
+.suggestion-label{font-family:var(--font-mono);font-size:8px;font-weight:700;text-transform:uppercase;color:var(--color-meta);letter-spacing:0.5px;margin-bottom:3px}
+.suggestion-player{font-family:var(--font-body);font-size:12px;font-weight:800}
+.suggestion-reason{font-family:var(--font-mono);font-size:8px;color:var(--color-meta);margin-top:2px}
+
 .slot-group{padding:4px 12px}
 .slot-group-title{font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.5px;padding:6px 0 2px;border-bottom:1px solid #ddd;margin-bottom:2px}
 .slot-row{display:flex;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0;gap:6px;min-height:28px}
@@ -141,17 +154,22 @@ body::before{
 .cat-section{position:sticky;bottom:0;background:var(--color-card);border-top:var(--border);padding:8px 12px}
 .cat-title{font-family:var(--font-display);font-size:13px;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
 .cat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
-.cat-cell{text-align:center;padding:4px 2px;background:#f5f5f5;border-radius:3px}
+.cat-cell{text-align:center;padding:4px 2px;background:#f5f5f5;border-radius:3px;position:relative}
 .cat-label{font-family:var(--font-mono);font-size:7px;font-weight:700;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.3px}
 .cat-value{font-family:var(--font-mono);font-size:12px;font-weight:700}
 .cat-value.strong{color:var(--color-elite)}
 .cat-value.weak{color:var(--color-tough)}
+.cat-rank{font-family:var(--font-mono);font-size:7px;color:var(--color-meta);margin-top:1px}
+.cat-rank.top3{color:var(--color-elite);font-weight:700}
+.cat-rank.bot3{color:var(--color-tough);font-weight:700}
+.cat-bar{height:3px;border-radius:2px;margin-top:2px;background:#e0e0e0}
+.cat-bar-fill{height:100%;border-radius:2px;transition:width 0.3s}
 
-/* ═══ MODAL ═══ */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center}
+/* ═══ SETUP MODAL ═══ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
-.modal{background:var(--color-card);border:var(--border);box-shadow:8px 8px 0 var(--color-black);max-width:400px;width:90%;padding:24px;position:relative}
-.modal-title{font-family:var(--font-display);font-size:20px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.modal{background:var(--color-card);border:var(--border);box-shadow:8px 8px 0 var(--color-black);max-width:420px;width:90%;padding:24px;position:relative}
+.modal-title{font-family:var(--font-display);font-size:24px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
 .modal-sub{font-family:var(--font-mono);font-size:10px;color:var(--color-meta);margin-bottom:16px}
 .modal-close{position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--color-meta);padding:4px}
 .form-group{margin-bottom:12px}
@@ -160,21 +178,16 @@ body::before{
 .form-input:focus{outline:none;border-color:var(--color-accent)}
 .form-row{display:flex;gap:8px}
 .form-row .form-group{flex:1}
-.form-submit{font-family:var(--font-mono);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:10px 20px;background:var(--color-black);color:var(--color-accent);border:var(--border);cursor:pointer;width:100%;transition:all 0.15s;margin-top:4px}
+.form-submit{font-family:var(--font-mono);font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:12px 20px;background:var(--color-black);color:var(--color-accent);border:var(--border);cursor:pointer;width:100%;transition:all 0.15s;margin-top:4px}
 .form-submit:hover{background:#222}
-.form-error{font-family:var(--font-mono);font-size:10px;color:var(--color-tough);margin-top:8px;display:none}
-.form-hint{font-family:var(--font-mono);font-size:9px;color:var(--color-meta);margin-top:12px;line-height:1.6}
-.disconnect-btn{font-family:var(--font-mono);font-size:10px;color:var(--color-tough);background:none;border:none;cursor:pointer;text-decoration:underline;margin-top:8px}
-
-/* ═══ EMPTY / LOADING ═══ */
-.empty-state{text-align:center;padding:40px 20px;font-family:var(--font-mono);font-size:11px;color:var(--color-meta);text-transform:uppercase;letter-spacing:1px}
-.loading-spinner{width:24px;height:24px;border:3px solid #ddd;border-top-color:var(--color-accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px}
-@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ═══ SCROLLBAR ═══ */
 .panel::-webkit-scrollbar{width:6px}
 .panel::-webkit-scrollbar-track{background:transparent}
 .panel::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px}
+
+/* ═══ EMPTY / LOADING ═══ */
+.empty-state{text-align:center;padding:40px 20px;font-family:var(--font-mono);font-size:11px;color:var(--color-meta);text-transform:uppercase;letter-spacing:1px}
 
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:900px){
@@ -193,45 +206,35 @@ body::before{
         <span class="logo">DRAFT ASSISTANT</span>
     </div>
     <div class="header-meta">
-        <span class="round-badge" id="round-badge">ROUND 1</span>
-        <button class="league-btn" id="league-btn" onclick="openModal()">Connect League</button>
+        <span class="pick-badge" id="pick-badge">PICK 1.01</span>
+        <button class="undo-btn" onclick="undoLastPick()">Undo</button>
     </div>
 </div>
 
-<!-- League Connect Modal -->
-<div class="modal-overlay" id="league-modal">
+<!-- Setup Modal -->
+<div class="modal-overlay open" id="setup-modal">
     <div class="modal">
-        <button class="modal-close" onclick="closeModal()">&times;</button>
-        <div class="modal-title">Connect ESPN League</div>
-        <div class="modal-sub">Link your league to see all teams and predict picks</div>
-        <div class="form-group">
-            <label class="form-label">League ID</label>
-            <input class="form-input" id="input-league-id" type="text" placeholder="e.g. 96345">
-        </div>
+        <div class="modal-title">Draft Setup</div>
+        <div class="modal-sub">Configure your snake draft</div>
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">Team ID (yours)</label>
-                <input class="form-input" id="input-team-id" type="text" placeholder="e.g. 12">
+                <label class="form-label">Your Pick Position</label>
+                <input class="form-input" id="input-pick-pos" type="number" value="1" min="1" max="20">
             </div>
             <div class="form-group">
-                <label class="form-label">Season</label>
-                <input class="form-input" id="input-season" type="text" placeholder="2026" value="2026">
+                <label class="form-label">Teams</label>
+                <input class="form-input" id="input-num-teams" type="number" value="10" min="4" max="20">
             </div>
         </div>
-        <div class="form-group" style="margin-top:16px;padding-top:12px;border-top:1px dashed #ddd">
-            <label class="form-label">Auth (private leagues only)</label>
-            <input class="form-input" id="input-espn-s2" type="password" placeholder="espn_s2 cookie" style="margin-bottom:6px">
-            <input class="form-input" id="input-swid" type="text" placeholder="SWID cookie (e.g. {XXXXXXXX-...})">
+        <div class="form-group">
+            <label class="form-label">Rounds</label>
+            <input class="form-input" id="input-num-rounds" type="number" value="20" min="10" max="30">
         </div>
-        <button class="form-submit" id="connect-submit" onclick="connectLeague()">Connect</button>
-        <div class="form-error" id="connect-error"></div>
-        <div class="form-hint">
-            Find your League ID in your ESPN Fantasy URL:<br>
-            fantasy.espn.com/baseball/league?leagueId=<strong>XXXXX</strong><br><br>
-            <strong>Private leagues:</strong> Enter espn_s2 and SWID cookies.<br>
-            DevTools &gt; Application &gt; Cookies &gt; espn.com
+        <div class="form-group">
+            <label class="form-label">Your Team Name (optional)</label>
+            <input class="form-input" id="input-my-name" type="text" placeholder="My Team">
         </div>
-        <button class="disconnect-btn" id="disconnect-btn" style="display:none" onclick="disconnectLeague()">Disconnect League</button>
+        <button class="form-submit" onclick="startDraft()">Start Draft</button>
     </div>
 </div>
 
@@ -249,8 +252,8 @@ body::before{
         </div>
         <div class="sort-controls">
             <button class="sort-btn active" data-sort="dna" onclick="setSortMode('dna')">DNA</button>
-            <button class="sort-btn" data-sort="espn" onclick="setSortMode('espn')">ESPN</button>
             <button class="sort-btn" data-sort="weighted" onclick="setSortMode('weighted')">Weighted</button>
+            <button class="sort-btn" data-sort="need" onclick="setSortMode('need')">Need</button>
         </div>
         <div class="pos-tabs" id="pos-tabs">
             <button class="pos-tab active" data-pos="all">All</button>
@@ -264,8 +267,8 @@ body::before{
             <button class="pos-tab" data-pos="RP">RP</button>
         </div>
         <div class="weights-bar">
-            <div class="weights-toggle open" id="weights-toggle" onclick="toggleWeights()">Category Weights</div>
-            <div class="weights-grid open" id="weights-grid">
+            <div class="weights-toggle" id="weights-toggle" onclick="toggleWeights()">Category Weights</div>
+            <div class="weights-grid" id="weights-grid">
                 <div class="weight-item"><span class="weight-label">R</span><input class="weight-input" data-cat="R" type="number" value="1" min="0" max="5" step="0.5"></div>
                 <div class="weight-item"><span class="weight-label">HR</span><input class="weight-input" data-cat="HR" type="number" value="1" min="0" max="5" step="0.5"></div>
                 <div class="weight-item"><span class="weight-label">RBI</span><input class="weight-input" data-cat="RBI" type="number" value="1" min="0" max="5" step="0.5"></div>
@@ -286,14 +289,14 @@ body::before{
         <div id="avail-list"></div>
     </div>
 
-    <!-- CENTER: League Board -->
-    <div class="panel" id="panel-league">
+    <!-- CENTER: Draft Board -->
+    <div class="panel" id="panel-board">
         <div class="panel-header">
-            <div class="panel-title">League Board</div>
-            <div class="panel-sub" id="league-sub">Connect league to see teams</div>
+            <div class="panel-title">Draft Board</div>
+            <div class="panel-sub" id="board-sub">Set up your draft to begin</div>
         </div>
-        <div id="league-content">
-            <div class="empty-state">CONNECT YOUR ESPN LEAGUE<br>TO SEE ALL TEAMS AND PREDICTED PICKS</div>
+        <div class="board-wrapper" id="board-wrapper">
+            <div class="empty-state">CONFIGURE YOUR DRAFT TO BEGIN</div>
         </div>
     </div>
 
@@ -301,27 +304,28 @@ body::before{
     <div class="panel" id="panel-myteam">
         <div class="panel-header">
             <div class="panel-title">My Team</div>
-            <div class="panel-sub" id="myteam-sub">0 / 21 slots filled</div>
+            <div class="panel-sub" id="myteam-sub">0 / 22 slots filled</div>
         </div>
+        <div id="suggestion-area"></div>
         <div id="myteam-slots"></div>
         <div class="cat-section" id="cat-section">
             <div class="cat-title">Hitting Projections</div>
             <div class="cat-grid" id="cat-hitting">
-                <div class="cat-cell"><div class="cat-label">R</div><div class="cat-value" id="cat-r">—</div></div>
-                <div class="cat-cell"><div class="cat-label">HR</div><div class="cat-value" id="cat-hr">—</div></div>
-                <div class="cat-cell"><div class="cat-label">RBI</div><div class="cat-value" id="cat-rbi">—</div></div>
-                <div class="cat-cell"><div class="cat-label">SB</div><div class="cat-value" id="cat-sb">—</div></div>
-                <div class="cat-cell"><div class="cat-label">AVG</div><div class="cat-value" id="cat-avg">—</div></div>
-                <div class="cat-cell"><div class="cat-label">OPS</div><div class="cat-value" id="cat-ops">—</div></div>
+                <div class="cat-cell"><div class="cat-label">R</div><div class="cat-value" id="cat-r">—</div><div class="cat-rank" id="rank-r"></div></div>
+                <div class="cat-cell"><div class="cat-label">HR</div><div class="cat-value" id="cat-hr">—</div><div class="cat-rank" id="rank-hr"></div></div>
+                <div class="cat-cell"><div class="cat-label">RBI</div><div class="cat-value" id="cat-rbi">—</div><div class="cat-rank" id="rank-rbi"></div></div>
+                <div class="cat-cell"><div class="cat-label">SB</div><div class="cat-value" id="cat-sb">—</div><div class="cat-rank" id="rank-sb"></div></div>
+                <div class="cat-cell"><div class="cat-label">AVG</div><div class="cat-value" id="cat-avg">—</div><div class="cat-rank" id="rank-avg"></div></div>
+                <div class="cat-cell"><div class="cat-label">OPS</div><div class="cat-value" id="cat-ops">—</div><div class="cat-rank" id="rank-ops"></div></div>
             </div>
             <div class="cat-title" style="margin-top:8px">Pitching Projections</div>
             <div class="cat-grid" id="cat-pitching">
-                <div class="cat-cell"><div class="cat-label">K</div><div class="cat-value" id="cat-k">—</div></div>
-                <div class="cat-cell"><div class="cat-label">QS</div><div class="cat-value" id="cat-qs">—</div></div>
-                <div class="cat-cell"><div class="cat-label">W</div><div class="cat-value" id="cat-w">—</div></div>
-                <div class="cat-cell"><div class="cat-label">S</div><div class="cat-value" id="cat-s">—</div></div>
-                <div class="cat-cell"><div class="cat-label">ERA</div><div class="cat-value" id="cat-era">—</div></div>
-                <div class="cat-cell"><div class="cat-label">WHIP</div><div class="cat-value" id="cat-whip">—</div></div>
+                <div class="cat-cell"><div class="cat-label">K</div><div class="cat-value" id="cat-k">—</div><div class="cat-rank" id="rank-k"></div></div>
+                <div class="cat-cell"><div class="cat-label">QS</div><div class="cat-value" id="cat-qs">—</div><div class="cat-rank" id="rank-qs"></div></div>
+                <div class="cat-cell"><div class="cat-label">W</div><div class="cat-value" id="cat-w">—</div><div class="cat-rank" id="rank-w"></div></div>
+                <div class="cat-cell"><div class="cat-label">S</div><div class="cat-value" id="cat-s">—</div><div class="cat-rank" id="rank-s"></div></div>
+                <div class="cat-cell"><div class="cat-label">ERA</div><div class="cat-value" id="cat-era">—</div><div class="cat-rank" id="rank-era"></div></div>
+                <div class="cat-cell"><div class="cat-label">WHIP</div><div class="cat-value" id="cat-whip">—</div><div class="cat-rank" id="rank-whip"></div></div>
             </div>
         </div>
     </div>
@@ -330,45 +334,89 @@ body::before{
 <script>
 // ═══ STATE ═══
 let projData = null;
-let allPlayers = [];        // master list from projections
-let availablePlayers = [];  // not yet drafted
-let draftedPlayers = [];    // my drafted players with slot assignments
-let leagueTeams = [];       // ESPN league teams
-let leagueConfig = null;
-let myTeamId = null;
+let allPlayers = [];
+let availablePlayers = [];
 let currentPosFilter = 'all';
 let searchQuery = '';
-let sortMode = 'dna';       // 'dna' | 'espn' | 'weighted'
-let espnAdpMap = {};         // playerId → ESPN ADP rank
-let statZScores = {};        // playerId → { R: z, HR: z, ... }
-let weightedScores = {};     // playerId → weighted score
+let sortMode = 'dna';
+let statZScores = {};
+let weightedScores = {};
+let needScores = {};
 let categoryWeights = { R:1, HR:1, RBI:1, SB:1, AVG:1, OPS:1, K:1, QS:1, W:1, S:1, ERA:1, WHIP:1 };
 
-// ESPN roster slot structure
+// Draft state
+let draftConfig = null; // { numTeams, numRounds, myPick, teamNames }
+let draftBoard = [];     // flat array: draftBoard[pickIndex] = { player, teamIdx }
+let currentPickIdx = 0;
+let pickHistory = [];    // for undo
+let posRanks = {};       // playerId → positional rank among available
+
+// My team roster
 const ROSTER_SLOTS = [
-    { slot: 'C', label: 'C', type: 'hitter', max: 1 },
-    { slot: '1B', label: '1B', type: 'hitter', max: 1 },
-    { slot: '2B', label: '2B', type: 'hitter', max: 1 },
-    { slot: '3B', label: '3B', type: 'hitter', max: 1 },
-    { slot: 'SS', label: 'SS', type: 'hitter', max: 1 },
-    { slot: 'OF', label: 'OF', type: 'hitter', max: 3 },
-    { slot: 'UTIL', label: 'UTIL', type: 'hitter', max: 1 },
-    { slot: 'SP', label: 'SP', type: 'pitcher', max: 5 },
-    { slot: 'RP', label: 'RP', type: 'pitcher', max: 4 },
-    { slot: 'BN', label: 'BN', type: 'any', max: 3 },
+    { slot:'C', label:'C', type:'hitter', max:1 },
+    { slot:'1B', label:'1B', type:'hitter', max:1 },
+    { slot:'2B', label:'2B', type:'hitter', max:1 },
+    { slot:'3B', label:'3B', type:'hitter', max:1 },
+    { slot:'SS', label:'SS', type:'hitter', max:1 },
+    { slot:'OF', label:'OF', type:'hitter', max:3 },
+    { slot:'UTIL', label:'UTIL', type:'hitter', max:1 },
+    { slot:'SP', label:'SP', type:'pitcher', max:5 },
+    { slot:'RP', label:'RP', type:'pitcher', max:2 },
+    { slot:'P', label:'P', type:'pitcher', max:2 },
+    { slot:'BN', label:'BN', type:'any', max:3 },
 ];
 
-// Flatten to individual slot entries
 function buildSlotList() {
     const slots = [];
     ROSTER_SLOTS.forEach(s => {
-        for (let i = 0; i < s.max; i++) {
-            slots.push({ ...s, idx: i, player: null });
-        }
+        for (let i = 0; i < s.max; i++) slots.push({ ...s, idx: i, player: null });
     });
     return slots;
 }
 let mySlots = buildSlotList();
+
+// ═══ SNAKE ORDER ═══
+function getTeamForPick(pickIdx) {
+    if (!draftConfig) return 0;
+    const round = Math.floor(pickIdx / draftConfig.numTeams);
+    const posInRound = pickIdx % draftConfig.numTeams;
+    // Snake: even rounds (0,2,4...) go L→R, odd rounds go R→L
+    return round % 2 === 0 ? posInRound : (draftConfig.numTeams - 1 - posInRound);
+}
+
+function isMyPick(pickIdx) {
+    return draftConfig && getTeamForPick(pickIdx) === (draftConfig.myPick - 1);
+}
+
+function pickLabel(pickIdx) {
+    const round = Math.floor(pickIdx / draftConfig.numTeams) + 1;
+    const pos = (pickIdx % draftConfig.numTeams) + 1;
+    return `${round}.${pos.toString().padStart(2,'0')}`;
+}
+
+// ═══ START DRAFT ═══
+function startDraft() {
+    const numTeams = parseInt(document.getElementById('input-num-teams').value) || 10;
+    const numRounds = parseInt(document.getElementById('input-num-rounds').value) || 20;
+    const myPick = Math.min(numTeams, Math.max(1, parseInt(document.getElementById('input-pick-pos').value) || 1));
+    const myName = document.getElementById('input-my-name').value.trim() || 'My Team';
+
+    const teamNames = [];
+    for (let i = 0; i < numTeams; i++) {
+        teamNames.push(i === myPick - 1 ? myName : `Team ${i + 1}`);
+    }
+
+    draftConfig = { numTeams, numRounds, myPick, teamNames };
+    const totalPicks = numTeams * numRounds;
+    draftBoard = new Array(totalPicks).fill(null);
+    currentPickIdx = 0;
+    pickHistory = [];
+
+    document.getElementById('setup-modal').classList.remove('open');
+    renderBoard();
+    updatePickBadge();
+    loadProjections();
+}
 
 // ═══ LOAD PROJECTIONS ═══
 async function loadProjections() {
@@ -376,11 +424,10 @@ async function loadProjections() {
         const resp = await fetch('/atlas/fantasy_projections.json');
         projData = await resp.json();
 
-        // Build flat player list from all positions
         const positions = projData.positions || {};
         const seen = new Set();
-        const hitterPos = ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL'];
-        const pitcherPos = ['SP', 'RP'];
+        const hitterPos = ['C','1B','2B','3B','SS','OF','UTIL'];
+        const pitcherPos = ['SP','RP'];
 
         [...hitterPos, ...pitcherPos].forEach(pos => {
             (positions[pos] || []).forEach(p => {
@@ -396,74 +443,122 @@ async function loadProjections() {
             });
         });
 
-        // Sort by fantasy value
         allPlayers.sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
         availablePlayers = [...allPlayers];
 
-        // Compute z-scores and weighted scores for category weighting
         computeStatZScores();
         computeAllWeightedScores();
-
-        // Try restoring saved league
-        loadSavedLeague();
+        computePositionalRanks();
+        computeNeedScores();
 
         renderAvailable();
         renderMyTeam();
     } catch (e) {
         document.getElementById('avail-list').innerHTML =
-            '<div class="empty-state">PROJECTIONS NOT AVAILABLE — RUN THE PIPELINE FIRST</div>';
+            '<div class="empty-state">PROJECTIONS NOT AVAILABLE — RUN PIPELINE FIRST</div>';
     }
 }
 
-// ═══ SORT MODE & WEIGHTS ═══
-function setSortMode(mode) {
-    sortMode = mode;
-    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`.sort-btn[data-sort="${mode}"]`).classList.add('active');
-    sortAvailablePlayers();
-    renderAvailable();
-}
-
-function toggleWeights() {
-    const toggle = document.getElementById('weights-toggle');
-    const grid = document.getElementById('weights-grid');
-    toggle.classList.toggle('open');
-    grid.classList.toggle('open');
-}
-
-function applyWeights() {
-    document.querySelectorAll('.weight-input').forEach(inp => {
-        const cat = inp.getAttribute('data-cat');
-        categoryWeights[cat] = parseFloat(inp.value) || 0;
-        inp.classList.remove('boosted', 'zeroed');
-        if (categoryWeights[cat] > 1) inp.classList.add('boosted');
-        if (categoryWeights[cat] === 0) inp.classList.add('zeroed');
+// ═══ POSITIONAL RANKS ═══
+function computePositionalRanks() {
+    posRanks = {};
+    const byPos = {};
+    availablePlayers.forEach(p => {
+        const pos = p.espn_pos;
+        if (!byPos[pos]) byPos[pos] = [];
+        byPos[pos].push(p);
     });
-    computeAllWeightedScores();
-    setSortMode('weighted');
+    Object.keys(byPos).forEach(pos => {
+        byPos[pos].sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
+        byPos[pos].forEach((p, i) => {
+            posRanks[p.id || p.name] = { pos, rank: i + 1 };
+        });
+    });
 }
 
-function resetWeights() {
-    Object.keys(categoryWeights).forEach(k => categoryWeights[k] = 1);
-    document.querySelectorAll('.weight-input').forEach(inp => {
-        inp.value = '1';
-        inp.classList.remove('boosted', 'zeroed');
+// ═══ NEED SCORES ═══
+function computeNeedScores() {
+    // Find which categories my team is weakest in, then score each available player
+    // by how much they'd improve those weak categories
+    const myStats = getMyTeamStats();
+    const cats = ['R','HR','RBI','SB','AVG','OPS','K','QS','W','S','ERA','WHIP'];
+
+    // Get z-scores for my team's totals relative to league avg expectations
+    const leagueAvg = { R:750, HR:200, RBI:700, SB:90, AVG:0.260, OPS:0.760, K:1100, QS:60, W:55, S:30, ERA:3.80, WHIP:1.20 };
+    const myGaps = {};
+    cats.forEach(cat => {
+        const key = cat.toLowerCase();
+        const mine = myStats[key] || 0;
+        const avg = leagueAvg[cat];
+        if (cat === 'ERA' || cat === 'WHIP') {
+            myGaps[cat] = mine > 0 ? (mine - avg) / avg : 0; // positive = bad (too high)
+        } else {
+            myGaps[cat] = avg > 0 ? (avg - mine) / avg : 1; // positive = need more
+        }
     });
-    computeAllWeightedScores();
-    if (sortMode === 'weighted') {
-        sortAvailablePlayers();
-        renderAvailable();
-    }
+
+    availablePlayers.forEach(p => {
+        const key = p.id || p.name;
+        const z = statZScores[key] || {};
+        let score = 0;
+
+        const relevantCats = p.playerType === 'hitter'
+            ? ['R','HR','RBI','SB','AVG','OPS']
+            : ['K','QS','W','S','ERA','WHIP'];
+
+        relevantCats.forEach(cat => {
+            const gap = myGaps[cat] || 0;
+            const zVal = z[cat] || 0;
+            // Multiply player's z-score by how much we need that category
+            score += zVal * Math.max(0, gap) * (categoryWeights[cat] || 1);
+        });
+
+        // Boost if we have an empty position slot for this player
+        const hasEmptySlot = mySlots.some(s =>
+            !s.player && (s.slot === p.espn_pos || s.slot === 'UTIL' || s.slot === 'P' || s.slot === 'BN')
+        );
+        if (hasEmptySlot) score += 0.5;
+
+        needScores[key] = score;
+    });
+}
+
+function getMyTeamStats() {
+    const hitters = mySlots.filter(s => s.player && s.player.playerType === 'hitter' && s.slot !== 'BN');
+    const pitchers = mySlots.filter(s => s.player && s.player.playerType === 'pitcher' && s.slot !== 'BN');
+
+    let r=0, hr=0, rbi=0, sb=0, hSum=0, abSum=0, opsSum=0, opsCount=0;
+    hitters.forEach(s => {
+        const y = s.player.yearly || {};
+        r += y.r||0; hr += y.hr||0; rbi += y.rbi||0; sb += y.sb||0;
+        hSum += (y.avg||0.250) * (y.games||162) * 4;
+        abSum += (y.games||162) * 4;
+        opsSum += y.ops||0; opsCount++;
+    });
+
+    let k=0, qs=0, w=0, s_=0, eraNum=0, eraIp=0, whipNum=0, whipIp=0;
+    pitchers.forEach(s => {
+        const y = s.player.yearly || {};
+        k += y.k||0; qs += y.qs||0; w += y.w||0; s_ += y.s||0;
+        const ip = y.ip||100;
+        eraNum += (y.era||4.00)*ip; eraIp += ip;
+        whipNum += (y.whip||1.30)*ip; whipIp += ip;
+    });
+
+    return {
+        r, hr, rbi, sb,
+        avg: abSum > 0 ? hSum/abSum : 0,
+        ops: opsCount > 0 ? opsSum/opsCount : 0,
+        k, qs, w, s: s_,
+        era: eraIp > 0 ? eraNum/eraIp : 0,
+        whip: whipIp > 0 ? whipNum/whipIp : 0,
+    };
 }
 
 // ═══ Z-SCORE COMPUTATION ═══
 function computeStatZScores() {
-    // Compute mean & stdev for each stat across all players (by type)
     const hitters = allPlayers.filter(p => p.playerType === 'hitter');
     const pitchers = allPlayers.filter(p => p.playerType === 'pitcher');
-
-    const hitterStats = ['r', 'hr', 'rbi', 'sb', 'avg', 'ops'];
-    const pitcherStats = ['k', 'qs', 'w', 's', 'era', 'whip'];
 
     function zScoresForGroup(players, stats, catMap) {
         const means = {}, stdevs = {};
@@ -480,112 +575,84 @@ function computeStatZScores() {
             stats.forEach(stat => {
                 const val = (p.yearly || {})[stat] || 0;
                 let z = (val - means[stat]) / stdevs[stat];
-                // ERA and WHIP: lower is better, so invert
                 if (stat === 'era' || stat === 'whip') z = -z;
-                const catKey = catMap[stat];
-                statZScores[key][catKey] = z;
+                statZScores[key][catMap[stat]] = z;
             });
         });
     }
 
-    zScoresForGroup(hitters, hitterStats, { r: 'R', hr: 'HR', rbi: 'RBI', sb: 'SB', avg: 'AVG', ops: 'OPS' });
-    zScoresForGroup(pitchers, pitcherStats, { k: 'K', qs: 'QS', w: 'W', s: 'S', era: 'ERA', whip: 'WHIP' });
+    zScoresForGroup(hitters, ['r','hr','rbi','sb','avg','ops'], { r:'R', hr:'HR', rbi:'RBI', sb:'SB', avg:'AVG', ops:'OPS' });
+    zScoresForGroup(pitchers, ['k','qs','w','s','era','whip'], { k:'K', qs:'QS', w:'W', s:'S', era:'ERA', whip:'WHIP' });
 }
 
 function computeAllWeightedScores() {
     allPlayers.forEach(p => {
         const key = p.id || p.name;
         const z = statZScores[key] || {};
-        let score = 0;
-        let totalWeight = 0;
-
-        if (p.playerType === 'hitter') {
-            ['R', 'HR', 'RBI', 'SB', 'AVG', 'OPS'].forEach(cat => {
-                if (z[cat] !== undefined) {
-                    score += (z[cat] || 0) * (categoryWeights[cat] || 0);
-                    totalWeight += categoryWeights[cat] || 0;
-                }
-            });
-        } else {
-            ['K', 'QS', 'W', 'S', 'ERA', 'WHIP'].forEach(cat => {
-                if (z[cat] !== undefined) {
-                    score += (z[cat] || 0) * (categoryWeights[cat] || 0);
-                    totalWeight += categoryWeights[cat] || 0;
-                }
-            });
-        }
+        let score = 0, totalWeight = 0;
+        const cats = p.playerType === 'hitter'
+            ? ['R','HR','RBI','SB','AVG','OPS']
+            : ['K','QS','W','S','ERA','WHIP'];
+        cats.forEach(cat => {
+            if (z[cat] !== undefined) {
+                score += (z[cat]||0) * (categoryWeights[cat]||0);
+                totalWeight += categoryWeights[cat]||0;
+            }
+        });
         weightedScores[key] = totalWeight > 0 ? score / totalWeight : 0;
     });
 }
 
+// ═══ SORT ═══
+function setSortMode(mode) {
+    sortMode = mode;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.sort-btn[data-sort="${mode}"]`)?.classList.add('active');
+    renderAvailable();
+}
+
 function sortAvailablePlayers() {
     if (sortMode === 'dna') {
-        availablePlayers.sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
-    } else if (sortMode === 'espn') {
-        availablePlayers.sort((a, b) => {
-            const aRank = espnAdpMap[a.id || a.name] || 9999;
-            const bRank = espnAdpMap[b.id || b.name] || 9999;
-            return aRank - bRank;
-        });
+        availablePlayers.sort((a, b) => (b.fantasy_value||0) - (a.fantasy_value||0));
     } else if (sortMode === 'weighted') {
-        availablePlayers.sort((a, b) => {
-            const aKey = a.id || a.name;
-            const bKey = b.id || b.name;
-            return (weightedScores[bKey] || 0) - (weightedScores[aKey] || 0);
-        });
+        availablePlayers.sort((a, b) => (weightedScores[b.id||b.name]||0) - (weightedScores[a.id||a.name]||0));
+    } else if (sortMode === 'need') {
+        computeNeedScores();
+        availablePlayers.sort((a, b) => (needScores[b.id||b.name]||0) - (needScores[a.id||a.name]||0));
     }
 }
 
-// ═══ ESPN ADP FETCH ═══
-async function fetchEspnAdp(season, leagueId, espnS2, swid) {
-    try {
-        // Fetch ESPN player rankings via proxy to avoid CORS
-        const params = new URLSearchParams({ leagueId, season, views: 'kona_player_info' });
-        if (espnS2) params.set('espnS2', espnS2);
-        if (swid) params.set('swid', swid);
-        const url = `https://us-central1-morello-sims.cloudfunctions.net/espnProxy?${params}`;
-        const resp = await fetch(url);
-        if (!resp.ok) return;
+function toggleWeights() {
+    document.getElementById('weights-toggle').classList.toggle('open');
+    document.getElementById('weights-grid').classList.toggle('open');
+}
 
-        const data = await resp.json();
-        const players = data.players || [];
-        // Build ADP map: lower ADP = better
-        players.forEach((p, i) => {
-            const adp = p.player?.ownership?.averageDraftPosition || p.draftAuctionValue || null;
-            const name = p.player?.fullName;
-            const id = p.player?.id;
-            if (adp && adp > 0) {
-                // Try to match to our players by name
-                const match = allPlayers.find(ap =>
-                    ap.name === name || ap.id === id || ap.name?.toLowerCase() === name?.toLowerCase()
-                );
-                if (match) {
-                    espnAdpMap[match.id || match.name] = Math.round(adp);
-                }
-            }
-        });
+function applyWeights() {
+    document.querySelectorAll('.weight-input').forEach(inp => {
+        const cat = inp.getAttribute('data-cat');
+        categoryWeights[cat] = parseFloat(inp.value) || 0;
+        inp.classList.remove('boosted','zeroed');
+        if (categoryWeights[cat] > 1) inp.classList.add('boosted');
+        if (categoryWeights[cat] === 0) inp.classList.add('zeroed');
+    });
+    computeAllWeightedScores();
+    setSortMode('weighted');
+}
 
-        // If we got ADP data, also rank by it
-        const sorted = [...allPlayers]
-            .filter(p => espnAdpMap[p.id || p.name])
-            .sort((a, b) => (espnAdpMap[a.id || a.name] || 9999) - (espnAdpMap[b.id || b.name] || 9999));
-
-        // Fill in rank numbers
-        sorted.forEach((p, i) => {
-            espnAdpMap[p.id || p.name] = espnAdpMap[p.id || p.name]; // keep ADP value
-        });
-
-        renderAvailable();
-    } catch (e) {
-        console.log('ESPN ADP fetch failed (CORS or auth):', e.message);
-    }
+function resetWeights() {
+    Object.keys(categoryWeights).forEach(k => categoryWeights[k] = 1);
+    document.querySelectorAll('.weight-input').forEach(inp => {
+        inp.value = '1';
+        inp.classList.remove('boosted','zeroed');
+    });
+    computeAllWeightedScores();
+    if (sortMode === 'weighted') renderAvailable();
 }
 
 // ═══ FORMAT HELPERS ═══
-function fmtAvg(v) { return v ? ('.' + Math.round(v * 1000).toString().padStart(3, '0')) : '.000'; }
+function fmtAvg(v) { return v ? ('.' + Math.round(v*1000).toString().padStart(3,'0')) : '.000'; }
 function fmtStat(v) { return v != null ? (Number.isInteger(v) ? v : v.toFixed(1)) : '—'; }
 function fmtEra(v) { return v != null ? v.toFixed(2) : '—'; }
-
 function valClass(fv) {
     if (fv >= 90) return 'elite';
     if (fv >= 70) return 'good';
@@ -598,156 +665,248 @@ function renderAvailable() {
     const list = document.getElementById('avail-list');
     const query = searchQuery.toLowerCase();
 
-    // Sort before rendering
     sortAvailablePlayers();
 
     let filtered = availablePlayers;
+    if (currentPosFilter !== 'all') filtered = filtered.filter(p => p.espn_pos === currentPosFilter);
+    if (query) filtered = filtered.filter(p => p.name.toLowerCase().includes(query));
 
-    // Position filter
-    if (currentPosFilter !== 'all') {
-        filtered = filtered.filter(p => p.espn_pos === currentPosFilter);
-    }
-
-    // Search filter
-    if (query) {
-        filtered = filtered.filter(p => p.name.toLowerCase().includes(query));
-    }
-
-    document.getElementById('avail-count').textContent =
-        `${availablePlayers.length} players available`;
+    document.getElementById('avail-count').textContent = `${availablePlayers.length} players available`;
 
     if (!filtered.length) {
         list.innerHTML = '<div class="empty-state">NO PLAYERS MATCH</div>';
         return;
     }
 
-    // Pre-compute DNA ranks for all available (for badge display)
-    const dnaRanked = [...availablePlayers].sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
-    const dnaRankMap = {};
-    dnaRanked.forEach((p, i) => dnaRankMap[p.id || p.name] = i + 1);
-
     let html = '';
-    filtered.slice(0, 100).forEach((p, i) => {
+    filtered.slice(0, 80).forEach((p, i) => {
         const fv = p.fantasy_value || 0;
         const yearly = p.yearly || {};
         const pKey = p.id || p.name;
-        let statLine = '';
+        const pr = posRanks[pKey];
+        const prLabel = pr ? `${pr.pos}${pr.rank}` : '';
+
+        let statLine;
         if (p.playerType === 'hitter') {
-            statLine = `${fmtStat(yearly.hr)} HR · ${fmtStat(yearly.rbi)} RBI · ${fmtAvg(yearly.avg)}`;
+            statLine = `${p.team} · ${fmtStat(yearly.hr)} HR · ${fmtStat(yearly.rbi)} RBI · ${fmtStat(yearly.sb)} SB · ${fmtAvg(yearly.avg)}`;
         } else {
-            statLine = `${fmtStat(yearly.k)} K · ${fmtEra(yearly.era)} ERA`;
+            statLine = `${p.team} · ${fmtStat(yearly.k)} K · ${fmtEra(yearly.era)} ERA · ${fmtEra(yearly.whip)} WHIP`;
         }
 
-        // Rank badges
-        const dnaRank = dnaRankMap[pKey] || '—';
-        const espnRank = espnAdpMap[pKey] || '—';
-        const wScore = weightedScores[pKey];
-        const wDisplay = wScore !== undefined ? wScore.toFixed(1) : '—';
-
-        // Display value based on sort mode
         let displayVal, displayClass;
         if (sortMode === 'dna') {
             displayVal = Math.round(fv);
             displayClass = valClass(fv);
-        } else if (sortMode === 'espn') {
-            displayVal = espnRank !== '—' ? '#' + espnRank : '—';
-            displayClass = '';
+        } else if (sortMode === 'weighted') {
+            const ws = weightedScores[pKey];
+            displayVal = ws !== undefined ? ws.toFixed(1) : '—';
+            displayClass = ws > 1 ? 'elite' : ws > 0 ? 'good' : ws > -0.5 ? 'ok' : '';
         } else {
-            displayVal = wScore !== undefined ? wScore.toFixed(1) : '—';
-            displayClass = wScore > 1 ? 'elite' : wScore > 0 ? 'good' : wScore > -0.5 ? 'ok' : '';
+            const ns = needScores[pKey];
+            displayVal = ns !== undefined ? ns.toFixed(1) : '—';
+            displayClass = ns > 1 ? 'elite' : ns > 0.3 ? 'good' : '';
         }
 
-        html += `<div class="avail-row" onclick="draftPlayer('${pKey.toString().replace(/'/g, "\\'")}')">
+        const safeKey = pKey.toString().replace(/'/g, "\\'");
+
+        html += `<div class="avail-row">
             <span class="avail-rank">${i + 1}</span>
-            <span class="avail-pos">${p.espn_pos}</span>
+            <span class="avail-pos">${p.espn_pos}<span class="pos-rank-badge">${prLabel}</span></span>
             <div class="avail-info">
                 <div class="avail-name">${p.name}</div>
-                <div class="avail-meta">${p.team} · ${statLine}</div>
-            </div>
-            <div class="avail-ranks">
-                <span class="rank-badge dna" title="DNA Rank">${dnaRank}</span>
-                <span class="rank-badge espn" title="ESPN ADP">${espnRank}</span>
+                <div class="avail-meta">${statLine}</div>
             </div>
             <span class="avail-val ${displayClass}">${displayVal}</span>
-            <button class="avail-draft-btn" onclick="event.stopPropagation();draftPlayer('${pKey.toString().replace(/'/g, "\\'")}')">Draft</button>
+            <div class="avail-btns">
+                <button class="btn-mine" onclick="event.stopPropagation();draftToMyTeam('${safeKey}')">Mine</button>
+                <button class="btn-taken" onclick="event.stopPropagation();draftByOpponent('${safeKey}')">Taken</button>
+            </div>
         </div>`;
     });
 
     list.innerHTML = html;
 }
 
-// ═══ DRAFT / UNDRAFT ═══
-function draftPlayer(playerId) {
-    const idx = availablePlayers.findIndex(p => (p.id || p.name).toString() === playerId.toString());
+// ═══ DRAFT ACTIONS ═══
+function draftToMyTeam(playerId) {
+    const idx = availablePlayers.findIndex(p => (p.id||p.name).toString() === playerId.toString());
     if (idx === -1) return;
-
     const player = availablePlayers[idx];
 
-    // Find best open slot
     const slotIdx = findBestSlot(player);
-    if (slotIdx === -1) {
-        alert('No open roster slot for ' + player.name);
-        return;
-    }
+    if (slotIdx === -1) { alert('No open roster slot for ' + player.name); return; }
 
-    // Move player
     availablePlayers.splice(idx, 1);
     mySlots[slotIdx].player = player;
-    draftedPlayers.push(player);
 
-    updateRound();
-    renderAvailable();
-    renderMyTeam();
-    renderLeagueBoard();
+    // Place on draft board at current pick if it's my turn, or find next my-pick
+    let boardIdx = currentPickIdx;
+    if (!isMyPick(currentPickIdx)) {
+        // Find next available my-pick slot
+        for (let i = 0; i < draftBoard.length; i++) {
+            if (isMyPick(i) && !draftBoard[i]) { boardIdx = i; break; }
+        }
+    }
+    if (boardIdx < draftBoard.length && !draftBoard[boardIdx]) {
+        draftBoard[boardIdx] = { player, teamIdx: draftConfig.myPick - 1 };
+        pickHistory.push({ type: 'mine', pickIdx: boardIdx, slotIdx, player });
+        if (boardIdx === currentPickIdx) advancePick();
+    } else {
+        pickHistory.push({ type: 'mine', pickIdx: -1, slotIdx, player });
+    }
+
+    computePositionalRanks();
+    computeNeedScores();
+    renderAll();
 }
 
-function undraftPlayer(slotIdx) {
-    const player = mySlots[slotIdx].player;
-    if (!player) return;
+function draftByOpponent(playerId) {
+    const idx = availablePlayers.findIndex(p => (p.id||p.name).toString() === playerId.toString());
+    if (idx === -1) return;
+    const player = availablePlayers[idx];
 
-    mySlots[slotIdx].player = null;
+    availablePlayers.splice(idx, 1);
 
-    // Re-insert into available list sorted by fantasy value
-    const dpIdx = draftedPlayers.findIndex(p => (p.id || p.name) === (player.id || player.name));
-    if (dpIdx !== -1) draftedPlayers.splice(dpIdx, 1);
+    // Place on draft board at current pick
+    const teamIdx = getTeamForPick(currentPickIdx);
+    if (currentPickIdx < draftBoard.length && !draftBoard[currentPickIdx]) {
+        draftBoard[currentPickIdx] = { player, teamIdx };
+        pickHistory.push({ type: 'opponent', pickIdx: currentPickIdx, player });
+        advancePick();
+    } else {
+        pickHistory.push({ type: 'opponent', pickIdx: -1, player });
+    }
 
-    availablePlayers.push(player);
-    availablePlayers.sort((a, b) => (b.fantasy_value || 0) - (a.fantasy_value || 0));
+    computePositionalRanks();
+    computeNeedScores();
+    renderAll();
+}
 
-    updateRound();
-    renderAvailable();
-    renderMyTeam();
-    renderLeagueBoard();
+function advancePick() {
+    // Move to next empty pick
+    for (let i = currentPickIdx + 1; i < draftBoard.length; i++) {
+        if (!draftBoard[i]) { currentPickIdx = i; updatePickBadge(); return; }
+    }
+    currentPickIdx = draftBoard.length; // draft over
+    updatePickBadge();
+}
+
+function undoLastPick() {
+    if (!pickHistory.length) return;
+    const last = pickHistory.pop();
+
+    // Return player to available
+    availablePlayers.push(last.player);
+
+    if (last.type === 'mine' && last.slotIdx >= 0) {
+        mySlots[last.slotIdx].player = null;
+    }
+
+    if (last.pickIdx >= 0) {
+        draftBoard[last.pickIdx] = null;
+        currentPickIdx = last.pickIdx;
+    }
+
+    computePositionalRanks();
+    computeNeedScores();
+    updatePickBadge();
+    renderAll();
+}
+
+function updatePickBadge() {
+    const badge = document.getElementById('pick-badge');
+    if (!draftConfig || currentPickIdx >= draftBoard.length) {
+        badge.innerHTML = 'DRAFT COMPLETE';
+        return;
+    }
+    const label = pickLabel(currentPickIdx);
+    const mine = isMyPick(currentPickIdx);
+    badge.innerHTML = `PICK ${label}${mine ? '<span class="you"> — YOUR PICK</span>' : ''}`;
 }
 
 function findBestSlot(player) {
     const pos = player.espn_pos;
     const type = player.playerType;
 
-    // First try exact position match
     for (let i = 0; i < mySlots.length; i++) {
         if (!mySlots[i].player && mySlots[i].slot === pos) return i;
     }
-
-    // Then try UTIL for hitters
     if (type === 'hitter') {
         for (let i = 0; i < mySlots.length; i++) {
             if (!mySlots[i].player && mySlots[i].slot === 'UTIL') return i;
         }
     }
-
-    // Then try bench
+    if (type === 'pitcher') {
+        for (let i = 0; i < mySlots.length; i++) {
+            if (!mySlots[i].player && mySlots[i].slot === 'P') return i;
+        }
+    }
     for (let i = 0; i < mySlots.length; i++) {
         if (!mySlots[i].player && mySlots[i].slot === 'BN') return i;
     }
-
     return -1;
 }
 
-function updateRound() {
-    const filled = mySlots.filter(s => s.player).length;
-    const round = Math.floor(filled / 1) + 1; // each pick = 1 round for now
-    document.getElementById('round-badge').textContent = `ROUND ${Math.min(round, 21)}`;
+// ═══ RENDER DRAFT BOARD ═══
+function renderBoard() {
+    if (!draftConfig) return;
+    const { numTeams, numRounds, teamNames, myPick } = draftConfig;
+    const wrapper = document.getElementById('board-wrapper');
+
+    document.getElementById('board-sub').textContent =
+        `${draftBoard.filter(Boolean).length} / ${numTeams * numRounds} picks made`;
+
+    const cols = numTeams + 1; // +1 for round labels
+    let html = `<div class="draft-grid" style="grid-template-columns: 36px repeat(${numTeams}, 1fr)">`;
+
+    // Header row
+    html += '<div></div>';
+    for (let t = 0; t < numTeams; t++) {
+        const isMine = t === myPick - 1;
+        html += `<div class="board-header" style="${isMine ? 'background:var(--color-accent);color:var(--color-black)' : ''}">${teamNames[t]}</div>`;
+    }
+
+    // Rounds
+    for (let r = 0; r < numRounds; r++) {
+        html += `<div class="board-round">R${r + 1}</div>`;
+        for (let t = 0; t < numTeams; t++) {
+            // Snake: even rounds L→R, odd rounds R→L
+            const actualTeam = r % 2 === 0 ? t : (numTeams - 1 - t);
+            const pickIdx = r * numTeams + t;
+            const pick = draftBoard[pickIdx];
+            const isCurrent = pickIdx === currentPickIdx;
+            const isMine = actualTeam === myPick - 1;
+
+            let cls = 'draft-cell';
+            if (pick) {
+                cls += pick.teamIdx === myPick - 1 ? ' mine filled' : ' filled';
+            } else {
+                cls += ' empty';
+                if (isCurrent) cls += ' current';
+                if (isMine && !pick) cls += ' my-turn';
+            }
+
+            if (pick) {
+                html += `<div class="${cls}">
+                    <span class="pick-num">${pickLabel(pickIdx)}</span>
+                    <span class="pick-name">${pick.player.name}</span>
+                    <span class="pick-pos">${pick.player.espn_pos}</span>
+                </div>`;
+            } else {
+                html += `<div class="${cls}">
+                    <span class="pick-num">${pickLabel(pickIdx)}</span>
+                </div>`;
+            }
+        }
+    }
+
+    html += '</div>';
+    wrapper.innerHTML = html;
+
+    // Scroll to current pick row
+    const currentRound = Math.floor(currentPickIdx / numTeams);
+    const rowHeight = 36;
+    wrapper.scrollTop = Math.max(0, (currentRound - 2) * rowHeight);
 }
 
 // ═══ RENDER MY TEAM ═══
@@ -761,9 +920,10 @@ function renderMyTeam() {
 
     mySlots.forEach((s, i) => {
         const groupName = s.slot === 'BN' ? 'Bench' :
-            ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL'].includes(s.slot) ? 'Hitters' : 'Pitchers';
+            ['C','1B','2B','3B','SS','OF','UTIL'].includes(s.slot) ? 'Hitters' : 'Pitchers';
 
         if (groupName !== currentGroup) {
+            if (currentGroup) html += '</div>';
             currentGroup = groupName;
             html += `<div class="slot-group"><div class="slot-group-title">${groupName}</div>`;
         }
@@ -771,17 +931,15 @@ function renderMyTeam() {
         if (s.player) {
             const p = s.player;
             const yearly = p.yearly || {};
-            let stat = '';
-            if (p.playerType === 'hitter') {
-                stat = `${fmtStat(yearly.hr)} HR`;
-            } else {
-                stat = `${fmtStat(yearly.k)} K`;
-            }
+            let stat = p.playerType === 'hitter'
+                ? `${fmtStat(yearly.hr)} HR · ${fmtAvg(yearly.avg)}`
+                : `${fmtStat(yearly.k)} K · ${fmtEra(yearly.era)}`;
+
             html += `<div class="slot-row">
                 <span class="slot-label">${s.label}</span>
                 <span class="slot-player">${p.name}</span>
                 <span class="slot-stat">${stat}</span>
-                <button class="slot-remove" onclick="undraftPlayer(${i})">&times;</button>
+                <button class="slot-remove" onclick="undraftFromSlot(${i})">&times;</button>
             </div>`;
         } else {
             html += `<div class="slot-row">
@@ -790,415 +948,115 @@ function renderMyTeam() {
             </div>`;
         }
     });
-
-    html += '</div>';
+    if (currentGroup) html += '</div>';
     container.innerHTML = html;
 
-    // Update category totals
     updateCategoryTotals();
+    renderSuggestion();
+}
+
+function undraftFromSlot(slotIdx) {
+    const player = mySlots[slotIdx].player;
+    if (!player) return;
+    mySlots[slotIdx].player = null;
+    availablePlayers.push(player);
+
+    // Also remove from draft board
+    for (let i = 0; i < draftBoard.length; i++) {
+        if (draftBoard[i] && draftBoard[i].player === player) {
+            draftBoard[i] = null;
+            if (i < currentPickIdx) currentPickIdx = i;
+            break;
+        }
+    }
+
+    computePositionalRanks();
+    computeNeedScores();
+    updatePickBadge();
+    renderAll();
+}
+
+// ═══ SUGGESTION ═══
+function renderSuggestion() {
+    const area = document.getElementById('suggestion-area');
+    if (availablePlayers.length === 0) { area.innerHTML = ''; return; }
+
+    computeNeedScores();
+    const sorted = [...availablePlayers].sort((a, b) => (needScores[b.id||b.name]||0) - (needScores[a.id||a.name]||0));
+    const best = sorted[0];
+    if (!best) { area.innerHTML = ''; return; }
+
+    const pr = posRanks[best.id||best.name];
+    const prLabel = pr ? `${pr.pos}${pr.rank}` : best.espn_pos;
+
+    area.innerHTML = `<div class="suggestion-box">
+        <div class="suggestion-label">Suggested Pick</div>
+        <div class="suggestion-player">${best.name} <span style="font-weight:400;font-size:10px;color:var(--color-meta)">${prLabel} · ${best.team}</span></div>
+        <div class="suggestion-reason">Fills your biggest category gap</div>
+    </div>`;
 }
 
 // ═══ CATEGORY TOTALS ═══
 function updateCategoryTotals() {
-    const hitters = mySlots.filter(s => s.player && s.player.playerType === 'hitter' && s.slot !== 'BN');
-    const pitchers = mySlots.filter(s => s.player && s.player.playerType === 'pitcher' && s.slot !== 'BN');
+    const stats = getMyTeamStats();
+    const filled = mySlots.filter(s => s.player).length;
 
-    // Hitting
-    let r = 0, hr = 0, rbi = 0, sb = 0, hSum = 0, abSum = 0, obpSum = 0, slgSum = 0;
-    hitters.forEach(s => {
-        const y = s.player.yearly || {};
-        r += y.r || 0;
-        hr += y.hr || 0;
-        rbi += y.rbi || 0;
-        sb += y.sb || 0;
-        hSum += (y.avg || 0.250) * (y.games || 162) * 4; // rough H estimate
-        abSum += (y.games || 162) * 4;
-    });
-    const avg = abSum > 0 ? hSum / abSum : 0;
+    document.getElementById('cat-r').textContent = filled ? Math.round(stats.r) : '—';
+    document.getElementById('cat-hr').textContent = filled ? Math.round(stats.hr) : '—';
+    document.getElementById('cat-rbi').textContent = filled ? Math.round(stats.rbi) : '—';
+    document.getElementById('cat-sb').textContent = filled ? Math.round(stats.sb) : '—';
+    document.getElementById('cat-avg').textContent = filled ? fmtAvg(stats.avg) : '—';
+    document.getElementById('cat-ops').textContent = filled ? stats.ops.toFixed(3) : '—';
+    document.getElementById('cat-k').textContent = filled ? Math.round(stats.k) : '—';
+    document.getElementById('cat-qs').textContent = filled ? Math.round(stats.qs) : '—';
+    document.getElementById('cat-w').textContent = filled ? Math.round(stats.w) : '—';
+    document.getElementById('cat-s').textContent = filled ? Math.round(stats.s) : '—';
+    document.getElementById('cat-era').textContent = filled && stats.era > 0 ? stats.era.toFixed(2) : '—';
+    document.getElementById('cat-whip').textContent = filled && stats.whip > 0 ? stats.whip.toFixed(2) : '—';
 
-    document.getElementById('cat-r').textContent = hitters.length ? Math.round(r) : '—';
-    document.getElementById('cat-hr').textContent = hitters.length ? Math.round(hr) : '—';
-    document.getElementById('cat-rbi').textContent = hitters.length ? Math.round(rbi) : '—';
-    document.getElementById('cat-sb').textContent = hitters.length ? Math.round(sb) : '—';
-    document.getElementById('cat-avg').textContent = hitters.length ? fmtAvg(avg) : '—';
-
-    // OPS — sum of individual OPS / count
-    let opsTotal = 0;
-    hitters.forEach(s => { opsTotal += (s.player.yearly?.ops || 0); });
-    const opsAvg = hitters.length ? opsTotal / hitters.length : 0;
-    document.getElementById('cat-ops').textContent = hitters.length ? opsAvg.toFixed(3) : '—';
-
-    // Color code hitting
-    // Pitching
-    let k = 0, qs = 0, w = 0, saves = 0;
-    let eraNum = 0, eraIp = 0, whipNum = 0, whipIp = 0;
-    pitchers.forEach(s => {
-        const y = s.player.yearly || {};
-        k += y.k || 0;
-        qs += y.qs || 0;
-        w += y.w || 0;
-        saves += y.s || 0;
-        const ip = y.ip || 100;
-        eraNum += (y.era || 4.00) * ip;
-        eraIp += ip;
-        whipNum += (y.whip || 1.30) * ip;
-        whipIp += ip;
-    });
-
-    document.getElementById('cat-k').textContent = pitchers.length ? Math.round(k) : '—';
-    document.getElementById('cat-qs').textContent = pitchers.length ? Math.round(qs) : '—';
-    document.getElementById('cat-w').textContent = pitchers.length ? Math.round(w) : '—';
-    document.getElementById('cat-s').textContent = pitchers.length ? Math.round(saves) : '—';
-    document.getElementById('cat-era').textContent = pitchers.length && eraIp ? (eraNum / eraIp).toFixed(2) : '—';
-    document.getElementById('cat-whip').textContent = pitchers.length && whipIp ? (whipNum / whipIp).toFixed(2) : '—';
-
-    // Color code relative to league averages (dynamic) or fallback thresholds
-    const leagueAvgs = computeLeagueAverages();
-    if (leagueAvgs) {
-        // Higher is better for these cats
-        colorCatVsLeague('cat-r', r, leagueAvgs.r);
-        colorCatVsLeague('cat-hr', hr, leagueAvgs.hr);
-        colorCatVsLeague('cat-rbi', rbi, leagueAvgs.rbi);
-        colorCatVsLeague('cat-sb', sb, leagueAvgs.sb);
-        colorCatVsLeague('cat-k', k, leagueAvgs.k);
-        colorCatVsLeague('cat-w', w, leagueAvgs.w);
-        colorCatVsLeague('cat-s', saves, leagueAvgs.s);
-        // Lower is better for ERA/WHIP
-        const era = pitchers.length && eraIp ? eraNum / eraIp : 0;
-        const whip = pitchers.length && whipIp ? whipNum / whipIp : 0;
-        colorCatVsLeague('cat-era', era, leagueAvgs.era, true);
-        colorCatVsLeague('cat-whip', whip, leagueAvgs.whip, true);
-        colorCatVsLeague('cat-avg', avg, leagueAvgs.avg);
-        colorCatVsLeague('cat-ops', opsAvg, leagueAvgs.ops);
-    } else {
-        // Fallback: hardcoded thresholds
-        colorCat('cat-r', r, 800, 600);
-        colorCat('cat-hr', hr, 220, 150);
-        colorCat('cat-rbi', rbi, 750, 550);
-        colorCat('cat-sb', sb, 120, 70);
-        colorCat('cat-k', k, 1200, 900);
-        colorCat('cat-w', w, 70, 45);
-        colorCat('cat-s', saves, 40, 20);
-    }
-}
-
-// Compute projected category averages across all league teams using our projection data
-function computeLeagueAverages() {
-    if (!leagueTeams || leagueTeams.length === 0) return null;
-
-    const teamTotals = [];
-    leagueTeams.forEach(team => {
-        const totals = { r:0, hr:0, rbi:0, sb:0, avg:0, ops:0, k:0, qs:0, w:0, s:0, era:0, whip:0, hCount:0, pCount:0, eraIp:0, whipIp:0, hSum:0, abSum:0, opsSum:0 };
-        team.players.forEach(tp => {
-            // Match to our projection data by name
-            const proj = allPlayers.find(p => p.name === tp.name || p.id === tp.id);
-            if (!proj || !proj.yearly) return;
-            const y = proj.yearly;
-            if (proj.playerType === 'hitter') {
-                totals.r += y.r || 0;
-                totals.hr += y.hr || 0;
-                totals.rbi += y.rbi || 0;
-                totals.sb += y.sb || 0;
-                totals.hSum += (y.avg || 0.250) * (y.games || 162) * 4;
-                totals.abSum += (y.games || 162) * 4;
-                totals.opsSum += y.ops || 0;
-                totals.hCount++;
-            } else {
-                totals.k += y.k || 0;
-                totals.qs += y.qs || 0;
-                totals.w += y.w || 0;
-                totals.s += y.s || 0;
-                const ip = y.ip || 100;
-                totals.eraIp += ip;
-                totals.whipIp += ip;
-                totals.era += (y.era || 4.00) * ip;
-                totals.whip += (y.whip || 1.30) * ip;
-                totals.pCount++;
-            }
-        });
-        totals.avgCalc = totals.abSum > 0 ? totals.hSum / totals.abSum : 0.250;
-        totals.opsCalc = totals.hCount > 0 ? totals.opsSum / totals.hCount : 0.750;
-        totals.eraCalc = totals.eraIp > 0 ? totals.era / totals.eraIp : 4.00;
-        totals.whipCalc = totals.whipIp > 0 ? totals.whip / totals.whipIp : 1.30;
-        teamTotals.push(totals);
-    });
-
-    if (teamTotals.length === 0) return null;
-    const n = teamTotals.length;
-    return {
-        r: teamTotals.reduce((s,t) => s + t.r, 0) / n,
-        hr: teamTotals.reduce((s,t) => s + t.hr, 0) / n,
-        rbi: teamTotals.reduce((s,t) => s + t.rbi, 0) / n,
-        sb: teamTotals.reduce((s,t) => s + t.sb, 0) / n,
-        avg: teamTotals.reduce((s,t) => s + t.avgCalc, 0) / n,
-        ops: teamTotals.reduce((s,t) => s + t.opsCalc, 0) / n,
-        k: teamTotals.reduce((s,t) => s + t.k, 0) / n,
-        qs: teamTotals.reduce((s,t) => s + t.qs, 0) / n,
-        w: teamTotals.reduce((s,t) => s + t.w, 0) / n,
-        s: teamTotals.reduce((s,t) => s + t.s, 0) / n,
-        era: teamTotals.reduce((s,t) => s + t.eraCalc, 0) / n,
-        whip: teamTotals.reduce((s,t) => s + t.whipCalc, 0) / n,
+    // Color code with league avg thresholds
+    const thresholds = {
+        r: [800,600], hr: [220,150], rbi: [750,550], sb: [120,70],
+        k: [1200,900], w: [70,45], s: [40,20]
     };
-}
-
-// Color a category relative to league average (green = top third, red = bottom third)
-function colorCatVsLeague(id, val, leagueAvg, lowerIsBetter = false) {
-    const el = document.getElementById(id);
-    el.classList.remove('strong', 'weak');
-    if (val === 0 || val === '—') return;
-    const pct = lowerIsBetter ? (leagueAvg / val) : (val / leagueAvg);
-    if (pct >= 1.10) el.classList.add('strong');      // 10%+ above avg
-    else if (pct <= 0.85) el.classList.add('weak');    // 15%+ below avg
-}
-
-function colorCat(id, val, goodThresh, badThresh) {
-    const el = document.getElementById(id);
-    el.classList.remove('strong', 'weak');
-    if (val >= goodThresh) el.classList.add('strong');
-    else if (val > 0 && val < badThresh) el.classList.add('weak');
-}
-
-// ═══ LEAGUE INTEGRATION ═══
-function openModal() {
-    document.getElementById('league-modal').classList.add('open');
-    if (leagueConfig) {
-        document.getElementById('input-league-id').value = leagueConfig.leagueId;
-        document.getElementById('input-team-id').value = leagueConfig.teamId;
-        document.getElementById('input-season').value = leagueConfig.season;
-        document.getElementById('disconnect-btn').style.display = 'block';
-    }
-}
-function closeModal() {
-    document.getElementById('league-modal').classList.remove('open');
-}
-
-async function connectLeague() {
-    const leagueId = document.getElementById('input-league-id').value.trim();
-    const teamId = document.getElementById('input-team-id').value.trim();
-    const season = document.getElementById('input-season').value.trim() || '2026';
-    const espnS2 = document.getElementById('input-espn-s2').value.trim();
-    const swid = document.getElementById('input-swid').value.trim();
-    const errEl = document.getElementById('connect-error');
-    const submitBtn = document.getElementById('connect-submit');
-
-    if (!leagueId || !teamId) {
-        errEl.textContent = 'League ID and Team ID are required';
-        errEl.style.display = 'block';
-        return;
-    }
-
-    errEl.style.display = 'none';
-    submitBtn.textContent = 'Connecting...';
-    submitBtn.disabled = true;
-
-    try {
-        const params = new URLSearchParams({ leagueId, season, views: 'mRoster,mTeam' });
-        if (espnS2) params.set('espnS2', espnS2);
-        if (swid) params.set('swid', swid);
-        const url = `https://us-central1-morello-sims.cloudfunctions.net/espnProxy?${params}`;
-
-        const resp = await fetch(url);
-
-        if (!resp.ok) {
-            throw new Error(resp.status === 401
-                ? 'League is private. Enter espn_s2 and SWID cookies.'
-                : `ESPN API error (${resp.status})`);
-        }
-
-        const data = await resp.json();
-        leagueTeams = (data.teams || []).map(t => {
-            const entries = t.roster?.entries || [];
-            const players = entries.map(e => {
-                const pl = e.playerPoolEntry?.player;
-                return pl ? { name: pl.fullName, id: pl.id, pos: getEspnPos(pl.defaultPositionId) } : null;
-            }).filter(Boolean);
-
-            let managerName = 'Unknown';
-            if (t.owners && t.owners[0]) {
-                if (typeof t.owners[0] === 'object') {
-                    managerName = `${t.owners[0].firstName || ''} ${t.owners[0].lastName || ''}`.trim();
-                }
-            }
-
-            return {
-                id: t.id,
-                name: t.name || t.abbrev || `Team ${t.id}`,
-                manager: managerName,
-                players,
-                isMine: t.id === parseInt(teamId),
-            };
-        });
-
-        myTeamId = parseInt(teamId);
-        leagueConfig = { leagueId, teamId, season, espnS2, swid };
-
-        // Save to localStorage
-        localStorage.setItem('draft_league', JSON.stringify(leagueConfig));
-
-        // Update UI
-        document.getElementById('league-btn').textContent = 'Connected';
-        document.getElementById('league-btn').classList.add('connected');
-        document.getElementById('league-sub').textContent = `${leagueTeams.length} teams loaded`;
-
-        closeModal();
-        renderLeagueBoard();
-
-        // Also fetch ESPN ADP rankings
-        fetchEspnAdp(season, leagueId, espnS2, swid);
-
-    } catch (e) {
-        errEl.textContent = e.message;
-        errEl.style.display = 'block';
-    } finally {
-        submitBtn.textContent = 'Connect';
-        submitBtn.disabled = false;
-    }
-}
-
-function disconnectLeague() {
-    leagueTeams = [];
-    leagueConfig = null;
-    myTeamId = null;
-    localStorage.removeItem('draft_league');
-    document.getElementById('league-btn').textContent = 'Connect League';
-    document.getElementById('league-btn').classList.remove('connected');
-    document.getElementById('league-sub').textContent = 'Connect league to see teams';
-    document.getElementById('league-content').innerHTML =
-        '<div class="empty-state">CONNECT YOUR ESPN LEAGUE<br>TO SEE ALL TEAMS AND PREDICTED PICKS</div>';
-    closeModal();
-}
-
-function loadSavedLeague() {
-    try {
-        const saved = JSON.parse(localStorage.getItem('draft_league'));
-        if (saved && saved.leagueId) {
-            document.getElementById('input-league-id').value = saved.leagueId;
-            document.getElementById('input-team-id').value = saved.teamId;
-            document.getElementById('input-season').value = saved.season;
-            if (saved.espnS2) document.getElementById('input-espn-s2').value = saved.espnS2;
-            if (saved.swid) document.getElementById('input-swid').value = saved.swid;
-            // Auto-connect
-            connectLeague();
-        }
-    } catch (e) {}
-}
-
-function getEspnPos(posId) {
-    const map = { 0: 'C', 1: 'C', 2: '1B', 3: '2B', 4: '3B', 5: 'SS', 6: 'OF', 7: 'OF',
-                  8: 'OF', 9: 'SP', 10: 'RP', 11: 'SP', 14: 'SP', 15: 'RP' };
-    return map[posId] || 'UTIL';
-}
-
-// ═══ RENDER LEAGUE BOARD ═══
-function renderLeagueBoard() {
-    if (!leagueTeams.length) return;
-    const container = document.getElementById('league-content');
-
-    let html = '<div class="league-grid">';
-    leagueTeams.forEach(team => {
-        const needs = analyzeNeeds(team);
-
-        // Build roster list grouped by position
-        let rosterHtml = '';
-        if (team.players.length > 0) {
-            const byPos = {};
-            team.players.forEach(p => {
-                const pos = p.pos || 'UTIL';
-                if (!byPos[pos]) byPos[pos] = [];
-                byPos[pos].push(p);
-            });
-            const posOrder = ['C','1B','2B','3B','SS','OF','SP','RP','UTIL'];
-            posOrder.forEach(pos => {
-                if (byPos[pos]) {
-                    byPos[pos].forEach(p => {
-                        const lastName = p.name.split(' ').slice(-1)[0];
-                        rosterHtml += `<div class="roster-player"><span class="roster-pos">${pos}</span><span class="roster-name">${lastName}</span></div>`;
-                    });
-                }
-            });
-        } else {
-            rosterHtml = '<div style="padding:4px 8px;color:#999;font-size:10px">No players</div>';
-        }
-
-        html += `<div class="team-card ${team.isMine ? 'is-mine' : ''}">
-            <div class="team-card-header">
-                <span>${team.name}</span>
-                <span class="slots">${team.players.length} rostered</span>
-            </div>
-            <div class="team-needs">
-                ${needs.map(n => `<span class="need-chip ${n.filled ? 'filled' : ''}">${n.pos}</span>`).join('')}
-            </div>
-            <div class="team-roster">${rosterHtml}</div>
-        </div>`;
+    Object.entries(thresholds).forEach(([cat, [good, bad]]) => {
+        const el = document.getElementById('cat-' + cat);
+        el.classList.remove('strong','weak');
+        const val = stats[cat === 's' ? 's' : cat];
+        if (val >= good) el.classList.add('strong');
+        else if (val > 0 && val < bad) el.classList.add('weak');
     });
-    html += '</div>';
-    container.innerHTML = html;
 }
 
-function analyzeNeeds(team) {
-    const posCounts = { C: 0, '1B': 0, '2B': 0, '3B': 0, SS: 0, OF: 0, SP: 0, RP: 0 };
-    const posNeeds = { C: 1, '1B': 1, '2B': 1, '3B': 1, SS: 1, OF: 3, SP: 5, RP: 4 };
-
-    team.players.forEach(p => {
-        if (posCounts[p.pos] !== undefined) posCounts[p.pos]++;
-    });
-
-    return Object.keys(posNeeds).map(pos => ({
-        pos,
-        filled: posCounts[pos] >= posNeeds[pos],
-        count: posCounts[pos],
-        needed: posNeeds[pos],
-    }));
-}
-
-function predictPick(team) {
-    const needs = analyzeNeeds(team);
-    const openNeeds = needs.filter(n => !n.filled).map(n => n.pos);
-
-    if (!openNeeds.length) return null;
-
-    // Find best available player at a needed position
-    for (const player of availablePlayers) {
-        if (openNeeds.includes(player.espn_pos)) {
-            return player;
-        }
-    }
-    return availablePlayers[0] || null;
+// ═══ RENDER ALL ═══
+function renderAll() {
+    renderAvailable();
+    renderBoard();
+    renderMyTeam();
 }
 
 // ═══ EVENT LISTENERS ═══
-// Position tabs
-document.querySelectorAll('.pos-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.pos-tab').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentPosFilter = btn.getAttribute('data-pos');
-        renderAvailable();
-    });
-});
-
-// Search
 document.getElementById('search-input').addEventListener('input', (e) => {
     searchQuery = e.target.value;
     renderAvailable();
 });
 
-// Modal close on overlay
-document.getElementById('league-modal').addEventListener('click', function(e) {
-    if (e.target === this) closeModal();
+document.querySelectorAll('.pos-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.pos-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentPosFilter = tab.getAttribute('data-pos');
+        renderAvailable();
+    });
 });
 
-// URL params
-const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.get('leagueId') && urlParams.get('teamId')) {
-    document.getElementById('input-league-id').value = urlParams.get('leagueId');
-    document.getElementById('input-team-id').value = urlParams.get('teamId');
-    document.getElementById('input-season').value = urlParams.get('seasonId') || '2026';
-}
-
-// ═══ INIT ═══
-loadProjections();
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        undoLastPick();
+    }
+});
 </script>
-
 </body>
 </html>
