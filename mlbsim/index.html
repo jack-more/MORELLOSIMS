@@ -154,6 +154,27 @@ body::after{
 /* No lineups */
 .tbd-block{text-align:center;padding:16px;font-family:var(--font-mono);font-size:10px;color:var(--color-meta);text-transform:uppercase;letter-spacing:1px}
 
+/* ═══ MODEL BREAKDOWN ═══ */
+.model-breakdown{margin:4px 12px 6px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px;border:1px solid rgba(0,0,0,0.06)}
+.model-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-family:var(--font-mono);font-size:10px}
+.model-row:last-child{margin-bottom:0}
+.model-label{font-weight:700;color:rgba(0,0,0,0.45);min-width:40px;text-transform:uppercase;font-size:9px;letter-spacing:0.5px}
+.model-val{font-weight:600;color:rgba(0,0,0,0.7);min-width:50px;text-align:center;font-size:10px}
+.model-bar-mini{flex:1;height:8px;display:flex;border-radius:4px;overflow:hidden;border:1px solid rgba(0,0,0,0.15)}
+.model-bar-away,.model-bar-home{height:100%;transition:width 0.5s ease}
+.model-mid-spacer{flex:1}
+.model-edge-sm{font-weight:700;color:rgba(0,0,0,0.55);font-size:9px;min-width:50px;text-align:right}
+.model-formula-row{margin-top:4px;padding-top:5px;border-top:1px dashed rgba(0,0,0,0.10)}
+.model-formula{font-family:var(--font-mono);font-size:9px;font-weight:600;color:rgba(0,0,0,0.55);flex:1;text-align:center}
+.model-formula strong{color:rgba(0,0,0,0.85);font-size:10px}
+.model-tags{display:flex;gap:6px;flex-wrap:wrap}
+.model-tag{font-family:var(--font-mono);font-size:8px;font-weight:700;letter-spacing:0.5px;padding:2px 8px;border-radius:10px;text-transform:uppercase}
+.tag-park{background:rgba(0,163,52,0.12);color:#00a334}
+.tag-bp{background:rgba(255,106,0,0.12);color:#ff6a00}
+.tag-tier{background:rgba(255,234,0,0.15);color:#a89800}
+.tag-oaa{background:rgba(0,120,255,0.12);color:#0078ff}
+.tag-re24{background:rgba(180,0,255,0.12);color:#9d00cc}
+
 /* ═══ BULLPEN SECTION ═══ */
 .bp-toggle{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border-top:1px dashed #ddd;font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;color:var(--color-meta);cursor:pointer;letter-spacing:1px;user-select:none}
 .bp-toggle .arrow{transition:transform 0.2s}
@@ -314,7 +335,7 @@ body::after{
   <div class="sp-side">
       <div class="sp-name">Max Fried</div>
       <span class="arch-badge">Boomerang</span>
-      <div class="sp-stats">RHP</div>
+      <div class="sp-stats">LHP</div>
     </div>
   <div class="sp-vs">VS</div>
   <div class="sp-side">
@@ -323,6 +344,51 @@ body::after{
       <div class="sp-stats">RHP</div>
     </div>
 </div>
+  <!-- MODEL BREAKDOWN -->
+  <div class="model-breakdown">
+    <div class="model-row">
+      <span class="model-label">wOBA</span>
+      <span class="model-val">NYY .362</span>
+      <div class="model-bar-mini">
+        <div class="model-bar-away" style="width:55%;background:#003087"></div>
+        <div class="model-bar-home" style="width:45%;background:#FD5A1E"></div>
+      </div>
+      <span class="model-val">SF .318</span>
+      <span class="model-edge-sm">NYY +.044</span>
+    </div>
+    <div class="model-row">
+      <span class="model-label">TIER</span>
+      <span class="model-val">T2 Core</span>
+      <div class="model-mid-spacer"></div>
+      <span class="model-val">T2 Core</span>
+      <span class="model-edge-sm">EVEN</span>
+    </div>
+    <div class="model-row">
+      <span class="model-label">RE24</span>
+      <span class="model-val">NYY +0.4</span>
+      <div class="model-mid-spacer"></div>
+      <span class="model-val">SF -0.1</span>
+      <span class="model-edge-sm">NYY +0.5</span>
+    </div>
+    <div class="model-row">
+      <span class="model-label">OAA</span>
+      <span class="model-val">SF +4</span>
+      <div class="model-mid-spacer"></div>
+      <span class="model-val">NYY +1</span>
+      <span class="model-edge-sm">SF +3</span>
+    </div>
+    <div class="model-row model-formula-row ma-premium">
+      <span class="model-label">MODEL</span>
+      <span class="model-formula">BaseRuns(wOBA×Tier) + RE24 + OAA + Park + BP = <strong>NYY 6.0 — SF 4.9</strong></span>
+    </div>
+    <div class="model-row model-tags">
+      <span class="model-tag tag-park">ORACLE PK 0.97×</span>
+      <span class="model-tag tag-tier">BOTH T2</span>
+      <span class="model-tag tag-re24">RE24 NYY +0.5</span>
+      <span class="model-tag tag-oaa">OAA SF +3</span>
+    </div>
+  </div>
+
   <div class="game-meta">8:05 PM ET · Oracle Park</div>
   <div class="affiliate-row">
   <a href="https://kalshi.com/sign-up/?referral=88acd325-1cbe-44b0-9358-f0cf92cf9fc7" target="_blank" rel="noopener" class="aff-btn aff-kalshi">
@@ -956,6 +1022,52 @@ function toggleLineup(idx) {
     if (toggle) toggle.classList.toggle('open');
   }
 }
+
+// ═══ ROUND PA VALUES (GMM-weighted, display only) ═══
+document.querySelectorAll('.batter-stats').forEach(el => {
+  el.textContent = el.textContent.replace(
+    /(\d+\.?\d*)(PA)/,
+    (_, num) => Math.round(parseFloat(num)) + ' PA'
+  );
+});
+
+// ═══ COMPUTE SPREAD + TOTAL FROM RUN BAR ═══
+document.querySelectorAll('.game-card').forEach(card => {
+  const segs = card.querySelectorAll('.run-bar-seg');
+  if (segs.length < 2) return;
+  const awayRuns = parseFloat(segs[0].textContent);
+  const homeRuns = parseFloat(segs[1].textContent);
+  if (isNaN(awayRuns) || isNaN(homeRuns)) return;
+
+  const diff = awayRuns - homeRuns;
+  const total = awayRuns + homeRuns;
+  const awayAbbr = card.querySelectorAll('.team-abbr')[0]?.textContent?.trim();
+  const homeAbbr = card.querySelectorAll('.team-abbr')[1]?.textContent?.trim();
+
+  // Spread: favorite team -X.X (negative diff = home favored)
+  const spreadEl = card.querySelector('.spread');
+  if (spreadEl && spreadEl.textContent.trim() === '—') {
+    let spreadText, spreadColor;
+    if (Math.abs(diff) < 0.3) {
+      spreadText = 'PICK';
+      spreadColor = '#888';
+    } else if (diff > 0) {
+      spreadText = awayAbbr + ' -' + diff.toFixed(1);
+      spreadColor = diff >= 1.5 ? '#00a334' : '#FFD600';
+    } else {
+      spreadText = homeAbbr + ' -' + Math.abs(diff).toFixed(1);
+      spreadColor = Math.abs(diff) >= 1.5 ? '#00a334' : '#FFD600';
+    }
+    spreadEl.textContent = spreadText;
+    spreadEl.style.color = spreadColor;
+  }
+
+  // Total (O/U line)
+  const ouEl = card.querySelector('.ou-line');
+  if (ouEl && !ouEl.textContent.trim()) {
+    ouEl.textContent = 'O/U ' + total.toFixed(1);
+  }
+});
 
 // ═══ BULLPEN TOGGLE ═══
 function toggleBullpen(idx) {
