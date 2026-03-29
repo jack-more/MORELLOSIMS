@@ -8112,11 +8112,18 @@ function toggleBullpen(idx) {
 
 // ═══ SORT GAMES ═══
 let currentSort = 'time';
+// Store original card order on first load
+let originalCardOrder = null;
 function sortGames(mode, el) {
   const container = document.querySelector('#tab-lines');
   if (!container) return;
   const cards = Array.from(container.querySelectorAll('.game-card'));
   if (!cards.length) return;
+
+  // Capture original order once
+  if (!originalCardOrder) {
+    originalCardOrder = cards.map(c => c);
+  }
 
   // Toggle: clicking active sort resets to time
   if (mode === currentSort && mode !== 'time') {
@@ -8124,39 +8131,26 @@ function sortGames(mode, el) {
   }
   currentSort = mode;
 
-  // Update active sort chip (only the sort chips after the divider)
-  const divider = document.querySelector('.chip-divider');
-  if (divider) {
-    let sib = divider.nextElementSibling;
-    while (sib) {
-      if (sib.classList.contains('chip')) sib.classList.remove('active');
-      sib = sib.nextElementSibling;
-    }
-  }
-  // Find the right button to highlight
-  if (divider) {
-    let sib = divider.nextElementSibling;
-    while (sib) {
-      if (sib.classList.contains('chip') && sib.textContent.trim().toLowerCase() === mode) {
-        sib.classList.add('active');
-      }
-      sib = sib.nextElementSibling;
-    }
-  }
+  // Update active chip state
+  const sortChips = container.querySelectorAll('.chips .chip');
+  sortChips.forEach(chip => {
+    chip.classList.toggle('active', chip.textContent.trim().toLowerCase() === mode);
+  });
 
   // Sort
-  cards.sort((a, b) => {
-    if (mode === 'value') {
-      return (parseFloat(b.dataset.value) || 0) - (parseFloat(a.dataset.value) || 0);
-    } else if (mode === 'confidence') {
-      return (parseFloat(b.dataset.conf) || 0) - (parseFloat(a.dataset.conf) || 0);
-    }
-    return 0; // time = original order
-  });
+  let sorted;
+  if (mode === 'value') {
+    sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.value) || 0) - (parseFloat(a.dataset.value) || 0));
+  } else if (mode === 'confidence') {
+    sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.conf) || 0) - (parseFloat(a.dataset.conf) || 0));
+  } else {
+    // time = restore original order
+    sorted = [...originalCardOrder];
+  }
 
   // Re-insert in sorted order
   const parent = cards[0].parentNode;
-  cards.forEach(card => parent.appendChild(card));
+  sorted.forEach(card => parent.appendChild(card));
 }
 
 </script>
