@@ -2385,25 +2385,11 @@ function sortGames(mode, el) {
   }
   currentSort = mode;
 
-  // Update active sort chip (only the sort chips after the divider)
-  const divider = document.querySelector('.chip-divider');
-  if (divider) {
-    let sib = divider.nextElementSibling;
-    while (sib) {
-      if (sib.classList.contains('chip')) sib.classList.remove('active');
-      sib = sib.nextElementSibling;
-    }
-  }
-  // Find the right button to highlight
-  if (divider) {
-    let sib = divider.nextElementSibling;
-    while (sib) {
-      if (sib.classList.contains('chip') && sib.textContent.trim().toLowerCase() === mode) {
-        sib.classList.add('active');
-      }
-      sib = sib.nextElementSibling;
-    }
-  }
+  // Update active sort chip
+  const chips = document.querySelectorAll('.chips .chip');
+  chips.forEach(c => {
+    c.classList.toggle('active', c.textContent.trim().toLowerCase() === mode);
+  });
 
   // Sort
   cards.sort((a, b) => {
