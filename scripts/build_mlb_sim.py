@@ -220,12 +220,12 @@ for g in games_raw:
             base_w = get_base_woba(pid)
             if hvc and hvc["PA"] >= 1:
                 vs_woba = hvc["wOBA"]
-                pa = max(hvc["PA"], 4)
                 total_pa = hvc["PA"]
             else:
                 vs_woba = base_w
-                pa = 4
                 total_pa = 0
+            # Per-game PA estimate (not lifetime total)
+            pa = 4
 
             ms = woba_to_ms(vs_woba)
             ms_lo = max(40, ms - 4)
