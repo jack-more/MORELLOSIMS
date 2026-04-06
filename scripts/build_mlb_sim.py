@@ -204,49 +204,73 @@ for g in games_raw:
     home_lineup_raw = g.get("lineups", {}).get("homePlayers", [])
     has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
 
-    def process_lineup(lineup_raw, opp_cluster, team_abbr):
+    def process_lineup(lineup_raw, opp_gmm_proba, team_abbr):
+        """Process a lineup using GMM-weighted multi-cluster matching.
+        opp_gmm_proba: dict of {cluster: probability} from the opposing pitcher's GMM."""
         batters = []
         team_woba_sum = 0
         team_pa = 0
         team_h = 0; team_bb = 0; team_hr = 0; team_tb = 0
+
+        # League average priors
+        LG_WOBA = 0.310; LG_H_RATE = 0.245; LG_BB_RATE = 0.08
+        LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
+
         for i, p in enumerate(lineup_raw):
             pid = p.get("id")
             name = p.get("fullName", "Unknown")
             pos = p.get("primaryPosition", {}).get("abbreviation", "?")
             bat_side = p.get("batSide", {}).get("code", "R")
 
-            # Look up vs opponent cluster
-            hvc = hvc_idx.get((pid, opp_cluster))
             base_w = get_base_woba(pid)
-            if hvc and hvc["PA"] >= 1:
-                vs_woba = hvc["wOBA"]
-                total_pa = hvc["PA"]
+
+            # GMM-weighted lookup across ALL pitcher clusters
+            # This thickens the dataset by using 2nd/3rd DNA clusterings
+            w_woba = 0; w_h = 0; w_bb = 0; w_hr = 0; w_tb = 0
+            total_weight = 0; total_pa = 0
+
+            for cluster, prob in opp_gmm_proba.items():
+                hvc = hvc_idx.get((pid, cluster))
+                if hvc and hvc["PA"] >= 1:
+                    hvc_pa = hvc["PA"]
+                    w_woba += prob * hvc["wOBA"] * hvc_pa
+                    w_h += prob * hvc["H"]
+                    w_bb += prob * hvc["BB"]
+                    w_hr += prob * hvc["HR"]
+                    s = hvc.get("singles", 0)
+                    d = hvc.get("doubles", 0)
+                    t = hvc.get("triples", 0)
+                    w_tb += prob * (s + d*2 + t*3 + hvc["HR"]*4)
+                    total_weight += prob * hvc_pa
+                    total_pa += hvc_pa
+
+            if total_weight > 0:
+                raw_vs_woba = w_woba / total_weight
+                raw_h = w_h / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_H_RATE
+                raw_bb = w_bb / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_BB_RATE
+                raw_hr = w_hr / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_HR_RATE
+                raw_tb = w_tb / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_TB_RATE
+
+                # Regress toward base/league avg based on total PA across clusters
+                confidence = min(1.0, total_pa / 50.0)
+                vs_woba = confidence * raw_vs_woba + (1 - confidence) * base_w
+                vs_woba = max(0.050, min(0.600, vs_woba))
+                h_rate = confidence * raw_h + (1 - confidence) * LG_H_RATE
+                bb_rate = confidence * raw_bb + (1 - confidence) * LG_BB_RATE
+                hr_rate = confidence * raw_hr + (1 - confidence) * LG_HR_RATE
+                tb_rate = confidence * raw_tb + (1 - confidence) * LG_TB_RATE
             else:
                 vs_woba = base_w
                 total_pa = 0
-            # Per-game PA estimate (not lifetime total)
+                h_rate = LG_H_RATE; bb_rate = LG_BB_RATE
+                hr_rate = LG_HR_RATE; tb_rate = LG_TB_RATE
+
+            # Per-game PA estimate
             pa = 4
 
             ms = woba_to_ms(vs_woba)
             ms_lo = max(40, ms - 4)
             ms_hi = min(99, ms + 4)
-
-            # Use REAL archetype-specific rates when available
-            if hvc and hvc["PA"] >= 2:
-                hvc_pa = hvc["PA"]
-                h_rate = hvc["H"] / hvc_pa if hvc_pa > 0 else 0.25
-                bb_rate = hvc["BB"] / hvc_pa if hvc_pa > 0 else 0.08
-                hr_rate = hvc["HR"] / hvc_pa if hvc_pa > 0 else 0.03
-                singles = hvc.get("singles", 0)
-                doubles = hvc.get("doubles", 0)
-                triples = hvc.get("triples", 0)
-                tb_rate = (singles + doubles * 2 + triples * 3 + hvc["HR"] * 4) / hvc_pa if hvc_pa > 0 else 0.4
-            else:
-                # Fallback: derive from wOBA
-                h_rate = min(0.35, vs_woba * 0.7)
-                bb_rate = 0.08
-                hr_rate = max(0, (vs_woba - 0.280) * 0.15) if vs_woba > 0.280 else 0.01
-                tb_rate = h_rate + hr_rate * 3 + 0.05
 
             proj_h = h_rate * pa
             proj_bb = bb_rate * pa
@@ -289,11 +313,15 @@ for g in games_raw:
         runs = base_runs(team_pa, team_h, team_bb, team_hr, team_tb)
         return batters, round(runs, 1), round(team_avg_woba, 3), team_pa
 
+    # Get GMM probabilities for opposing pitchers (multi-cluster DNA)
+    home_gmm = home_ps.get("gmm_proba", {home_cluster: 1.0})
+    away_gmm = away_ps.get("gmm_proba", {away_cluster: 1.0})
+
     if has_lineups:
         away_batters, away_runs_raw, away_woba, away_pa = process_lineup(
-            away_lineup_raw, home_cluster, away_abbr)
+            away_lineup_raw, home_gmm, away_abbr)
         home_batters, home_runs_raw, home_woba, home_pa = process_lineup(
-            home_lineup_raw, away_cluster, home_abbr)
+            home_lineup_raw, away_gmm, home_abbr)
 
         # Apply tier multipliers
         away_runs = round(away_runs_raw * home_tier_mult, 1)
