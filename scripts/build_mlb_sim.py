@@ -262,6 +262,7 @@ for g in games_raw:
                 "base_woba": round(base_w, 3),
                 "vs_woba": round(vs_woba, 3),
                 "total_pa": round(total_pa),
+                "hr_rate": round(hr_rate, 4),
             })
             all_batter_matchups.append({
                 "name": name,
@@ -269,6 +270,7 @@ for g in games_raw:
                 "ms": ms,
                 "base_woba": round(base_w, 3),
                 "vs_woba": round(vs_woba, 3),
+                "hr_rate": round(hr_rate, 4),
                 "opp_pitcher": "",  # filled later
                 "opp_team": "",
             })
@@ -532,18 +534,75 @@ def render_game(g, idx):
   {lineup_html}
 </div>'''
 
-# ─── Render daily projections tab ─────────────────────────────────────────────
-def render_daily_tab():
-    # Top edges (sorted by conf)
+# ─── Render HR Watch tab ─────────────────────────────────────────────────────
+def render_hr_watch_tab():
+    # Sort all batters by HR rate (highest probability of going yard)
+    hr_candidates = sorted(
+        [bm for bm in all_batter_matchups if bm.get("hr_rate", 0) > 0],
+        key=lambda x: -x.get("hr_rate", 0)
+    )[:25]
+
+    hr_html = ""
+    for i, bm in enumerate(hr_candidates):
+        hr_pct = round(bm["hr_rate"] * 100, 1)
+        mc = ms_class(bm["ms"])
+        # Heat level based on HR rate
+        if bm["hr_rate"] >= 0.06:
+            heat = "hr-fire"
+            heat_icon = "\U0001f525"
+        elif bm["hr_rate"] >= 0.04:
+            heat = "hr-hot"
+            heat_icon = "\U0001f7e2"
+        elif bm["hr_rate"] >= 0.025:
+            heat = "hr-warm"
+            heat_icon = "\U0001f7e1"
+        else:
+            heat = "hr-mild"
+            heat_icon = "\u26aa"
+
+        hr_html += f'''<div class="hr-row {heat}">
+  <div class="hr-rank">{i+1}</div>
+  <div class="hr-info">
+    <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
+    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 MS {bm["ms"]}</div>
+  </div>
+  <div class="hr-rate-col">
+    <div class="hr-rate">{hr_pct}%</div>
+    <div class="hr-rate-label">HR Rate</div>
+  </div>
+</div>'''
+
+    # Heating Up section: batters with vs_woba significantly above base_woba
+    heating = sorted(
+        [bm for bm in all_batter_matchups if bm["vs_woba"] - bm["base_woba"] > 0.02],
+        key=lambda x: -(x["vs_woba"] - x["base_woba"])
+    )[:15]
+
+    heat_html = ""
+    for i, bm in enumerate(heating):
+        bump = round(bm["vs_woba"] - bm["base_woba"], 3)
+        mc = ms_class(bm["ms"])
+        heat_html += f'''<div class="trend-row">
+  <div class="trend-rank">{i+1}</div>
+  <div class="trend-info">
+    <div class="trend-name">{h(bm["name"])}</div>
+    <div class="trend-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 .{str(bm["base_woba"])[2:]}\u2192.{str(bm["vs_woba"])[2:]} wOBA (+.{str(bump)[2:]})</div>
+  </div>
+  <div class="trend-right">
+    <div class="trend-ms {mc}">{bm["ms"]}</div>
+  </div>
+</div>'''
+
+    # Today's Edges column
     edges = sorted(
         [g for g in games if g["has_lineups"] and g["conf"] > 0],
         key=lambda x: (-x["conf"], -x["edge"])
     )
-    picks_html = ""
+    edges_html = ""
     for i, g in enumerate(edges[:12]):
         cc = conf_color(g["conf"])
         prem = ' ma-premium' if g["conf"] >= 8 else ''
-        picks_html += f'''<div class="pick-row{prem}">
+        edges_html += f'''<div class="pick-row{prem}">
   <div class="pick-rank">{i+1}</div>
   <div class="pick-info">
     <div class="pick-label gp-pick-strong">{h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}">{g["conf"]}</span></div>
@@ -552,37 +611,31 @@ def render_daily_tab():
   <div class="pick-edge">+{g["edge"]}</div>
 </div>'''
 
-    # Top batter matchups
-    top_batters = sorted(all_batter_matchups, key=lambda x: -x["ms"])[:20]
-    trends_html = ""
-    for i, bm in enumerate(top_batters):
-        mc = ms_class(bm["ms"])
-        trends_html += f'''<div class="trend-row">
-  <div class="trend-rank">{i+1}</div>
-  <div class="trend-info">
-    <div class="trend-name">{h(bm["name"])}</div>
-    <div class="trend-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 .{str(bm["base_woba"])[2:]}\u2192.{str(bm["vs_woba"])[2:]} wOBA</div>
-  </div>
-  <div class="trend-right">
-    <div class="trend-ms {mc}">{bm["ms"]}</div>
-  </div>
-</div>'''
-
     games_with_lu = sum(1 for g in games if g["has_lineups"])
+    no_data = '<div class="empty-state">UPDATES WHEN LINEUPS ARE RELEASED</div>' if not hr_html else ''
+
     return f'''<div class="tab-content" id="tab-daily">
         <div style="padding-top:12px">
-            <div class="section-title">DAILY PROJECTIONS</div>
-            <div class="section-sub">Today's per-batter matchup scores + team run projections</div>
+            <div class="section-title">DAILY DASHBOARD</div>
+            <div class="section-sub">{DATE_SHORT} \u00b7 {games_with_lu} games with lineups</div>
         </div>
-        <div class="slate-info">
-            <span>{DATE_SHORT}</span>
-            <span>{games_with_lu} GAMES</span>
-        </div>
-        <div class="section-title">TODAY'S EDGES</div>
-<div class="section-sub">Games with projected spread/total edge</div>
-<div class="picks-container ma-premium">{picks_html}</div>
-        <div class="picks-container">
-            {trends_html}
+        {no_data}
+        <div class="daily-grid">
+            <div class="daily-col">
+                <div class="section-title">\U0001f4a3 HR WATCH</div>
+                <div class="section-sub">Most likely to go yard</div>
+                <div class="picks-container">{hr_html}</div>
+            </div>
+            <div class="daily-col">
+                <div class="section-title">\U0001f525 HEATING UP</div>
+                <div class="section-sub">Elevated wOBA vs archetype</div>
+                <div class="picks-container">{heat_html}</div>
+            </div>
+            <div class="daily-col">
+                <div class="section-title">\U0001f3af TODAY'S EDGES</div>
+                <div class="section-sub">Best projected spreads</div>
+                <div class="picks-container ma-premium">{edges_html}</div>
+            </div>
         </div>
     </div>'''
 
@@ -629,8 +682,6 @@ html = f'''<!DOCTYPE html>
     <div class="filter-bar-inner">
         <button class="filter-btn active" data-tab="lines">Lines</button>
         <button class="filter-btn" data-tab="daily">Daily</button>
-        <button class="filter-btn" data-tab="stats">Stats</button>
-        <button class="filter-btn" data-tab="fantasy">Fantasy</button>
         <button class="filter-btn" data-tab="info">Info</button>
     </div>
 </div>
@@ -653,26 +704,8 @@ html = f'''<!DOCTYPE html>
         <div class="gen-badge">Generated {gen_time} \u00b7 Powered by ATLAS Pitcher DNA</div>
     </div>
 
-    <!-- DAILY PROJECTIONS TAB -->
-    {render_daily_tab()}
-
-    <!-- STATS & TRENDS TAB -->
-    <div class="tab-content" id="tab-stats">
-        <div style="padding-top:12px">
-            <div class="section-title">STATS &amp; TRENDS</div>
-            <div class="section-sub">Pitcher archetype performance \u2014 hot and cold over the last 14 days</div>
-        </div>
-        <div class="empty-state">STATS &amp; TRENDS COMING SOON</div>
-    </div>
-
-    <!-- FANTASY TAB -->
-    <div class="tab-content" id="tab-fantasy">
-        <div style="padding-top:12px">
-            <div class="section-title">WEEKLY FANTASY</div>
-            <div class="section-sub">7-day projected stat lines \u2014 built for weekly fantasy lineups</div>
-        </div>
-        <div class="empty-state">WEEKLY FANTASY COMING SOON</div>
-    </div>
+    <!-- HR WATCH TAB -->
+    {render_hr_watch_tab()}
 
     <!-- INFO TAB -->
     <div class="tab-content" id="tab-info">
@@ -734,16 +767,8 @@ O/U Total = Home Runs + Away Runs</div>
         <span>LINES</span>
     </button>
     <button class="nav-btn" data-tab="daily">
-        <span class="nav-icon">\U0001f4c5</span>
-        <span>DAILY</span>
-    </button>
-    <button class="nav-btn" data-tab="stats">
-        <span class="nav-icon">\U0001f4c8</span>
-        <span>STATS</span>
-    </button>
-    <button class="nav-btn" data-tab="fantasy">
-        <span class="nav-icon">\u26be</span>
-        <span>FANTASY</span>
+        <span class="nav-icon">\U0001f4a3</span>
+        <span>HR WATCH</span>
     </button>
     <button class="nav-btn" data-tab="info">
         <span class="nav-icon">\u2139\ufe0f</span>
