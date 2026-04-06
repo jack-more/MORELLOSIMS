@@ -231,17 +231,27 @@ for g in games_raw:
             ms_lo = max(40, ms - 4)
             ms_hi = min(99, ms + 4)
 
-            # Project counting stats from wOBA (simplified)
-            # Use wOBA to estimate component rates
-            h_rate = min(0.35, vs_woba * 0.7)
-            bb_rate = 0.08
-            hr_rate = max(0, (vs_woba - 0.280) * 0.15) if vs_woba > 0.280 else 0.01
-            slg_est = h_rate + hr_rate * 3 + 0.05  # rough
+            # Use REAL archetype-specific rates when available
+            if hvc and hvc["PA"] >= 2:
+                hvc_pa = hvc["PA"]
+                h_rate = hvc["H"] / hvc_pa if hvc_pa > 0 else 0.25
+                bb_rate = hvc["BB"] / hvc_pa if hvc_pa > 0 else 0.08
+                hr_rate = hvc["HR"] / hvc_pa if hvc_pa > 0 else 0.03
+                singles = hvc.get("singles", 0)
+                doubles = hvc.get("doubles", 0)
+                triples = hvc.get("triples", 0)
+                tb_rate = (singles + doubles * 2 + triples * 3 + hvc["HR"] * 4) / hvc_pa if hvc_pa > 0 else 0.4
+            else:
+                # Fallback: derive from wOBA
+                h_rate = min(0.35, vs_woba * 0.7)
+                bb_rate = 0.08
+                hr_rate = max(0, (vs_woba - 0.280) * 0.15) if vs_woba > 0.280 else 0.01
+                tb_rate = h_rate + hr_rate * 3 + 0.05
 
             proj_h = h_rate * pa
             proj_bb = bb_rate * pa
             proj_hr = hr_rate * pa
-            proj_tb = proj_h + proj_hr * 3 + pa * 0.05
+            proj_tb = tb_rate * pa
 
             team_pa += pa
             team_h += proj_h
