@@ -245,25 +245,20 @@ for g in games_raw:
                     total_pa += hvc_pa
 
             if total_weight > 0:
-                raw_vs_woba = w_woba / total_weight
-                raw_h = w_h / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_H_RATE
-                raw_bb = w_bb / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_BB_RATE
-                raw_hr = w_hr / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_HR_RATE
-                raw_tb = w_tb / total_weight * (1 / max(total_pa, 1)) if total_pa > 0 else LG_TB_RATE
-
-                # Regress toward base/league avg based on total PA across clusters
-                confidence = min(1.0, total_pa / 50.0)
-                vs_woba = confidence * raw_vs_woba + (1 - confidence) * base_w
+                # GMM-weighted rates - no league avg regression needed
+                # The multi-cluster approach already thickens the dataset
+                vs_woba = w_woba / total_weight
                 vs_woba = max(0.050, min(0.600, vs_woba))
-                h_rate = confidence * raw_h + (1 - confidence) * LG_H_RATE
-                bb_rate = confidence * raw_bb + (1 - confidence) * LG_BB_RATE
-                hr_rate = confidence * raw_hr + (1 - confidence) * LG_HR_RATE
-                tb_rate = confidence * raw_tb + (1 - confidence) * LG_TB_RATE
+                h_rate = w_h / total_weight
+                bb_rate = w_bb / total_weight
+                hr_rate = w_hr / total_weight
+                tb_rate = w_tb / total_weight
             else:
+                # No archetype data at all - use batter's base wOBA
                 vs_woba = base_w
                 total_pa = 0
-                h_rate = LG_H_RATE; bb_rate = LG_BB_RATE
-                hr_rate = LG_HR_RATE; tb_rate = LG_TB_RATE
+                h_rate = 0.245; bb_rate = 0.08
+                hr_rate = 0.03; tb_rate = 0.40
 
             # Per-game PA estimate
             pa = 4
