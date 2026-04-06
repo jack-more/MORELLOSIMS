@@ -299,6 +299,7 @@ for g in games_raw:
                 "hr_rate": round(hr_rate, 4),
             })
             all_batter_matchups.append({
+                "id": pid,
                 "name": name,
                 "team": team_abbr,
                 "ms": ms,
@@ -572,6 +573,40 @@ def render_game(g, idx):
   {lineup_html}
 </div>'''
 
+# ─── Fetch hitting streaks for all batters in today's lineups ─────────────────
+print("\nFetching hitting streaks...")
+batter_streaks = {}  # pid -> {"streak": int, "last7_avg": float, "last7_ops": float}
+all_lineup_pids = set()
+for g in games:
+    if g["has_lineups"]:
+        for b in g["away_batters"] + g["home_batters"]:
+            all_lineup_pids.add(b["id"])
+
+for pid in all_lineup_pids:
+    data = fetch(f"{MLB_API}/people/{pid}/stats?stats=gameLog&season={NOW.year}&group=hitting")
+    if not data:
+        continue
+    splits = data.get("stats", [{}])[0].get("splits", [])
+    if not splits:
+        continue
+    # Current consecutive hitting streak (walk backwards)
+    streak = 0
+    for s in reversed(splits):
+        hits = s.get("stat", {}).get("hits", 0)
+        if hits > 0:
+            streak += 1
+        else:
+            break
+    # Last 7 games rolling avg/OPS
+    recent = splits[-7:] if len(splits) >= 7 else splits
+    total_h = sum(s.get("stat", {}).get("hits", 0) for s in recent)
+    total_ab = sum(s.get("stat", {}).get("atBats", 0) for s in recent)
+    last7_avg = total_h / max(total_ab, 1)
+    batter_streaks[pid] = {"streak": streak, "last7_avg": round(last7_avg, 3)}
+
+print(f"  Fetched streaks for {len(batter_streaks)} batters")
+print(f"  Batters on 3+ game streaks: {sum(1 for v in batter_streaks.values() if v['streak'] >= 3)}")
+
 # ─── Render HR Watch tab ─────────────────────────────────────────────────────
 def render_hr_watch_tab():
     # Sort all batters by HR rate (highest probability of going yard)
@@ -610,21 +645,47 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
-    # Heating Up section: batters with vs_woba significantly above base_woba
-    heating = sorted(
-        [bm for bm in all_batter_matchups if bm["vs_woba"] - bm["base_woba"] > 0.02],
-        key=lambda x: -(x["vs_woba"] - x["base_woba"])
-    )[:15]
+    # Heating Up: batters on real hitting streaks + favorable archetype matchup
+    # Per SABR research: consecutive game hitting streaks are non-random signal
+    # Compound signal = streak length * archetype wOBA advantage
+    heating_candidates = []
+    for bm in all_batter_matchups:
+        pid = bm.get("id")
+        streak_data = batter_streaks.get(pid, {})
+        streak = streak_data.get("streak", 0)
+        last7 = streak_data.get("last7_avg", 0)
+        woba_bump = bm["vs_woba"] - bm["base_woba"]
+        # Must be on at least a 2-game streak
+        if streak >= 2:
+            # Score: streak length weighted by archetype advantage
+            # A 5-game streak + .050 wOBA bump >> a 2-game streak + .100 bump
+            heat_score = streak * (1 + max(0, woba_bump) * 5)
+            heating_candidates.append({
+                **bm, "streak": streak, "last7_avg": last7,
+                "woba_bump": woba_bump, "heat_score": heat_score
+            })
+
+    heating = sorted(heating_candidates, key=lambda x: -x["heat_score"])[:15]
 
     heat_html = ""
     for i, bm in enumerate(heating):
-        bump = round(bm["vs_woba"] - bm["base_woba"], 3)
         mc = ms_class(bm["ms"])
+        streak_str = f'{bm["streak"]}G streak'
+        avg_str = f'.{str(bm["last7_avg"])[2:]}' if bm["last7_avg"] > 0 else ""
+        bump = bm["woba_bump"]
+        bump_str = f'+.{str(abs(round(bump,3)))[2:]}' if bump > 0 else ""
+        # Streak fire icons
+        if bm["streak"] >= 7:
+            icon = "\U0001f525\U0001f525"
+        elif bm["streak"] >= 4:
+            icon = "\U0001f525"
+        else:
+            icon = "\U0001f7e2"
         heat_html += f'''<div class="trend-row">
   <div class="trend-rank">{i+1}</div>
   <div class="trend-info">
-    <div class="trend-name">{h(bm["name"])}</div>
-    <div class="trend-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 .{str(bm["base_woba"])[2:]}\u2192.{str(bm["vs_woba"])[2:]} wOBA (+.{str(bump)[2:]})</div>
+    <div class="trend-name">{icon} {h(bm["name"])}</div>
+    <div class="trend-meta">{streak_str} &middot; L7 {avg_str} &middot; {h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}){"" if not bump_str else " &middot; wOBA " + bump_str}</div>
   </div>
   <div class="trend-right">
     <div class="trend-ms {mc}">{bm["ms"]}</div>
@@ -666,7 +727,7 @@ def render_hr_watch_tab():
             </div>
             <div class="daily-col">
                 <div class="section-title">\U0001f525 HEATING UP</div>
-                <div class="section-sub">Elevated wOBA vs archetype</div>
+                <div class="section-sub">Active hitting streaks + archetype edge</div>
                 <div class="picks-container">{heat_html}</div>
             </div>
             <div class="daily-col">
