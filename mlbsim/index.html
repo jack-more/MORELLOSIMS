@@ -7792,52 +7792,31 @@ function toggleBullpen(idx) {
 }
 
 // ═══ SORT GAMES ═══
-let currentSort = 'time';
+const originalCardOrder = Array.from(document.querySelectorAll('#tab-lines .game-card'));
+
 function sortGames(mode, el) {
   const container = document.querySelector('#tab-lines');
   if (!container) return;
   const cards = Array.from(container.querySelectorAll('.game-card'));
   if (!cards.length) return;
 
-  // Toggle: clicking active sort resets to time
-  if (mode === currentSort && mode !== 'time') {
-    mode = 'time';
-  }
-  currentSort = mode;
-
-  // Update active sort chip (only the sort chips after the divider)
-  const divider = document.querySelector('.chip-divider');
-  if (divider) {
-    let sib = divider.nextElementSibling;
-    while (sib) {
-      if (sib.classList.contains('chip')) sib.classList.remove('active');
-      sib = sib.nextElementSibling;
-    }
-  }
-  // Find the right button to highlight
-  if (divider) {
-    let sib = divider.nextElementSibling;
-    while (sib) {
-      if (sib.classList.contains('chip') && sib.textContent.trim().toLowerCase() === mode) {
-        sib.classList.add('active');
-      }
-      sib = sib.nextElementSibling;
-    }
-  }
+  // Highlight active button, deactivate the rest
+  document.querySelectorAll('.chips .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
 
   // Sort
-  cards.sort((a, b) => {
-    if (mode === 'value') {
-      return (parseFloat(b.dataset.value) || 0) - (parseFloat(a.dataset.value) || 0);
-    } else if (mode === 'confidence') {
-      return (parseFloat(b.dataset.conf) || 0) - (parseFloat(a.dataset.conf) || 0);
-    }
-    return 0; // time = original order
-  });
+  let sorted;
+  if (mode === 'value') {
+    sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.value) || 0) - (parseFloat(a.dataset.value) || 0));
+  } else if (mode === 'confidence') {
+    sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.conf) || 0) - (parseFloat(a.dataset.conf) || 0));
+  } else {
+    sorted = [...originalCardOrder];
+  }
 
   // Re-insert in sorted order
   const parent = cards[0].parentNode;
-  cards.forEach(card => parent.appendChild(card));
+  sorted.forEach(card => parent.appendChild(card));
 }
 
 </script>
