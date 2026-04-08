@@ -1,0 +1,137 @@
+name: MLB Pipeline
+
+on:
+  schedule:
+    # 1) Atlas refresh — 9 AM ET (13:00 UTC) daily
+    #    Pulls cumulative 2026 Statcast data before lineups drop
+    - cron: '0 13 * * *'
+
+    # 2) Main picks run — 5 PM ET (21:00 UTC) daily
+    #    Most lineups confirmed by now (released 2-5 PM ET)
+    - cron: '0 21 * * *'
+
+    # 3) Late refresh — 6:30 PM ET (22:30 UTC) daily
+    #    Catch any late lineup changes before 7 PM first pitch
+    - cron: '30 22 * * *'
+
+    # 4) Settle picks — 11 AM ET next day (15:00 UTC)
+    #    Mark results after games complete
+    - cron: '0 15 * * *'
+
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'What to run'
+        required: true
+        default: 'picks'
+        type: choice
+        options:
+          - picks
+          - atlas-refresh
+          - both
+
+jobs:
+  atlas-refresh:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.run_type == 'atlas-refresh' || inputs.run_type == 'both') ||
+      github.event.schedule == '0 13 * * *'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install pybaseball numpy pandas requests
+
+      - name: Refresh 2026 atlas
+        run: python3 scripts/refresh_atlas_2026.py
+
+      - name: Commit atlas updates
+        run: |
+          git config user.name "MLB Pipeline Bot"
+          git config user.email "noreply@github.com"
+          git add atlas/
+          if git diff --cached --quiet; then
+            echo "No atlas changes to commit"
+          else
+            git commit -m "Atlas refresh — $(TZ=America/New_York date +'%b %d %I:%M %p ET')"
+            git push
+          fi
+
+  generate-picks:
+    runs-on: ubuntu-latest
+    needs: [atlas-refresh]
+    if: >-
+      always() &&
+      (needs.atlas-refresh.result == 'success' || needs.atlas-refresh.result == 'skipped') &&
+      (
+        github.event_name == 'workflow_dispatch' &&
+        (inputs.run_type == 'picks' || inputs.run_type == 'both') ||
+        github.event.schedule == '0 21 * * *' ||
+        github.event.schedule == '30 22 * * *' ||
+        github.event.schedule == '0 13 * * *'
+      )
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Pull latest (in case atlas job pushed)
+        run: git pull origin main
+
+      - name: Generate MLB picks
+        run: python3 scripts/build_mlb_sim.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "MLB Pipeline Bot"
+          git config user.email "noreply@github.com"
+          git add mlbsim/index.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-sync MLB SIM — $(TZ=America/New_York date +'%b %d %I:%M %p ET')"
+            git push
+          fi
+
+  settle-picks:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 15 * * *'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Generate settled picks
+        run: python3 scripts/build_mlb_sim.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "MLB Pipeline Bot"
+          git config user.email "noreply@github.com"
+          git add mlbsim/index.html index.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Settle MLB picks — $(TZ=America/New_York date +'%b %d %I:%M %p ET')"
+            git push
+          fi
