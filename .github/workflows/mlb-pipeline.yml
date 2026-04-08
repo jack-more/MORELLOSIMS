@@ -18,6 +18,11 @@ on:
     #    Mark results after games complete
     - cron: '0 15 * * *'
 
+  # Auto-overwrite when old bot pushes broken code to mlbsim/index.html
+  push:
+    paths:
+      - 'mlbsim/index.html'
+
   workflow_dispatch:
     inputs:
       run_type:
@@ -70,6 +75,7 @@ jobs:
       always() &&
       (needs.atlas-refresh.result == 'success' || needs.atlas-refresh.result == 'skipped') &&
       (
+        (github.event_name == 'push' && github.actor != 'github-actions[bot]') ||
         github.event_name == 'workflow_dispatch' &&
         (inputs.run_type == 'picks' || inputs.run_type == 'both') ||
         github.event.schedule == '0 21 * * *' ||
