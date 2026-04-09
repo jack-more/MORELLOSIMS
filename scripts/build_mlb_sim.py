@@ -206,11 +206,98 @@ for ps in pitcher_seasons:
         name_to_mlb_id[name.lower().strip()] = pid
 print(f"  Name→ID index: {len(name_to_mlb_id)} players")
 
-# ─── Scrape RotoWire lineups as backup ──────────────────────────────────────
+# ─── Scrape lineup sources (BaseballMonster + RotoWire) ─────────────────────
 import re as _re
+import csv as _csv
+from io import StringIO as _StringIO
+
+# Team abbreviation normalization
+TEAM_ALIAS = {"ATH": "OAK", "AZ": "ARI", "CWS": "CHW", "CHW": "CWS", "TB": "TBR", "TBR": "TB",
+              "SD": "SDP", "SDP": "SD", "SF": "SFG", "SFG": "SF", "KC": "KCR", "KCR": "KC"}
+
+def normalize_abbr(abbr):
+    """Normalize team abbreviation to match MLB API style."""
+    return TEAM_ALIAS.get(abbr, abbr)
+
+def fetch_baseballmonster_lineups():
+    """Fetch structured CSV lineups from BaseballMonster — includes MLB IDs directly."""
+    try:
+        date_str = NOW.strftime("%-m/%-d/%Y")
+        url = f"https://baseballmonster.com/Lineups.aspx?csv=1&d={date_str}"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200 or len(r.text) < 50:
+            print(f"  WARN: BaseballMonster returned {r.status_code}")
+            return {}
+
+        reader = _csv.reader(_StringIO(r.text))
+        header = next(reader, None)
+        if not header:
+            return {}
+
+        # Group by team
+        team_lineups = {}  # team_abbr → {"batters": [...], "sp_id": ..., "sp_name": ...}
+        for row in reader:
+            if len(row) < 7:
+                continue
+            team = row[0].strip()
+            mlb_id = int(row[3].strip()) if row[3].strip().isdigit() else None
+            name = row[4].strip()
+            order = row[5].strip()
+            # confirmed = row[6].strip()
+
+            if not mlb_id:
+                continue
+
+            if team not in team_lineups:
+                team_lineups[team] = {"batters": [], "sp_id": None, "sp_name": None}
+
+            if order == "SP":
+                team_lineups[team]["sp_id"] = mlb_id
+                team_lineups[team]["sp_name"] = name
+            elif order.isdigit():
+                team_lineups[team]["batters"].append({
+                    "id": mlb_id,
+                    "fullName": name,
+                    "order": int(order),
+                    "primaryPosition": {"abbreviation": row[7].strip() if len(row) > 7 and row[7].strip() else "?"},
+                    "batSide": {"code": "R"},  # BM doesn't give bat side, will be overridden if available
+                })
+
+        # Now pair teams into games — BM lists teams in away/home pairs
+        teams_in_order = []
+        seen = set()
+        for row_text in r.text.strip().split("\n")[1:]:
+            parts = row_text.split(",")
+            if parts and parts[0].strip() not in seen:
+                seen.add(parts[0].strip())
+                teams_in_order.append(parts[0].strip())
+
+        # Games: teams alternate away/home
+        result = {}
+        for i in range(0, len(teams_in_order) - 1, 2):
+            away = teams_in_order[i]
+            home = teams_in_order[i + 1]
+            away_data = team_lineups.get(away, {})
+            home_data = team_lineups.get(home, {})
+
+            away_batters = sorted(away_data.get("batters", []), key=lambda x: x.get("order", 99))
+            home_batters = sorted(home_data.get("batters", []), key=lambda x: x.get("order", 99))
+
+            result[(away, home)] = {
+                "away_sp_name": away_data.get("sp_name"),
+                "home_sp_name": home_data.get("sp_name"),
+                "away_sp_id": away_data.get("sp_id"),
+                "home_sp_id": home_data.get("sp_id"),
+                "away_lineup": away_batters,
+                "home_lineup": home_batters,
+            }
+        return result
+    except Exception as e:
+        print(f"  WARN: BaseballMonster scrape failed: {e}")
+        return {}
 
 def fetch_rotowire_lineups():
-    """Scrape projected/confirmed lineups from RotoWire."""
+    """Scrape projected/confirmed lineups from RotoWire — backup source."""
     try:
         r = requests.get("https://www.rotowire.com/baseball/daily-lineups.php",
                          headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
@@ -231,57 +318,52 @@ def fetch_rotowire_lineups():
                 html, _re.DOTALL)
             return pitcher.group(1).strip() if pitcher else None, batters
 
-        result = {}  # (away_abbr, home_abbr) → {"away_sp", "home_sp", "away_lineup", "home_lineup"}
+        def resolve_id(name):
+            if not name: return None
+            key = name.lower().strip()
+            if key in name_to_mlb_id:
+                return name_to_mlb_id[key]
+            last = key.split()[-1] if key else ""
+            for k, v in name_to_mlb_id.items():
+                if k.endswith(" " + last):
+                    return v
+            return None
+
+        def build_lineup(batters):
+            lineup = []
+            for pos, name, bats in batters:
+                pid = resolve_id(name)
+                if pid:
+                    lineup.append({
+                        "id": pid, "fullName": name,
+                        "primaryPosition": {"abbreviation": pos.strip()},
+                        "batSide": {"code": bats.strip()},
+                    })
+            return lineup
+
+        result = {}
         n_games = min(len(visit_sections), len(home_sections), len(all_teams) // 2)
         for i in range(n_games):
             away = all_teams[i * 2]
             home = all_teams[i * 2 + 1]
             v_sp, v_batters = parse_section(visit_sections[i])
             h_sp, h_batters = parse_section(home_sections[i])
-
-            def resolve_id(name):
-                """Look up MLB ID from player name."""
-                if not name: return None
-                key = name.lower().strip()
-                if key in name_to_mlb_id:
-                    return name_to_mlb_id[key]
-                # Try last name match
-                last = key.split()[-1] if key else ""
-                for k, v in name_to_mlb_id.items():
-                    if k.endswith(" " + last) or k == last:
-                        return v
-                return None
-
-            def build_lineup(batters):
-                lineup = []
-                for pos, name, bats in batters:
-                    pid = resolve_id(name)
-                    if pid:
-                        lineup.append({
-                            "id": pid,
-                            "fullName": name,
-                            "primaryPosition": {"abbreviation": pos.strip()},
-                            "batSide": {"code": bats.strip()},
-                        })
-                return lineup
-
             result[(away, home)] = {
-                "away_sp_name": v_sp,
-                "home_sp_name": h_sp,
-                "away_sp_id": resolve_id(v_sp),
-                "home_sp_id": resolve_id(h_sp),
-                "away_lineup": build_lineup(v_batters),
-                "home_lineup": build_lineup(h_batters),
+                "away_sp_name": v_sp, "home_sp_name": h_sp,
+                "away_sp_id": resolve_id(v_sp), "home_sp_id": resolve_id(h_sp),
+                "away_lineup": build_lineup(v_batters), "home_lineup": build_lineup(h_batters),
             }
         return result
     except Exception as e:
         print(f"  WARN: RotoWire scrape failed: {e}")
         return {}
 
-print("\nFetching RotoWire lineups...")
+print("\nFetching external lineups...")
+bm_lineups = fetch_baseballmonster_lineups()
+print(f"  BaseballMonster games: {len(bm_lineups)}")
 rw_lineups = fetch_rotowire_lineups()
 print(f"  RotoWire games: {len(rw_lineups)}")
-rw_used = 0
+rw_used = 0; bm_used = 0
 
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
@@ -334,23 +416,33 @@ for g in games_raw:
     away_tier_mult = away_tier.get("effective_multiplier", 1.0)
     home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
-    # Lineups — try MLB API first, fall back to RotoWire
+    # Lineups — try MLB API first, then BaseballMonster (has MLB IDs), then RotoWire
     away_lineup_raw = g.get("lineups", {}).get("awayPlayers", [])
     home_lineup_raw = g.get("lineups", {}).get("homePlayers", [])
     has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
     lineup_source = "MLB API" if has_lineups else ""
 
-    # RotoWire fallback — also fill in pitcher IDs if MLB API missing them
-    rw_key = (away_abbr, home_abbr)
-    # ATH → OAK alias
-    if rw_key not in rw_lineups:
-        rw_key = ("ATH" if away_abbr == "OAK" else away_abbr,
-                  "ATH" if home_abbr == "OAK" else home_abbr)
-    if rw_key not in rw_lineups:
-        rw_key = ("OAK" if away_abbr == "ATH" else away_abbr,
-                  "OAK" if home_abbr == "ATH" else home_abbr)
-    rw = rw_lineups.get(rw_key, {})
+    # Helper to find external lineup data with team alias handling
+    def find_external(source, a, h):
+        for aa in [a, TEAM_ALIAS.get(a, a)]:
+            for hh in [h, TEAM_ALIAS.get(h, h)]:
+                if (aa, hh) in source:
+                    return source[(aa, hh)]
+        return {}
 
+    bm = find_external(bm_lineups, away_abbr, home_abbr)
+    rw = find_external(rw_lineups, away_abbr, home_abbr)
+
+    # BaseballMonster fallback (preferred — has MLB IDs directly)
+    if not has_lineups and bm:
+        away_lineup_raw = bm.get("away_lineup", [])
+        home_lineup_raw = bm.get("home_lineup", [])
+        has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
+        if has_lineups:
+            lineup_source = "BaseballMonster"
+            bm_used += 1
+
+    # RotoWire fallback
     if not has_lineups and rw:
         away_lineup_raw = rw.get("away_lineup", [])
         home_lineup_raw = rw.get("home_lineup", [])
@@ -359,10 +451,11 @@ for g in games_raw:
             lineup_source = "RotoWire"
             rw_used += 1
 
-    # Fill in pitcher IDs from RotoWire if MLB API didn't have them
-    if not away_sp_id and rw.get("away_sp_id"):
-        away_sp_id = rw["away_sp_id"]
-        away_sp_name = rw.get("away_sp_name", away_sp_name)
+    # Fill in pitcher IDs from external sources if MLB API didn't have them
+    ext = bm if bm.get("away_sp_id") else rw
+    if not away_sp_id and ext.get("away_sp_id"):
+        away_sp_id = ext["away_sp_id"]
+        away_sp_name = ext.get("away_sp_name", away_sp_name)
         away_ps = pitcher_idx.get(away_sp_id, {})
         away_cluster = away_ps.get("cluster", "R_UT")
         away_arch = away_ps.get("archetype", "Unknown")
@@ -370,9 +463,9 @@ for g in games_raw:
         away_tier = tier_idx.get(away_sp_id, {})
         away_tier_name = away_tier.get("tier", "T3_Standard")
         away_tier_mult = away_tier.get("effective_multiplier", 1.0)
-    if not home_sp_id and rw.get("home_sp_id"):
-        home_sp_id = rw["home_sp_id"]
-        home_sp_name = rw.get("home_sp_name", home_sp_name)
+    if not home_sp_id and ext.get("home_sp_id"):
+        home_sp_id = ext["home_sp_id"]
+        home_sp_name = ext.get("home_sp_name", home_sp_name)
         home_ps = pitcher_idx.get(home_sp_id, {})
         home_cluster = home_ps.get("cluster", "R_UT")
         home_arch = home_ps.get("archetype", "Unknown")
@@ -572,6 +665,8 @@ for g in games_raw:
 
 print(f"  Processed {len(games)} games")
 print(f"  With lineups: {sum(1 for g in games if g['has_lineups'])}")
+if bm_used > 0:
+    print(f"  BaseballMonster fill-ins: {bm_used}")
 if rw_used > 0:
     print(f"  RotoWire fill-ins: {rw_used}")
 
