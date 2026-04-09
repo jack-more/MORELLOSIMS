@@ -119,31 +119,74 @@ for k, v in pitcher_tiers.items():
     if pid not in tier_idx or yr > tier_idx[pid]["game_year"]:
         tier_idx[pid] = v
 
-# (batter_id, cluster) → most recent hvc record
-hvc_idx = {}
+# (batter_id, cluster) → BLENDED hvc record across recent years (2025+2026)
+# Weight 2026 at 1.5x to favor current form, but keep 2025 for sample size
+YEAR_WEIGHT = {2026: 1.5, 2025: 1.0, 2024: 0.6, 2023: 0.4}
+BLEND_YEARS = {2025, 2026}  # years to blend (keep last 2 seasons)
+
+hvc_by_key = {}  # (batter, cluster) → list of records from blend years
 for r in hvc_data:
     key = (r["batter"], r["cluster"])
     yr = r["game_year"]
-    if key not in hvc_idx or yr > hvc_idx[key]["game_year"]:
-        hvc_idx[key] = r
+    if yr in BLEND_YEARS:
+        hvc_by_key.setdefault(key, []).append(r)
 
-# batter overall wOBA (weighted avg across all clusters, most recent year)
-batter_base_woba = {}
-batter_base_year = {}
+hvc_idx = {}
+for key, records in hvc_by_key.items():
+    total_wpa = 0; total_w = 0
+    total_h = 0; total_bb = 0; total_hr = 0; total_tb = 0
+    total_pa_raw = 0; total_singles = 0; total_doubles = 0; total_triples = 0
+    for r in records:
+        yr = r["game_year"]
+        pa = r["PA"]
+        if pa < 1: continue
+        w = pa * YEAR_WEIGHT.get(yr, 0.5)
+        total_wpa += w * r["wOBA"]
+        total_w += w
+        total_pa_raw += pa
+        total_h += r["H"] * YEAR_WEIGHT.get(yr, 0.5)
+        total_bb += r["BB"] * YEAR_WEIGHT.get(yr, 0.5)
+        total_hr += r["HR"] * YEAR_WEIGHT.get(yr, 0.5)
+        total_singles += r.get("singles", 0) * YEAR_WEIGHT.get(yr, 0.5)
+        total_doubles += r.get("doubles", 0) * YEAR_WEIGHT.get(yr, 0.5)
+        total_triples += r.get("triples", 0) * YEAR_WEIGHT.get(yr, 0.5)
+        total_tb += (r.get("singles", 0) + r.get("doubles", 0)*2 + r.get("triples", 0)*3 + r["HR"]*4) * YEAR_WEIGHT.get(yr, 0.5)
+    if total_w > 0:
+        hvc_idx[key] = {
+            "batter": key[0], "cluster": key[1],
+            "game_year": max(r["game_year"] for r in records),
+            "PA": total_pa_raw,
+            "wOBA": total_wpa / total_w,
+            "H": total_h, "BB": total_bb, "HR": total_hr,
+            "singles": total_singles, "doubles": total_doubles,
+            "triples": total_triples,
+        }
+
+# Also keep fallback for batters only in older years (pre-2025)
+for r in hvc_data:
+    key = (r["batter"], r["cluster"])
+    if key not in hvc_idx:
+        yr = r["game_year"]
+        if key not in hvc_idx or yr > hvc_idx[key]["game_year"]:
+            hvc_idx[key] = r
+
+# batter overall wOBA (weighted avg across blend years)
+batter_woba_accum = {}  # bid → (total_wpa, total_w)
 for r in hvc_data:
     bid = r["batter"]
     yr = r["game_year"]
-    if bid not in batter_base_year or yr > batter_base_year[bid]:
-        batter_base_year[bid] = yr
-        batter_base_woba[bid] = []
-    if yr == batter_base_year.get(bid):
-        batter_base_woba.setdefault(bid, []).append((r["PA"], r["wOBA"]))
+    pa = r["PA"]
+    if pa < 1: continue
+    w = pa * YEAR_WEIGHT.get(yr, 0.3)
+    if bid not in batter_woba_accum:
+        batter_woba_accum[bid] = [0, 0]
+    batter_woba_accum[bid][0] += w * r["wOBA"]
+    batter_woba_accum[bid][1] += w
 
 def get_base_woba(bid):
-    recs = batter_base_woba.get(bid, [])
-    total_pa = sum(pa for pa, _ in recs)
-    if total_pa == 0: return .310
-    return sum(pa * w for pa, w in recs) / total_pa
+    acc = batter_woba_accum.get(bid)
+    if not acc or acc[1] == 0: return .310
+    return acc[0] / acc[1]
 
 print(f"  Pitchers indexed: {len(pitcher_idx)}")
 print(f"  HVC records: {len(hvc_idx)}")
