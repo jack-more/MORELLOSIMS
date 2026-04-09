@@ -566,12 +566,12 @@ def merge_pitcher_siera(new_records):
 
 # ─── Step 8: Recompute pitcher tiers ─────────────────────────────────────────
 
-# Tier assignment thresholds (z-score based)
-TIER_THRESHOLDS = [
-    (1.0, "T1_Apex"),
-    (0.0, "T2_Core"),
-    (-1.0, "T3_Standard"),
-]
+# Pure SIERA cutoffs — no z-score, no whiff rate, no cluster-relative nonsense
+SIERA_TIER_CUTOFFS = [
+    (3.00, "T1_Apex"),     # SIERA < 3.00
+    (3.75, "T2_Core"),     # SIERA 3.00–3.75
+    (4.50, "T3_Standard"), # SIERA 3.75–4.50
+]                          # SIERA > 4.50 → T4_Fringe
 DEFAULT_TIER = "T4_Fringe"
 
 BASE_TIER_MULTIPLIERS = {
@@ -581,21 +581,24 @@ BASE_TIER_MULTIPLIERS = {
     "T4_Fringe": 1.10,
 }
 
-BAYESIAN_PRIOR_WEIGHT = 5
 
-
-def assign_tier(z_score):
-    for threshold, tier in TIER_THRESHOLDS:
-        if z_score >= threshold:
+def assign_tier_by_siera(siera):
+    """Assign tier based on pure SIERA thresholds."""
+    for cutoff, tier in SIERA_TIER_CUTOFFS:
+        if siera < cutoff:
             return tier
     return DEFAULT_TIER
 
 
 def recompute_pitcher_tiers():
-    """Rerun tier assignment including 2026 data."""
+    """Rerun tier assignment including 2026 data. Uses pure SIERA cutoffs."""
     print(f"\n{'='*60}")
-    print(f"RECOMPUTING PITCHER TIERS")
+    print(f"RECOMPUTING PITCHER TIERS (pure SIERA cutoffs)")
     print(f"{'='*60}")
+    print(f"  T1_Apex: SIERA < 3.00  (0.87x)")
+    print(f"  T2_Core: SIERA 3.00-3.75  (0.95x)")
+    print(f"  T3_Standard: SIERA 3.75-4.50  (1.00x)")
+    print(f"  T4_Fringe: SIERA > 4.50  (1.10x)")
 
     pitcher_seasons = load_atlas("pitcher_seasons.json")
     siera_data = load_atlas("pitcher_siera.json")
@@ -620,59 +623,35 @@ def recompute_pitcher_tiers():
 
     print(f"  SIERA matched: {matched}/{len(pitcher_seasons)}")
 
-    # Group by cluster
-    by_cluster = defaultdict(list)
-    for ps in pitcher_seasons:
-        if ps["siera"] is not None:
-            by_cluster[ps["cluster"]].append(ps)
-
-    # Global stats
-    all_siera = [ps["siera"] for ps in pitcher_seasons if ps["siera"] is not None]
-    global_mean = np.mean(all_siera)
-    global_stdev = np.std(all_siera, ddof=1)
-
-    # Assign tiers
+    # Assign tiers using pure SIERA cutoffs
     tiers_output = {}
-    for cluster_id, records in sorted(by_cluster.items()):
-        sieras = [r["siera"] for r in records]
-        n = len(sieras)
-        if n == 0:
+    tier_counts = defaultdict(int)
+    for ps in pitcher_seasons:
+        if ps["siera"] is None:
             continue
-        cluster_mean = np.mean(sieras)
-        cluster_stdev = np.std(sieras, ddof=1) if n > 1 else global_stdev
-        effective_stdev = (
-            (n * cluster_stdev + BAYESIAN_PRIOR_WEIGHT * global_stdev)
-            / (n + BAYESIAN_PRIOR_WEIGHT)
-        )
-        arch_siera = cluster_mean
+        tier = assign_tier_by_siera(ps["siera"])
+        mult = BASE_TIER_MULTIPLIERS[tier]
+        tier_counts[tier] += 1
 
-        for r in records:
-            z = -(r["siera"] - cluster_mean) / effective_stdev if effective_stdev > 0 else 0.0
-            tier = assign_tier(z)
-            base_mult = BASE_TIER_MULTIPLIERS[tier]
-            dominance = global_mean / arch_siera if arch_siera > 0 else 1.0
-            eff_mult = 1.0 + (base_mult - 1.0) * dominance
-
-            key = f"{r['pitcher']}_{r['game_year']}"
-            tiers_output[key] = {
-                "pitcher": r["pitcher"],
-                "player_name": r.get("player_name", ""),
-                "game_year": r["game_year"],
-                "cluster": cluster_id,
-                "archetype": r.get("archetype", ""),
-                "siera": round(r["siera"], 2),
-                "whiff_rate": round(r.get("whiff_rate", 0), 4),
-                "z_score": round(z, 4),
-                "tier": tier,
-                "base_multiplier": base_mult,
-                "effective_multiplier": round(eff_mult, 4),
-                "archetype_dominance": round(dominance, 4),
-            }
+        key = f"{ps['pitcher']}_{ps['game_year']}"
+        tiers_output[key] = {
+            "pitcher": ps["pitcher"],
+            "player_name": ps.get("player_name", ""),
+            "game_year": ps["game_year"],
+            "cluster": ps["cluster"],
+            "archetype": ps.get("archetype", ""),
+            "siera": round(ps["siera"], 2),
+            "tier": tier,
+            "base_multiplier": mult,
+            "effective_multiplier": mult,
+        }
 
     save_atlas("pitcher_tiers.json", tiers_output)
 
     # Count 2026 entries
     count_2026 = sum(1 for v in tiers_output.values() if v["game_year"] == SEASON)
+    for t in ["T1_Apex", "T2_Core", "T3_Standard", "T4_Fringe"]:
+        print(f"  {t}: {tier_counts[t]}")
     print(f"  Total tiers: {len(tiers_output)}, 2026 entries: {count_2026}")
     return count_2026
 
