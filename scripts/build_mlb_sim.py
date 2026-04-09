@@ -622,12 +622,32 @@ for g in games_raw:
         away_wp = 100 - home_wp
 
     # Confidence (1-10) based on how far from 50/50
+    # In real baseball, 55% WP is a solid edge, 60%+ is a strong play
     wp_gap = abs(away_wp - 50)
-    conf = min(10, max(0, round(wp_gap / 4.5)))
+    if wp_gap >= 15: conf = 10
+    elif wp_gap >= 12: conf = 9
+    elif wp_gap >= 10: conf = 8
+    elif wp_gap >= 8: conf = 7
+    elif wp_gap >= 6: conf = 6
+    elif wp_gap >= 5: conf = 5
+    elif wp_gap >= 4: conf = 4
+    elif wp_gap >= 3: conf = 3
+    elif wp_gap >= 2: conf = 2
+    elif wp_gap >= 1: conf = 1
+    else: conf = 0
 
-    # Value (1-10) — without real odds, base on edge magnitude
+    # Value (1-10) — based on run edge magnitude
     edge = abs(away_runs - home_runs)
-    value = min(10, max(0, round(edge * 2)))
+    if edge >= 4.0: value = 10
+    elif edge >= 3.0: value = 8
+    elif edge >= 2.5: value = 7
+    elif edge >= 2.0: value = 6
+    elif edge >= 1.5: value = 5
+    elif edge >= 1.0: value = 4
+    elif edge >= 0.7: value = 3
+    elif edge >= 0.4: value = 2
+    elif edge >= 0.2: value = 1
+    else: value = 0
     if not has_lineups:
         conf = 0
         value = 0
