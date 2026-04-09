@@ -2,21 +2,29 @@ name: MLB Pipeline
 
 on:
   schedule:
-    # 1) Atlas refresh — 9 AM ET (13:00 UTC) daily
-    #    Pulls cumulative 2026 Statcast data before lineups drop
+    # 1) Early morning picks — 7 AM ET (11:00 UTC)
+    #    Get picks up for morning visitors. Probable pitchers known, lineups may be projected.
+    - cron: '0 11 * * *'
+
+    # 2) Atlas refresh + re-run — 9 AM ET (13:00 UTC)
+    #    Pull latest Statcast data, regenerate with any new lineup info
     - cron: '0 13 * * *'
 
-    # 2) Main picks run — 5 PM ET (21:00 UTC) daily
-    #    Most lineups confirmed by now (released 2-5 PM ET)
+    # 3) Lineup refresh — 2 PM ET (18:00 UTC)
+    #    Early lineups start dropping
+    - cron: '0 18 * * *'
+
+    # 4) Main refresh — 5 PM ET (21:00 UTC)
+    #    Most lineups confirmed by now
     - cron: '0 21 * * *'
 
-    # 3) Late refresh — 6:30 PM ET (22:30 UTC) daily
-    #    Catch any late lineup changes before 7 PM first pitch
+    # 5) Late refresh — 6:30 PM ET (22:30 UTC)
+    #    Final lineup check before 7 PM first pitch
     - cron: '30 22 * * *'
 
-    # 4) Settle picks — 11 AM ET next day (15:00 UTC)
-    #    Mark results after games complete
-    - cron: '0 15 * * *'
+    # 6) Settle picks — 2 AM ET (06:00 UTC)
+    #    All games done, mark results overnight
+    - cron: '0 6 * * *'
 
   # Auto-overwrite when old bot pushes broken code to mlbsim/index.html
   push:
@@ -78,9 +86,11 @@ jobs:
         (github.event_name == 'push' && github.actor != 'github-actions[bot]') ||
         github.event_name == 'workflow_dispatch' &&
         (inputs.run_type == 'picks' || inputs.run_type == 'both') ||
+        github.event.schedule == '0 11 * * *' ||
+        github.event.schedule == '0 13 * * *' ||
+        github.event.schedule == '0 18 * * *' ||
         github.event.schedule == '0 21 * * *' ||
-        github.event.schedule == '30 22 * * *' ||
-        github.event.schedule == '0 13 * * *'
+        github.event.schedule == '30 22 * * *'
       )
     steps:
       - uses: actions/checkout@v4
@@ -115,7 +125,7 @@ jobs:
 
   settle-picks:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '0 15 * * *'
+    if: github.event.schedule == '0 6 * * *'
     steps:
       - uses: actions/checkout@v4
 
