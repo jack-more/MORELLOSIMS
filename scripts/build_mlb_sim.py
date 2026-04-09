@@ -1038,6 +1038,48 @@ css_start = CSS.find("<style>")
 css_end = CSS.find("</style>") + len("</style>")
 css_block = CSS[css_start:css_end] if css_start >= 0 else ""
 
+# Inject Daily tab CSS if missing
+DAILY_CSS = """
+/* ── Daily Dashboard ── */
+.daily-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:8px 0}
+@media(max-width:900px){.daily-grid{grid-template-columns:1fr}}
+.daily-col .section-title{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;margin-bottom:2px}
+.daily-col .section-sub{font-size:11px;color:#888;margin-bottom:10px}
+.hr-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222);transition:background .15s}
+.hr-row:hover{background:rgba(255,255,255,.03)}
+.hr-fire{border-left:3px solid #ff4444}
+.hr-hot{border-left:3px solid #00cc44}
+.hr-warm{border-left:3px solid #ffcc00}
+.hr-mild{border-left:3px solid #555}
+.hr-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
+.hr-info{flex:1;min-width:0}
+.hr-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-meta{font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-rate-col{text-align:right;min-width:55px}
+.hr-rate{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:#ff6644}
+.hr-rate-label{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+.trend-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222)}
+.trend-row:hover{background:rgba(255,255,255,.03)}
+.trend-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
+.trend-info{flex:1;min-width:0}
+.trend-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend-meta{font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend-right{text-align:right}
+.trend-ms{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;padding:2px 6px;border-radius:4px}
+.pick-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222)}
+.pick-row:hover{background:rgba(255,255,255,.03)}
+.pick-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
+.pick-info{flex:1;min-width:0}
+.pick-label{font-weight:700;font-size:14px}
+.pick-matchup{font-size:11px;color:#999}
+.pick-edge{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:#00cc44;min-width:40px;text-align:right}
+.mc-conf-num{font-size:12px;margin-left:4px}
+.empty-state{text-align:center;padding:40px 20px;color:#666;font-size:13px}
+.picks-container{max-height:500px;overflow-y:auto}
+"""
+if "daily-grid" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_CSS + "\n</style>")
+
 html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
