@@ -191,6 +191,98 @@ def get_base_woba(bid):
 print(f"  Pitchers indexed: {len(pitcher_idx)}")
 print(f"  HVC records: {len(hvc_idx)}")
 
+# ─── Build name → MLB ID index from atlas ───────────────────────────────────
+# Used to map RotoWire player names to MLB IDs
+name_to_mlb_id = {}
+for r in hvc_data:
+    name = r.get("batter_name", "")
+    bid = r["batter"]
+    if name and bid:
+        name_to_mlb_id[name.lower().strip()] = bid
+for ps in pitcher_seasons:
+    name = ps.get("player_name", "")
+    pid = ps["pitcher"]
+    if name and pid:
+        name_to_mlb_id[name.lower().strip()] = pid
+print(f"  Name→ID index: {len(name_to_mlb_id)} players")
+
+# ─── Scrape RotoWire lineups as backup ──────────────────────────────────────
+import re as _re
+
+def fetch_rotowire_lineups():
+    """Scrape projected/confirmed lineups from RotoWire."""
+    try:
+        r = requests.get("https://www.rotowire.com/baseball/daily-lineups.php",
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            print(f"  WARN: RotoWire returned {r.status_code}")
+            return {}
+
+        all_teams = _re.findall(r'lineup__abbr[^>]*>([A-Z]+)<', r.text)
+        visit_sections = _re.findall(r'<ul class="lineup__list is-visit">(.*?)</ul>', r.text, _re.DOTALL)
+        home_sections = _re.findall(r'<ul class="lineup__list is-home">(.*?)</ul>', r.text, _re.DOTALL)
+
+        def parse_section(html):
+            pitcher = _re.search(r'lineup__player-highlight-name[^>]*>.*?<a[^>]*>([^<]+)</a>', html, _re.DOTALL)
+            batters = _re.findall(
+                r'<li class="lineup__player">\s*<div class="lineup__pos">([^<]+)</div>\s*'
+                r'<a title="([^"]+)"[^>]*>[^<]+</a>\s*'
+                r'<span class="lineup__bats">([^<]+)</span>',
+                html, _re.DOTALL)
+            return pitcher.group(1).strip() if pitcher else None, batters
+
+        result = {}  # (away_abbr, home_abbr) → {"away_sp", "home_sp", "away_lineup", "home_lineup"}
+        n_games = min(len(visit_sections), len(home_sections), len(all_teams) // 2)
+        for i in range(n_games):
+            away = all_teams[i * 2]
+            home = all_teams[i * 2 + 1]
+            v_sp, v_batters = parse_section(visit_sections[i])
+            h_sp, h_batters = parse_section(home_sections[i])
+
+            def resolve_id(name):
+                """Look up MLB ID from player name."""
+                if not name: return None
+                key = name.lower().strip()
+                if key in name_to_mlb_id:
+                    return name_to_mlb_id[key]
+                # Try last name match
+                last = key.split()[-1] if key else ""
+                for k, v in name_to_mlb_id.items():
+                    if k.endswith(" " + last) or k == last:
+                        return v
+                return None
+
+            def build_lineup(batters):
+                lineup = []
+                for pos, name, bats in batters:
+                    pid = resolve_id(name)
+                    if pid:
+                        lineup.append({
+                            "id": pid,
+                            "fullName": name,
+                            "primaryPosition": {"abbreviation": pos.strip()},
+                            "batSide": {"code": bats.strip()},
+                        })
+                return lineup
+
+            result[(away, home)] = {
+                "away_sp_name": v_sp,
+                "home_sp_name": h_sp,
+                "away_sp_id": resolve_id(v_sp),
+                "home_sp_id": resolve_id(h_sp),
+                "away_lineup": build_lineup(v_batters),
+                "home_lineup": build_lineup(h_batters),
+            }
+        return result
+    except Exception as e:
+        print(f"  WARN: RotoWire scrape failed: {e}")
+        return {}
+
+print("\nFetching RotoWire lineups...")
+rw_lineups = fetch_rotowire_lineups()
+print(f"  RotoWire games: {len(rw_lineups)}")
+rw_used = 0
+
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
 sched = fetch(f"{MLB_API}/schedule?sportId=1&date={TODAY}&hydrate=probablePitcher,lineups,linescore,team,venue")
@@ -242,10 +334,52 @@ for g in games_raw:
     away_tier_mult = away_tier.get("effective_multiplier", 1.0)
     home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
-    # Lineups
+    # Lineups — try MLB API first, fall back to RotoWire
     away_lineup_raw = g.get("lineups", {}).get("awayPlayers", [])
     home_lineup_raw = g.get("lineups", {}).get("homePlayers", [])
     has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
+    lineup_source = "MLB API" if has_lineups else ""
+
+    # RotoWire fallback — also fill in pitcher IDs if MLB API missing them
+    rw_key = (away_abbr, home_abbr)
+    # ATH → OAK alias
+    if rw_key not in rw_lineups:
+        rw_key = ("ATH" if away_abbr == "OAK" else away_abbr,
+                  "ATH" if home_abbr == "OAK" else home_abbr)
+    if rw_key not in rw_lineups:
+        rw_key = ("OAK" if away_abbr == "ATH" else away_abbr,
+                  "OAK" if home_abbr == "ATH" else home_abbr)
+    rw = rw_lineups.get(rw_key, {})
+
+    if not has_lineups and rw:
+        away_lineup_raw = rw.get("away_lineup", [])
+        home_lineup_raw = rw.get("home_lineup", [])
+        has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
+        if has_lineups:
+            lineup_source = "RotoWire"
+            rw_used += 1
+
+    # Fill in pitcher IDs from RotoWire if MLB API didn't have them
+    if not away_sp_id and rw.get("away_sp_id"):
+        away_sp_id = rw["away_sp_id"]
+        away_sp_name = rw.get("away_sp_name", away_sp_name)
+        away_ps = pitcher_idx.get(away_sp_id, {})
+        away_cluster = away_ps.get("cluster", "R_UT")
+        away_arch = away_ps.get("archetype", "Unknown")
+        away_hand = "LHP" if away_ps.get("is_rhp", 1) == 0 else "RHP"
+        away_tier = tier_idx.get(away_sp_id, {})
+        away_tier_name = away_tier.get("tier", "T3_Standard")
+        away_tier_mult = away_tier.get("effective_multiplier", 1.0)
+    if not home_sp_id and rw.get("home_sp_id"):
+        home_sp_id = rw["home_sp_id"]
+        home_sp_name = rw.get("home_sp_name", home_sp_name)
+        home_ps = pitcher_idx.get(home_sp_id, {})
+        home_cluster = home_ps.get("cluster", "R_UT")
+        home_arch = home_ps.get("archetype", "Unknown")
+        home_hand = "LHP" if home_ps.get("is_rhp", 1) == 0 else "RHP"
+        home_tier = tier_idx.get(home_sp_id, {})
+        home_tier_name = home_tier.get("tier", "T3_Standard")
+        home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
     def process_lineup(lineup_raw, opp_gmm_proba, team_abbr):
         """Process a lineup using GMM-weighted multi-cluster matching.
@@ -438,6 +572,8 @@ for g in games_raw:
 
 print(f"  Processed {len(games)} games")
 print(f"  With lineups: {sum(1 for g in games if g['has_lineups'])}")
+if rw_used > 0:
+    print(f"  RotoWire fill-ins: {rw_used}")
 
 # ─── HTML Generation ──────────────────────────────────────────────────────────
 print("\nGenerating HTML...")
