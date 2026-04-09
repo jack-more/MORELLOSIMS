@@ -515,14 +515,26 @@ for g in games_raw:
                     total_pa += hvc_pa
 
             if total_weight > 0:
-                # GMM-weighted rates - no league avg regression needed
-                # The multi-cluster approach already thickens the dataset
+                # GMM-weighted rates
                 vs_woba = w_woba / total_weight
-                vs_woba = max(0.050, min(0.600, vs_woba))
                 h_rate = w_h / total_weight
                 bb_rate = w_bb / total_weight
                 hr_rate = w_hr / total_weight
                 tb_rate = w_tb / total_weight
+
+                # PA confidence blending: when sample is thin, blend toward
+                # batter's own overall stats (NOT league avg — his own profile).
+                # At 50+ PA the archetype data dominates; under 15 PA, base dominates.
+                PA_FULL_TRUST = 50
+                if total_pa < PA_FULL_TRUST:
+                    trust = total_pa / PA_FULL_TRUST  # 0.0 to 1.0
+                    vs_woba = trust * vs_woba + (1 - trust) * base_w
+                    h_rate = trust * h_rate + (1 - trust) * 0.245
+                    bb_rate = trust * bb_rate + (1 - trust) * 0.08
+                    hr_rate = trust * hr_rate + (1 - trust) * 0.03
+                    tb_rate = trust * tb_rate + (1 - trust) * 0.40
+
+                vs_woba = max(0.050, min(0.600, vs_woba))
             else:
                 # No archetype data at all - use batter's base wOBA
                 vs_woba = base_w
