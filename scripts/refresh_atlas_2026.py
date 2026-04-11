@@ -22,6 +22,7 @@ import json
 import os
 import sys
 import argparse
+import re
 from datetime import datetime, date, timedelta
 from collections import defaultdict
 import math
@@ -535,16 +536,77 @@ def merge_hitter_vs_cluster(new_records):
     return len(new_records)
 
 
+def _cluster_short_label(cluster_id, clusters_meta):
+    """Extract the short archetype name from clusters.json for a cluster_id.
+    e.g. '👹 Split Demon RP' → 'Split Demon'."""
+    c = clusters_meta.get(cluster_id, {})
+    sn = c.get("short_name", "")
+    sn = re.sub(r"^[^\w]+", "", sn).strip()
+    for suffix in (" RP", " SP"):
+        if sn.endswith(suffix):
+            sn = sn[: -len(suffix)]
+    return sn
+
+
+# Manual overrides for pitchers whose GMM clustering doesn't match their
+# actual stuff (e.g. Senga throws a ghost fork but clustering places him in
+# Kitchen Sink Illusionist). Keyed by (lowercased name fragment → cluster_id).
+CLUSTER_OVERRIDES = {
+    "senga, kodai": ("R_11", {"R_11": 0.55, "R_8": 0.25, "R_5": 0.20}),
+}
+
+
+def _apply_cluster_overrides(records):
+    """Force specific pitchers into the right cluster regardless of GMM."""
+    count = 0
+    for r in records:
+        name = (r.get("player_name") or "").lower()
+        for frag, (cid, gmm) in CLUSTER_OVERRIDES.items():
+            if frag in name:
+                r["cluster"] = cid
+                r["gmm_proba"] = dict(gmm)
+                count += 1
+                break
+    return count
+
+
+def _sync_archetype_labels(records, clusters_meta):
+    """Ensure every pitcher's archetype label matches their cluster's short name.
+    Prevents stale labels like 'Knuckleball Wizard' on non-knuckleball clusters."""
+    synced = 0
+    for r in records:
+        cid = r.get("cluster")
+        if not cid:
+            continue
+        expected = _cluster_short_label(cid, clusters_meta)
+        if expected and r.get("archetype") != expected:
+            r["archetype"] = expected
+            synced += 1
+    return synced
+
+
 def merge_pitcher_seasons(new_records):
-    """Replace all 2026 records, keep everything else."""
+    """Replace all 2026 records, keep everything else.
+    Also apply cluster overrides and sync archetype labels across ALL years
+    so the atlas stays consistent with clusters.json."""
     print(f"\n  Merging pitcher_seasons...")
     existing = load_atlas("pitcher_seasons.json")
+    clusters_meta = load_atlas("clusters.json")
 
     kept = [r for r in existing if r.get("game_year") != SEASON]
     print(f"    Existing records (non-2026): {len(kept)}")
     print(f"    New 2026 records: {len(new_records)}")
 
     merged = kept + new_records
+
+    # Apply manual overrides (Senga, etc.) across all years
+    n_over = _apply_cluster_overrides(merged)
+    print(f"    Cluster overrides applied: {n_over}")
+
+    # Sync archetype labels to match cluster short names
+    n_sync = _sync_archetype_labels(merged, clusters_meta)
+    print(f"    Archetype labels synced: {n_sync}")
+
     save_atlas("pitcher_seasons.json", merged)
     return len(new_records)
 
