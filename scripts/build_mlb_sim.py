@@ -884,26 +884,32 @@ for g in games:
             all_lineup_pids.add(b["id"])
 
 for pid in all_lineup_pids:
-    data = fetch(f"{MLB_API}/people/{pid}/stats?stats=gameLog&season={NOW.year}&group=hitting")
-    if not data:
+    try:
+        data = fetch(f"{MLB_API}/people/{pid}/stats?stats=gameLog&season={NOW.year}&group=hitting")
+        if not data:
+            continue
+        stats_list = data.get("stats") or []
+        if not stats_list:
+            continue
+        splits = stats_list[0].get("splits", [])
+        if not splits:
+            continue
+        # Current consecutive hitting streak (walk backwards)
+        streak = 0
+        for s in reversed(splits):
+            hits = s.get("stat", {}).get("hits", 0)
+            if hits > 0:
+                streak += 1
+            else:
+                break
+        # Last 7 games rolling avg/OPS
+        recent = splits[-7:] if len(splits) >= 7 else splits
+        total_h = sum(s.get("stat", {}).get("hits", 0) for s in recent)
+        total_ab = sum(s.get("stat", {}).get("atBats", 0) for s in recent)
+        last7_avg = total_h / max(total_ab, 1)
+        batter_streaks[pid] = {"streak": streak, "last7_avg": round(last7_avg, 3)}
+    except Exception:
         continue
-    splits = data.get("stats", [{}])[0].get("splits", [])
-    if not splits:
-        continue
-    # Current consecutive hitting streak (walk backwards)
-    streak = 0
-    for s in reversed(splits):
-        hits = s.get("stat", {}).get("hits", 0)
-        if hits > 0:
-            streak += 1
-        else:
-            break
-    # Last 7 games rolling avg/OPS
-    recent = splits[-7:] if len(splits) >= 7 else splits
-    total_h = sum(s.get("stat", {}).get("hits", 0) for s in recent)
-    total_ab = sum(s.get("stat", {}).get("atBats", 0) for s in recent)
-    last7_avg = total_h / max(total_ab, 1)
-    batter_streaks[pid] = {"streak": streak, "last7_avg": round(last7_avg, 3)}
 
 print(f"  Fetched streaks for {len(batter_streaks)} batters")
 print(f"  Batters on 3+ game streaks: {sum(1 for v in batter_streaks.values() if v['streak'] >= 3)}")
