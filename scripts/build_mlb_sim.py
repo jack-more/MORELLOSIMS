@@ -26,7 +26,8 @@ DATE_SHORT = NOW.strftime("%b %-d").upper()  # for slate
 
 # ─── Team metadata ────────────────────────────────────────────────────────────
 TEAMS = {
-    "ARI":{"id":109,"color":"#A71930"},"ATL":{"id":144,"color":"#CE1141"},
+    "ARI":{"id":109,"color":"#A71930"},"AZ":{"id":109,"color":"#A71930"},
+    "ATL":{"id":144,"color":"#CE1141"},
     "BAL":{"id":110,"color":"#DF4601"},"BOS":{"id":111,"color":"#BD3039"},
     "CHC":{"id":112,"color":"#0E3386"},"CIN":{"id":113,"color":"#C6011F"},
     "CLE":{"id":114,"color":"#00385D"},"COL":{"id":115,"color":"#333366"},
@@ -42,6 +43,7 @@ TEAMS = {
     "SF": {"id":137,"color":"#FD5A1E"},"STL":{"id":138,"color":"#C41E3A"},
     "TB": {"id":139,"color":"#092C5C"},"TEX":{"id":140,"color":"#003278"},
     "TOR":{"id":141,"color":"#134A8E"},"WSH":{"id":120,"color":"#AB0003"},
+    "WAS":{"id":120,"color":"#AB0003"},
 }
 
 def load_atlas(f):
@@ -263,8 +265,9 @@ import csv as _csv
 from io import StringIO as _StringIO
 
 # Team abbreviation normalization
-TEAM_ALIAS = {"ATH": "OAK", "AZ": "ARI", "CWS": "CHW", "CHW": "CWS", "TB": "TBR", "TBR": "TB",
-              "SD": "SDP", "SDP": "SD", "SF": "SFG", "SFG": "SF", "KC": "KCR", "KCR": "KC"}
+TEAM_ALIAS = {"ATH": "OAK", "AZ": "ARI", "ARI": "AZ", "CWS": "CHW", "CHW": "CWS", "TB": "TBR", "TBR": "TB",
+              "SD": "SDP", "SDP": "SD", "SF": "SFG", "SFG": "SF", "KC": "KCR", "KCR": "KC",
+              "WSH": "WAS", "WAS": "WSH"}
 
 def normalize_abbr(abbr):
     """Normalize team abbreviation to match MLB API style."""
