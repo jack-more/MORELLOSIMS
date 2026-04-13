@@ -429,6 +429,68 @@ rw_lineups = fetch_rotowire_lineups()
 print(f"  RotoWire games: {len(rw_lineups)}")
 rw_used = 0; bm_used = 0
 
+# ─── Fetch real sportsbook odds (ESPN) ──────────────────────────────────────
+_ESPN_TEAM_MAP = {
+    "Arizona Diamondbacks": "AZ", "Atlanta Braves": "ATL", "Baltimore Orioles": "BAL",
+    "Boston Red Sox": "BOS", "Chicago Cubs": "CHC", "Chicago White Sox": "CWS",
+    "Cincinnati Reds": "CIN", "Cleveland Guardians": "CLE", "Colorado Rockies": "COL",
+    "Detroit Tigers": "DET", "Houston Astros": "HOU", "Kansas City Royals": "KC",
+    "Los Angeles Angels": "LAA", "Los Angeles Dodgers": "LAD", "Miami Marlins": "MIA",
+    "Milwaukee Brewers": "MIL", "Minnesota Twins": "MIN", "New York Mets": "NYM",
+    "New York Yankees": "NYY", "Oakland Athletics": "ATH", "Philadelphia Phillies": "PHI",
+    "Pittsburgh Pirates": "PIT", "San Diego Padres": "SD", "San Francisco Giants": "SF",
+    "Seattle Mariners": "SEA", "St. Louis Cardinals": "STL", "Tampa Bay Rays": "TB",
+    "Texas Rangers": "TEX", "Toronto Blue Jays": "TOR", "Washington Nationals": "WSH",
+}
+
+def fetch_espn_odds():
+    """Scrape real ML odds from ESPN MLB odds page (DraftKings lines). Free, no API key."""
+    try:
+        r = requests.get("https://www.espn.com/mlb/odds",
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            print(f"  WARN: ESPN odds page returned {r.status_code}")
+            return {}
+
+        idx = r.text.find('"odds":[{"displayValue":"MLB Odds"')
+        if idx < 0:
+            print("  WARN: ESPN odds data block not found")
+            return {}
+        chunk = r.text[idx:idx+150000]
+
+        # Split by game event IDs
+        line_blocks = _re.split(r'"id":"4018\d+","uid"', chunk)
+        result = {}
+        for block in line_blocks[1:]:
+            # Extract team abbreviations
+            home_abbr = away_abbr = None
+            comps = _re.findall(r'"homeAway":"(home|away)".*?"abbreviation":"([A-Z]+)"', block, _re.DOTALL)
+            for ha, abbr in comps:
+                if ha == "home":
+                    home_abbr = abbr
+                elif ha == "away":
+                    away_abbr = abbr
+
+            # Extract moneyline close odds
+            ml_match = _re.search(
+                r'"moneyline":\{"displayName":"Moneyline".*?"home":\{.*?"odds":"([^"]+)".*?"away":\{.*?"odds":"([^"]+)"',
+                block, _re.DOTALL
+            )
+            if home_abbr and away_abbr and ml_match:
+                result[(away_abbr, home_abbr)] = {
+                    "away_ml": int(ml_match.group(2)),
+                    "home_ml": int(ml_match.group(1)),
+                }
+
+        print(f"  ESPN odds: {len(result)} games (DraftKings)")
+        return result
+    except Exception as e:
+        print(f"  WARN: ESPN odds fetch failed: {e}")
+        return {}
+
+print("\nFetching sportsbook odds...")
+real_odds = fetch_espn_odds()
+
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
 sched = fetch(f"{MLB_API}/schedule?sportId=1&date={TODAY}&hydrate=probablePitcher,lineups,linescore,team,venue")
@@ -732,9 +794,16 @@ for g in games_raw:
         conf = 0
         value = 0
 
-    # Implied moneyline odds from model win probability
-    away_ml = wp_to_ml(away_wp) if has_lineups else ""
-    home_ml = wp_to_ml(home_wp) if has_lineups else ""
+    # Real sportsbook odds (fall back to model-implied if unavailable)
+    game_odds = real_odds.get((away_abbr, home_abbr), {})
+    if game_odds:
+        away_ml = f"{game_odds['away_ml']:+d}" if game_odds.get("away_ml") else ""
+        home_ml = f"{game_odds['home_ml']:+d}" if game_odds.get("home_ml") else ""
+        odds_source = game_odds.get("book", "")
+    else:
+        away_ml = wp_to_ml(away_wp) if has_lineups else ""
+        home_ml = wp_to_ml(home_wp) if has_lineups else ""
+        odds_source = "MODEL"
 
     # Pick
     if away_wp > home_wp:
@@ -756,7 +825,7 @@ for g in games_raw:
         "away_tier_mult": away_tier_mult, "home_tier_mult": home_tier_mult,
         "away_runs": away_runs, "home_runs": home_runs,
         "away_wp": away_wp, "home_wp": home_wp,
-        "away_ml": away_ml, "home_ml": home_ml,
+        "away_ml": away_ml, "home_ml": home_ml, "odds_source": odds_source,
         "away_woba": away_woba, "home_woba": home_woba,
         "away_batters": away_batters, "home_batters": home_batters,
         "has_lineups": has_lineups,
