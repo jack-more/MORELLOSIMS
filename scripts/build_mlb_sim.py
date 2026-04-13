@@ -112,6 +112,16 @@ def pythagorean_wp(team_runs, opp_runs, exp=1.83):
     return round(tr / (tr + opp) * 100, 1)
 
 
+def wp_to_ml(prob):
+    """Convert win probability (0-100) to American moneyline odds."""
+    if prob <= 0 or prob >= 100:
+        return ""
+    if prob >= 50:
+        return f"{int(round(-(prob / (100 - prob)) * 100))}"
+    else:
+        return f"+{int(round(((100 - prob) / prob) * 100))}"
+
+
 # ─── Park Factors (runs, 100 = neutral) ────────────────────────────────────
 # Source: FanGraphs 5-year rolling park factors for runs scored.
 # >100 = hitter-friendly, <100 = pitcher-friendly.
@@ -722,13 +732,15 @@ for g in games_raw:
         conf = 0
         value = 0
 
+    # Implied moneyline odds from model win probability
+    away_ml = wp_to_ml(away_wp) if has_lineups else ""
+    home_ml = wp_to_ml(home_wp) if has_lineups else ""
+
     # Pick
     if away_wp > home_wp:
         pick_team = away_abbr
-        pick_ml = ""  # no odds available from API
     else:
         pick_team = home_abbr
-        pick_ml = ""
 
     park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
@@ -744,6 +756,7 @@ for g in games_raw:
         "away_tier_mult": away_tier_mult, "home_tier_mult": home_tier_mult,
         "away_runs": away_runs, "home_runs": home_runs,
         "away_wp": away_wp, "home_wp": home_wp,
+        "away_ml": away_ml, "home_ml": home_ml,
         "away_woba": away_woba, "home_woba": home_woba,
         "away_batters": away_batters, "home_batters": home_batters,
         "has_lineups": has_lineups,
@@ -858,6 +871,8 @@ def render_game(g, idx):
         lineup_html = '<div class="tbd-block">LINEUPS TBD \u2014 WILL UPDATE WHEN RELEASED</div>'
 
     ou_line = f"O/U {g['total']}" if g["has_lineups"] else ""
+    away_ml_display = g["away_ml"] if g["away_ml"] else "\u2014"
+    home_ml_display = g["home_ml"] if g["home_ml"] else "\u2014"
 
     return f'''<div class="game-card" data-conf="{g["conf"]}" data-value="{g["value"]}" data-edge="{g["edge"]}">
   <div class="run-bar ma-premium">
@@ -868,7 +883,7 @@ def render_game(g, idx):
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/{g["away_id"]}.svg" alt="{aa}" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">{aa}</div>
-    <div class="team-ml">\u2014</div>
+    <div class="team-ml">{away_ml_display}</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
@@ -879,7 +894,7 @@ def render_game(g, idx):
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/{g["home_id"]}.svg" alt="{ha}" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">{ha}</div>
-    <div class="team-ml">\u2014</div>
+    <div class="team-ml">{home_ml_display}</div>
   </div>
 </div>
   {edge_html}
