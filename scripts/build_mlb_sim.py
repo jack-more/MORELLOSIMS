@@ -26,7 +26,8 @@ DATE_SHORT = NOW.strftime("%b %-d").upper()  # for slate
 
 # ─── Team metadata ────────────────────────────────────────────────────────────
 TEAMS = {
-    "ARI":{"id":109,"color":"#A71930"},"ATL":{"id":144,"color":"#CE1141"},
+    "ARI":{"id":109,"color":"#A71930"},"AZ":{"id":109,"color":"#A71930"},
+    "ATL":{"id":144,"color":"#CE1141"},
     "BAL":{"id":110,"color":"#DF4601"},"BOS":{"id":111,"color":"#BD3039"},
     "CHC":{"id":112,"color":"#0E3386"},"CIN":{"id":113,"color":"#C6011F"},
     "CLE":{"id":114,"color":"#00385D"},"COL":{"id":115,"color":"#333366"},
@@ -42,6 +43,7 @@ TEAMS = {
     "SF": {"id":137,"color":"#FD5A1E"},"STL":{"id":138,"color":"#C41E3A"},
     "TB": {"id":139,"color":"#092C5C"},"TEX":{"id":140,"color":"#003278"},
     "TOR":{"id":141,"color":"#134A8E"},"WSH":{"id":120,"color":"#AB0003"},
+    "WAS":{"id":120,"color":"#AB0003"},
 }
 
 def load_atlas(f):
@@ -95,6 +97,34 @@ def base_runs(pa, h, bb, hr, tb):
     if b + c == 0: return d
     return a * b / (b + c) + d
 
+
+def pythagorean_wp(team_runs, opp_runs, exp=1.83):
+    """Pythagorean Win% — standard sabermetric formula.
+    exp=1.83 is the MLB-standard Pythagenpat exponent."""
+    if team_runs <= 0 and opp_runs <= 0:
+        return 50.0
+    if opp_runs <= 0:
+        return 95.0
+    if team_runs <= 0:
+        return 5.0
+    tr = team_runs ** exp
+    opp = opp_runs ** exp
+    return round(tr / (tr + opp) * 100, 1)
+
+
+# ─── Park Factors (runs, 100 = neutral) ────────────────────────────────────
+# Source: FanGraphs 5-year rolling park factors for runs scored.
+# >100 = hitter-friendly, <100 = pitcher-friendly.
+PARK_FACTOR = {
+    "COL": 1.14, "BOS": 1.06, "CIN": 1.05, "TEX": 1.04, "ATL": 1.03,
+    "AZ": 1.03, "PHI": 1.02, "CHC": 1.02, "MIN": 1.02, "MIL": 1.01,
+    "TOR": 1.01, "NYY": 1.01, "BAL": 1.00, "LAA": 1.00, "WSH": 1.00,
+    "DET": 0.99, "KC": 0.99, "HOU": 0.99, "PIT": 0.99, "SF": 0.98,
+    "CLE": 0.98, "STL": 0.98, "CWS": 0.98, "TB": 0.97, "SD": 0.97,
+    "LAD": 0.97, "MIA": 0.96, "SEA": 0.96, "NYM": 0.96, "ATH": 0.96,
+    "OAK": 0.96,
+}
+
 # ─── Load atlas data ─────────────────────────────────────────────────────────
 print("Loading atlas...")
 hvc_data = load_atlas("hitter_vs_cluster.json")
@@ -119,34 +149,275 @@ for k, v in pitcher_tiers.items():
     if pid not in tier_idx or yr > tier_idx[pid]["game_year"]:
         tier_idx[pid] = v
 
-# (batter_id, cluster) → most recent hvc record
-hvc_idx = {}
+# (batter_id, cluster) → BLENDED hvc record across recent years (2025+2026)
+# Weight 2026 at 1.5x to favor current form, but keep 2025 for sample size
+YEAR_WEIGHT = {2026: 1.5, 2025: 1.0, 2024: 0.6, 2023: 0.4}
+BLEND_YEARS = {2025, 2026}  # years to blend (keep last 2 seasons)
+
+hvc_by_key = {}  # (batter, cluster) → list of records from blend years
 for r in hvc_data:
     key = (r["batter"], r["cluster"])
     yr = r["game_year"]
-    if key not in hvc_idx or yr > hvc_idx[key]["game_year"]:
-        hvc_idx[key] = r
+    if yr in BLEND_YEARS:
+        hvc_by_key.setdefault(key, []).append(r)
 
-# batter overall wOBA (weighted avg across all clusters, most recent year)
-batter_base_woba = {}
-batter_base_year = {}
+hvc_idx = {}
+for key, records in hvc_by_key.items():
+    total_wpa = 0; total_w = 0
+    total_h = 0; total_bb = 0; total_hr = 0; total_tb = 0
+    total_pa_raw = 0; total_singles = 0; total_doubles = 0; total_triples = 0
+    for r in records:
+        yr = r["game_year"]
+        pa = r["PA"]
+        if pa < 1: continue
+        w = pa * YEAR_WEIGHT.get(yr, 0.5)
+        total_wpa += w * r["wOBA"]
+        total_w += w
+        total_pa_raw += pa
+        total_h += r["H"] * YEAR_WEIGHT.get(yr, 0.5)
+        total_bb += r["BB"] * YEAR_WEIGHT.get(yr, 0.5)
+        total_hr += r["HR"] * YEAR_WEIGHT.get(yr, 0.5)
+        total_singles += r.get("singles", 0) * YEAR_WEIGHT.get(yr, 0.5)
+        total_doubles += r.get("doubles", 0) * YEAR_WEIGHT.get(yr, 0.5)
+        total_triples += r.get("triples", 0) * YEAR_WEIGHT.get(yr, 0.5)
+        total_tb += (r.get("singles", 0) + r.get("doubles", 0)*2 + r.get("triples", 0)*3 + r["HR"]*4) * YEAR_WEIGHT.get(yr, 0.5)
+    if total_w > 0:
+        hvc_idx[key] = {
+            "batter": key[0], "cluster": key[1],
+            "game_year": max(r["game_year"] for r in records),
+            "PA": total_pa_raw,
+            "wOBA": total_wpa / total_w,
+            "H": total_h, "BB": total_bb, "HR": total_hr,
+            "singles": total_singles, "doubles": total_doubles,
+            "triples": total_triples,
+        }
+
+# Also keep fallback for batters only in older years (pre-2025)
+for r in hvc_data:
+    key = (r["batter"], r["cluster"])
+    if key not in hvc_idx:
+        yr = r["game_year"]
+        if key not in hvc_idx or yr > hvc_idx[key]["game_year"]:
+            hvc_idx[key] = r
+
+# batter overall wOBA + component rates (weighted avg across blend years)
+# Used for thin-sample PA confidence blending — regress toward the BATTER'S
+# own rates, not generic league averages.
+batter_woba_accum = {}  # bid → (total_wpa, total_w)
+batter_rates_accum = {}  # bid → {h, bb, hr, tb, pa_w} (year-weighted sums)
 for r in hvc_data:
     bid = r["batter"]
     yr = r["game_year"]
-    if bid not in batter_base_year or yr > batter_base_year[bid]:
-        batter_base_year[bid] = yr
-        batter_base_woba[bid] = []
-    if yr == batter_base_year.get(bid):
-        batter_base_woba.setdefault(bid, []).append((r["PA"], r["wOBA"]))
+    pa = r["PA"]
+    if pa < 1: continue
+    w = pa * YEAR_WEIGHT.get(yr, 0.3)
+    if bid not in batter_woba_accum:
+        batter_woba_accum[bid] = [0, 0]
+    batter_woba_accum[bid][0] += w * r["wOBA"]
+    batter_woba_accum[bid][1] += w
+    # Accumulate component rates
+    if bid not in batter_rates_accum:
+        batter_rates_accum[bid] = {"h": 0, "bb": 0, "hr": 0, "tb": 0, "pa_w": 0}
+    batter_rates_accum[bid]["h"] += r["H"] * YEAR_WEIGHT.get(yr, 0.3)
+    batter_rates_accum[bid]["bb"] += r["BB"] * YEAR_WEIGHT.get(yr, 0.3)
+    batter_rates_accum[bid]["hr"] += r["HR"] * YEAR_WEIGHT.get(yr, 0.3)
+    s = r.get("singles", 0); d = r.get("doubles", 0); t = r.get("triples", 0)
+    batter_rates_accum[bid]["tb"] += (s + d*2 + t*3 + r["HR"]*4) * YEAR_WEIGHT.get(yr, 0.3)
+    batter_rates_accum[bid]["pa_w"] += w
 
 def get_base_woba(bid):
-    recs = batter_base_woba.get(bid, [])
-    total_pa = sum(pa for pa, _ in recs)
-    if total_pa == 0: return .310
-    return sum(pa * w for pa, w in recs) / total_pa
+    acc = batter_woba_accum.get(bid)
+    if not acc or acc[1] == 0: return .310
+    return acc[0] / acc[1]
+
+# League-average fallbacks (used only when batter has zero data at all)
+LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
+
+def get_base_rates(bid):
+    """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
+    acc = batter_rates_accum.get(bid)
+    if not acc or acc["pa_w"] == 0:
+        return LG_H_RATE, LG_BB_RATE, LG_HR_RATE, LG_TB_RATE
+    pw = acc["pa_w"]
+    return acc["h"] / pw, acc["bb"] / pw, acc["hr"] / pw, acc["tb"] / pw
 
 print(f"  Pitchers indexed: {len(pitcher_idx)}")
 print(f"  HVC records: {len(hvc_idx)}")
+
+# ─── Build name → MLB ID index from atlas ───────────────────────────────────
+# Used to map RotoWire player names to MLB IDs
+name_to_mlb_id = {}
+for r in hvc_data:
+    name = r.get("batter_name", "")
+    bid = r["batter"]
+    if name and bid:
+        name_to_mlb_id[name.lower().strip()] = bid
+for ps in pitcher_seasons:
+    name = ps.get("player_name", "")
+    pid = ps["pitcher"]
+    if name and pid:
+        name_to_mlb_id[name.lower().strip()] = pid
+print(f"  Name→ID index: {len(name_to_mlb_id)} players")
+
+# ─── Scrape lineup sources (BaseballMonster + RotoWire) ─────────────────────
+import re as _re
+import csv as _csv
+from io import StringIO as _StringIO
+
+# Team abbreviation normalization
+TEAM_ALIAS = {"ATH": "OAK", "AZ": "ARI", "ARI": "AZ", "CWS": "CHW", "CHW": "CWS", "TB": "TBR", "TBR": "TB",
+              "SD": "SDP", "SDP": "SD", "SF": "SFG", "SFG": "SF", "KC": "KCR", "KCR": "KC",
+              "WSH": "WAS", "WAS": "WSH"}
+
+def normalize_abbr(abbr):
+    """Normalize team abbreviation to match MLB API style."""
+    return TEAM_ALIAS.get(abbr, abbr)
+
+def fetch_baseballmonster_lineups():
+    """Fetch structured CSV lineups from BaseballMonster — includes MLB IDs directly."""
+    try:
+        date_str = NOW.strftime("%-m/%-d/%Y")
+        url = f"https://baseballmonster.com/Lineups.aspx?csv=1&d={date_str}"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200 or len(r.text) < 50:
+            print(f"  WARN: BaseballMonster returned {r.status_code}")
+            return {}
+
+        reader = _csv.reader(_StringIO(r.text))
+        header = next(reader, None)
+        if not header:
+            return {}
+
+        # Group by team
+        team_lineups = {}  # team_abbr → {"batters": [...], "sp_id": ..., "sp_name": ...}
+        for row in reader:
+            if len(row) < 7:
+                continue
+            team = row[0].strip()
+            mlb_id = int(row[3].strip()) if row[3].strip().isdigit() else None
+            name = row[4].strip()
+            order = row[5].strip()
+            # confirmed = row[6].strip()
+
+            if not mlb_id:
+                continue
+
+            if team not in team_lineups:
+                team_lineups[team] = {"batters": [], "sp_id": None, "sp_name": None}
+
+            if order == "SP":
+                team_lineups[team]["sp_id"] = mlb_id
+                team_lineups[team]["sp_name"] = name
+            elif order.isdigit():
+                team_lineups[team]["batters"].append({
+                    "id": mlb_id,
+                    "fullName": name,
+                    "order": int(order),
+                    "primaryPosition": {"abbreviation": row[7].strip() if len(row) > 7 and row[7].strip() else "?"},
+                    "batSide": {"code": "R"},  # BM doesn't give bat side, will be overridden if available
+                })
+
+        # Now pair teams into games — BM lists teams in away/home pairs
+        teams_in_order = []
+        seen = set()
+        for row_text in r.text.strip().split("\n")[1:]:
+            parts = row_text.split(",")
+            if parts and parts[0].strip() not in seen:
+                seen.add(parts[0].strip())
+                teams_in_order.append(parts[0].strip())
+
+        # Games: teams alternate away/home
+        result = {}
+        for i in range(0, len(teams_in_order) - 1, 2):
+            away = teams_in_order[i]
+            home = teams_in_order[i + 1]
+            away_data = team_lineups.get(away, {})
+            home_data = team_lineups.get(home, {})
+
+            away_batters = sorted(away_data.get("batters", []), key=lambda x: x.get("order", 99))
+            home_batters = sorted(home_data.get("batters", []), key=lambda x: x.get("order", 99))
+
+            result[(away, home)] = {
+                "away_sp_name": away_data.get("sp_name"),
+                "home_sp_name": home_data.get("sp_name"),
+                "away_sp_id": away_data.get("sp_id"),
+                "home_sp_id": home_data.get("sp_id"),
+                "away_lineup": away_batters,
+                "home_lineup": home_batters,
+            }
+        return result
+    except Exception as e:
+        print(f"  WARN: BaseballMonster scrape failed: {e}")
+        return {}
+
+def fetch_rotowire_lineups():
+    """Scrape projected/confirmed lineups from RotoWire — backup source."""
+    try:
+        r = requests.get("https://www.rotowire.com/baseball/daily-lineups.php",
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            print(f"  WARN: RotoWire returned {r.status_code}")
+            return {}
+
+        all_teams = _re.findall(r'lineup__abbr[^>]*>([A-Z]+)<', r.text)
+        visit_sections = _re.findall(r'<ul class="lineup__list is-visit">(.*?)</ul>', r.text, _re.DOTALL)
+        home_sections = _re.findall(r'<ul class="lineup__list is-home">(.*?)</ul>', r.text, _re.DOTALL)
+
+        def parse_section(html):
+            pitcher = _re.search(r'lineup__player-highlight-name[^>]*>.*?<a[^>]*>([^<]+)</a>', html, _re.DOTALL)
+            batters = _re.findall(
+                r'<li class="lineup__player">\s*<div class="lineup__pos">([^<]+)</div>\s*'
+                r'<a title="([^"]+)"[^>]*>[^<]+</a>\s*'
+                r'<span class="lineup__bats">([^<]+)</span>',
+                html, _re.DOTALL)
+            return pitcher.group(1).strip() if pitcher else None, batters
+
+        def resolve_id(name):
+            if not name: return None
+            key = name.lower().strip()
+            if key in name_to_mlb_id:
+                return name_to_mlb_id[key]
+            last = key.split()[-1] if key else ""
+            for k, v in name_to_mlb_id.items():
+                if k.endswith(" " + last):
+                    return v
+            return None
+
+        def build_lineup(batters):
+            lineup = []
+            for pos, name, bats in batters:
+                pid = resolve_id(name)
+                if pid:
+                    lineup.append({
+                        "id": pid, "fullName": name,
+                        "primaryPosition": {"abbreviation": pos.strip()},
+                        "batSide": {"code": bats.strip()},
+                    })
+            return lineup
+
+        result = {}
+        n_games = min(len(visit_sections), len(home_sections), len(all_teams) // 2)
+        for i in range(n_games):
+            away = all_teams[i * 2]
+            home = all_teams[i * 2 + 1]
+            v_sp, v_batters = parse_section(visit_sections[i])
+            h_sp, h_batters = parse_section(home_sections[i])
+            result[(away, home)] = {
+                "away_sp_name": v_sp, "home_sp_name": h_sp,
+                "away_sp_id": resolve_id(v_sp), "home_sp_id": resolve_id(h_sp),
+                "away_lineup": build_lineup(v_batters), "home_lineup": build_lineup(h_batters),
+            }
+        return result
+    except Exception as e:
+        print(f"  WARN: RotoWire scrape failed: {e}")
+        return {}
+
+print("\nFetching external lineups...")
+bm_lineups = fetch_baseballmonster_lineups()
+print(f"  BaseballMonster games: {len(bm_lineups)}")
+rw_lineups = fetch_rotowire_lineups()
+print(f"  RotoWire games: {len(rw_lineups)}")
+rw_used = 0; bm_used = 0
 
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
@@ -199,10 +470,63 @@ for g in games_raw:
     away_tier_mult = away_tier.get("effective_multiplier", 1.0)
     home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
-    # Lineups
+    # Lineups — try MLB API first, then BaseballMonster (has MLB IDs), then RotoWire
     away_lineup_raw = g.get("lineups", {}).get("awayPlayers", [])
     home_lineup_raw = g.get("lineups", {}).get("homePlayers", [])
     has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
+    lineup_source = "MLB API" if has_lineups else ""
+
+    # Helper to find external lineup data with team alias handling
+    def find_external(source, a, h):
+        for aa in [a, TEAM_ALIAS.get(a, a)]:
+            for hh in [h, TEAM_ALIAS.get(h, h)]:
+                if (aa, hh) in source:
+                    return source[(aa, hh)]
+        return {}
+
+    bm = find_external(bm_lineups, away_abbr, home_abbr)
+    rw = find_external(rw_lineups, away_abbr, home_abbr)
+
+    # BaseballMonster fallback (preferred — has MLB IDs directly)
+    if not has_lineups and bm:
+        away_lineup_raw = bm.get("away_lineup", [])
+        home_lineup_raw = bm.get("home_lineup", [])
+        has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
+        if has_lineups:
+            lineup_source = "BaseballMonster"
+            bm_used += 1
+
+    # RotoWire fallback
+    if not has_lineups and rw:
+        away_lineup_raw = rw.get("away_lineup", [])
+        home_lineup_raw = rw.get("home_lineup", [])
+        has_lineups = len(away_lineup_raw) > 0 and len(home_lineup_raw) > 0
+        if has_lineups:
+            lineup_source = "RotoWire"
+            rw_used += 1
+
+    # Fill in pitcher IDs from external sources if MLB API didn't have them
+    ext = bm if bm.get("away_sp_id") else rw
+    if not away_sp_id and ext.get("away_sp_id"):
+        away_sp_id = ext["away_sp_id"]
+        away_sp_name = ext.get("away_sp_name", away_sp_name)
+        away_ps = pitcher_idx.get(away_sp_id, {})
+        away_cluster = away_ps.get("cluster", "R_UT")
+        away_arch = away_ps.get("archetype", "Unknown")
+        away_hand = "LHP" if away_ps.get("is_rhp", 1) == 0 else "RHP"
+        away_tier = tier_idx.get(away_sp_id, {})
+        away_tier_name = away_tier.get("tier", "T3_Standard")
+        away_tier_mult = away_tier.get("effective_multiplier", 1.0)
+    if not home_sp_id and ext.get("home_sp_id"):
+        home_sp_id = ext["home_sp_id"]
+        home_sp_name = ext.get("home_sp_name", home_sp_name)
+        home_ps = pitcher_idx.get(home_sp_id, {})
+        home_cluster = home_ps.get("cluster", "R_UT")
+        home_arch = home_ps.get("archetype", "Unknown")
+        home_hand = "LHP" if home_ps.get("is_rhp", 1) == 0 else "RHP"
+        home_tier = tier_idx.get(home_sp_id, {})
+        home_tier_name = home_tier.get("tier", "T3_Standard")
+        home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
     def process_lineup(lineup_raw, opp_gmm_proba, team_abbr):
         """Process a lineup using GMM-weighted multi-cluster matching.
@@ -212,10 +536,6 @@ for g in games_raw:
         team_pa = 0
         team_h = 0; team_bb = 0; team_hr = 0; team_tb = 0
 
-        # League average priors
-        LG_WOBA = 0.310; LG_H_RATE = 0.245; LG_BB_RATE = 0.08
-        LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
-
         for i, p in enumerate(lineup_raw):
             pid = p.get("id")
             name = p.get("fullName", "Unknown")
@@ -223,6 +543,7 @@ for g in games_raw:
             bat_side = p.get("batSide", {}).get("code", "R")
 
             base_w = get_base_woba(pid)
+            base_h, base_bb, base_hr, base_tb = get_base_rates(pid)
 
             # GMM-weighted lookup across ALL pitcher clusters
             # This thickens the dataset by using 2nd/3rd DNA clusterings
@@ -245,20 +566,32 @@ for g in games_raw:
                     total_pa += hvc_pa
 
             if total_weight > 0:
-                # GMM-weighted rates - no league avg regression needed
-                # The multi-cluster approach already thickens the dataset
+                # GMM-weighted rates
                 vs_woba = w_woba / total_weight
-                vs_woba = max(0.050, min(0.600, vs_woba))
                 h_rate = w_h / total_weight
                 bb_rate = w_bb / total_weight
                 hr_rate = w_hr / total_weight
                 tb_rate = w_tb / total_weight
+
+                # PA confidence blending: when sample is thin, blend toward
+                # the BATTER'S OWN rates (not league avg).
+                # At 50+ PA the archetype data dominates; under 15 PA, base dominates.
+                PA_FULL_TRUST = 50
+                if total_pa < PA_FULL_TRUST:
+                    trust = total_pa / PA_FULL_TRUST  # 0.0 to 1.0
+                    vs_woba = trust * vs_woba + (1 - trust) * base_w
+                    h_rate = trust * h_rate + (1 - trust) * base_h
+                    bb_rate = trust * bb_rate + (1 - trust) * base_bb
+                    hr_rate = trust * hr_rate + (1 - trust) * base_hr
+                    tb_rate = trust * tb_rate + (1 - trust) * base_tb
+
+                vs_woba = max(0.050, min(0.600, vs_woba))
             else:
-                # No archetype data at all - use batter's base wOBA
+                # No archetype data at all — use batter's own rates
                 vs_woba = base_w
                 total_pa = 0
-                h_rate = 0.245; bb_rate = 0.08
-                hr_rate = 0.03; tb_rate = 0.40
+                h_rate = base_h; bb_rate = base_bb
+                hr_rate = base_hr; tb_rate = base_tb
 
             # Per-game PA estimate
             pa = 4
@@ -320,8 +653,13 @@ for g in games_raw:
             home_lineup_raw, away_gmm, home_abbr)
 
         # Apply tier multipliers
-        away_runs = round(away_runs_raw * home_tier_mult, 1)
-        home_runs = round(home_runs_raw * away_tier_mult, 1)
+        away_runs_tiered = away_runs_raw * home_tier_mult
+        home_runs_tiered = home_runs_raw * away_tier_mult
+
+        # Apply park factor (home team's park affects BOTH sides)
+        pf = PARK_FACTOR.get(home_abbr, 1.00)
+        away_runs = round(away_runs_tiered * pf, 1)
+        home_runs = round(home_runs_tiered * pf, 1)
 
         # Fill opp info for daily tab
         for bm in all_batter_matchups[-len(away_lineup_raw)-len(home_lineup_raw):-len(home_lineup_raw)]:
@@ -338,26 +676,48 @@ for g in games_raw:
         away_woba = 0
         home_woba = 0
 
-    total_runs = away_runs + home_runs
-    if total_runs > 0:
-        away_wp = round(away_runs / total_runs * 100)
-        home_wp = 100 - away_wp
-    else:
-        away_wp = 50
-        home_wp = 50
+    # Pythagorean Win% — standard sabermetric formula (exp=1.83)
+    # Much better than linear ratio at capturing real WP from run differentials
+    away_wp_raw = pythagorean_wp(away_runs, home_runs)
+    home_wp_raw = 100 - away_wp_raw
 
-    # Home field bump
+    # Home field advantage: +1.5% WP to home team (real MLB HFA ~53.5%)
+    # Applied to displayed WP only — confidence uses RAW model WP
+    HFA_BUMP = 1.5
     if has_lineups:
-        home_wp = min(95, home_wp + 3)
-        away_wp = 100 - home_wp
+        home_wp = min(95, round(home_wp_raw + HFA_BUMP, 1))
+        away_wp = round(100 - home_wp, 1)
+    else:
+        away_wp = away_wp_raw
+        home_wp = home_wp_raw
 
-    # Confidence (1-10) based on how far from 50/50
-    wp_gap = abs(away_wp - 50)
-    conf = min(10, max(0, round(wp_gap / 4.5)))
+    # Confidence (1-10) based on RAW model WP gap (before HFA)
+    # This way confidence reflects actual model edge, not a generic home bump
+    raw_gap = abs(away_wp_raw - 50)
+    if raw_gap >= 15: conf = 10
+    elif raw_gap >= 12: conf = 9
+    elif raw_gap >= 10: conf = 8
+    elif raw_gap >= 8: conf = 7
+    elif raw_gap >= 6: conf = 6
+    elif raw_gap >= 5: conf = 5
+    elif raw_gap >= 4: conf = 4
+    elif raw_gap >= 3: conf = 3
+    elif raw_gap >= 2: conf = 2
+    elif raw_gap >= 1: conf = 1
+    else: conf = 0
 
-    # Value (1-10) — without real odds, base on edge magnitude
+    # Value (1-10) — based on run edge magnitude
     edge = abs(away_runs - home_runs)
-    value = min(10, max(0, round(edge * 2)))
+    if edge >= 4.0: value = 10
+    elif edge >= 3.0: value = 8
+    elif edge >= 2.5: value = 7
+    elif edge >= 2.0: value = 6
+    elif edge >= 1.5: value = 5
+    elif edge >= 1.0: value = 4
+    elif edge >= 0.7: value = 3
+    elif edge >= 0.4: value = 2
+    elif edge >= 0.2: value = 1
+    else: value = 0
     if not has_lineups:
         conf = 0
         value = 0
@@ -370,6 +730,7 @@ for g in games_raw:
         pick_team = home_abbr
         pick_ml = ""
 
+    park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
         "away_abbr": away_abbr, "home_abbr": home_abbr,
         "away_id": TEAMS.get(away_abbr, {}).get("id", 0),
@@ -386,15 +747,20 @@ for g in games_raw:
         "away_woba": away_woba, "home_woba": home_woba,
         "away_batters": away_batters, "home_batters": home_batters,
         "has_lineups": has_lineups,
+        "park_factor": park_factor,
         "conf": conf, "value": value,
         "edge": round(edge, 1),
         "pick_team": pick_team,
         "venue": venue, "time_str": time_str,
-        "total": round(total_runs, 1),
+        "total": round(away_runs + home_runs, 1),
     })
 
 print(f"  Processed {len(games)} games")
 print(f"  With lineups: {sum(1 for g in games if g['has_lineups'])}")
+if bm_used > 0:
+    print(f"  BaseballMonster fill-ins: {bm_used}")
+if rw_used > 0:
+    print(f"  RotoWire fill-ins: {rw_used}")
 
 # ─── HTML Generation ──────────────────────────────────────────────────────────
 print("\nGenerating HTML...")
@@ -550,7 +916,7 @@ def render_game(g, idx):
     </div>
     <div class="model-row model-formula-row ma-premium">
       <span class="model-label">MODEL</span>
-      <span class="model-formula">BaseRuns(wOBA\u00d7Tier) + Park = <strong>{formula}</strong></span>
+      <span class="model-formula">BaseRuns\u00d7Tier\u00d7Park({g["park_factor"]:.2f}) \u2192 <strong>{formula}</strong> | Pyth WP</span>
     </div>
     <div class="model-row model-tags">
       <span class="model-tag tag-arch">vs {g["away_tier"]}</span><span class="model-tag tag-arch">vs {g["home_tier"]}</span>
@@ -578,26 +944,32 @@ for g in games:
             all_lineup_pids.add(b["id"])
 
 for pid in all_lineup_pids:
-    data = fetch(f"{MLB_API}/people/{pid}/stats?stats=gameLog&season={NOW.year}&group=hitting")
-    if not data:
+    try:
+        data = fetch(f"{MLB_API}/people/{pid}/stats?stats=gameLog&season={NOW.year}&group=hitting")
+        if not data:
+            continue
+        stats_list = data.get("stats") or []
+        if not stats_list:
+            continue
+        splits = stats_list[0].get("splits", [])
+        if not splits:
+            continue
+        # Current consecutive hitting streak (walk backwards)
+        streak = 0
+        for s in reversed(splits):
+            hits = s.get("stat", {}).get("hits", 0)
+            if hits > 0:
+                streak += 1
+            else:
+                break
+        # Last 7 games rolling avg/OPS
+        recent = splits[-7:] if len(splits) >= 7 else splits
+        total_h = sum(s.get("stat", {}).get("hits", 0) for s in recent)
+        total_ab = sum(s.get("stat", {}).get("atBats", 0) for s in recent)
+        last7_avg = total_h / max(total_ab, 1)
+        batter_streaks[pid] = {"streak": streak, "last7_avg": round(last7_avg, 3)}
+    except Exception:
         continue
-    splits = data.get("stats", [{}])[0].get("splits", [])
-    if not splits:
-        continue
-    # Current consecutive hitting streak (walk backwards)
-    streak = 0
-    for s in reversed(splits):
-        hits = s.get("stat", {}).get("hits", 0)
-        if hits > 0:
-            streak += 1
-        else:
-            break
-    # Last 7 games rolling avg/OPS
-    recent = splits[-7:] if len(splits) >= 7 else splits
-    total_h = sum(s.get("stat", {}).get("hits", 0) for s in recent)
-    total_ab = sum(s.get("stat", {}).get("atBats", 0) for s in recent)
-    last7_avg = total_h / max(total_ab, 1)
-    batter_streaks[pid] = {"streak": streak, "last7_avg": round(last7_avg, 3)}
 
 print(f"  Fetched streaks for {len(batter_streaks)} batters")
 print(f"  Batters on 3+ game streaks: {sum(1 for v in batter_streaks.values() if v['streak'] >= 3)}")
@@ -743,6 +1115,48 @@ CSS = open(os.path.join(REPO_ROOT, "mlbsim", "index.html")).read()
 css_start = CSS.find("<style>")
 css_end = CSS.find("</style>") + len("</style>")
 css_block = CSS[css_start:css_end] if css_start >= 0 else ""
+
+# Inject Daily tab CSS if missing
+DAILY_CSS = """
+/* ── Daily Dashboard ── */
+.daily-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:8px 0}
+@media(max-width:900px){.daily-grid{grid-template-columns:1fr}}
+.daily-col .section-title{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;margin-bottom:2px}
+.daily-col .section-sub{font-size:11px;color:#888;margin-bottom:10px}
+.hr-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222);transition:background .15s}
+.hr-row:hover{background:rgba(255,255,255,.03)}
+.hr-fire{border-left:3px solid #ff4444}
+.hr-hot{border-left:3px solid #00cc44}
+.hr-warm{border-left:3px solid #ffcc00}
+.hr-mild{border-left:3px solid #555}
+.hr-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
+.hr-info{flex:1;min-width:0}
+.hr-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-meta{font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-rate-col{text-align:right;min-width:55px}
+.hr-rate{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:#ff6644}
+.hr-rate-label{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+.trend-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222)}
+.trend-row:hover{background:rgba(255,255,255,.03)}
+.trend-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
+.trend-info{flex:1;min-width:0}
+.trend-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend-meta{font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trend-right{text-align:right}
+.trend-ms{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;padding:2px 6px;border-radius:4px}
+.pick-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222)}
+.pick-row:hover{background:rgba(255,255,255,.03)}
+.pick-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
+.pick-info{flex:1;min-width:0}
+.pick-label{font-weight:700;font-size:14px}
+.pick-matchup{font-size:11px;color:#999}
+.pick-edge{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:#00cc44;min-width:40px;text-align:right}
+.mc-conf-num{font-size:12px;margin-left:4px}
+.empty-state{text-align:center;padding:40px 20px;color:#666;font-size:13px}
+.picks-container{max-height:500px;overflow-y:auto}
+"""
+if "daily-grid" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_CSS + "\n</style>")
 
 html = f'''<!DOCTYPE html>
 <html lang="en">
