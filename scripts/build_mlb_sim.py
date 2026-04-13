@@ -95,6 +95,34 @@ def base_runs(pa, h, bb, hr, tb):
     if b + c == 0: return d
     return a * b / (b + c) + d
 
+
+def pythagorean_wp(team_runs, opp_runs, exp=1.83):
+    """Pythagorean Win% — standard sabermetric formula.
+    exp=1.83 is the MLB-standard Pythagenpat exponent."""
+    if team_runs <= 0 and opp_runs <= 0:
+        return 50.0
+    if opp_runs <= 0:
+        return 95.0
+    if team_runs <= 0:
+        return 5.0
+    tr = team_runs ** exp
+    opp = opp_runs ** exp
+    return round(tr / (tr + opp) * 100, 1)
+
+
+# ─── Park Factors (runs, 100 = neutral) ────────────────────────────────────
+# Source: FanGraphs 5-year rolling park factors for runs scored.
+# >100 = hitter-friendly, <100 = pitcher-friendly.
+PARK_FACTOR = {
+    "COL": 1.14, "BOS": 1.06, "CIN": 1.05, "TEX": 1.04, "ATL": 1.03,
+    "AZ": 1.03, "PHI": 1.02, "CHC": 1.02, "MIN": 1.02, "MIL": 1.01,
+    "TOR": 1.01, "NYY": 1.01, "BAL": 1.00, "LAA": 1.00, "WSH": 1.00,
+    "DET": 0.99, "KC": 0.99, "HOU": 0.99, "PIT": 0.99, "SF": 0.98,
+    "CLE": 0.98, "STL": 0.98, "CWS": 0.98, "TB": 0.97, "SD": 0.97,
+    "LAD": 0.97, "MIA": 0.96, "SEA": 0.96, "NYM": 0.96, "ATH": 0.96,
+    "OAK": 0.96,
+}
+
 # ─── Load atlas data ─────────────────────────────────────────────────────────
 print("Loading atlas...")
 hvc_data = load_atlas("hitter_vs_cluster.json")
@@ -170,8 +198,11 @@ for r in hvc_data:
         if key not in hvc_idx or yr > hvc_idx[key]["game_year"]:
             hvc_idx[key] = r
 
-# batter overall wOBA (weighted avg across blend years)
+# batter overall wOBA + component rates (weighted avg across blend years)
+# Used for thin-sample PA confidence blending — regress toward the BATTER'S
+# own rates, not generic league averages.
 batter_woba_accum = {}  # bid → (total_wpa, total_w)
+batter_rates_accum = {}  # bid → {h, bb, hr, tb, pa_w} (year-weighted sums)
 for r in hvc_data:
     bid = r["batter"]
     yr = r["game_year"]
@@ -182,11 +213,31 @@ for r in hvc_data:
         batter_woba_accum[bid] = [0, 0]
     batter_woba_accum[bid][0] += w * r["wOBA"]
     batter_woba_accum[bid][1] += w
+    # Accumulate component rates
+    if bid not in batter_rates_accum:
+        batter_rates_accum[bid] = {"h": 0, "bb": 0, "hr": 0, "tb": 0, "pa_w": 0}
+    batter_rates_accum[bid]["h"] += r["H"] * YEAR_WEIGHT.get(yr, 0.3)
+    batter_rates_accum[bid]["bb"] += r["BB"] * YEAR_WEIGHT.get(yr, 0.3)
+    batter_rates_accum[bid]["hr"] += r["HR"] * YEAR_WEIGHT.get(yr, 0.3)
+    s = r.get("singles", 0); d = r.get("doubles", 0); t = r.get("triples", 0)
+    batter_rates_accum[bid]["tb"] += (s + d*2 + t*3 + r["HR"]*4) * YEAR_WEIGHT.get(yr, 0.3)
+    batter_rates_accum[bid]["pa_w"] += w
 
 def get_base_woba(bid):
     acc = batter_woba_accum.get(bid)
     if not acc or acc[1] == 0: return .310
     return acc[0] / acc[1]
+
+# League-average fallbacks (used only when batter has zero data at all)
+LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
+
+def get_base_rates(bid):
+    """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
+    acc = batter_rates_accum.get(bid)
+    if not acc or acc["pa_w"] == 0:
+        return LG_H_RATE, LG_BB_RATE, LG_HR_RATE, LG_TB_RATE
+    pw = acc["pa_w"]
+    return acc["h"] / pw, acc["bb"] / pw, acc["hr"] / pw, acc["tb"] / pw
 
 print(f"  Pitchers indexed: {len(pitcher_idx)}")
 print(f"  HVC records: {len(hvc_idx)}")
@@ -482,10 +533,6 @@ for g in games_raw:
         team_pa = 0
         team_h = 0; team_bb = 0; team_hr = 0; team_tb = 0
 
-        # League average priors
-        LG_WOBA = 0.310; LG_H_RATE = 0.245; LG_BB_RATE = 0.08
-        LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
-
         for i, p in enumerate(lineup_raw):
             pid = p.get("id")
             name = p.get("fullName", "Unknown")
@@ -493,6 +540,7 @@ for g in games_raw:
             bat_side = p.get("batSide", {}).get("code", "R")
 
             base_w = get_base_woba(pid)
+            base_h, base_bb, base_hr, base_tb = get_base_rates(pid)
 
             # GMM-weighted lookup across ALL pitcher clusters
             # This thickens the dataset by using 2nd/3rd DNA clusterings
@@ -523,24 +571,24 @@ for g in games_raw:
                 tb_rate = w_tb / total_weight
 
                 # PA confidence blending: when sample is thin, blend toward
-                # batter's own overall stats (NOT league avg — his own profile).
+                # the BATTER'S OWN rates (not league avg).
                 # At 50+ PA the archetype data dominates; under 15 PA, base dominates.
                 PA_FULL_TRUST = 50
                 if total_pa < PA_FULL_TRUST:
                     trust = total_pa / PA_FULL_TRUST  # 0.0 to 1.0
                     vs_woba = trust * vs_woba + (1 - trust) * base_w
-                    h_rate = trust * h_rate + (1 - trust) * 0.245
-                    bb_rate = trust * bb_rate + (1 - trust) * 0.08
-                    hr_rate = trust * hr_rate + (1 - trust) * 0.03
-                    tb_rate = trust * tb_rate + (1 - trust) * 0.40
+                    h_rate = trust * h_rate + (1 - trust) * base_h
+                    bb_rate = trust * bb_rate + (1 - trust) * base_bb
+                    hr_rate = trust * hr_rate + (1 - trust) * base_hr
+                    tb_rate = trust * tb_rate + (1 - trust) * base_tb
 
                 vs_woba = max(0.050, min(0.600, vs_woba))
             else:
-                # No archetype data at all - use batter's base wOBA
+                # No archetype data at all — use batter's own rates
                 vs_woba = base_w
                 total_pa = 0
-                h_rate = 0.245; bb_rate = 0.08
-                hr_rate = 0.03; tb_rate = 0.40
+                h_rate = base_h; bb_rate = base_bb
+                hr_rate = base_hr; tb_rate = base_tb
 
             # Per-game PA estimate
             pa = 4
@@ -602,8 +650,13 @@ for g in games_raw:
             home_lineup_raw, away_gmm, home_abbr)
 
         # Apply tier multipliers
-        away_runs = round(away_runs_raw * home_tier_mult, 1)
-        home_runs = round(home_runs_raw * away_tier_mult, 1)
+        away_runs_tiered = away_runs_raw * home_tier_mult
+        home_runs_tiered = home_runs_raw * away_tier_mult
+
+        # Apply park factor (home team's park affects BOTH sides)
+        pf = PARK_FACTOR.get(home_abbr, 1.00)
+        away_runs = round(away_runs_tiered * pf, 1)
+        home_runs = round(home_runs_tiered * pf, 1)
 
         # Fill opp info for daily tab
         for bm in all_batter_matchups[-len(away_lineup_raw)-len(home_lineup_raw):-len(home_lineup_raw)]:
@@ -620,32 +673,34 @@ for g in games_raw:
         away_woba = 0
         home_woba = 0
 
-    total_runs = away_runs + home_runs
-    if total_runs > 0:
-        away_wp = round(away_runs / total_runs * 100)
-        home_wp = 100 - away_wp
-    else:
-        away_wp = 50
-        home_wp = 50
+    # Pythagorean Win% — standard sabermetric formula (exp=1.83)
+    # Much better than linear ratio at capturing real WP from run differentials
+    away_wp_raw = pythagorean_wp(away_runs, home_runs)
+    home_wp_raw = 100 - away_wp_raw
 
-    # Home field bump
+    # Home field advantage: +1.5% WP to home team (real MLB HFA ~53.5%)
+    # Applied to displayed WP only — confidence uses RAW model WP
+    HFA_BUMP = 1.5
     if has_lineups:
-        home_wp = min(95, home_wp + 3)
-        away_wp = 100 - home_wp
+        home_wp = min(95, round(home_wp_raw + HFA_BUMP, 1))
+        away_wp = round(100 - home_wp, 1)
+    else:
+        away_wp = away_wp_raw
+        home_wp = home_wp_raw
 
-    # Confidence (1-10) based on how far from 50/50
-    # In real baseball, 55% WP is a solid edge, 60%+ is a strong play
-    wp_gap = abs(away_wp - 50)
-    if wp_gap >= 15: conf = 10
-    elif wp_gap >= 12: conf = 9
-    elif wp_gap >= 10: conf = 8
-    elif wp_gap >= 8: conf = 7
-    elif wp_gap >= 6: conf = 6
-    elif wp_gap >= 5: conf = 5
-    elif wp_gap >= 4: conf = 4
-    elif wp_gap >= 3: conf = 3
-    elif wp_gap >= 2: conf = 2
-    elif wp_gap >= 1: conf = 1
+    # Confidence (1-10) based on RAW model WP gap (before HFA)
+    # This way confidence reflects actual model edge, not a generic home bump
+    raw_gap = abs(away_wp_raw - 50)
+    if raw_gap >= 15: conf = 10
+    elif raw_gap >= 12: conf = 9
+    elif raw_gap >= 10: conf = 8
+    elif raw_gap >= 8: conf = 7
+    elif raw_gap >= 6: conf = 6
+    elif raw_gap >= 5: conf = 5
+    elif raw_gap >= 4: conf = 4
+    elif raw_gap >= 3: conf = 3
+    elif raw_gap >= 2: conf = 2
+    elif raw_gap >= 1: conf = 1
     else: conf = 0
 
     # Value (1-10) — based on run edge magnitude
@@ -672,6 +727,7 @@ for g in games_raw:
         pick_team = home_abbr
         pick_ml = ""
 
+    park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
         "away_abbr": away_abbr, "home_abbr": home_abbr,
         "away_id": TEAMS.get(away_abbr, {}).get("id", 0),
@@ -688,11 +744,12 @@ for g in games_raw:
         "away_woba": away_woba, "home_woba": home_woba,
         "away_batters": away_batters, "home_batters": home_batters,
         "has_lineups": has_lineups,
+        "park_factor": park_factor,
         "conf": conf, "value": value,
         "edge": round(edge, 1),
         "pick_team": pick_team,
         "venue": venue, "time_str": time_str,
-        "total": round(total_runs, 1),
+        "total": round(away_runs + home_runs, 1),
     })
 
 print(f"  Processed {len(games)} games")
@@ -856,7 +913,7 @@ def render_game(g, idx):
     </div>
     <div class="model-row model-formula-row ma-premium">
       <span class="model-label">MODEL</span>
-      <span class="model-formula">BaseRuns(wOBA\u00d7Tier) + Park = <strong>{formula}</strong></span>
+      <span class="model-formula">BaseRuns\u00d7Tier\u00d7Park({g["park_factor"]:.2f}) \u2192 <strong>{formula}</strong> | Pyth WP</span>
     </div>
     <div class="model-row model-tags">
       <span class="model-tag tag-arch">vs {g["away_tier"]}</span><span class="model-tag tag-arch">vs {g["home_tier"]}</span>
