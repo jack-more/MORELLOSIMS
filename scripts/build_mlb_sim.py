@@ -242,7 +242,7 @@ def get_base_woba(bid):
 
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
-MIN_CONF_PICK = 4  # minimum confidence to display a pick (below = NO PLAY)
+MIN_CONF_PICK = 7  # minimum confidence to display a pick (below = NO PLAY)
 
 def get_base_rates(bid):
     """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
