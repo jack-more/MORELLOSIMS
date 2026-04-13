@@ -242,6 +242,7 @@ def get_base_woba(bid):
 
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
+MIN_CONF_PICK = 4  # minimum confidence to display a pick (below = NO PLAY)
 
 def get_base_rates(bid):
     """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
@@ -886,12 +887,14 @@ def render_game(g, idx):
     else:
         aw = 50; hw = 50
 
-    # Pick display
+    # Pick display — only show if confidence >= 4 (meaningful edge)
     pick_html = ""
-    if g["has_lineups"] and g["conf"] > 0:
+    if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK:
         cc = conf_color(g["conf"])
         vc = conf_color(g["value"])
         pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span> <span class="mc-conf-num" style="color:{vc}" title="Value">V:{g["value"]}</span></div>'''
+    elif g["has_lineups"] and g["conf"] > 0:
+        pick_html = '<div class="sim-pick" style="background:#333;color:#888;border-color:#555">NO PLAY</div>'
 
     # Edge bar
     edge_html = ""
@@ -1145,7 +1148,7 @@ def render_hr_watch_tab():
 
     # Today's Edges column
     edges = sorted(
-        [g for g in games if g["has_lineups"] and g["conf"] > 0],
+        [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK],
         key=lambda x: (-x["conf"], -x["edge"])
     )
     edges_html = ""
