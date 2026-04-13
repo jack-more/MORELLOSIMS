@@ -1438,6 +1438,25 @@ function sortGames(mode, el) {{
 with open(OUTPUT, "w") as f:
     f.write(html)
 
+# ─── Picks log — append today's C:7+ picks to CSV ──────────────────────────
+PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
+qualified_picks = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK]
+
+# Write header if file doesn't exist
+if not os.path.exists(PICKS_LOG):
+    with open(PICKS_LOG, "w") as f:
+        f.write("date,time,pick,conf,value,away,home,away_runs,home_runs,away_wp,home_wp,away_ml,home_ml,away_sp,home_sp,result\n")
+
+with open(PICKS_LOG, "a") as f:
+    for g in qualified_picks:
+        f.write(f'{TODAY},{g["time_str"]},{g["pick_team"]},{g["conf"]},{g["value"]},{g["away_abbr"]},{g["home_abbr"]},{g["away_runs"]},{g["home_runs"]},{g["away_wp"]},{g["home_wp"]},{g["away_ml"]},{g["home_ml"]},{g["away_sp"]},{g["home_sp"]},\n')
+
+# Print picks summary to stdout (used by commit message)
+picks_summary = " | ".join(f'{g["pick_team"]} ML (C:{g["conf"]})' for g in qualified_picks)
+if not picks_summary:
+    picks_summary = "NO PLAYS"
+print(f"\n  PICKS: {picks_summary}")
+
 size = os.path.getsize(OUTPUT)
 print(f"\n{'='*60}")
 print(f"  DONE: {OUTPUT}")
