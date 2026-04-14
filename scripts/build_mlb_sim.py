@@ -749,13 +749,33 @@ for g in games_raw:
         away_woba = 0
         home_woba = 0
 
-    # Pythagorean Win% — standard sabermetric formula (exp=1.83)
-    # Much better than linear ratio at capturing real WP from run differentials
+    # ─── Pure run-differential model ──────────────────────────────────────
+    # Confidence is derived SOLELY from projected run differential.
+    # No WP gap, no Pythagorean smoothing, no market edge. The only signal
+    # the user sees is: how many runs does the model think each side scores,
+    # and how big is the gap.
+    #
+    # Calibration note: prior system stamped C:10 on anything with raw WP gap
+    # ≥15, which let 91 picks cluster at C:10 with a 44% actual win rate
+    # (model claimed 70%). Run-diff buckets below are deliberately stingy —
+    # the model must project a meaningful on-field margin to earn C:7+.
+    run_diff = abs(away_runs - home_runs)
+    if run_diff >= 2.5:   conf = 10
+    elif run_diff >= 1.8: conf = 9
+    elif run_diff >= 1.4: conf = 8
+    elif run_diff >= 1.1: conf = 7
+    elif run_diff >= 0.8: conf = 6
+    elif run_diff >= 0.5: conf = 5
+    elif run_diff >= 0.3: conf = 4
+    elif run_diff >= 0.15: conf = 3
+    elif run_diff >= 0.05: conf = 2
+    elif run_diff > 0:     conf = 1
+    else:                  conf = 0
+
+    # Display WP (derived from run diff via Pythagorean, then home-field
+    # adjusted). Shown for readability only — it does NOT drive picks.
     away_wp_raw = pythagorean_wp(away_runs, home_runs)
     home_wp_raw = 100 - away_wp_raw
-
-    # Home field advantage: +1.5% WP to home team (real MLB HFA ~53.5%)
-    # Applied to displayed WP only — confidence uses RAW model WP
     HFA_BUMP = 1.5
     if has_lineups:
         home_wp = min(95, round(home_wp_raw + HFA_BUMP, 1))
@@ -764,36 +784,14 @@ for g in games_raw:
         away_wp = away_wp_raw
         home_wp = home_wp_raw
 
-    # Confidence (1-10) based on RAW model WP gap (before HFA)
-    # This way confidence reflects actual model edge, not a generic home bump
-    raw_gap = abs(away_wp_raw - 50)
-    if raw_gap >= 15: conf = 10
-    elif raw_gap >= 12: conf = 9
-    elif raw_gap >= 10: conf = 8
-    elif raw_gap >= 8: conf = 7
-    elif raw_gap >= 6: conf = 6
-    elif raw_gap >= 5: conf = 5
-    elif raw_gap >= 4: conf = 4
-    elif raw_gap >= 3: conf = 3
-    elif raw_gap >= 2: conf = 2
-    elif raw_gap >= 1: conf = 1
-    else: conf = 0
-
-    # Value (1-10) — based on run edge magnitude
-    edge = abs(away_runs - home_runs)
-    if edge >= 4.0: value = 10
-    elif edge >= 3.0: value = 8
-    elif edge >= 2.5: value = 7
-    elif edge >= 2.0: value = 6
-    elif edge >= 1.5: value = 5
-    elif edge >= 1.0: value = 4
-    elif edge >= 0.7: value = 3
-    elif edge >= 0.4: value = 2
-    elif edge >= 0.2: value = 1
-    else: value = 0
+    # Legacy "value" field retained as alias of conf for back-compat with the
+    # HTML template's data-value attribute. Single signal now.
+    value = conf
+    edge = round(run_diff, 1)
     if not has_lineups:
         conf = 0
         value = 0
+        edge = 0
 
     # Real sportsbook odds (fall back to model-implied if unavailable)
     game_odds = real_odds.get((away_abbr, home_abbr), {})
@@ -806,11 +804,13 @@ for g in games_raw:
         home_ml = wp_to_ml(home_wp) if has_lineups else ""
         odds_source = "MODEL"
 
-    # Pick
-    if away_wp > home_wp:
+    # Pick — team with higher projected runs. Pure run differential.
+    if away_runs > home_runs:
         pick_team = away_abbr
-    else:
+    elif home_runs > away_runs:
         pick_team = home_abbr
+    else:
+        pick_team = home_abbr  # tiebreak to home on exact tie (HFA)
 
     park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
@@ -1284,8 +1284,8 @@ html = f'''<!DOCTYPE html>
     <div class="tab-content active" id="tab-lines">
         <div class="chips">
             <div class="chip active" onclick="sortGames('time', this)">Time</div>
-            <div class="chip" onclick="sortGames('value', this)">Value</div>
             <div class="chip" onclick="sortGames('confidence', this)">Confidence</div>
+            <div class="chip" onclick="sortGames('run_diff', this)">Run Diff</div>
         </div>
         <div class="slate-info">
             <span>{DATE_SHORT} SLATE</span>
@@ -1416,8 +1416,8 @@ function sortGames(mode, el) {{
   el.classList.add('active');
 
   let sorted;
-  if (mode === 'value') {{
-    sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.value) || 0) - (parseFloat(a.dataset.value) || 0));
+  if (mode === 'run_diff') {{
+    sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.edge) || 0) - (parseFloat(a.dataset.edge) || 0));
   }} else if (mode === 'confidence') {{
     sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.conf) || 0) - (parseFloat(a.dataset.conf) || 0));
   }} else {{
