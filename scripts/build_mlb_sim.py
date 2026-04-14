@@ -887,19 +887,16 @@ def render_game(g, idx):
     else:
         aw = 50; hw = 50
 
-    # Pick display — only show if confidence >= 4 (meaningful edge)
+    # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
     if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK:
         cc = conf_color(g["conf"])
-        vc = conf_color(g["value"])
-        pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span> <span class="mc-conf-num" style="color:{vc}" title="Value">V:{g["value"]}</span></div>'''
+        pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span></div>'''
     elif g["has_lineups"] and g["conf"] > 0:
         pick_html = '<div class="sim-pick" style="background:#333;color:#888;border-color:#555">NO PLAY</div>'
 
-    # Edge bar
+    # (Edge bar removed — picks are driven by model WP confidence only.)
     edge_html = ""
-    if g["has_lineups"] and g["edge"] > 1:
-        edge_html = f'<div class="edge-bar ma-premium">ML Edge: {h(g["pick_team"])} +{g["edge"]} projected runs</div>'
 
     # wOBA comparison
     woba_diff = g["away_woba"] - g["home_woba"]
@@ -1146,10 +1143,10 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
-    # Today's Edges column
+    # Today's Picks column — ranked by confidence only
     edges = sorted(
         [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK],
-        key=lambda x: (-x["conf"], -x["edge"])
+        key=lambda x: -x["conf"]
     )
     edges_html = ""
     for i, g in enumerate(edges[:12]):
@@ -1158,10 +1155,9 @@ def render_hr_watch_tab():
         edges_html += f'''<div class="pick-row{prem}">
   <div class="pick-rank">{i+1}</div>
   <div class="pick-info">
-    <div class="pick-label gp-pick-strong">{h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}">{g["conf"]}</span></div>
+    <div class="pick-label gp-pick-strong">{h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}">C:{g["conf"]}</span></div>
     <div class="pick-matchup">{g["away_abbr"]} @ {g["home_abbr"]}</div>
   </div>
-  <div class="pick-edge">+{g["edge"]}</div>
 </div>'''
 
     games_with_lu = sum(1 for g in games if g["has_lineups"])
@@ -1185,7 +1181,7 @@ def render_hr_watch_tab():
                 <div class="picks-container">{heat_html}</div>
             </div>
             <div class="daily-col">
-                <div class="section-title">\U0001f3af TODAY'S EDGES</div>
+                <div class="section-title">\U0001f3af TODAY'S PICKS</div>
                 <div class="section-sub">Best projected spreads</div>
                 <div class="picks-container ma-premium">{edges_html}</div>
             </div>
