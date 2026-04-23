@@ -1,0 +1,150 @@
+name: MLB Pipeline
+
+on:
+  schedule:
+    # 1) Early morning — 7 AM ET (11:00 UTC)
+    #    Atlas refresh + first picks. Projected lineups from RotoWire/BaseballMonster.
+    - cron: '0 11 * * *'
+
+    # 2) Mid-morning — 10 AM ET (14:00 UTC)
+    #    Refresh lineups. Many day game lineups confirmed by now.
+    - cron: '0 14 * * *'
+
+    # 3) Noon — 12 PM ET (16:00 UTC)
+    #    Last refresh before early games (some start 12:35 PM ET)
+    - cron: '0 16 * * *'
+
+    # 4) Afternoon — 3 PM ET (19:00 UTC)
+    #    Night game lineups dropping. Refresh for evening slate.
+    - cron: '0 19 * * *'
+
+    # 5) Pre-game — 6 PM ET (22:00 UTC)
+    #    Final refresh. Most 7 PM lineups locked.
+    - cron: '0 22 * * *'
+
+    # 6) Settle — 2 AM ET (06:00 UTC)
+    #    All games done, mark results overnight.
+    - cron: '0 6 * * *'
+
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'What to run'
+        required: true
+        default: 'picks'
+        type: choice
+        options:
+          - picks
+          - atlas-refresh
+          - both
+
+permissions:
+  contents: write
+
+jobs:
+  atlas-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.run_type == 'atlas-refresh' || inputs.run_type == 'both') ||
+      github.event.schedule == '0 11 * * *'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install pybaseball numpy pandas requests
+
+      - name: Refresh 2026 atlas
+        run: python3 scripts/refresh_atlas_2026.py
+
+      - name: Commit atlas updates
+        run: |
+          git config user.name "MLB Pipeline Bot"
+          git config user.email "noreply@github.com"
+          git add atlas/
+          if git diff --cached --quiet; then
+            echo "No atlas changes to commit"
+          else
+            git commit -m "Atlas refresh — $(TZ=America/New_York date +'%b %d %I:%M %p ET')"
+            git push
+          fi
+
+  generate-picks:
+    runs-on: ubuntu-latest
+    needs: [atlas-refresh]
+    timeout-minutes: 60
+    if: >-
+      always() &&
+      (needs.atlas-refresh.result == 'success' || needs.atlas-refresh.result == 'skipped') &&
+      github.event.schedule != '0 6 * * *'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Pull latest (in case atlas job pushed)
+        run: git pull origin main
+
+      - name: Generate MLB picks
+        timeout-minutes: 45
+        run: python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
+
+      - name: Commit and push
+        run: |
+          git config user.name "MLB Pipeline Bot"
+          git config user.email "noreply@github.com"
+          PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
+          git add mlbsim/index.html mlbsim/picks_log.csv
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "MLB SIM — $(TZ=America/New_York date +'%b %d %I:%M %p ET') — ${PICKS}"
+            git push
+          fi
+
+  settle-picks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: >-
+      github.event.schedule == '0 6 * * *'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Generate settled picks
+        timeout-minutes: 45
+        run: python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
+
+      - name: Commit and push
+        run: |
+          git config user.name "MLB Pipeline Bot"
+          git config user.email "noreply@github.com"
+          PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
+          git add mlbsim/index.html mlbsim/picks_log.csv index.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Settle MLB — $(TZ=America/New_York date +'%b %d %I:%M %p ET') — ${PICKS}"
+            git push
+          fi
