@@ -1275,6 +1275,10 @@ html = f'''<!DOCTYPE html>
 </head>
 <body data-ma-theme="mlb">
 
+<div style="background:#FFD600;color:#000;text-align:center;padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:2px;">
+UNDER CONSTRUCTION &mdash; MODEL REWORK IN PROGRESS &mdash; PICKS MAY BE INACCURATE
+</div>
+
 <!-- Header -->
 <header class="header">
     <div class="brand-row">
@@ -1285,6 +1289,10 @@ html = f'''<!DOCTYPE html>
         <div class="status-indicators" style="display:flex;align-items:center;gap:6px">
             <div class="status-dot"></div>
         </div>
+    </div>
+    <div style="display:flex;justify-content:center;gap:24px;padding:6px 0 2px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:1px;">
+        <span style="color:#4CAF50;">SEASON: 31-20</span>
+        <span style="color:#FFD600;">+7.1% ROI</span>
     </div>
 </header>
 
