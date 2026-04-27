@@ -243,6 +243,7 @@ def get_base_woba(bid):
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
 MIN_CONF_PICK = 7  # minimum confidence to display a pick (below = NO PLAY)
+MAX_FAV_ODDS = -180  # skip heavy favorites — juice kills ROI
 
 def get_base_rates(bid):
     """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
@@ -812,6 +813,15 @@ for g in games_raw:
     else:
         pick_team = home_abbr  # tiebreak to home on exact tie (HFA)
 
+    # Odds filter — kill heavy favorites that bleed ROI
+    # Check final ML (real or model-implied) for the picked side
+    pick_ml_str = home_ml if pick_team == home_abbr else away_ml
+    try:
+        pick_odds_raw = int(pick_ml_str)
+    except (ValueError, TypeError):
+        pick_odds_raw = 0
+    odds_too_heavy = pick_odds_raw < MAX_FAV_ODDS and pick_odds_raw != 0
+
     park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
         "away_abbr": away_abbr, "home_abbr": home_abbr,
@@ -834,6 +844,8 @@ for g in games_raw:
         "conf": conf, "value": value,
         "edge": round(edge, 1),
         "pick_team": pick_team,
+        "odds_too_heavy": odds_too_heavy,
+        "pick_odds": pick_odds_raw,
         "venue": venue, "time_str": time_str,
         "total": round(away_runs + home_runs, 1),
     })
@@ -889,9 +901,11 @@ def render_game(g, idx):
 
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
-    if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK:
+    if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and not g["odds_too_heavy"]:
         cc = conf_color(g["conf"])
         pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span></div>'''
+    elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]:
+        pick_html = f'<div class="sim-pick" style="background:#FF3333;color:#fff;border-color:#000">BAD PRICE ({g["pick_odds"]:+d})</div>'
     elif g["has_lineups"] and g["conf"] > 0:
         pick_html = '<div class="sim-pick" style="background:#333;color:#888;border-color:#555">NO PLAY</div>'
 
@@ -1143,9 +1157,9 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
-    # Today's Picks column — ranked by confidence only
+    # Today's Picks column — ranked by confidence, heavy faves excluded
     edges = sorted(
-        [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK],
+        [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and not g["odds_too_heavy"]],
         key=lambda x: -x["conf"]
     )
     edges_html = ""
@@ -1436,7 +1450,10 @@ with open(OUTPUT, "w") as f:
 
 # ─── Picks log — append today's C:7+ picks to CSV ──────────────────────────
 PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
-qualified_picks = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK]
+qualified_picks = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and not g["odds_too_heavy"]]
+skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]]
+if skipped_heavy:
+    print(f"  Skipped {len(skipped_heavy)} heavy faves: " + ", ".join(f'{g["pick_team"]} ({g["pick_odds"]:+d})' for g in skipped_heavy))
 
 # Write header if file doesn't exist
 if not os.path.exists(PICKS_LOG):
