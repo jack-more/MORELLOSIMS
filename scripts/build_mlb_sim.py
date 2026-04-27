@@ -243,7 +243,12 @@ def get_base_woba(bid):
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
 MIN_CONF_PICK = 7  # minimum confidence to display a pick (below = NO PLAY)
-MAX_FAV_ODDS = -180  # skip heavy favorites — juice kills ROI
+MAX_FAV_BY_CONF = {
+    7: -150,
+    8: -180,
+    9: -220,
+    10: -290,
+}
 
 def get_base_rates(bid):
     """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
@@ -820,7 +825,8 @@ for g in games_raw:
         pick_odds_raw = int(pick_ml_str)
     except (ValueError, TypeError):
         pick_odds_raw = 0
-    odds_too_heavy = pick_odds_raw < MAX_FAV_ODDS and pick_odds_raw != 0
+    max_fav = MAX_FAV_BY_CONF.get(conf, -150)
+    odds_too_heavy = pick_odds_raw < max_fav and pick_odds_raw != 0
 
     park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
