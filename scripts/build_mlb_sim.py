@@ -16,6 +16,21 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 ATLAS_DIR = os.path.join(REPO_ROOT, "atlas")
 OUTPUT = os.path.join(REPO_ROOT, "mlbsim", "index.html")
+RECORD_PATH = os.path.join(REPO_ROOT, "mlbsim", "record.json")
+
+# ─── Season record (single source of truth) ──────────────────────────────────
+# Read from mlbsim/record.json so updating the record never requires editing
+# this script. Falls back to a sane default if file is missing/malformed.
+try:
+    with open(RECORD_PATH) as _rf:
+        _rec = json.load(_rf)
+    SEASON_RECORD = f'{_rec["wins"]}-{_rec["losses"]}'
+    _roi = _rec["roi_pct"]
+    SEASON_ROI = f'{"+" if _roi >= 0 else ""}{_roi:.1f}% ROI'
+except Exception as _e:
+    print(f"  WARN record.json: {_e} — falling back to placeholder")
+    SEASON_RECORD = "0-0"
+    SEASON_ROI = "+0.0% ROI"
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
 ET = timezone(timedelta(hours=-4))
@@ -1291,8 +1306,8 @@ UNDER CONSTRUCTION &mdash; MODEL REWORK IN PROGRESS &mdash; PICKS MAY BE INACCUR
         </div>
     </div>
     <div style="display:flex;justify-content:center;gap:24px;padding:6px 0 2px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:1px;">
-        <span style="color:#4CAF50;">SEASON: 31-20</span>
-        <span style="color:#FFD600;">+7.1% ROI</span>
+        <span style="color:#4CAF50;">SEASON: {SEASON_RECORD}</span>
+        <span style="color:#FFD600;">{SEASON_ROI}</span>
     </div>
 </header>
 
