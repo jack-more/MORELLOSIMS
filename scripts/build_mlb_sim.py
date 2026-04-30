@@ -26,10 +26,12 @@ try:
         _rec = json.load(_rf)
     SEASON_RECORD = f'{_rec["wins"]}-{_rec["losses"]}'
     _roi = _rec["roi_pct"]
-    SEASON_ROI = f'{"+" if _roi >= 0 else ""}{_roi:.1f}% ROI'
+    SEASON_ROI_VALUE = f'{"+" if _roi >= 0 else ""}{_roi:.1f}%'
+    SEASON_ROI = f'{SEASON_ROI_VALUE} ROI'
 except Exception as _e:
     print(f"  WARN record.json: {_e} — falling back to placeholder")
     SEASON_RECORD = "0-0"
+    SEASON_ROI_VALUE = "+0.0%"
     SEASON_ROI = "+0.0% ROI"
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
@@ -1290,10 +1292,6 @@ html = f'''<!DOCTYPE html>
 </head>
 <body data-ma-theme="mlb">
 
-<div style="background:#FFD600;color:#000;text-align:center;padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:2px;">
-UNDER CONSTRUCTION &mdash; MODEL REWORK IN PROGRESS &mdash; PICKS MAY BE INACCURATE
-</div>
-
 <!-- Header -->
 <header class="header">
     <div class="brand-row">
@@ -1305,11 +1303,27 @@ UNDER CONSTRUCTION &mdash; MODEL REWORK IN PROGRESS &mdash; PICKS MAY BE INACCUR
             <div class="status-dot"></div>
         </div>
     </div>
-    <div style="display:flex;justify-content:center;gap:24px;padding:6px 0 2px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;letter-spacing:1px;">
-        <span style="color:#4CAF50;">SEASON: {SEASON_RECORD}</span>
-        <span style="color:#FFD600;">{SEASON_ROI}</span>
-    </div>
 </header>
+
+<!-- ─── SEASON RECORD BOX ────────────────────────────────────── -->
+<div style="max-width:560px;margin:14px auto 18px;padding:0 12px;">
+  <div style="background:#0a0a0a;border:2px solid #FFEA00;border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 #FFEA00;">
+    <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;gap:18px;">
+      <div style="text-align:left;flex:1;">
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">SEASON</div>
+        <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{SEASON_RECORD}</div>
+      </div>
+      <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 22px;flex:1;">
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">ROI</div>
+        <div style="font-size:30px;color:#FFEA00;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{SEASON_ROI_VALUE}</div>
+      </div>
+      <div style="text-align:right;flex:1;">
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:10 ONLY<br><span style="color:#888;">|ODDS|&lt;200</span></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- FILTER BAR (DESKTOP) -->
 <div class="filter-bar">
