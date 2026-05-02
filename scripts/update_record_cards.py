@@ -16,6 +16,7 @@ import re
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 PICKS_DIR = os.path.join(REPO, "picks")
 BASELINES = os.path.join(PICKS_DIR, "baselines.json")
+HOMEPAGE = os.path.join(REPO, "index.html")
 PAGES = {
     "mlb": (os.path.join(REPO, "mlbsim", "index.html"), os.path.join(PICKS_DIR, "mlb.json"), "#FFEA00"),
     "nba": (os.path.join(REPO, "nbasim", "index.html"), os.path.join(PICKS_DIR, "nba.json"), "#00FF55"),
@@ -93,10 +94,85 @@ def install_or_replace(html, sport, new_block):
     raise RuntimeError(f"Could not find an insertion point for {sport} record card.")
 
 
+def update_homepage_hero(html, sport, wins, losses, roi, baseline):
+    """Patch the homepage MLB/NBA picks tracker hero stats from JSON."""
+    risked = baseline["risked"]
+    pl = baseline["pl"]
+    if os.path.exists(os.path.join(PICKS_DIR, f"{sport}.json")):
+        with open(os.path.join(PICKS_DIR, f"{sport}.json")) as f:
+            picks = json.load(f)
+        for p in picks:
+            if p["status"] in ("win", "loss"):
+                risked += p.get("units") or 50
+                pl += p.get("pl") or 0
+    bankroll = 1000 + pl
+    total_picks = wins + losses
+
+    # Replace hero stats inside the post-{sport}-picks block via class anchors
+    block_pattern = re.compile(
+        rf'(<details class="blog-card post-{sport}-picks"[^>]*>)(.*?)(</details>)',
+        re.DOTALL,
+    )
+    m = block_pattern.search(html)
+    if not m:
+        return html
+
+    block = m.group(2)
+    # Title
+    block = re.sub(
+        r'(<h3 class="blog-title bebas">)[^<]*(</h3>)',
+        rf'\g<1>{sport.upper()} SIM: {wins}-{losses} RECORD ({roi:+.1f}% ROI)\g<2>',
+        block,
+    )
+    # Hero record
+    block = re.sub(
+        r'(stat-record">\s*<span class="stat-value">)[^<]*(</span>)',
+        rf'\g<1>{wins}-{losses}\g<2>',
+        block,
+    )
+    # Hero ROI
+    block = re.sub(
+        r'(stat-roi">\s*<span class="stat-value">)[^<]*(</span>)',
+        rf'\g<1>{roi:+.1f}%\g<2>',
+        block,
+    )
+    # Hero bankroll
+    block = re.sub(
+        r'(stat-bankroll">\s*<span class="stat-value">)[^<]*(</span>)',
+        rf'\g<1>{bankroll:,}\g<2>',
+        block,
+    )
+    # Hero picks count
+    block = re.sub(
+        r'(stat-picks">\s*<span class="stat-value">)[^<]*(</span>)',
+        rf'\g<1>{total_picks}\g<2>',
+        block,
+    )
+    # Dispatch summary inside body
+    block = re.sub(
+        r'(<span class="dispatch-val record">)[^<]*(</span>)',
+        rf'\g<1>{wins}-{losses}\g<2>',
+        block,
+    )
+    block = re.sub(
+        r'(<span class="dispatch-val roi">)[^<]*(</span>)',
+        rf'\g<1>{roi:+.1f}%\g<2>',
+        block,
+    )
+    block = re.sub(
+        r'(<span class="dispatch-val bankroll">)[^<]*(</span>)',
+        rf'\g<1>{bankroll:,}\g<2>',
+        block,
+    )
+
+    return html[:m.start(2)] + block + html[m.end(2):]
+
+
 def main():
     with open(BASELINES) as f:
         baselines = json.load(f)
 
+    # Per-sport SEASON RECORD BOX on /mlbsim/ and /nbasim/
     for sport, (page_path, picks_path, accent) in PAGES.items():
         if not os.path.exists(page_path):
             print(f"  [WARN] {page_path} missing — skipping {sport}")
@@ -111,7 +187,18 @@ def main():
         new_html = install_or_replace(html, sport, block)
         with open(page_path, "w") as f:
             f.write(new_html)
-        print(f"  {sport.upper()}: {wins}-{losses} ({roi:+.1f}% ROI) → {page_path}")
+        print(f"  {sport.upper()} card: {wins}-{losses} ({roi:+.1f}% ROI) → {page_path}")
+
+    # Homepage dispatch hero stats (NBA + MLB)
+    if os.path.exists(HOMEPAGE):
+        with open(HOMEPAGE) as f:
+            home_html = f.read()
+        for sport in ("nba", "mlb"):
+            wins, losses, roi = aggregate(os.path.join(PICKS_DIR, f"{sport}.json"), baselines[sport])
+            home_html = update_homepage_hero(home_html, sport, wins, losses, roi, baselines[sport])
+        with open(HOMEPAGE, "w") as f:
+            f.write(home_html)
+        print(f"  Homepage hero stats updated → {HOMEPAGE}")
 
 
 if __name__ == "__main__":
