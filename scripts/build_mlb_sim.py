@@ -802,6 +802,22 @@ for g in games_raw:
     home_has_full = bool(home_ps) and home_ps.get("archetype", "Unknown") != "Unknown"
     must_pick = run_diff >= 1.8 and away_has_full and home_has_full
 
+    # FULL COVERAGE rule: do NOT rate games where any batter in either lineup
+    # lacks atlas data (pa_w == 0). Rookies, NPB imports, fresh call-ups all
+    # fail this check. Such games are still rendered but excluded from picks
+    # so the SIM never bets on a lineup it can't actually project.
+    missing_coverage = []
+    for p in list(away_lineup_raw) + list(home_lineup_raw):
+        pid = p.get("id") if isinstance(p, dict) else None
+        if pid is None:
+            continue
+        acc = batter_rates_accum.get(pid)
+        if not acc or acc.get("pa_w", 0) <= 0:
+            missing_coverage.append(p.get("fullName", f"id:{pid}") if isinstance(p, dict) else str(pid))
+    has_full_coverage = len(missing_coverage) == 0 and away_has_full and home_has_full
+    if missing_coverage:
+        print(f"  [COVERAGE] {away_abbr} @ {home_abbr}: missing {len(missing_coverage)} batter(s): {', '.join(missing_coverage[:3])}{'...' if len(missing_coverage) > 3 else ''}")
+
     # Display WP (derived from run diff via Pythagorean, then home-field
     # adjusted). Shown for readability only — it does NOT drive picks.
     away_wp_raw = pythagorean_wp(away_runs, home_runs)
@@ -876,6 +892,8 @@ for g in games_raw:
         "pick_team": pick_team,
         "odds_too_heavy": odds_too_heavy,
         "must_pick": must_pick,
+        "has_full_coverage": has_full_coverage,
+        "missing_coverage_count": len(missing_coverage),
         "pick_odds": pick_odds_raw,
         "venue": venue, "time_str": time_str,
         "total": round(away_runs + home_runs, 1),
@@ -932,7 +950,7 @@ def render_game(g, idx):
 
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
-    if g["has_lineups"] and not g["odds_too_heavy"] and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick")):
+    if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick")):
         cc = conf_color(g["conf"])
         pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span></div>'''
     elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]:
@@ -1190,7 +1208,7 @@ def render_hr_watch_tab():
 
     # Today's Picks column — ranked by confidence, heavy faves excluded
     edges = sorted(
-        [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))],
+        [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))],
         key=lambda x: -x["conf"]
     )
     edges_html = ""
@@ -1501,7 +1519,7 @@ with open(OUTPUT, "w") as f:
 
 # ─── Picks log — append today's C:7+ picks to CSV ──────────────────────────
 PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
-qualified_picks = [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))]
+qualified_picks = [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))]
 skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]]
 if skipped_heavy:
     print(f"  Skipped {len(skipped_heavy)} heavy faves: " + ", ".join(f'{g["pick_team"]} ({g["pick_odds"]:+d})' for g in skipped_heavy))
