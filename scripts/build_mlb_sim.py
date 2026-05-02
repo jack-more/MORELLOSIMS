@@ -795,6 +795,13 @@ for g in games_raw:
     elif run_diff > 0:     conf = 1
     else:                  conf = 0
 
+    # MUST-PICK rule: any matchup with run_diff >= 1.8 AND both pitchers having
+    # full stats (in atlas index, non-default archetype) qualifies regardless
+    # of the C:10 confidence floor. Captures real edges the binary cutoff misses.
+    away_has_full = bool(away_ps) and away_ps.get("archetype", "Unknown") != "Unknown"
+    home_has_full = bool(home_ps) and home_ps.get("archetype", "Unknown") != "Unknown"
+    must_pick = run_diff >= 1.8 and away_has_full and home_has_full
+
     # Display WP (derived from run diff via Pythagorean, then home-field
     # adjusted). Shown for readability only — it does NOT drive picks.
     away_wp_raw = pythagorean_wp(away_runs, home_runs)
@@ -868,6 +875,7 @@ for g in games_raw:
         "edge": round(edge, 1),
         "pick_team": pick_team,
         "odds_too_heavy": odds_too_heavy,
+        "must_pick": must_pick,
         "pick_odds": pick_odds_raw,
         "venue": venue, "time_str": time_str,
         "total": round(away_runs + home_runs, 1),
@@ -924,7 +932,7 @@ def render_game(g, idx):
 
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
-    if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and not g["odds_too_heavy"]:
+    if g["has_lineups"] and not g["odds_too_heavy"] and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick")):
         cc = conf_color(g["conf"])
         pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span></div>'''
     elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]:
@@ -1182,7 +1190,7 @@ def render_hr_watch_tab():
 
     # Today's Picks column — ranked by confidence, heavy faves excluded
     edges = sorted(
-        [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and not g["odds_too_heavy"]],
+        [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))],
         key=lambda x: -x["conf"]
     )
     edges_html = ""
@@ -1493,7 +1501,7 @@ with open(OUTPUT, "w") as f:
 
 # ─── Picks log — append today's C:7+ picks to CSV ──────────────────────────
 PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
-qualified_picks = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and not g["odds_too_heavy"]]
+qualified_picks = [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))]
 skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]]
 if skipped_heavy:
     print(f"  Skipped {len(skipped_heavy)} heavy faves: " + ", ".join(f'{g["pick_team"]} ({g["pick_odds"]:+d})' for g in skipped_heavy))
