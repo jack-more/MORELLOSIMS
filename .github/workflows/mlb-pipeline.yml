@@ -103,12 +103,15 @@ jobs:
         timeout-minutes: 45
         run: python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
 
+      - name: Render dispatch log from picks/*.json
+        run: python3 scripts/render_dispatch.py
+
       - name: Commit and push
         run: |
           git config user.name "MLB Pipeline Bot"
           git config user.email "noreply@github.com"
           PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
-          git add mlbsim/index.html mlbsim/picks_log.csv
+          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json index.html
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -132,16 +135,23 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Generate settled picks
+      - name: Settle yesterday's MLB picks
         timeout-minutes: 45
-        run: python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
+        run: python3 scripts/settle_mlb.py 2>&1 | tee /tmp/mlb_output.txt
+
+      - name: Generate today's MLB picks
+        timeout-minutes: 45
+        run: python3 scripts/build_mlb_sim.py 2>&1 | tee -a /tmp/mlb_output.txt
+
+      - name: Render dispatch log from picks/*.json
+        run: python3 scripts/render_dispatch.py
 
       - name: Commit and push
         run: |
           git config user.name "MLB Pipeline Bot"
           git config user.email "noreply@github.com"
           PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
-          git add mlbsim/index.html mlbsim/picks_log.csv index.html
+          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json index.html
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

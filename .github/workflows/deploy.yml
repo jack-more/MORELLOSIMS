@@ -1,0 +1,28 @@
+name: Deploy to Firebase Hosting
+
+# Auto-deploys main → morellosims.com on every push.
+# Without this, the MLB/NBA pipelines push to GitHub but the live site never updates.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Don't queue a backlog if multiple commits land within seconds.
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+          channelId: live
+          projectId: morello-sims

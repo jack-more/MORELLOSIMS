@@ -264,7 +264,7 @@ MAX_FAV_BY_CONF = {
     7: -150,
     8: -180,
     9: -220,
-    10: -290,
+    10: -350,
 }
 
 def get_base_rates(bid):
@@ -1506,6 +1506,51 @@ if not os.path.exists(PICKS_LOG):
 with open(PICKS_LOG, "a") as f:
     for g in qualified_picks:
         f.write(f'{TODAY},{g["time_str"]},{g["pick_team"]},{g["conf"]},{g["value"]},{g["away_abbr"]},{g["home_abbr"]},{g["away_runs"]},{g["home_runs"]},{g["away_wp"]},{g["home_wp"]},{g["away_ml"]},{g["home_ml"]},{g["away_sp"]},{g["home_sp"]},\n')
+
+# ─── Picks JSON contract — upsert today's picks into picks/mlb.json ────────
+# This is the source of truth read by scripts/render_dispatch.py.
+import json as _json
+PICKS_JSON = os.path.join(REPO_ROOT, "picks", "mlb.json")
+os.makedirs(os.path.dirname(PICKS_JSON), exist_ok=True)
+existing = []
+if os.path.exists(PICKS_JSON):
+    try:
+        with open(PICKS_JSON) as f:
+            existing = _json.load(f)
+    except Exception:
+        existing = []
+by_id = {p["id"]: p for p in existing}
+for g in qualified_picks:
+    pick_team = g["pick_team"]
+    pick_ml = g["away_ml"] if pick_team == g["away_abbr"] else g["home_ml"]
+    pick_id = f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}-ml'
+    if pick_id in by_id and by_id[pick_id]["status"] != "pending":
+        continue  # Never mutate settled picks; renderer reads what's there.
+    by_id[pick_id] = {
+        "id": pick_id,
+        "sport": "mlb",
+        "date": TODAY,
+        "away": g["away_abbr"],
+        "home": g["home_abbr"],
+        "matchup": f'{g["away_abbr"]} @ {g["home_abbr"]}',
+        "bet_type": "ml",
+        "side": pick_team,
+        "line": None,
+        "odds": pick_ml,
+        "pick_text": f'{pick_team} ML',
+        "conf": g["conf"],
+        "units": 50,
+        "sim_projection": f'{g["away_abbr"]} {g["away_runs"]} - {g["home_abbr"]} {g["home_runs"]}',
+        "sim_edge": g.get("value"),
+        "status": "pending",
+        "result": None,
+        "pl": None,
+        "settled_at": None,
+    }
+merged = sorted(by_id.values(), key=lambda p: (p["date"], p["matchup"]), reverse=True)
+with open(PICKS_JSON, "w") as f:
+    _json.dump(merged, f, indent=2)
+print(f"  picks/mlb.json: {len(merged)} total picks ({sum(1 for p in merged if p['status'] == 'pending')} pending)")
 
 # Print picks summary to stdout (used by commit message)
 picks_summary = " | ".join(f'{g["pick_team"]} ML (C:{g["conf"]})' for g in qualified_picks)

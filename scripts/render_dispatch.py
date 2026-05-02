@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""
+Regenerate the dispatch log section of index.html from picks/{nba,mlb}.json.
+
+This is the ONLY thing that should ever write to the dispatch log block in
+index.html. Pipelines write to picks/*.json — never directly to the HTML.
+
+Usage:  python3 scripts/render_dispatch.py
+"""
+import json
+import os
+import re
+from collections import defaultdict, OrderedDict
+from datetime import datetime, timedelta
+
+REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+INDEX = os.path.join(REPO, "index.html")
+NBA_PATH = os.path.join(REPO, "picks", "nba.json")
+MLB_PATH = os.path.join(REPO, "picks", "mlb.json")
+
+NBA_BEGIN = "<!-- DISPATCH:NBA:BEGIN -->"
+NBA_END = "<!-- DISPATCH:NBA:END -->"
+MLB_BEGIN = "<!-- DISPATCH:MLB:BEGIN -->"
+MLB_END = "<!-- DISPATCH:MLB:END -->"
+
+
+def esc(s):
+    if s is None:
+        return ""
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def short_date(date_iso):
+    """'2026-04-30' → 'APR 30'."""
+    dt = datetime.strptime(date_iso, "%Y-%m-%d")
+    return dt.strftime("%b %d").upper().replace(" 0", " ")
+
+
+def week_range(date_iso):
+    """Monday–Sunday range string for the week containing date_iso."""
+    dt = datetime.strptime(date_iso, "%Y-%m-%d")
+    monday = dt - timedelta(days=dt.weekday())
+    sunday = monday + timedelta(days=6)
+    return f'{monday.strftime("%b %d").upper().replace(" 0", " ")} — {sunday.strftime("%b %d").upper().replace(" 0", " ")}'
+
+
+def week_key(date_iso):
+    dt = datetime.strptime(date_iso, "%Y-%m-%d")
+    iso = dt.isocalendar()
+    return (iso[0], iso[1])
+
+
+def aggregate(picks):
+    settled = [p for p in picks if p["status"] in ("win", "loss")]
+    wins = sum(1 for p in settled if p["status"] == "win")
+    losses = sum(1 for p in settled if p["status"] == "loss")
+    risked = sum(p["units"] for p in settled)
+    pl = sum(p.get("pl") or 0 for p in settled)
+    bankroll = 1000 + pl
+    roi = (pl / risked * 100) if risked else 0
+    # Streak — last N settled, newest first
+    settled_sorted = sorted(settled, key=lambda p: p["date"], reverse=True)
+    streak = 0
+    streak_type = ""
+    if settled_sorted:
+        streak_type = settled_sorted[0]["status"]
+        for p in settled_sorted:
+            if p["status"] == streak_type:
+                streak += 1
+            else:
+                break
+    streak_str = f'{"W" if streak_type == "win" else "L"}{streak}' if streak else "—"
+    return {
+        "wins": wins, "losses": losses,
+        "risked": risked, "pl": pl, "bankroll": int(bankroll),
+        "roi": roi, "streak": streak_str,
+        "total": len(picks), "settled": len(settled), "pending": len(picks) - len(settled),
+    }
+
+
+def group_by_week(picks):
+    grouped = OrderedDict()
+    for p in sorted(picks, key=lambda p: p["date"], reverse=True):
+        wk = week_key(p["date"])
+        if wk not in grouped:
+            grouped[wk] = {"range": week_range(p["date"]), "picks": []}
+        grouped[wk]["picks"].append(p)
+    return grouped
+
+
+def render_pick_row(p, sport):
+    if p["status"] == "win":
+        cls = "win"
+        result = f'W {(p.get("pl") or 0):+g}'
+    elif p["status"] == "loss":
+        cls = "loss"
+        result = f'L {(p.get("pl") or 0):+g}'
+    elif p["status"] == "push":
+        cls = "push"
+        result = "PUSH"
+    else:
+        cls = "pending"
+        result = "—"
+
+    # MLB ML rows show the odds in the conf column instead of "C:10"
+    conf_disp = f'C:{p["conf"]}' if sport == "nba" else f'{p["odds"]:+d}'
+
+    detail = ""
+    if p.get("result"):
+        detail = p["result"]
+    if p.get("sim_projection"):
+        detail = f'{detail} · SIM: {p["sim_projection"]} (edge {p.get("sim_edge", "")})' if detail else f'SIM: {p["sim_projection"]} (edge {p.get("sim_edge", "")})'
+
+    out = f'''
+                        <div class="pick-row {cls}" data-status="{"settled" if p["status"] != "pending" else "pending"}" data-matchup="{esc(p["matchup"])}">
+                            <span class="pr-date">{short_date(p["date"])}</span>
+                            <span class="pr-matchup">{esc(p["matchup"])}</span>
+                            <span class="pr-side pick-side-text">{esc(p["pick_text"])}</span>
+                            <span class="pr-conf">{conf_disp}</span>
+                            <span class="pr-units">{p["units"]}</span>
+                            <span class="pr-result">{result}</span>
+                        </div>'''
+    if detail:
+        out += f'\n                        <div class="pick-detail" hidden>{esc(detail)}</div>'
+    return out
+
+
+def render_week(wk_data, sport):
+    picks = wk_data["picks"]
+    w = sum(1 for p in picks if p["status"] == "win")
+    l = sum(1 for p in picks if p["status"] == "loss")
+    pending = sum(1 for p in picks if p["status"] == "pending")
+    pl = sum(p.get("pl") or 0 for p in picks if p["status"] in ("win", "loss"))
+
+    if pending and not w and not l:
+        rec_cls = "pending"
+        rec_text = "PENDING"
+    elif pending:
+        rec_cls = "mixed"
+        rec_text = f'{w}-{l} · {pl:+g} $PP · {pending}P'
+    elif w > l:
+        rec_cls = "win"
+        rec_text = f'{w}-{l} · {pl:+g} $PP'
+    elif l > w:
+        rec_cls = "loss"
+        rec_text = f'{w}-{l} · {pl:+g} $PP'
+    else:
+        rec_cls = "mixed"
+        rec_text = f'{w}-{l} · {pl:+g} $PP'
+
+    rows = "".join(render_pick_row(p, sport) for p in picks)
+    return f'''
+                    <details class="week-group">
+                        <summary class="week-header">
+                            <span class="week-label">{wk_data["range"]}</span>
+                            <span class="week-record {rec_cls}">{rec_text}</span>
+                        </summary>
+                        <div class="week-body">{rows}
+                        </div>
+                    </details>'''
+
+
+def render_sport_block(picks, sport, hero_color):
+    """Render a full dispatch card for one sport."""
+    if not picks:
+        return ""
+
+    agg = aggregate(picks)
+    grouped = group_by_week(picks)
+    weeks_html = "".join(render_week(g, sport) for g in grouped.values())
+
+    sport_upper = sport.upper()
+    hero_title = f'{sport_upper} SIM: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
+    css_class = "post-nba-picks" if sport == "nba" else "post-mlb-picks"
+    methodology = (
+        '<a href="/nbasim/" style="color:#2a9d5f;">nbasim</a>' if sport == "nba"
+        else '<a href="/mlbsim/" style="color:#FFEA00;">mlbsim</a>'
+    )
+    method_text = (
+        f"Picks sourced from the {sport_upper} SIM pipeline. Lines via The Odds API. "
+        f"Full methodology at {methodology}."
+    )
+    earliest = min(p["date"] for p in picks)
+    latest = max(p["date"] for p in picks)
+    date_range = f'{short_date(earliest)} — {short_date(latest)}, 2026'
+
+    return f'''
+            <details class="blog-card {css_class}" open>
+                <summary>
+                    <div class="blog-meta mono">
+                        <span class="blog-card-type type-picks">PICKS LOG</span>
+                        <div class="blog-system-dots">
+                            <span class="blog-date">{date_range}</span>
+                        </div>
+                    </div>
+                    <h3 class="blog-title bebas">{hero_title}</h3>
+                    <div class="blog-hero-stats">
+                        <div class="blog-hero-stat stat-record">
+                            <span class="stat-value">{agg["wins"]}-{agg["losses"]}</span>
+                            <span class="stat-label">RECORD</span>
+                        </div>
+                        <div class="blog-hero-stat stat-roi">
+                            <span class="stat-value">{agg["roi"]:+.0f}%</span>
+                            <span class="stat-label">ROI</span>
+                        </div>
+                        <div class="blog-hero-stat stat-bankroll">
+                            <span class="stat-value">{agg["bankroll"]:,}</span>
+                            <span class="stat-label">BANKROLL</span>
+                        </div>
+                        <div class="blog-hero-stat stat-picks">
+                            <span class="stat-value">{agg["total"]}</span>
+                            <span class="stat-label">PICKS</span>
+                        </div>
+                    </div>
+                    <p class="blog-preview">
+                        {agg["total"]} picks across {agg["settled"]} settled. Auto-rendered from <code>picks/{sport}.json</code>.
+                    </p>
+                </summary>
+                <div class="blog-card-body">
+                    <div class="dispatch-summary">
+                        <div class="dispatch-stat"><span class="dispatch-val record">{agg["wins"]}-{agg["losses"]}</span><span class="dispatch-lbl">RECORD</span></div>
+                        <div class="dispatch-stat"><span class="dispatch-val roi">{agg["roi"]:+.0f}%</span><span class="dispatch-lbl">ROI</span></div>
+                        <div class="dispatch-stat"><span class="dispatch-val bankroll">{agg["bankroll"]:,}</span><span class="dispatch-lbl">BANKROLL</span></div>
+                        <div class="dispatch-stat"><span class="dispatch-val">{agg["risked"]:,}</span><span class="dispatch-lbl">RISKED</span></div>
+                        <div class="dispatch-stat"><span class="dispatch-val streak">{agg["streak"]}</span><span class="dispatch-lbl">STREAK</span></div>
+                    </div>
+
+                    <div class="dispatch-table">{weeks_html}
+                    </div>
+
+                    <p class="blog-body-text" style="font-size:11px; color:#555; margin-top:12px;">
+                        {method_text}
+                    </p>
+                </div>
+            </details>
+'''
+
+
+def replace_section(html, begin_marker, end_marker, new_content):
+    """Replace block between markers, inserting markers if missing."""
+    bi = html.find(begin_marker)
+    ei = html.find(end_marker)
+    if bi >= 0 and ei >= 0:
+        return html[:bi] + begin_marker + "\n" + new_content + "\n            " + html[ei:]
+    return None  # caller decides what to do
+
+
+def install_or_replace_dispatch(html, nba_html, mlb_html):
+    """Inject markers + replace blocks. If markers don't exist yet, do a one-time install."""
+    nba_replaced = replace_section(html, NBA_BEGIN, NBA_END, nba_html)
+    if nba_replaced is None:
+        # First-time install: locate existing post-nba-picks block, wrap in markers
+        m = re.search(r'(<details class="blog-card post-nba-picks"[^>]*>.*?</details>)', html, re.DOTALL)
+        if not m:
+            raise RuntimeError("Could not find existing NBA picks block to wrap.")
+        wrapped = f'{NBA_BEGIN}\n{nba_html}\n            {NBA_END}'
+        nba_replaced = html[:m.start()] + wrapped + html[m.end():]
+
+    mlb_replaced = replace_section(nba_replaced, MLB_BEGIN, MLB_END, mlb_html)
+    if mlb_replaced is None:
+        m = re.search(r'(<details class="blog-card post-mlb-picks"[^>]*>.*?</details>)', nba_replaced, re.DOTALL)
+        if not m:
+            raise RuntimeError("Could not find existing MLB picks block to wrap.")
+        wrapped = f'{MLB_BEGIN}\n{mlb_html}\n            {MLB_END}'
+        mlb_replaced = nba_replaced[:m.start()] + wrapped + nba_replaced[m.end():]
+
+    return mlb_replaced
+
+
+def main():
+    with open(NBA_PATH) as f:
+        nba_picks = json.load(f)
+    with open(MLB_PATH) as f:
+        mlb_picks = json.load(f)
+
+    nba_html = render_sport_block(nba_picks, "nba", "#00FF55")
+    mlb_html = render_sport_block(mlb_picks, "mlb", "#FFEA00")
+
+    with open(INDEX) as f:
+        html = f.read()
+
+    new_html = install_or_replace_dispatch(html, nba_html, mlb_html)
+
+    with open(INDEX, "w") as f:
+        f.write(new_html)
+
+    nba_agg = aggregate(nba_picks)
+    mlb_agg = aggregate(mlb_picks)
+    print(f"  NBA: {nba_agg['wins']}-{nba_agg['losses']} ({nba_agg['pending']}P) · {nba_agg['roi']:+.1f}% ROI")
+    print(f"  MLB: {mlb_agg['wins']}-{mlb_agg['losses']} ({mlb_agg['pending']}P) · {mlb_agg['roi']:+.1f}% ROI")
+    print(f"  Wrote {INDEX}")
+
+
+if __name__ == "__main__":
+    main()

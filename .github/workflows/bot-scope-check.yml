@@ -1,0 +1,56 @@
+name: Bot Scope Check
+
+# Fails if an automated commit touches files outside its allowed lane.
+# Lanes are author-based (commits authored by these bot identities).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Enforce bot lanes
+        run: |
+          set -euo pipefail
+
+          AUTHOR_EMAIL=$(git log -1 --pretty=format:'%ae')
+          AUTHOR_NAME=$(git log -1 --pretty=format:'%an')
+          echo "Author: $AUTHOR_NAME <$AUTHOR_EMAIL>"
+
+          # Determine bot lane. Add new bots here.
+          case "$AUTHOR_NAME" in
+            "MLB Pipeline Bot")
+              ALLOWED='^(mlbsim/|picks/mlb\.json$|atlas/)'
+              ;;
+            "github-actions[bot]")
+              ALLOWED='^(nbasim/|index\.html$|picks/nba\.json$)'
+              ;;
+            "MLB Pitcher Chart Bot"|"Pitcher Chart Bot")
+              ALLOWED='^(atlas/|mlbsim/)'
+              ;;
+            *)
+              echo "Human author or unrecognized bot — skipping lane check."
+              exit 0
+              ;;
+          esac
+
+          CHANGED=$(git diff --name-only HEAD^ HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          VIOLATIONS=$(echo "$CHANGED" | grep -vE "$ALLOWED" || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo ""
+            echo "❌ Bot '$AUTHOR_NAME' wrote outside its lane (allowed: $ALLOWED):"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "✅ Bot stayed in lane."
