@@ -340,6 +340,114 @@ def build_batter_names(df):
     return name_map
 
 
+# ─── Step 4b: Compute hitter season totals for 2026 ─────────────────────────
+
+def compute_hitter_seasons(df, name_map):
+    """Compute 2026 season-to-date stats per batter from Statcast data.
+    Returns one record per batter with PA/H/HR/BB/K/wOBA accumulated for 2026.
+    """
+    print(f"\n{'='*60}")
+    print(f"COMPUTING HITTER SEASONS (2026)")
+    print(f"{'='*60}")
+
+    # PA outcomes only (rows where events is set = end of plate appearance)
+    pa_df = df[df["events"].notna()].copy()
+    pa_df["hit_type"] = pa_df["events"].apply(event_to_hit_type)
+    print(f"  Plate appearances: {len(pa_df)}")
+
+    records = []
+    for bid, group in pa_df.groupby("batter"):
+        events = group["hit_type"].tolist()
+        singles = events.count("single")
+        doubles = events.count("double")
+        triples = events.count("triple")
+        hr = events.count("home_run")
+        bb = events.count("walk")
+        k = events.count("strikeout")
+        h = singles + doubles + triples + hr
+        woba = compute_woba(events)
+
+        records.append({
+            "batter": int(bid),
+            "batter_name": name_map.get(int(bid), ""),
+            "season_PA_2026": float(len(events)),
+            "season_H_2026": float(h),
+            "season_HR_2026": float(hr),
+            "season_BB_2026": float(bb),
+            "season_K_2026": float(k),
+            "season_wOBA_2026": float(woba) if woba is not None else 0.0,
+        })
+
+    print(f"  Generated {len(records)} hitter-season records for 2026")
+    return records
+
+
+def merge_batters(new_records, name_map):
+    """Update batters.json with 2026 season data.
+
+    Schema upgrade (one-time, on first refresh after this code lands):
+      - Snapshot existing total_PA → baseline_PA (preserves preseason career total)
+    Each refresh:
+      - Recompute season_*_2026 fields fresh from the cumulative Statcast pull
+      - total_PA = baseline_PA + season_PA_2026
+      - Add new rookies who appear in 2026 but weren't in the preseason file
+      - Zero-out season fields for batters with no 2026 PA (handles trades, IL, retired)
+    Idempotent: safe to run every cron with no double-counting.
+    """
+    print(f"\n  Merging batters.json...")
+    existing = load_atlas("batters.json")
+    by_id = {b["batter"]: b for b in existing}
+
+    # One-time migration: snapshot baseline_PA from preseason total_PA
+    n_migrated = 0
+    for b in existing:
+        if "baseline_PA" not in b:
+            b["baseline_PA"] = float(b.get("total_PA") or 0.0)
+            n_migrated += 1
+    if n_migrated:
+        print(f"    Snapshotted baseline_PA for {n_migrated} batters (one-time)")
+
+    new_by_id = {r["batter"]: r for r in new_records}
+    SEASON_FIELDS = (
+        "season_PA_2026", "season_H_2026", "season_HR_2026",
+        "season_BB_2026", "season_K_2026", "season_wOBA_2026",
+    )
+
+    n_updated = 0
+    n_new = 0
+    for bid, season in new_by_id.items():
+        if bid in by_id:
+            r = by_id[bid]
+            for f in SEASON_FIELDS:
+                r[f] = season[f]
+            r["total_PA"] = round((r.get("baseline_PA") or 0.0) + season["season_PA_2026"], 1)
+            if season["batter_name"]:
+                r["batter_name"] = season["batter_name"]
+            n_updated += 1
+        else:
+            existing.append({
+                "batter": bid,
+                "batter_name": season["batter_name"] or name_map.get(bid, str(bid)),
+                "baseline_PA": 0.0,
+                **{f: season[f] for f in SEASON_FIELDS},
+                "total_PA": season["season_PA_2026"],
+            })
+            n_new += 1
+
+    # Zero out 2026 fields for batters without any 2026 PA (handles offseason rosters)
+    n_zeroed = 0
+    for b in existing:
+        if b["batter"] not in new_by_id and "season_PA_2026" in b:
+            for f in SEASON_FIELDS:
+                b[f] = 0.0
+            b["total_PA"] = round(b.get("baseline_PA") or 0.0, 1)
+            n_zeroed += 1
+
+    print(f"    Updated: {n_updated}, New rookies: {n_new}, Zeroed (no 2026 PA): {n_zeroed}")
+    save_atlas("batters.json", existing)
+    return n_updated + n_new
+
+
 # ─── Step 5: Compute pitcher season features for 2026 ───────────────────────
 
 def compute_pitcher_seasons(df, pitcher_idx):
@@ -750,6 +858,9 @@ def main():
     for r in hvc_records:
         r["batter_name"] = name_map.get(r["batter"], "")
 
+    # 4b. Compute hitter season totals for 2026 (powers atlas/batters.json)
+    hs_records = compute_hitter_seasons(df, name_map)
+
     # 5. Compute pitcher seasons for 2026
     ps_records = compute_pitcher_seasons(df, pitcher_idx)
 
@@ -761,6 +872,7 @@ def main():
     print(f"MERGING INTO ATLAS")
     print(f"{'='*60}")
     n_hvc = merge_hitter_vs_cluster(hvc_records)
+    n_hs = merge_batters(hs_records, name_map)
     n_ps = merge_pitcher_seasons(ps_records)
     n_siera = merge_pitcher_siera(siera_records)
 
@@ -771,6 +883,7 @@ def main():
     print(f"\n{'#'*60}")
     print(f"  REFRESH COMPLETE")
     print(f"  hitter_vs_cluster: +{n_hvc} records")
+    print(f"  batters:           {n_hs} batters with 2026 stats")
     print(f"  pitcher_seasons:   +{n_ps} records")
     print(f"  pitcher_siera:     +{n_siera} records")
     print(f"  pitcher_tiers:     {n_tiers} entries for 2026")
