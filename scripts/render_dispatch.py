@@ -103,7 +103,15 @@ def render_pick_row(p, sport):
         result = "—"
 
     # MLB ML rows show the odds in the conf column instead of "C:10"
-    conf_disp = f'C:{p["conf"]}' if sport == "nba" else f'{p["odds"]:+d}'
+    if sport == "nba":
+        conf_disp = f'C:{p["conf"]}'
+    else:
+        # odds may be int (-326) or str ("-326" / "+150"); normalize either way
+        try:
+            odds_int = int(str(p["odds"]).replace("+", ""))
+            conf_disp = f"{odds_int:+d}"
+        except (ValueError, TypeError):
+            conf_disp = str(p.get("odds", ""))
 
     detail = ""
     if p.get("result"):
