@@ -469,6 +469,78 @@ _ESPN_TEAM_MAP = {
     "Texas Rangers": "TEX", "Toronto Blue Jays": "TOR", "Washington Nationals": "WSH",
 }
 
+# Action Network book IDs (we prefer DraftKings since that's what most
+# users actually shop). Falls through this list per game until a real ML
+# is found, so an absent DK price still gets filled by FD/Caesars/MGM.
+ACTION_BOOK_PRIORITY = [
+    (15,  "DraftKings"),
+    (30,  "FanDuel"),
+    (68,  "Caesars"),
+    (71,  "BetMGM"),
+    (75,  "PointsBet"),
+    (123, "BetRivers"),
+    (69,  "WynnBET"),
+    (972, "ESPN BET"),
+    (247, "Hard Rock"),
+    (79,  "Unibet"),
+]
+
+
+def _fetch_action_network_odds():
+    """Action Network public scoreboard — no auth, returns ML from up to 10
+    sportsbooks per game. We pick the first book in ACTION_BOOK_PRIORITY
+    that has a real moneyLine published. Returns
+        {(away_abbr, home_abbr): {away_ml, home_ml, book}}.
+
+    Action Network is the most reliable free MLB odds source — significantly
+    better coverage than ESPN, and it returns 5+ books per game so any one
+    book missing a line doesn't drop the game from the sim.
+    """
+    bookids = ",".join(str(b[0]) for b in ACTION_BOOK_PRIORITY)
+    url = f"https://api.actionnetwork.com/web/v1/scoreboard/mlb?period=game&bookIds={bookids}"
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+        })
+        data = json.loads(urllib.request.urlopen(req, timeout=12).read())
+    except Exception as e:
+        print(f"  WARN: Action Network odds failed: {e}")
+        return {}
+
+    result = {}
+    for g in data.get("games", []):
+        teams = g.get("teams") or []
+        if len(teams) != 2:
+            continue
+        # teams[0]/teams[1] order may vary; use away_team_id / home_team_id
+        ht_id = g.get("home_team_id")
+        at_id = g.get("away_team_id")
+        by_id = {t.get("id"): t for t in teams}
+        home = (by_id.get(ht_id) or {}).get("abbr")
+        away = (by_id.get(at_id) or {}).get("abbr")
+        if not (home and away):
+            continue
+
+        # Walk book priority — first book with a real ML wins
+        odds_list = g.get("odds") or []
+        odds_by_book = {o.get("book_id"): o for o in odds_list}
+        for book_id, book_name in ACTION_BOOK_PRIORITY:
+            o = odds_by_book.get(book_id)
+            if not o:
+                continue
+            h_ml = o.get("ml_home")
+            a_ml = o.get("ml_away")
+            if h_ml is not None and a_ml is not None:
+                result[(away, home)] = {
+                    "away_ml": int(a_ml),
+                    "home_ml": int(h_ml),
+                    "book": book_name,
+                }
+                break
+    return result
+
+
 def _fetch_espn_scoreboard_odds(date_str):
     """ESPN's structured scoreboard JSON. Returns ONLY games where the book
     published a real moneyLine — never derives from spread or model.
@@ -511,8 +583,16 @@ def _fetch_espn_scoreboard_odds(date_str):
 
 def fetch_espn_odds():
     """Real-book ML odds — STRICT. Only returns prices the book actually
-    published. Never derives, approximates, or invents. Games without real
-    book ML get excluded; their picks won't fire (intentional)."""
+    published. Never derives, approximates, or invents.
+
+    Source priority:
+      1. Action Network public scoreboard (5+ books per game, very reliable)
+      2. ESPN scoreboard JSON (hit or miss for ML)
+      3. Legacy ESPN /mlb/odds HTML (browser-cookie-only — usually fails)
+    """
+    action_odds = _fetch_action_network_odds()
+    print(f"  Action Network odds: {len(action_odds)} games (real book ML)")
+
     primary = _fetch_espn_scoreboard_odds(TODAY.replace("-", ""))
     print(f"  ESPN scoreboard odds: {len(primary)} games (real book ML only)")
 
@@ -550,9 +630,14 @@ def fetch_espn_odds():
     except Exception as e:
         print(f"  WARN: ESPN HTML odds fetch failed: {e}")
 
+    # Merge order matters: lowest-priority source first, highest last
+    # (later .update() calls overwrite). Action Network wins because it's
+    # the most reliable; ESPN scoreboard / legacy fill any gaps.
     merged = dict(legacy)
     merged.update(primary)
-    print(f"  Total real-book odds: {len(merged)} games  (scoreboard {len(primary)} / legacy fill {len(legacy)})")
+    merged.update(action_odds)
+    print(f"  Total real-book odds: {len(merged)} games  "
+          f"(action {len(action_odds)} / espn-json {len(primary)} / espn-html {len(legacy)})")
     return merged
 
 print("\nFetching sportsbook odds...")
