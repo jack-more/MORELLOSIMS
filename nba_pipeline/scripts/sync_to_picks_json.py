@@ -192,6 +192,17 @@ def main():
     pick_log = load_json(PICK_LOG) or []
     meta_idx = build_pick_log_index(pick_log)
 
+    # Respect picks/baselines.json's tracking_started cutoff. Anything before
+    # that date is already counted in the baseline; including it here would
+    # double-count when render_dispatch adds picks/nba.json on top of baseline.
+    cutoff = "2026-05-01"
+    baselines_path = MORELLOSIMS / "picks" / "baselines.json"
+    if baselines_path.exists():
+        try:
+            cutoff = json.loads(baselines_path.read_text()).get("tracking_started", cutoff)
+        except (json.JSONDecodeError, OSError):
+            pass
+
     contract: list[dict] = []
     seen: set[str] = set()
 
@@ -199,6 +210,8 @@ def main():
         cp = csv_row_to_pick(row, meta_idx)
         if not cp:
             continue
+        if cp["date"] < cutoff:
+            continue  # already in baseline — skip to prevent double-counting
         if cp["id"] in seen:
             continue
         contract.append(cp)
