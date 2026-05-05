@@ -12,12 +12,12 @@ name: Render Dispatch
 #   ONLY its own files; this workflow is the single owner of index.html.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'picks/mlb.json'
-      - 'picks/nba.json'
-      - 'scripts/render_dispatch.py'  # re-render if the renderer itself changes
+  # workflow_run instead of push, because GitHub's default GITHUB_TOKEN
+  # does NOT trigger downstream `push` workflows (anti-loop protection).
+  # We instead chain off the upstream sport pipelines completing.
+  workflow_run:
+    workflows: ["MLB Pipeline", "NBA Pipeline"]
+    types: [completed]
   workflow_dispatch:
 
 # Serialize renders. Two near-simultaneous sport pushes will queue and both run;
@@ -34,10 +34,13 @@ jobs:
   render:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Skip self-triggering loops (defensive — GITHUB_TOKEN pushes don't trigger
-    # workflows by default, but this makes intent explicit and survives any
-    # future change to the token used).
-    if: github.actor != 'Dispatch Bot' && github.event.head_commit.author.name != 'Dispatch Bot'
+    # Only render when the upstream sport pipeline succeeded (or this was
+    # triggered manually). Don't waste cycles rendering on top of a failed run.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
 
     steps:
       - uses: actions/checkout@v4
