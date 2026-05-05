@@ -517,6 +517,31 @@ def fetch_espn_odds():
 print("\nFetching sportsbook odds...")
 real_odds = fetch_espn_odds()
 
+
+# ─── Fetch team standings (current season W-L) ──────────────────────────────
+def fetch_team_records():
+    """Returns {team_id: "W-L"} for the current MLB season.
+    Empty dict on any API failure — caller treats records as optional."""
+    try:
+        url = f"{MLB_API}/standings?leagueId=103,104&season={NOW.year}&standingsTypes=regularSeason"
+        data = fetch(url) or {}
+        out = {}
+        for div in data.get("records", []):
+            for tr in div.get("teamRecords", []):
+                tid = (tr.get("team") or {}).get("id")
+                w = tr.get("wins")
+                l = tr.get("losses")
+                if tid is not None and w is not None and l is not None:
+                    out[int(tid)] = f"{w}-{l}"
+        return out
+    except Exception as e:
+        print(f"  WARN: standings fetch failed: {e}")
+        return {}
+
+print("\nFetching team standings...")
+team_records = fetch_team_records()
+print(f"  Standings: {len(team_records)} teams")
+
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
 sched = fetch(f"{MLB_API}/schedule?sportId=1&date={TODAY}&hydrate=probablePitcher,lineups,linescore,team,venue")
@@ -1054,6 +1079,10 @@ def render_game(g, idx):
     ou_line = f"O/U {g['total']}" if g["has_lineups"] else ""
     away_ml_display = g["away_ml"] if g["away_ml"] else "\u2014"
     home_ml_display = g["home_ml"] if g["home_ml"] else "\u2014"
+    away_record = team_records.get(g["away_id"], "")
+    home_record = team_records.get(g["home_id"], "")
+    away_record_html = f'<div class="team-record">{away_record}</div>' if away_record else ""
+    home_record_html = f'<div class="team-record">{home_record}</div>' if home_record else ""
 
     return f'''<div class="game-card" data-conf="{g["conf"]}" data-value="{g["value"]}" data-edge="{g["edge"]}">
   <div class="run-bar ma-premium">
@@ -1064,6 +1093,7 @@ def render_game(g, idx):
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/{g["away_id"]}.svg" alt="{aa}" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">{aa}</div>
+    {away_record_html}
     <div class="team-ml">{away_ml_display}</div>
   </div>
   <div class="card-center ma-premium">
@@ -1075,6 +1105,7 @@ def render_game(g, idx):
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/{g["home_id"]}.svg" alt="{ha}" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">{ha}</div>
+    {home_record_html}
     <div class="team-ml">{home_ml_display}</div>
   </div>
 </div>
@@ -1349,6 +1380,9 @@ DAILY_CSS = """
 .mc-conf-num{font-size:12px;margin-left:4px}
 .empty-state{text-align:center;padding:40px 20px;color:#666;font-size:13px}
 .picks-container{max-height:500px;overflow-y:auto}
+
+/* ── Team season record (sits between team abbr + moneyline) ── */
+.team-record{font-family:'JetBrains Mono',monospace;font-size:10px;color:#888;letter-spacing:0.5px;margin-top:2px;text-align:center}
 """
 if "daily-grid" not in css_block:
     css_block = css_block.replace("</style>", DAILY_CSS + "\n</style>")
