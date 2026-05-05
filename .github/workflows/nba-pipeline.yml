@@ -1,0 +1,355 @@
+name: NBA Pipeline
+
+# In-repo replacement for jack-more/NBAsim's daily-update.yml.
+# All NBA logic now lives in nba_pipeline/. This workflow runs that project's
+# scripts in place, then copies the generated dashboard up to nbasim/index.html
+# with the auth injection MORELLOSIMS' navbar expects.
+#
+# Bot identity: "NBA Pipeline Bot"  (distinct from MLB Pipeline Bot and
+# Dispatch Bot — see bot-scope-check.yml for the lane enforcement).
+#
+# Lane: writes ONLY nbasim/, picks/nba.json, nba_pipeline/data/, nba_pipeline/db/.
+# index.html is owned exclusively by render-dispatch.yml (Dispatch Bot).
+
+on:
+  # ──────────────────────────────────────────────────────────────────────
+  # SCHEDULE IS DISABLED DURING MIGRATION VERIFICATION.
+  # NBAsim's daily-update.yml is still the authoritative NBA pipeline;
+  # this workflow is currently dispatch-only so we can test it without
+  # both pipelines fighting over nbasim/index.html.
+  #
+  # To activate: uncomment the schedule block below, then run
+  #   gh workflow disable "Daily NBA SIM Update" --repo jack-more/NBAsim
+  # ──────────────────────────────────────────────────────────────────────
+  # schedule:
+  #   - cron: '30 7 * * *'   # Post-game (7:30 AM UTC = 11:30 PM PST)
+  #   - cron: '30 13 * * *'  # Morning update (1:30 PM UTC = 5:30 AM PST)
+  #   - cron: '0 16 * * *'   # Trends refresh (4 PM UTC = 8 AM PST)
+  #   - cron: '0 17 * * *'   # Settlement (5 PM UTC = 9 AM PST)
+  #   - cron: '0 18 * * *'   # Pre-game (6 PM UTC = 10 AM PST)
+
+  workflow_dispatch:
+    inputs:
+      full_pipeline:
+        description: 'Run full pipeline (collect + analyze + scores + predict)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      settle_only:
+        description: 'Run settlement only'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      trends_only:
+        description: 'Run trends refresh only'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      inject_pick:
+        description: 'Manual pick injection — e.g. "BOS @ CLE" "BOS -0.5" --risk 50'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+# Prevent overlapping runs from racing on git push
+concurrency:
+  group: nba-pipeline
+  cancel-in-progress: false
+
+jobs:
+  # ════════════════════════════════════════════
+  # PRE-GAME / DAILY UPDATE
+  # ════════════════════════════════════════════
+  update-lines:
+    if: github.event.schedule != '0 17 * * *' && github.event.schedule != '0 16 * * *' && inputs.settle_only != 'true' && inputs.trends_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r nba_pipeline/requirements.txt
+
+      - name: Refresh game scores (ESPN)
+        continue-on-error: true
+        timeout-minutes: 3
+        working-directory: nba_pipeline
+        run: |
+          python -c "
+          import sys, os, logging
+          sys.path.insert(0, os.getcwd())
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+          from config import DB_PATH, CURRENT_SEASON
+          from collectors.games_espn import ESPNGameCollector
+          espn = ESPNGameCollector(DB_PATH)
+          n = espn.update_games_table(CURRENT_SEASON, days=21)
+          print(f'ESPN: {n} games added/updated')
+          "
+
+      - name: Refresh rosters and player stats
+        continue-on-error: true
+        timeout-minutes: 8
+        working-directory: nba_pipeline
+        run: |
+          python -c "
+          import sys, os, logging
+          sys.path.insert(0, os.getcwd())
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+          from config import DB_PATH
+          from collectors.players import PlayerCollector
+          pc = PlayerCollector(DB_PATH)
+          pc.collect_teams()
+          try: pc.collect_rosters('2025-26')
+          except Exception as e: print(f'Roster refresh failed (using cached): {e}')
+          try: pc.collect_player_season_stats('2025-26')
+          except Exception as e: print(f'Player stats refresh failed (using cached): {e}')
+          try: pc.collect_team_season_stats('2025-26')
+          except Exception as e: print(f'Team stats refresh failed (using cached): {e}')
+          print('=== Rosters + season stats step complete ===')
+          "
+
+      - name: Check data freshness
+        working-directory: nba_pipeline
+        run: |
+          python -c "
+          import sys, os, sqlite3
+          sys.path.insert(0, os.getcwd())
+          from config import DB_PATH
+          from datetime import datetime, timedelta, timezone
+          conn = sqlite3.connect(DB_PATH)
+          result = conn.execute('''
+              SELECT MAX(g.game_date) as latest
+              FROM player_game_stats pgs
+              JOIN games g ON pgs.game_id = g.game_id
+          ''').fetchone()
+          conn.close()
+          latest = result[0] if result else None
+          cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%d')
+          if latest is None or latest < cutoff:
+              print(f'::warning::BOXSCORE DATA IS STALE! Latest: {latest}, required: after {cutoff}.')
+          else:
+              print(f'Boxscore freshness OK: latest = {latest}')
+          "
+
+      - name: Run full pipeline (manual trigger only)
+        if: inputs.full_pipeline == 'true'
+        timeout-minutes: 20
+        working-directory: nba_pipeline
+        run: |
+          python main.py collect --skip-boxscores 2>&1 | tail -30
+          python main.py analyze 2>&1 | tail -10
+          python main.py scores 2>&1 | tail -10
+          python main.py predict 2>&1 | tail -10
+
+      - name: Generate dashboard (with retry)
+        working-directory: nba_pipeline
+        run: |
+          success=false
+          for attempt in 1 2 3; do
+            echo "=== Attempt $attempt/3 ==="
+            if python generate_frontend.py; then success=true; break; fi
+            echo "Attempt $attempt failed, waiting 60s before retry..."
+            sleep 60
+          done
+          if [ "$success" = false ]; then
+            echo "::error::All 3 generate_frontend.py attempts failed"
+            exit 1
+          fi
+
+      - name: Intelligence snapshot
+        continue-on-error: true
+        working-directory: nba_pipeline
+        run: python scripts/snapshot_daily.py
+
+      - name: Capture picks
+        working-directory: nba_pipeline
+        run: python scripts/capture_picks.py
+
+      - name: Inject manual pick (workflow_dispatch only)
+        if: inputs.inject_pick != ''
+        working-directory: nba_pipeline
+        run: python scripts/inject_pick.py ${{ inputs.inject_pick }}
+
+      - name: Generate blog entry
+        working-directory: nba_pipeline
+        run: python scripts/generate_blog_entry.py
+
+      - name: Sync NBA dashboard to nbasim/ (with auth injection)
+        run: |
+          mkdir -p nbasim
+          cp nba_pipeline/index.html nbasim/index.html
+          # Auth CSS + Firebase SDK already included by generate_frontend.py.
+          # Only inject MORELLOSIMS-specific additions:
+          sed -i 's|<body>|<body data-ma-theme="dark">|' nbasim/index.html
+          sed -i 's|<div class="top-picks">|<div class="top-picks" style="display:flex;align-items:center;gap:8px;">\n                <div class="status-indicators" style="display:flex;align-items:center;"></div>|' nbasim/index.html
+
+      - name: Commit and push
+        run: |
+          git config user.name "NBA Pipeline Bot"
+          git config user.email "noreply@github.com"
+          DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
+
+          git add nbasim/index.html
+          git add nba_pipeline/db/nba_sim.db
+          if [ -f nba_pipeline/db/.nba_api_last_refresh ]; then git add nba_pipeline/db/.nba_api_last_refresh; fi
+          if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
+          if [ -f nba_pipeline/data/pick_log.json ]; then git add nba_pipeline/data/pick_log.json; fi
+          if [ -f nba_pipeline/data/blog_snippet.html ]; then git add nba_pipeline/data/blog_snippet.html; fi
+          if [ -f nba_pipeline/data/daily_picks.json ]; then git add nba_pipeline/data/daily_picks.json; fi
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "NBA SIM — ${DATE}"
+          git pull --rebase origin main || true
+          git push
+
+  # ════════════════════════════════════════════
+  # DAILY TRENDS REFRESH (8 AM PST cron)
+  # ════════════════════════════════════════════
+  refresh-trends:
+    if: github.event.schedule == '0 16 * * *' || inputs.trends_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r nba_pipeline/requirements.txt
+
+      - name: Refresh trends (collect missing boxscores + lineup stats)
+        timeout-minutes: 15
+        working-directory: nba_pipeline
+        run: python scripts/refresh_trends.py
+
+      - name: Regenerate dashboard with fresh trends
+        working-directory: nba_pipeline
+        run: |
+          success=false
+          for attempt in 1 2 3; do
+            if python generate_frontend.py; then success=true; break; fi
+            echo "Attempt $attempt failed, waiting 30s..."
+            sleep 30
+          done
+          if [ "$success" = false ]; then
+            echo "::error::All 3 generate_frontend.py attempts failed"
+            exit 1
+          fi
+
+      - name: Intelligence snapshot
+        continue-on-error: true
+        working-directory: nba_pipeline
+        run: python scripts/snapshot_daily.py
+
+      - name: Capture picks
+        continue-on-error: true
+        working-directory: nba_pipeline
+        run: python scripts/capture_picks.py
+
+      - name: Generate blog entry
+        continue-on-error: true
+        working-directory: nba_pipeline
+        run: python scripts/generate_blog_entry.py
+
+      - name: Sync NBA dashboard to nbasim/
+        run: |
+          mkdir -p nbasim
+          cp nba_pipeline/index.html nbasim/index.html
+          sed -i 's|<body>|<body data-ma-theme="dark">|' nbasim/index.html
+          sed -i 's|<div class="top-picks">|<div class="top-picks" style="display:flex;align-items:center;gap:8px;">\n                <div class="status-indicators" style="display:flex;align-items:center;"></div>|' nbasim/index.html
+
+      - name: Commit and push
+        run: |
+          git config user.name "NBA Pipeline Bot"
+          git config user.email "noreply@github.com"
+          DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
+
+          git add nbasim/index.html
+          git add nba_pipeline/db/nba_sim.db
+          if [ -f nba_pipeline/db/.nba_api_last_refresh ]; then git add nba_pipeline/db/.nba_api_last_refresh; fi
+          if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
+          if [ -f nba_pipeline/data/pick_log.json ]; then git add nba_pipeline/data/pick_log.json; fi
+          if [ -f nba_pipeline/data/blog_snippet.html ]; then git add nba_pipeline/data/blog_snippet.html; fi
+          if [ -f nba_pipeline/data/daily_picks.json ]; then git add nba_pipeline/data/daily_picks.json; fi
+
+          if git diff --cached --quiet; then
+            echo "No trend changes to commit"
+            exit 0
+          fi
+
+          git commit -m "NBA trends refresh — ${DATE}"
+          git pull --rebase origin main || true
+          git push
+
+  # ════════════════════════════════════════════
+  # POST-GAME SETTLEMENT
+  # ════════════════════════════════════════════
+  grade-picks:
+    if: github.event.schedule == '0 17 * * *' || inputs.settle_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r nba_pipeline/requirements.txt
+
+      - name: Grade picks
+        working-directory: nba_pipeline
+        run: python scripts/grade_picks.py
+
+      - name: Settle blog + sync dashboard
+        run: |
+          # settle_blog reads settlement_results.json and patches index.html.
+          # In the new architecture, render-dispatch owns index.html, so we
+          # don't run settle_blog against the homepage. Instead, settle_blog
+          # is run inside nba_pipeline against its own internal index.html
+          # (the dashboard) — which we then copy to nbasim/.
+          if [ -f nba_pipeline/data/settlement_results.json ]; then
+            python nba_pipeline/scripts/settle_blog.py nba_pipeline/data/settlement_results.json nba_pipeline/index.html || echo "settle_blog non-fatal"
+          fi
+          mkdir -p nbasim
+          cp nba_pipeline/index.html nbasim/index.html
+          sed -i 's|<body>|<body data-ma-theme="dark">|' nbasim/index.html
+          sed -i 's|<div class="top-picks">|<div class="top-picks" style="display:flex;align-items:center;gap:8px;">\n                <div class="status-indicators" style="display:flex;align-items:center;"></div>|' nbasim/index.html
+
+      - name: Commit settlement
+        run: |
+          git config user.name "NBA Pipeline Bot"
+          git config user.email "noreply@github.com"
+          DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
+
+          git add nbasim/index.html
+          if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
+          if [ -f nba_pipeline/data/settlement_results.json ]; then git add nba_pipeline/data/settlement_results.json; fi
+
+          if git diff --cached --quiet; then
+            echo "No settlement changes"
+            exit 0
+          fi
+
+          git commit -m "NBA settle — ${DATE}"
+          git pull --rebase origin main || true
+          git push
