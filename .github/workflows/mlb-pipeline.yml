@@ -101,7 +101,11 @@ jobs:
 
       - name: Generate MLB picks
         timeout-minutes: 45
-        run: python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
+        # set -o pipefail so a build_mlb_sim crash fails the workflow
+        # (without it, the pipe to `tee` returns 0 even when python3 crashes)
+        run: |
+          set -o pipefail
+          python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.
@@ -145,7 +149,9 @@ jobs:
 
       - name: Generate today's MLB picks
         timeout-minutes: 45
-        run: python3 scripts/build_mlb_sim.py 2>&1 | tee -a /tmp/mlb_output.txt
+        run: |
+          set -o pipefail
+          python3 scripts/build_mlb_sim.py 2>&1 | tee -a /tmp/mlb_output.txt
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.

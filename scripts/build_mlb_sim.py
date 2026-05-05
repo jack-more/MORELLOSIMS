@@ -1416,7 +1416,6 @@ html = f'''<!DOCTYPE html>
     <div class="tab-content active" id="tab-lines">
         <div class="chips">
             <div class="chip active" onclick="sortGames('time', this)">Time</div>
-            <div class="chip" onclick="sortGames('confidence', this)">Confidence</div>
             <div class="chip" onclick="sortGames('run_diff', this)">Run Diff</div>
         </div>
         <div class="slate-info">
@@ -1550,8 +1549,6 @@ function sortGames(mode, el) {{
   let sorted;
   if (mode === 'run_diff') {{
     sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.edge) || 0) - (parseFloat(a.dataset.edge) || 0));
-  }} else if (mode === 'confidence') {{
-    sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.conf) || 0) - (parseFloat(a.dataset.conf) || 0));
   }} else {{
     sorted = [...originalCardOrder];
   }}
