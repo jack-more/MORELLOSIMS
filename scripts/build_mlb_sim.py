@@ -542,6 +542,45 @@ print("\nFetching team standings...")
 team_records = fetch_team_records()
 print(f"  Standings: {len(team_records)} teams")
 
+
+# ─── Load bullpen table + SP innings table ───────────────────────────────────
+# Built daily by scripts/07_fetch_bullpen.py. If files are missing, fall back
+# to a pass-through (no bullpen adjustment). Never crash the build for this.
+def _load_atlas_safe(filename: str, default):
+    path = os.path.join(REPO_ROOT, "atlas", filename)
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"  WARN: {filename} not loaded ({e}); bullpen adjustment disabled")
+        return default
+
+_bullpen_data = _load_atlas_safe("team_bullpen.json", {"teams": {}, "league_avg_rp_runs_per_ip": 0.5, "league_avg_sp_ip_per_start": 5.5})
+_sp_innings = _load_atlas_safe("sp_innings.json", {})
+_LEAGUE_RP_RUNS_PER_IP = _bullpen_data.get("league_avg_rp_runs_per_ip", 0.5)
+_LEAGUE_SP_IP = _bullpen_data.get("league_avg_sp_ip_per_start", 5.5)
+_TEAM_BULLPEN = _bullpen_data.get("teams", {})
+
+print(f"  Bullpen: {len(_TEAM_BULLPEN)} teams loaded (league avg {_LEAGUE_RP_RUNS_PER_IP:.3f} R/IP, SP avg {_LEAGUE_SP_IP:.2f} IP/start)")
+
+
+def bullpen_run_delta(opp_team_id, sp_id):
+    """Run-delta to ADD to the batting team's projection.
+    Positive = opposing bullpen is below league average → batting team scores more.
+    Negative = opposing bullpen is suppressive → batting team scores less.
+
+      bp_ip       = max(0, 9 - sp_avg_ip_per_start)   # exposure to bullpen
+      run_delta   = bp_ip * (opp_bp_runs_per_ip - league_avg)
+    """
+    opp_bp = _TEAM_BULLPEN.get(str(opp_team_id))
+    if not opp_bp or opp_bp.get("rp_runs_per_ip") is None:
+        return 0.0
+    sp_data = _sp_innings.get(str(sp_id), {})
+    sp_avg_ip = sp_data.get("avg_ip_per_start") or _LEAGUE_SP_IP
+    bp_ip = max(0.0, 9.0 - sp_avg_ip)
+    delta = bp_ip * (opp_bp["rp_runs_per_ip"] - _LEAGUE_RP_RUNS_PER_IP)
+    return round(delta, 2)
+
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
 sched = fetch(f"{MLB_API}/schedule?sportId=1&date={TODAY}&hydrate=probablePitcher,lineups,linescore,team,venue")
@@ -758,8 +797,12 @@ for g in games_raw:
                 h_rate = base_h; bb_rate = base_bb
                 hr_rate = base_hr; tb_rate = base_tb
 
-            # Per-game PA estimate
-            pa = 4
+            # Per-game PA — empirical MLB league averages by lineup slot.
+            # Leadoff gets ~4.62 PA, 9-hole ~3.80 PA; the structure of the
+            # game (38ish team-PA spread across 9 slots) makes this stable
+            # year over year. Index `i` is 0-based batting order position.
+            LINEUP_PA = [4.62, 4.51, 4.40, 4.30, 4.20, 4.10, 4.00, 3.90, 3.80]
+            pa = LINEUP_PA[i] if i < len(LINEUP_PA) else 3.80
 
             ms = woba_to_ms(vs_woba)
             ms_lo = max(40, ms - 4)
@@ -822,14 +865,23 @@ for g in games_raw:
         home_batters, home_runs_raw, home_woba, home_pa = process_lineup(
             home_lineup_raw, away_gmm, home_abbr)
 
-        # Apply tier multipliers
+        # Apply tier multipliers (opposing SP's tier scales the batting team's runs)
         away_runs_tiered = away_runs_raw * home_tier_mult
         home_runs_tiered = home_runs_raw * away_tier_mult
 
+        # Apply bullpen run-delta. The opposing team's bullpen (and their SP's
+        # avg innings) determine how much late-inning exposure the batting
+        # team gets. Positive delta = opposing bullpen below league average →
+        # batting team scores MORE late.
+        away_id = TEAMS.get(away_abbr, {}).get("id", 0)
+        home_id = TEAMS.get(home_abbr, {}).get("id", 0)
+        away_bp_delta = bullpen_run_delta(opp_team_id=home_id, sp_id=home_sp_id)
+        home_bp_delta = bullpen_run_delta(opp_team_id=away_id, sp_id=away_sp_id)
+
         # Apply park factor (home team's park affects BOTH sides)
         pf = PARK_FACTOR.get(home_abbr, 1.00)
-        away_runs = round(away_runs_tiered * pf, 1)
-        home_runs = round(home_runs_tiered * pf, 1)
+        away_runs = round((away_runs_tiered + away_bp_delta) * pf, 1)
+        home_runs = round((home_runs_tiered + home_bp_delta) * pf, 1)
 
         # Fill opp info for daily tab
         for bm in all_batter_matchups[-len(away_lineup_raw)-len(home_lineup_raw):-len(home_lineup_raw)]:

@@ -63,6 +63,11 @@ jobs:
       - name: Refresh 2026 atlas
         run: python3 scripts/refresh_atlas_2026.py
 
+      - name: Refresh team bullpen + SP innings tables
+        # Cheap (1 MLB API call). Output drives the bullpen run-delta in
+        # build_mlb_sim.py — without it, bullpen adjustment silently skips.
+        run: python3 scripts/07_fetch_bullpen.py
+
       - name: Commit atlas updates
         run: |
           git config user.name "MLB Pipeline Bot"
