@@ -90,7 +90,11 @@ def main():
 
         winner = p["away"] if away_runs > home_runs else p["home"]
         is_win = winner == p["side"]
-        ml = p["odds"] or -110
+        # picks/mlb.json stores odds as strings like "-326" or "+150"; coerce to int.
+        try:
+            ml = int(str(p.get("odds") or -110).replace("+", ""))
+        except (ValueError, TypeError):
+            ml = -110
         if is_win:
             pl = round(UNIT_SIZE * (ml / 100 if ml > 0 else 100 / abs(ml)), 2)
         else:

@@ -136,7 +136,12 @@ jobs:
 
       - name: Settle yesterday's MLB picks
         timeout-minutes: 45
-        run: python3 scripts/settle_mlb.py 2>&1 | tee /tmp/mlb_output.txt
+        # set -o pipefail so a settle script crash fails the workflow
+        # (the bare pipe to `tee` was hiding crashes for days, leaving picks
+        # stuck pending while still committing a "Settle MLB" commit).
+        run: |
+          set -o pipefail
+          python3 scripts/settle_mlb.py 2>&1 | tee /tmp/mlb_output.txt
 
       - name: Generate today's MLB picks
         timeout-minutes: 45
