@@ -103,15 +103,14 @@ jobs:
         timeout-minutes: 45
         run: python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
 
-      - name: Render dispatch log from picks/*.json
-        run: python3 scripts/render_dispatch.py
-
+      # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
+      # That workflow auto-triggers when picks/mlb.json is pushed below.
       - name: Commit and push
         run: |
           git config user.name "MLB Pipeline Bot"
           git config user.email "noreply@github.com"
           PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
-          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json index.html
+          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -143,15 +142,14 @@ jobs:
         timeout-minutes: 45
         run: python3 scripts/build_mlb_sim.py 2>&1 | tee -a /tmp/mlb_output.txt
 
-      - name: Render dispatch log from picks/*.json
-        run: python3 scripts/render_dispatch.py
-
+      # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
+      # That workflow auto-triggers when picks/mlb.json is pushed below.
       - name: Commit and push
         run: |
           git config user.name "MLB Pipeline Bot"
           git config user.email "noreply@github.com"
           PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
-          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json index.html
+          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

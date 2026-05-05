@@ -25,15 +25,28 @@ jobs:
           AUTHOR_NAME=$(git log -1 --pretty=format:'%an')
           echo "Author: $AUTHOR_NAME <$AUTHOR_EMAIL>"
 
-          # Determine bot lane. Add new bots here.
+          # Determine bot lane. Three-bot model: each sport has its own bot
+          # writing only its own files; index.html is owned exclusively by
+          # the Dispatch Bot. No bot touches another bot's lane.
           case "$AUTHOR_NAME" in
             "MLB Pipeline Bot")
               ALLOWED='^(mlbsim/|picks/mlb\.json$|atlas/)'
               ;;
+            "NBA Pipeline Bot")
+              ALLOWED='^(nbasim/|picks/nba\.json$|nba_pipeline/data/|nba_pipeline/db/)'
+              ;;
+            "Dispatch Bot")
+              ALLOWED='^index\.html$'
+              ;;
+            # ── Legacy bots (deprecated, will be removed once migration completes) ──
             "github-actions[bot]")
+              # NBAsim repo's existing bot — still operating until daily-update.yml
+              # is disabled. Keep its current lane during the migration window.
               ALLOWED='^(nbasim/|index\.html$|picks/nba\.json$)'
               ;;
             "MLB Pitcher Chart Bot"|"Pitcher Chart Bot")
+              # MLB_PitcherChart bots — workflow already disabled but lane kept
+              # in case of any in-flight pushes during cleanup.
               ALLOWED='^(atlas/|mlbsim/)'
               ;;
             *)
