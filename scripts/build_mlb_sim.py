@@ -469,50 +469,91 @@ _ESPN_TEAM_MAP = {
     "Texas Rangers": "TEX", "Toronto Blue Jays": "TOR", "Washington Nationals": "WSH",
 }
 
+def _fetch_espn_scoreboard_odds(date_str):
+    """ESPN's structured scoreboard JSON. Returns ONLY games where the book
+    published a real moneyLine — never derives from spread or model.
+    Returns {(away, home): {away_ml, home_ml, book}}.
+    """
+    try:
+        url = f'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_str}'
+        with urllib.request.urlopen(url, timeout=12) as r:
+            data = json.loads(r.read())
+        result = {}
+        for ev in data.get('events', []):
+            comp = ev.get('competitions', [{}])[0]
+            ha_map = {}
+            for t in comp.get('competitors', []):
+                ha = t.get('homeAway')
+                abbr = (t.get('team') or {}).get('abbreviation')
+                if ha and abbr:
+                    ha_map[ha] = abbr
+            home, away = ha_map.get('home'), ha_map.get('away')
+            if not (home and away):
+                continue
+            for o in comp.get('odds', []):
+                home_ml = (o.get('homeTeamOdds') or {}).get('moneyLine')
+                away_ml = (o.get('awayTeamOdds') or {}).get('moneyLine')
+                # STRICT: require BOTH real MLs from the book. No spread→ML
+                # derivation, no model fallback. If the book hasn't posted
+                # ML yet, this game is excluded — better than fake numbers.
+                if home_ml is not None and away_ml is not None:
+                    result[(away, home)] = {
+                        "away_ml": int(away_ml),
+                        "home_ml": int(home_ml),
+                        "book": (o.get('provider') or {}).get('name', 'ESPN'),
+                    }
+                    break
+        return result
+    except Exception as e:
+        print(f"  WARN: ESPN scoreboard odds failed: {e}")
+        return {}
+
+
 def fetch_espn_odds():
-    """Scrape real ML odds from ESPN MLB odds page (DraftKings lines). Free, no API key."""
+    """Real-book ML odds — STRICT. Only returns prices the book actually
+    published. Never derives, approximates, or invents. Games without real
+    book ML get excluded; their picks won't fire (intentional)."""
+    primary = _fetch_espn_scoreboard_odds(TODAY.replace("-", ""))
+    print(f"  ESPN scoreboard odds: {len(primary)} games (real book ML only)")
+
+    # Secondary: ESPN's HTML /mlb/odds page. Same rule — only when book
+    # publishes a real ML number, never derived.
+    legacy = {}
     try:
         r = requests.get("https://www.espn.com/mlb/odds",
                          headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         if r.status_code != 200:
-            print(f"  WARN: ESPN odds page returned {r.status_code}")
-            return {}
-
-        idx = r.text.find('"odds":[{"displayValue":"MLB Odds"')
-        if idx < 0:
-            print("  WARN: ESPN odds data block not found")
-            return {}
-        chunk = r.text[idx:idx+150000]
-
-        # Split by game event IDs
-        line_blocks = _re.split(r'"id":"4018\d+","uid"', chunk)
-        result = {}
-        for block in line_blocks[1:]:
-            # Extract team abbreviations
-            home_abbr = away_abbr = None
-            comps = _re.findall(r'"homeAway":"(home|away)".*?"abbreviation":"([A-Z]+)"', block, _re.DOTALL)
-            for ha, abbr in comps:
-                if ha == "home":
-                    home_abbr = abbr
-                elif ha == "away":
-                    away_abbr = abbr
-
-            # Extract moneyline close odds
-            ml_match = _re.search(
-                r'"moneyline":\{"displayName":"Moneyline".*?"home":\{.*?"odds":"([^"]+)".*?"away":\{.*?"odds":"([^"]+)"',
-                block, _re.DOTALL
-            )
-            if home_abbr and away_abbr and ml_match:
-                result[(away_abbr, home_abbr)] = {
-                    "away_ml": int(ml_match.group(2)),
-                    "home_ml": int(ml_match.group(1)),
-                }
-
-        print(f"  ESPN odds: {len(result)} games (DraftKings)")
-        return result
+            print(f"  WARN: ESPN /mlb/odds returned {r.status_code}")
+        else:
+            idx = r.text.find('"odds":[{"displayValue":"MLB Odds"')
+            if idx >= 0:
+                chunk = r.text[idx:idx+150000]
+                line_blocks = _re.split(r'"id":"4018\d+","uid"', chunk)
+                for block in line_blocks[1:]:
+                    home_abbr = away_abbr = None
+                    for ha, abbr in _re.findall(r'"homeAway":"(home|away)".*?"abbreviation":"([A-Z]+)"', block, _re.DOTALL):
+                        if ha == "home": home_abbr = abbr
+                        else: away_abbr = abbr
+                    ml_match = _re.search(
+                        r'"moneyline":\{"displayName":"Moneyline".*?"home":\{.*?"odds":"([^"]+)".*?"away":\{.*?"odds":"([^"]+)"',
+                        block, _re.DOTALL,
+                    )
+                    if home_abbr and away_abbr and ml_match:
+                        try:
+                            legacy[(away_abbr, home_abbr)] = {
+                                "away_ml": int(ml_match.group(2)),
+                                "home_ml": int(ml_match.group(1)),
+                                "book": "DraftKings",
+                            }
+                        except ValueError:
+                            pass
     except Exception as e:
-        print(f"  WARN: ESPN odds fetch failed: {e}")
-        return {}
+        print(f"  WARN: ESPN HTML odds fetch failed: {e}")
+
+    merged = dict(legacy)
+    merged.update(primary)
+    print(f"  Total real-book odds: {len(merged)} games  (scoreboard {len(primary)} / legacy fill {len(legacy)})")
+    return merged
 
 print("\nFetching sportsbook odds...")
 real_odds = fetch_espn_odds()
@@ -965,16 +1006,19 @@ for g in games_raw:
         value = 0
         edge = 0
 
-    # Real sportsbook odds (fall back to model-implied if unavailable)
+    # Real sportsbook odds — STRICT. We ONLY display prices the book actually
+    # published. If the odds source doesn't have this game, we leave the line
+    # blank ("—") and exclude the pick from picks/mlb.json. Tracking a pick
+    # against a fabricated price is dishonest and breaks settlement math.
     game_odds = real_odds.get((away_abbr, home_abbr), {})
-    if game_odds:
-        away_ml = f"{game_odds['away_ml']:+d}" if game_odds.get("away_ml") else ""
-        home_ml = f"{game_odds['home_ml']:+d}" if game_odds.get("home_ml") else ""
+    if game_odds and game_odds.get("away_ml") and game_odds.get("home_ml"):
+        away_ml = f"{game_odds['away_ml']:+d}"
+        home_ml = f"{game_odds['home_ml']:+d}"
         odds_source = game_odds.get("book", "")
     else:
-        away_ml = wp_to_ml(away_wp) if has_lineups else ""
-        home_ml = wp_to_ml(home_wp) if has_lineups else ""
-        odds_source = "MODEL"
+        away_ml = ""
+        home_ml = ""
+        odds_source = "NO_LINE"
 
     # Pick — team with higher projected runs. Pure run differential.
     if away_runs > home_runs:
@@ -1076,9 +1120,11 @@ def render_game(g, idx):
 
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
-    if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick")):
+    if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick")):
         cc = conf_color(g["conf"])
         pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span></div>'''
+    elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g.get("odds_source") == "NO_LINE":
+        pick_html = '<div class="sim-pick" style="background:#FFA500;color:#000;border-color:#000">NO LINE — book has not posted ML</div>'
     elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]:
         pick_html = f'<div class="sim-pick" style="background:#FF3333;color:#fff;border-color:#000">BAD PRICE ({g["pick_odds"]:+d})</div>'
     elif g["has_lineups"] and g["conf"] > 0:
@@ -1340,7 +1386,7 @@ def render_hr_watch_tab():
 
     # Today's Picks column — ranked by confidence, heavy faves excluded
     edges = sorted(
-        [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))],
+        [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))],
         key=lambda x: -x["conf"]
     )
     edges_html = ""
@@ -1651,7 +1697,7 @@ with open(OUTPUT, "w") as f:
 
 # ─── Picks log — append today's C:7+ picks to CSV ──────────────────────────
 PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
-qualified_picks = [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))]
+qualified_picks = [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))]
 skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]]
 if skipped_heavy:
     print(f"  Skipped {len(skipped_heavy)} heavy faves: " + ", ".join(f'{g["pick_team"]} ({g["pick_odds"]:+d})' for g in skipped_heavy))
