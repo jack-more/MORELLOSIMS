@@ -259,12 +259,14 @@ def get_base_woba(bid):
 
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
-MIN_CONF_PICK = 10  # C:10 only — lower tiers bleed money
+MIN_CONF_PICK = 8  # C:8+ qualifies (8, 9, 10) — opens up the slate
 MAX_FAV_BY_CONF = {
-    7: -150,
-    8: -180,
-    9: -220,
-    10: -350,
+    # Per-confidence cap on max favorite odds (more negative = bigger fav).
+    # Anything more favored than the cap gets filtered as odds_too_heavy.
+    # Tuned 2026-05: all qualifying confidence levels can take -340 juice.
+    8: -340,
+    9: -340,
+    10: -340,
 }
 
 def get_base_rates(bid):
@@ -521,6 +523,48 @@ sched = fetch(f"{MLB_API}/schedule?sportId=1&date={TODAY}&hydrate=probablePitche
 games_raw = sched.get("dates", [{}])[0].get("games", []) if sched else []
 print(f"  Games: {len(games_raw)}")
 
+
+# ─── Position lookup cache ──────────────────────────────────────────────────
+# The schedule's `lineups` hydrate returns batters with id+fullName but
+# usually NO primaryPosition. To avoid showing "?" for every player, we do
+# ONE bulk call to /people?personIds=... covering every batter across every
+# lineup, then process_lineup looks up positions from this cache.
+_POS_CACHE: dict[int, str] = {}
+
+
+def _bulk_fetch_positions(pids: list[int]) -> None:
+    """Populate _POS_CACHE from a bulk /people request. Idempotent."""
+    missing = [p for p in pids if p and p not in _POS_CACHE]
+    if not missing:
+        return
+    # MLB Stats API tolerates ~100+ IDs per call comfortably; chunk to be safe.
+    CHUNK = 75
+    for i in range(0, len(missing), CHUNK):
+        ids_csv = ",".join(str(p) for p in missing[i:i + CHUNK])
+        try:
+            data = fetch(f"{MLB_API}/people?personIds={ids_csv}")
+            for person in (data or {}).get("people", []) or []:
+                pid = person.get("id")
+                pos = person.get("primaryPosition", {}).get("abbreviation")
+                if pid and pos:
+                    _POS_CACHE[int(pid)] = pos
+        except Exception as e:
+            print(f"  WARN: bulk position fetch failed for chunk {i}: {e}")
+
+
+def lookup_position(pid, fallback_p: dict | None = None) -> str:
+    """Return position string, or '' if unknown. Never returns '?'."""
+    if not pid:
+        return ""
+    cached = _POS_CACHE.get(int(pid))
+    if cached:
+        return cached
+    if fallback_p:
+        v = fallback_p.get("primaryPosition", {}).get("abbreviation", "")
+        if v and v != "?":
+            return v
+    return ""
+
 # ─── Process each game ───────────────────────────────────────────────────────
 games = []
 all_batter_matchups = []  # for daily projections tab
@@ -635,7 +679,7 @@ for g in games_raw:
         for i, p in enumerate(lineup_raw):
             pid = p.get("id")
             name = p.get("fullName", "Unknown")
-            pos = p.get("primaryPosition", {}).get("abbreviation", "?")
+            pos = lookup_position(pid, p)  # '' if unknown — caller must handle
             bat_side = p.get("batSide", {}).get("code", "R")
 
             base_w = get_base_woba(pid)
@@ -743,6 +787,11 @@ for g in games_raw:
     away_gmm = away_ps.get("gmm_proba", {away_cluster: 1.0})
 
     if has_lineups:
+        # Pre-fetch positions in one bulk call so render shows "C · R" not "? · R"
+        _bulk_fetch_positions(
+            [p.get("id") for p in away_lineup_raw if p.get("id")] +
+            [p.get("id") for p in home_lineup_raw if p.get("id")]
+        )
         away_batters, away_runs_raw, away_woba, away_pa = process_lineup(
             away_lineup_raw, home_gmm, away_abbr)
         home_batters, home_runs_raw, home_woba, home_pa = process_lineup(
@@ -924,7 +973,7 @@ def render_batter(b):
     <span class="batter-ms {mc}">{b["ms"]}</span>
   </div>
   <div class="batter-bottom">
-    <span class="batter-stats">{h(b["pos"])} &middot; {b["bat_side"]}</span>
+    <span class="batter-stats">{(h(b["pos"]) + " &middot; ") if b.get("pos") else ""}{b["bat_side"]}</span>
     <span class="batter-range">{b["ms_lo"]}-{b["ms_hi"]}</span>
   </div>
   <div class="batter-woba">
@@ -1345,7 +1394,7 @@ html = f'''<!DOCTYPE html>
       </div>
       <div style="text-align:right;flex:1;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
-        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:10 ONLY<br><span style="color:#888;">|ODDS|&lt;200</span></div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:8+<br><span style="color:#888;">|ODDS|&lt;340</span></div>
       </div>
     </div>
   </div>

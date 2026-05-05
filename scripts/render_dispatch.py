@@ -17,6 +17,18 @@ REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 INDEX = os.path.join(REPO, "index.html")
 NBA_PATH = os.path.join(REPO, "picks", "nba.json")
 MLB_PATH = os.path.join(REPO, "picks", "mlb.json")
+BASELINES_PATH = os.path.join(REPO, "picks", "baselines.json")
+
+
+def load_baselines():
+    """Pre-tracking-era totals (manually entered through 2026-04-30 for MLB,
+    through 2026-04-30 for NBA). Auto-tracked picks from picks/{nba,mlb}.json
+    add to these. See picks/baselines.json for canonical record + filter."""
+    try:
+        with open(BASELINES_PATH) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
 NBA_BEGIN = "<!-- DISPATCH:NBA:BEGIN -->"
 NBA_END = "<!-- DISPATCH:NBA:END -->"
@@ -50,15 +62,26 @@ def week_key(date_iso):
     return (iso[0], iso[1])
 
 
-def aggregate(picks):
+def aggregate(picks, baseline=None):
+    """Aggregate pick totals. If baseline is provided (a dict with wins/losses/
+    risked/pl), it is ADDED to the computed totals — used to fold in the
+    pre-auto-tracking-era manual record from picks/baselines.json."""
     settled = [p for p in picks if p["status"] in ("win", "loss")]
-    wins = sum(1 for p in settled if p["status"] == "win")
-    losses = sum(1 for p in settled if p["status"] == "loss")
-    risked = sum(p["units"] for p in settled)
-    pl = sum(p.get("pl") or 0 for p in settled)
+    new_wins = sum(1 for p in settled if p["status"] == "win")
+    new_losses = sum(1 for p in settled if p["status"] == "loss")
+    new_risked = sum(p["units"] for p in settled)
+    new_pl = sum(p.get("pl") or 0 for p in settled)
+
+    base = baseline or {}
+    wins = new_wins + (base.get("wins") or 0)
+    losses = new_losses + (base.get("losses") or 0)
+    risked = new_risked + (base.get("risked") or 0)
+    pl = new_pl + (base.get("pl") or 0)
     bankroll = 1000 + pl
     roi = (pl / risked * 100) if risked else 0
-    # Streak — last N settled, newest first
+
+    # Streak — last N settled, newest first (pure auto-tracked picks only;
+    # baseline doesn't contribute since we don't have per-pick history there)
     settled_sorted = sorted(settled, key=lambda p: p["date"], reverse=True)
     streak = 0
     streak_type = ""
@@ -168,12 +191,16 @@ def render_week(wk_data, sport):
                     </details>'''
 
 
-def render_sport_block(picks, sport, hero_color):
-    """Render a full dispatch card for one sport."""
-    if not picks:
+def render_sport_block(picks, sport, hero_color, baseline=None):
+    """Render a full dispatch card for one sport.
+    `baseline` is the pre-tracking-era manual record (dict with wins/losses/
+    risked/pl) — when provided, hero stats include it. Per-pick rows below
+    only show auto-tracked picks (we don't have per-pick rows for baselines).
+    """
+    if not picks and not baseline:
         return ""
 
-    agg = aggregate(picks)
+    agg = aggregate(picks, baseline=baseline)
     grouped = group_by_week(picks)
     weeks_html = "".join(render_week(g, sport) for g in grouped.values())
 
@@ -188,9 +215,15 @@ def render_sport_block(picks, sport, hero_color):
         f"Picks sourced from the {sport_upper} SIM pipeline. Lines via The Odds API. "
         f"Full methodology at {methodology}."
     )
-    earliest = min(p["date"] for p in picks)
-    latest = max(p["date"] for p in picks)
-    date_range = f'{short_date(earliest)} — {short_date(latest)}, 2026'
+    if picks:
+        earliest = min(p["date"] for p in picks)
+        latest = max(p["date"] for p in picks)
+        date_range = f'{short_date(earliest)} — {short_date(latest)}, 2026'
+    elif baseline and baseline.get("since"):
+        # No auto-tracked picks yet — show the baseline's "since" date
+        date_range = f'SINCE {baseline["since"]}'
+    else:
+        date_range = '—'
 
     return f'''
             <details class="blog-card {css_class}" open>
@@ -281,8 +314,12 @@ def main():
     with open(MLB_PATH) as f:
         mlb_picks = json.load(f)
 
-    nba_html = render_sport_block(nba_picks, "nba", "#00FF55")
-    mlb_html = render_sport_block(mlb_picks, "mlb", "#FFEA00")
+    baselines = load_baselines()
+    nba_baseline = baselines.get("nba")
+    mlb_baseline = baselines.get("mlb")
+
+    nba_html = render_sport_block(nba_picks, "nba", "#00FF55", baseline=nba_baseline)
+    mlb_html = render_sport_block(mlb_picks, "mlb", "#FFEA00", baseline=mlb_baseline)
 
     with open(INDEX) as f:
         html = f.read()
@@ -292,8 +329,8 @@ def main():
     with open(INDEX, "w") as f:
         f.write(new_html)
 
-    nba_agg = aggregate(nba_picks)
-    mlb_agg = aggregate(mlb_picks)
+    nba_agg = aggregate(nba_picks, baseline=nba_baseline)
+    mlb_agg = aggregate(mlb_picks, baseline=mlb_baseline)
     print(f"  NBA: {nba_agg['wins']}-{nba_agg['losses']} ({nba_agg['pending']}P) · {nba_agg['roi']:+.1f}% ROI")
     print(f"  MLB: {mlb_agg['wins']}-{mlb_agg['losses']} ({mlb_agg['pending']}P) · {mlb_agg['roi']:+.1f}% ROI")
     print(f"  Wrote {INDEX}")
