@@ -27,7 +27,7 @@ RESULTS_JSON = os.path.join(PROJECT_ROOT, "data", "settlement_results.json")
 
 sys.path.insert(0, PROJECT_ROOT)
 from config import STARTING_BANKROLL
-from collectors.games_espn import fetch_scores_for_grading
+from collectors.games_espn import fetch_scores_for_grading, score_key
 CSV_FIELDS = ["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score"]
 
 
@@ -124,9 +124,15 @@ def compute_profit(result, risk_amount, odds=-110):
         return 0.0
 
 
-def grade_spread(matchup, side_str, scores):
+def grade_spread(matchup, side_str, scores, pick_date=None):
     """Grade a spread pick. Returns (result, profit_amount) or None."""
-    game = scores.get(matchup)
+    # NBA teams play 3-4x per season — must key by (date, matchup) to avoid
+    # mis-grading a Mar pick against the Apr rematch.
+    game = scores.get(score_key(pick_date, matchup)) if pick_date else None
+    if game is None:
+        # Legacy fallback: try matchup-only (only safe when scores has no
+        # rematches in window). Useful for very recent backfills.
+        game = scores.get(matchup)
     if game is None:
         return None
 
@@ -162,9 +168,11 @@ def grade_spread(matchup, side_str, scores):
         return "L"
 
 
-def grade_ml(matchup, side_str, scores):
+def grade_ml(matchup, side_str, scores, pick_date=None):
     """Grade a moneyline pick. Side is like 'GSW ML' or 'BOS ML'."""
-    game = scores.get(matchup)
+    game = scores.get(score_key(pick_date, matchup)) if pick_date else None
+    if game is None:
+        game = scores.get(matchup)
     if game is None:
         return None
 
@@ -236,9 +244,9 @@ def grade_all():
         risk = float(pick.get("risk", 0) or 0)
 
         if pick_type == "spread":
-            result = grade_spread(matchup, side, scores)
+            result = grade_spread(matchup, side, scores, pick_date=pick.get("date"))
         elif pick_type == "ml":
-            result = grade_ml(matchup, side, scores)
+            result = grade_ml(matchup, side, scores, pick_date=pick.get("date"))
         else:
             result = None  # TODO: total/prop grading
 
@@ -256,8 +264,8 @@ def grade_all():
         profit = compute_profit(result, risk, odds=pick_odds)
         pick["result"] = result
         pick["profit"] = str(profit)
-        # Store game scores for settlement blog patching
-        game = scores.get(matchup)
+        # Store game scores for settlement blog patching — same date+matchup keying
+        game = scores.get(score_key(pick.get("date"), matchup)) or scores.get(matchup)
         if game:
             pick["home_score"] = str(game["home_score"])
             pick["away_score"] = str(game["away_score"])

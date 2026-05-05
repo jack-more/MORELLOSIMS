@@ -90,11 +90,18 @@ def _fetch_espn_day(date: datetime) -> list[dict]:
 # ── Standalone convenience functions (no DB, no class needed) ────────
 
 
-def fetch_scores_for_grading(days: int = 7) -> dict:
-    """Fetch recent scores keyed by matchup string for pick grading.
+def score_key(date_iso: str, matchup: str) -> str:
+    """Compose the canonical (date, matchup) lookup key.
+    NBA teams meet 3-4 times per season; without the date, a March BKN @ CLE
+    pick could be graded against the April BKN @ CLE result."""
+    return f"{date_iso}|{matchup}"
 
-    Returns: {"AWAY @ HOME": {home_abbr, away_abbr, home_score, away_score}, ...}
-    Used by: scripts/grade_picks.py
+
+def fetch_scores_for_grading(days: int = 7) -> dict:
+    """Fetch recent scores keyed by (date, matchup) for pick grading.
+
+    Returns: {"YYYY-MM-DD|AWAY @ HOME": {home_abbr, away_abbr, home_score, away_score, game_date}}
+    Used by: scripts/grade_picks.py — callers MUST use score_key(pick_date, matchup).
     """
     today = datetime.now(timezone.utc)
     scores = {}
@@ -102,12 +109,14 @@ def fetch_scores_for_grading(days: int = 7) -> dict:
     for day_offset in range(days):
         date = today - timedelta(days=day_offset)
         for game in _fetch_espn_day(date):
-            key = f"{game['away_abbr']} @ {game['home_abbr']}"
-            scores[key] = {
+            game_date = game.get("game_date") or date.strftime("%Y-%m-%d")
+            matchup = f"{game['away_abbr']} @ {game['home_abbr']}"
+            scores[score_key(game_date, matchup)] = {
                 "home_abbr": game["home_abbr"],
                 "away_abbr": game["away_abbr"],
                 "home_score": game["home_score"],
                 "away_score": game["away_score"],
+                "game_date": game_date,
             }
 
     logger.info(f"ESPN: found {len(scores)} completed games (last {days} days)")

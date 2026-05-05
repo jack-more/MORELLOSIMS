@@ -144,6 +144,18 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     # Rich metadata from pick_log
     meta = meta_idx.get((date, matchup, side_raw), {})
     conf = int(meta.get("conf_1_10") or 0)
+
+    # If pick_log has no entry (manual injection, direct CSV append, or
+    # legacy rows with no metadata), derive a sensible conf floor from the
+    # risk amount. Mirrors capture_picks.py's risk_amount() ladder:
+    #   risk 50 → C:8+   (premium plays)
+    #   risk 30 → C:5-7  (mid-tier)
+    #   risk 20 → C:1-4  (light)
+    if conf == 0 and risk:
+        if risk >= 50: conf = 8
+        elif risk >= 30: conf = 5
+        elif risk > 0:   conf = 1
+
     sim_spread = meta.get("sim_spread")
     sim_edge = meta.get("spread_edge")
     sim_projection: str | None = None

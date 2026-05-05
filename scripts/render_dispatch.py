@@ -66,7 +66,10 @@ def aggregate(picks, baseline=None):
     """Aggregate pick totals. If baseline is provided (a dict with wins/losses/
     risked/pl), it is ADDED to the computed totals — used to fold in the
     pre-auto-tracking-era manual record from picks/baselines.json."""
-    settled = [p for p in picks if p["status"] in ("win", "loss")]
+    # Push counts as settled (game graded, just neutral on P/L). Bucketing
+    # pushes into pending was a bug — the dispatch row showed them as
+    # still-pending and the hero record under-counted by the push count.
+    settled = [p for p in picks if p["status"] in ("win", "loss", "push")]
     new_wins = sum(1 for p in settled if p["status"] == "win")
     new_losses = sum(1 for p in settled if p["status"] == "loss")
     new_risked = sum(p["units"] for p in settled)
@@ -286,6 +289,35 @@ def replace_section(html, begin_marker, end_marker, new_content):
     return None  # caller decides what to do
 
 
+def strip_orphans_after(html, end_marker, stop_patterns):
+    """Strip orphaned <details class="week-group"> markup that lives between
+    `end_marker` and the next legitimate sibling boundary.
+
+    Earlier versions of the dispatch system rendered week-groups directly into
+    the page; when the marker contract was added, the renderer started writing
+    new content between the markers but never cleaned up the original siblings
+    that lived outside them. This idempotent strip handles that legacy.
+    """
+    end_idx = html.find(end_marker)
+    if end_idx < 0:
+        return html
+    after = end_idx + len(end_marker)
+
+    # Find the earliest legitimate stop pattern after the end marker.
+    earliest = len(html)
+    for pat in stop_patterns:
+        idx = html.find(pat, after)
+        if idx >= 0 and idx < earliest:
+            earliest = idx
+
+    section = html[after:earliest]
+    # Only strip if there's actual orphan content (not just whitespace).
+    if '<details class="week-group"' in section or '<div class="pick-row' in section:
+        # Preserve newline + standard indentation before the stop pattern.
+        return html[:after] + "\n\n            " + html[earliest:]
+    return html
+
+
 def install_or_replace_dispatch(html, nba_html, mlb_html):
     """Inject markers + replace blocks. If markers don't exist yet, do a one-time install."""
     nba_replaced = replace_section(html, NBA_BEGIN, NBA_END, nba_html)
@@ -304,6 +336,18 @@ def install_or_replace_dispatch(html, nba_html, mlb_html):
             raise RuntimeError("Could not find existing MLB picks block to wrap.")
         wrapped = f'{MLB_BEGIN}\n{mlb_html}\n            {MLB_END}'
         mlb_replaced = nba_replaced[:m.start()] + wrapped + nba_replaced[m.end():]
+
+    # Defensive cleanup: strip any orphaned week-group / pick-row markup that
+    # may have been left outside the markers from the pre-marker dispatch era.
+    # Idempotent: no-op if nothing orphaned is present.
+    mlb_replaced = strip_orphans_after(
+        mlb_replaced, NBA_END,
+        stop_patterns=[MLB_BEGIN, '<!-- ═', '<details class="blog-card'],
+    )
+    mlb_replaced = strip_orphans_after(
+        mlb_replaced, MLB_END,
+        stop_patterns=['<details class="blog-card', '<!-- ═', '</main>', '</body>'],
+    )
 
     return mlb_replaced
 
