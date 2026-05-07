@@ -9,6 +9,7 @@ Usage: python3 scripts/build_mlb_sim.py
 """
 
 import json, os, sys, math, requests, time as _time
+import urllib.request  # used by _fetch_action_network_odds + _fetch_espn_scoreboard_odds
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
