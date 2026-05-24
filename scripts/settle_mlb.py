@@ -44,6 +44,20 @@ def find_game(games, away, home):
     return None
 
 
+def find_pick_game(games, pick):
+    game_pk = pick.get("game_pk")
+    if game_pk:
+        try:
+            game_pk = int(game_pk)
+        except (TypeError, ValueError):
+            game_pk = None
+        if game_pk is not None:
+            for g in games:
+                if g.get("gamePk") == game_pk:
+                    return g
+    return find_game(games, pick["away"], pick["home"])
+
+
 def get_final_runs(game):
     """Return (away_runs, home_runs), falling back to schedule team scores.
 
@@ -93,7 +107,7 @@ def main():
         if not data or not data.get("dates"):
             continue
         games = [g for d in data["dates"] for g in d.get("games", [])]
-        match = find_game(games, p["away"], p["home"])
+        match = find_pick_game(games, p)
         if not match:
             print(f"    [WARN] No MLB API match for {p['matchup']} on {p['date']}")
             continue

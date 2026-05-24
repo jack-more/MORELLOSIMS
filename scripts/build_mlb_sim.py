@@ -761,6 +761,7 @@ games = []
 all_batter_matchups = []  # for daily projections tab
 
 for g in games_raw:
+    game_pk = g.get("gamePk")
     away_team = g["teams"]["away"]["team"]
     home_team = g["teams"]["home"]["team"]
     away_abbr = away_team.get("abbreviation", "???")
@@ -1151,7 +1152,7 @@ for g in games_raw:
         "has_full_coverage": has_full_coverage,
         "missing_coverage_count": len(missing_coverage),
         "pick_odds": pick_odds_raw,
-        "venue": venue, "time_str": time_str,
+        "venue": venue, "time_str": time_str, "game_pk": game_pk,
         "total": round(away_runs + home_runs, 1),
     })
 
@@ -1810,10 +1811,19 @@ if os.path.exists(PICKS_JSON):
     except Exception:
         existing = []
 by_id = {p["id"]: p for p in existing}
+matchup_counts = {}
+for g in qualified_picks:
+    key = (g["away_abbr"], g["home_abbr"])
+    matchup_counts[key] = matchup_counts.get(key, 0) + 1
+
 for g in qualified_picks:
     pick_team = g["pick_team"]
     pick_ml = g["away_ml"] if pick_team == g["away_abbr"] else g["home_ml"]
-    pick_id = f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}-ml'
+    matchup_key = (g["away_abbr"], g["home_abbr"])
+    game_suffix = ""
+    if matchup_counts.get(matchup_key, 0) > 1:
+        game_suffix = f'-g{g.get("game_pk")}' if g.get("game_pk") else f'-{g["time_str"].lower().replace(" ", "").replace(":", "")}'
+    pick_id = f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}{game_suffix}-ml'
     if pick_id in by_id and by_id[pick_id]["status"] != "pending":
         continue  # Never mutate settled picks; renderer reads what's there.
     by_id[pick_id] = {
@@ -1832,6 +1842,8 @@ for g in qualified_picks:
         "units": 50,
         "sim_projection": f'{g["away_abbr"]} {g["away_runs"]} - {g["home_abbr"]} {g["home_runs"]}',
         "sim_edge": g.get("value"),
+        "game_pk": g.get("game_pk"),
+        "game_time": g.get("time_str"),
         "status": "pending",
         "result": None,
         "pl": None,
