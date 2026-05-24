@@ -85,7 +85,11 @@ def aggregate(picks, baseline=None):
 
     # Streak — last N settled, newest first (pure auto-tracked picks only;
     # baseline doesn't contribute since we don't have per-pick history there)
-    settled_sorted = sorted(settled, key=lambda p: p["date"], reverse=True)
+    settled_sorted = sorted(
+        (p for p in settled if p["status"] in ("win", "loss")),
+        key=lambda p: p["date"],
+        reverse=True,
+    )
     streak = 0
     streak_type = ""
     if settled_sorted:

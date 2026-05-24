@@ -176,7 +176,7 @@ def inject(matchup, side_text, risk=50, date_str=None, ml_odds=None, force=False
     # Append to CSV
     csv_exists = os.path.exists(PICKS_CSV)
     with open(PICKS_CSV, "a", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\n")
         if not csv_exists:
             writer.writerow(["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score"])
         writer.writerow([date_str, matchup, side, pick_type, risk, result, profit, odds_val, home_score, away_score])

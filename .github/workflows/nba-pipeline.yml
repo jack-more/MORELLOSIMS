@@ -329,24 +329,6 @@ jobs:
         working-directory: nba_pipeline
         run: python scripts/grade_picks.py
 
-      - name: Settle blog + sync dashboard
-        run: |
-          # settle_blog reads settlement_results.json and patches index.html.
-          # In the new architecture, render-dispatch owns index.html, so we
-          # don't run settle_blog against the homepage. Instead, settle_blog
-          # is run inside nba_pipeline against its own internal index.html
-          # (the dashboard) — which we then copy to nbasim/.
-          if [ -f nba_pipeline/data/settlement_results.json ]; then
-            python nba_pipeline/scripts/settle_blog.py nba_pipeline/data/settlement_results.json nba_pipeline/index.html || echo "settle_blog non-fatal"
-          fi
-          mkdir -p nbasim
-          cp nba_pipeline/index.html nbasim/index.html
-          sed -i 's|<body>|<body data-ma-theme="dark">|' nbasim/index.html
-          sed -i 's|<div class="top-picks">|<div class="top-picks" style="display:flex;align-items:center;gap:8px;">\n                <div class="status-indicators" style="display:flex;align-items:center;"></div>|' nbasim/index.html
-
-      - name: Build standalone NBA Simulator app at /sim/
-        run: python3 scripts/build_sim_app.py
-
       - name: Sync NBA picks to contract format (picks/nba.json)
         run: python3 nba_pipeline/scripts/sync_to_picks_json.py
 
@@ -356,8 +338,6 @@ jobs:
           git config user.email "noreply@github.com"
           DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
 
-          git add nbasim/index.html
-          git add sim/index.html
           git add picks/nba.json
           if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
           if [ -f nba_pipeline/data/settlement_results.json ]; then git add nba_pipeline/data/settlement_results.json; fi

@@ -3,13 +3,14 @@
 capture_picks.py — Automated pick capture from daily_picks.json.
 
 Reads the SIM's pre-game predictions, filters by confidence threshold,
+requires tracked picks to be C8 or better,
 and logs actionable picks to:
   1. data/picks.csv (backward compat with grade_picks.py / settle_blog.py)
   2. picks DB table (full metadata)
   3. data/pick_log.json (append-only audit trail)
 
 Usage:
-  python scripts/capture_picks.py [--threshold 65] [--dry-run]
+  python scripts/capture_picks.py [--threshold 65] [--min-conf-grade 8] [--dry-run]
 """
 
 import argparse
@@ -27,6 +28,7 @@ from db.connection import execute, read_query
 PICKS_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "picks.csv")
 DAILY_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "daily_picks.json")
 PICK_LOG = os.path.join(os.path.dirname(__file__), "..", "data", "pick_log.json")
+MIN_TRACKED_CONF_GRADE = 8
 
 
 def conf_to_1_10(confidence):
@@ -66,7 +68,7 @@ def existing_picks(slate_date):
     return existing
 
 
-def capture(threshold=65, dry_run=False):
+def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
     """Read daily_picks.json, filter, and log picks."""
     if not os.path.exists(DAILY_JSON):
         print("[capture] No daily_picks.json found. Run generate_frontend.py first.")
@@ -78,6 +80,7 @@ def capture(threshold=65, dry_run=False):
     raw_slate_date = snapshot["slate_date"]
     generated_at = snapshot["generated_at"]
     now = datetime.now(timezone.utc).isoformat()
+    games = snapshot.get("games") or []
 
     # Normalize date to YYYY-MM-DD format (daily_picks.json uses "MAR 4" format)
     if raw_slate_date and not raw_slate_date[0].isdigit():
@@ -109,6 +112,11 @@ def capture(threshold=65, dry_run=False):
 
     print(f"[capture] Slate: {slate_date} | Generated: {generated_at}")
     print(f"[capture] Threshold: >{threshold} or <{100 - threshold}")
+    print(f"[capture] Tracking floor: C:{min_conf_grade}+")
+
+    if not games:
+        print(f"[capture] Blank slate: no games in daily_picks.json ({raw_slate_date}).")
+        return []
 
     already = existing_picks(slate_date)
     # Also check adjacent dates to prevent cross-day duplicates
@@ -116,7 +124,7 @@ def capture(threshold=65, dry_run=False):
         already |= existing_picks(adj_date)
     picks = []
 
-    for g in snapshot["games"]:
+    for g in games:
         conf = g["confidence"]
         edge = g["spread_edge"]
 
@@ -141,6 +149,10 @@ def capture(threshold=65, dry_run=False):
             direction = "AWAY"
 
         c10 = conf_to_1_10(conf)
+        if c10 < min_conf_grade:
+            print(f"  SKIP (below C:{min_conf_grade}): {matchup} -> {pick_text} | conf={conf:.0f} ({c10}/10)")
+            continue
+
         risk = risk_amount(c10)
 
         # Extract line value from pick_text (e.g., "LAL +3.5" → 3.5)
@@ -201,7 +213,7 @@ def capture(threshold=65, dry_run=False):
     # ── Write to CSV ──
     csv_exists = os.path.exists(PICKS_CSV)
     with open(PICKS_CSV, "a", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\n")
         if not csv_exists:
             writer.writerow(["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score"])
         for p in picks:
@@ -255,6 +267,8 @@ def main():
     parser = argparse.ArgumentParser(description="Capture SIM picks from daily snapshot")
     parser.add_argument("--threshold", type=int, default=65,
                         help="Confidence threshold (default 65 = picks >65 or <35)")
+    parser.add_argument("--min-conf-grade", type=int, default=MIN_TRACKED_CONF_GRADE,
+                        help="Minimum 1-10 confidence grade to track (default 8)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Preview picks without saving")
     args = parser.parse_args()
@@ -276,7 +290,7 @@ def main():
         except Exception:
             pass  # Column already exists
 
-    picks = capture(threshold=args.threshold, dry_run=args.dry_run)
+    picks = capture(threshold=args.threshold, min_conf_grade=args.min_conf_grade, dry_run=args.dry_run)
     print(f"\n[capture] Done. {len(picks)} picks captured for today's slate.")
 
 

@@ -33,6 +33,7 @@ PICK_LOG = DATA / "pick_log.json"
 DAILY = DATA / "daily_picks.json"
 
 UNIT_SIZE_DEFAULT = 50  # used when CSV row has no `risk` value
+MIN_TRACKED_CONF = 8
 
 
 def parse_matchup(s: str) -> tuple[str, str]:
@@ -72,8 +73,9 @@ def normalize_slate_date(raw: str) -> str:
         return raw[:10]
     for fmt in ("%b %d", "%B %d"):
         try:
-            dt = datetime.strptime(raw, fmt)
-            return dt.replace(year=datetime.now().year).strftime("%Y-%m-%d")
+            year = datetime.now().year
+            dt = datetime.strptime(f"{raw} {year}", f"{fmt} %Y")
+            return dt.strftime("%Y-%m-%d")
         except ValueError:
             continue
     return ""
@@ -148,13 +150,16 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     # If pick_log has no entry (manual injection, direct CSV append, or
     # legacy rows with no metadata), derive a sensible conf floor from the
     # risk amount. Mirrors capture_picks.py's risk_amount() ladder:
-    #   risk 50 → C:8+   (premium plays)
-    #   risk 30 → C:5-7  (mid-tier)
-    #   risk 20 → C:1-4  (light)
+    #   risk 50 -> C:8+   (premium plays)
+    #   risk 30 -> C:5-7  (mid-tier, not tracked)
+    #   risk 20 -> C:1-4  (light, not tracked)
     if conf == 0 and risk:
         if risk >= 50: conf = 8
         elif risk >= 30: conf = 5
         elif risk > 0:   conf = 1
+
+    if conf < MIN_TRACKED_CONF:
+        return None
 
     sim_spread = meta.get("sim_spread")
     sim_edge = meta.get("spread_edge")
