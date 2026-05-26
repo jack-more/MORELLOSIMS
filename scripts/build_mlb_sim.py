@@ -185,7 +185,7 @@ def get_current_pitcher_info(pid):
     """Return only current-season atlas classification; never show stale labels."""
     current = current_pitcher_idx.get(pid)
     if current:
-        return current
+        return {**current, "has_current_atlas": True}
 
     historical = pitcher_idx.get(pid, {})
     is_rhp = historical.get("is_rhp", 1)
@@ -194,8 +194,9 @@ def get_current_pitcher_info(pid):
         "game_year": 2026,
         "is_rhp": is_rhp,
         "cluster": "R_UT" if is_rhp else "L_UT",
-        "archetype": "Untyped",
+        "archetype": "No 2026 Sample",
         "gmm_proba": {"R_UT" if is_rhp else "L_UT": 1.0},
+        "has_current_atlas": False,
     }
 
 # (batter_id, cluster) → BLENDED hvc record across recent years (2025+2026)
@@ -1082,8 +1083,8 @@ for g in games_raw:
     # MUST-PICK rule: any matchup with run_diff >= 1.8 AND both pitchers having
     # full stats (in atlas index, non-default archetype) qualifies regardless
     # of the C:10 confidence floor. Captures real edges the binary cutoff misses.
-    away_has_full = bool(away_ps) and away_ps.get("archetype", "Unknown") != "Unknown"
-    home_has_full = bool(home_ps) and home_ps.get("archetype", "Unknown") != "Unknown"
+    away_has_full = bool(away_ps) and away_ps.get("has_current_atlas") is True
+    home_has_full = bool(home_ps) and home_ps.get("has_current_atlas") is True
     must_pick = run_diff >= 1.8 and away_has_full and home_has_full
 
     # FULL COVERAGE rule: do NOT rate games where any batter in either lineup
@@ -1846,14 +1847,36 @@ for g in qualified_picks:
     key = (g["away_abbr"], g["home_abbr"])
     matchup_counts[key] = matchup_counts.get(key, 0) + 1
 
-for g in qualified_picks:
-    pick_team = g["pick_team"]
-    pick_ml = g["away_ml"] if pick_team == g["away_abbr"] else g["home_ml"]
+qualified_ids = set()
+
+
+def pick_id_for_game(g):
     matchup_key = (g["away_abbr"], g["home_abbr"])
     game_suffix = ""
     if matchup_counts.get(matchup_key, 0) > 1:
         game_suffix = f'-g{g.get("game_pk")}' if g.get("game_pk") else f'-{g["time_str"].lower().replace(" ", "").replace(":", "")}'
-    pick_id = f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}{game_suffix}-ml'
+    return f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}{game_suffix}-ml'
+
+
+for g in qualified_picks:
+    qualified_ids.add(pick_id_for_game(g))
+
+# A rebuild is the source of truth for today's not-yet-settled MLB slate. If a
+# pending same-day pick no longer qualifies after lineup/atlas/odds refreshes,
+# remove it instead of leaving a stale bet in the homepage contract.
+for pid, pick in list(by_id.items()):
+    if (
+        pick.get("sport") == "mlb"
+        and pick.get("date") == TODAY
+        and pick.get("status") == "pending"
+        and pid not in qualified_ids
+    ):
+        del by_id[pid]
+
+for g in qualified_picks:
+    pick_team = g["pick_team"]
+    pick_ml = g["away_ml"] if pick_team == g["away_abbr"] else g["home_ml"]
+    pick_id = pick_id_for_game(g)
     if pick_id in by_id and by_id[pick_id]["status"] != "pending":
         continue  # Never mutate settled picks; renderer reads what's there.
     by_id[pick_id] = {
