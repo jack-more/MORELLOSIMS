@@ -28,8 +28,17 @@ CSV_PATH = os.path.join(REPO, "mlbsim", "picks_log.csv")
 OUT_PATH = os.path.join(REPO, "mlbsim", "settled_picks.csv")
 RECORD_PATH = os.path.join(REPO, "mlbsim", "record.json")
 
-UNIT_SIZE = 50  # $PP per C:10 pick
+STAKE_BY_CONF = {
+    10: 100,
+    9: 50,
+    8: 30,
+}
 ODDS_CAP = 350  # |odds| < 350 (matches current MAX_FAV_BY_CONF[10])
+
+
+def stake_for_conf(conf):
+    """Return $PP risk by confidence grade."""
+    return STAKE_BY_CONF.get(int(conf or 0), 0)
 
 
 def run(cmd, **kw):
@@ -207,13 +216,14 @@ def settle_date(date_iso, picks_for_date, schedule_cache):
         p["home_score"] = home_runs
 
         ml = p["pick_ml"]
+        units = stake_for_conf(p.get("conf"))
         if is_win:
             if ml > 0:
-                p["pl"] = round(UNIT_SIZE * ml / 100, 2)
+                p["pl"] = round(units * ml / 100, 2)
             else:
-                p["pl"] = round(UNIT_SIZE * 100 / abs(ml), 2)
+                p["pl"] = round(units * 100 / abs(ml), 2)
         else:
-            p["pl"] = -UNIT_SIZE
+            p["pl"] = -units
 
 
 def find_game(games, away_abbr, home_abbr):
@@ -287,7 +297,7 @@ def main():
     settled = [p for p in deduped if p.get("result") in ("W", "L")]
     wins = sum(1 for p in settled if p["result"] == "W")
     losses = sum(1 for p in settled if p["result"] == "L")
-    risked = len(settled) * UNIT_SIZE
+    risked = sum(stake_for_conf(p.get("conf")) for p in settled)
     pl = sum(p.get("pl", 0) for p in settled)
     roi = (pl / risked * 100) if risked else 0
 

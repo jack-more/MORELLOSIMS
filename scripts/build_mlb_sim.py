@@ -261,6 +261,11 @@ def get_base_woba(bid):
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
 MIN_CONF_PICK = 8  # C:8+ qualifies (8, 9, 10) — opens up the slate
+STAKE_BY_CONF = {
+    10: 100,
+    9: 50,
+    8: 30,
+}
 MAX_FAV_BY_CONF = {
     # Per-confidence cap on max favorite odds (more negative = bigger fav).
     # Anything more favored than the cap gets filtered as odds_too_heavy.
@@ -269,6 +274,10 @@ MAX_FAV_BY_CONF = {
     9: -340,
     10: -340,
 }
+
+def stake_for_conf(conf):
+    """Return $PP risk by confidence grade."""
+    return STAKE_BY_CONF.get(int(conf or 0), 0)
 
 def get_base_rates(bid):
     """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
@@ -1839,7 +1848,7 @@ for g in qualified_picks:
         "odds": pick_ml,
         "pick_text": f'{pick_team} ML',
         "conf": g["conf"],
-        "units": 50,
+        "units": stake_for_conf(g["conf"]),
         "sim_projection": f'{g["away_abbr"]} {g["away_runs"]} - {g["home_abbr"]} {g["home_runs"]}',
         "sim_edge": g.get("value"),
         "game_pk": g.get("game_pk"),

@@ -16,13 +16,21 @@ from datetime import datetime, timedelta, timezone
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 PICKS_JSON = os.path.join(REPO, "picks", "mlb.json")
-UNIT_SIZE = 50
+STAKE_BY_CONF = {
+    10: 100,
+    9: 50,
+    8: 30,
+}
 
 ET = timezone(timedelta(hours=-4))
 YESTERDAY = (datetime.now(ET) - timedelta(days=1)).strftime("%Y-%m-%d")
 
 TEAM_ALIAS = {"ATH":"OAK","AZ":"ARI","CWS":"CHW","TB":"TBR","WSH":"WSN","SF":"SFG","KC":"KCR","SD":"SDP"}
 VOID_STATES = {"Postponed", "Cancelled", "Canceled"}
+
+def stake_for_conf(conf):
+    """Return $PP risk by confidence grade."""
+    return STAKE_BY_CONF.get(int(conf or 0), 0)
 
 def normalize(abbr):
     return TEAM_ALIAS.get(abbr, abbr)
@@ -131,15 +139,17 @@ def main():
 
         winner = p["away"] if away_runs > home_runs else p["home"]
         is_win = winner == p["side"]
+        units = p.get("units") or stake_for_conf(p.get("conf")) or 50
+        p["units"] = units
         # picks/mlb.json stores odds as strings like "-326" or "+150"; coerce to int.
         try:
             ml = int(str(p.get("odds") or -110).replace("+", ""))
         except (ValueError, TypeError):
             ml = -110
         if is_win:
-            pl = round(UNIT_SIZE * (ml / 100 if ml > 0 else 100 / abs(ml)), 2)
+            pl = round(units * (ml / 100 if ml > 0 else 100 / abs(ml)), 2)
         else:
-            pl = -UNIT_SIZE
+            pl = -units
 
         p["status"] = "win" if is_win else "loss"
         p["result"] = f"{away_runs}-{home_runs}"
