@@ -79,7 +79,7 @@ SPLIT_TYPES = {"FS", "FO", "SC"}
 KNUCKLE_TYPES = {"KN"}
 
 PITCH_FAMILY_MINIMUMS = {
-    "Split Demon": ("split_or_change", 0.08),
+    "Split Demon": ("split", 0.08),
     "Ghost": ("split_or_change", 0.08),
     "Uncle Charlie": ("curve", 0.10),
     "Knuckleball Wizard": ("knuckle", 0.05),
