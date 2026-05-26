@@ -50,6 +50,44 @@ WOBA_WEIGHTS = {
 }
 WOBA_SCALE = 1.15  # wOBA scale factor
 
+CLUSTER_FEATURE_WEIGHTS = {
+    "avg_velo_FF": 1.20,
+    "whiff_rate": 1.30,
+    "pfx_x_avg": 1.00,
+    "pfx_z_avg": 1.00,
+    "groundball_rate": 0.90,
+    "spin_overall": 0.70,
+}
+
+CLUSTER_FALLBACK_SCALES = {
+    "avg_velo_FF": 2.5,
+    "whiff_rate": 0.055,
+    "pfx_x_avg": 0.50,
+    "pfx_z_avg": 0.28,
+    "groundball_rate": 0.16,
+    "spin_overall": 250.0,
+}
+
+CLUSTER_PROBA_TEMP = 0.65
+CLUSTER_TOP_N = 3
+
+HEATER_TYPES = {"FF", "FA", "SI", "FC"}
+CURVE_TYPES = {"CU", "KC"}
+SLIDER_TYPES = {"SL", "ST", "SV"}
+CHANGE_TYPES = {"CH"}
+SPLIT_TYPES = {"FS", "FO", "SC"}
+KNUCKLE_TYPES = {"KN"}
+
+PITCH_FAMILY_MINIMUMS = {
+    "Split Demon": ("split_or_change", 0.08),
+    "Ghost": ("split_or_change", 0.08),
+    "Uncle Charlie": ("curve", 0.10),
+    "Knuckleball Wizard": ("knuckle", 0.05),
+    "Cutman": ("cutter", 0.12),
+    "Boomerang": ("slider", 0.12),
+    "Yakker": ("breaking", 0.12),
+}
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -169,6 +207,224 @@ def build_pitcher_cluster_index():
             idx[pid] = ps
     print(f"  Pitcher cluster index: {len(idx)} pitchers (latest year per pitcher)")
     return idx
+
+
+def _median_or_none(values):
+    clean = [v for v in values if isinstance(v, (int, float)) and not pd.isna(v)]
+    if not clean:
+        return None
+    return float(np.median(clean))
+
+
+def build_cluster_assignment_model():
+    """
+    Build fixed cluster profiles from the historical atlas.
+
+    We do not have the original saved GMM/PCA/scaler artifacts in this repo, so
+    current-year assignment uses normalized distance to the existing archetype
+    profiles. It is still a true current-year recluster: 2026 pitchers are scored
+    from their 2026 Statcast features instead of inheriting last year's bucket.
+    """
+    clusters_meta = load_atlas("clusters.json")
+    pitcher_seasons = load_atlas("pitcher_seasons.json")
+
+    by_cluster = defaultdict(list)
+    all_values = defaultdict(list)
+    for ps in pitcher_seasons:
+        if ps.get("game_year") == SEASON:
+            continue
+        cid = ps.get("cluster")
+        if not cid:
+            continue
+        by_cluster[cid].append(ps)
+        for f in CLUSTER_FEATURE_WEIGHTS:
+            v = ps.get(f)
+            if isinstance(v, (int, float)) and not pd.isna(v):
+                if f != "arm_angle" and v == 0:
+                    continue
+                all_values[f].append(float(v))
+
+    scales = {}
+    for f, fallback in CLUSTER_FALLBACK_SCALES.items():
+        vals = all_values.get(f) or []
+        stdev = float(np.std(vals)) if len(vals) >= 2 else 0.0
+        scales[f] = stdev if stdev > 0 else fallback
+
+    profiles = {}
+    for cid, meta in clusters_meta.items():
+        rows = by_cluster.get(cid, [])
+        profile = {
+            "cluster": cid,
+            "hand": meta.get("hand") or ("RHP" if cid.startswith("R_") else "LHP"),
+            "archetype": _cluster_short_label(cid, clusters_meta),
+        }
+
+        for f in CLUSTER_FEATURE_WEIGHTS:
+            hist_val = _median_or_none([r.get(f) for r in rows])
+            meta_val = meta.get(f)
+            if hist_val is not None:
+                profile[f] = hist_val
+            elif isinstance(meta_val, (int, float)) and not pd.isna(meta_val):
+                profile[f] = float(meta_val)
+
+        for f in ("pca_x", "pca_y", "pca_z"):
+            meta_val = meta.get(f)
+            if isinstance(meta_val, (int, float)) and not pd.isna(meta_val):
+                profile[f] = float(meta_val)
+
+        # These are only available in clusters.json, not older pitcher_seasons.
+        for f in ("groundball_rate", "spin_overall"):
+            meta_val = meta.get(f)
+            if isinstance(meta_val, (int, float)) and not pd.isna(meta_val):
+                profile[f] = float(meta_val)
+
+        profiles[cid] = profile
+
+    print(f"  Cluster assignment profiles: {len(profiles)} clusters")
+    return profiles, scales, clusters_meta
+
+
+def _cluster_distance(features, profile, scales):
+    weighted = 0.0
+    total_weight = 0.0
+    for f, weight in CLUSTER_FEATURE_WEIGHTS.items():
+        fv = features.get(f)
+        pv = profile.get(f)
+        if not isinstance(fv, (int, float)) or not isinstance(pv, (int, float)):
+            continue
+        if pd.isna(fv) or pd.isna(pv):
+            continue
+        if f != "arm_angle" and fv == 0:
+            continue
+        scale = scales.get(f) or CLUSTER_FALLBACK_SCALES[f]
+        z = (float(fv) - float(pv)) / scale
+        weighted += weight * z * z
+        total_weight += weight
+
+    if total_weight == 0:
+        return float("inf")
+    return weighted / total_weight
+
+
+def compute_pitch_mix(group):
+    counts = group["pitch_type"].dropna().astype(str).value_counts()
+    total = int(counts.sum())
+    if total == 0:
+        return {}
+    return {
+        pitch: round(int(count) / total, 4)
+        for pitch, count in counts.items()
+        if pitch != "PO"
+    }
+
+
+def _mix_share(pitch_mix, pitch_types):
+    return sum(float(pitch_mix.get(pt, 0.0)) for pt in pitch_types)
+
+
+def _mix_family_share(pitch_mix, family):
+    if family == "heater":
+        return _mix_share(pitch_mix, HEATER_TYPES)
+    if family == "cutter":
+        return _mix_share(pitch_mix, {"FC"})
+    if family == "curve":
+        return _mix_share(pitch_mix, CURVE_TYPES)
+    if family == "slider":
+        return _mix_share(pitch_mix, SLIDER_TYPES)
+    if family == "breaking":
+        return _mix_share(pitch_mix, CURVE_TYPES | SLIDER_TYPES)
+    if family == "split":
+        return _mix_share(pitch_mix, SPLIT_TYPES)
+    if family == "change":
+        return _mix_share(pitch_mix, CHANGE_TYPES)
+    if family == "split_or_change":
+        return _mix_share(pitch_mix, SPLIT_TYPES | CHANGE_TYPES)
+    if family == "knuckle":
+        return _mix_share(pitch_mix, KNUCKLE_TYPES)
+    return 0.0
+
+
+def _active_pitch_count(pitch_mix, threshold=0.05):
+    return sum(1 for share in pitch_mix.values() if share >= threshold)
+
+
+def _active_family_count(pitch_mix, threshold=0.05):
+    families = (
+        "heater",
+        "curve",
+        "slider",
+        "split",
+        "change",
+        "knuckle",
+    )
+    return sum(1 for family in families if _mix_family_share(pitch_mix, family) >= threshold)
+
+
+def _pitch_family_penalty(features, profile):
+    """Return inf for pitch-family impossible labels, otherwise a soft penalty."""
+    pitch_mix = features.get("pitch_mix") or {}
+    if not pitch_mix:
+        return 0.0
+
+    label = profile.get("archetype") or ""
+    for name, (family, minimum) in PITCH_FAMILY_MINIMUMS.items():
+        if name in label and _mix_family_share(pitch_mix, family) < minimum:
+            return float("inf")
+
+    heater = _mix_family_share(pitch_mix, "heater")
+    split_or_change = _mix_family_share(pitch_mix, "split_or_change")
+    breaking = _mix_family_share(pitch_mix, "breaking")
+    active_pitches = _active_pitch_count(pitch_mix)
+    active_families = _active_family_count(pitch_mix)
+    heater_dominant = heater >= 0.75 and split_or_change < 0.08 and breaking < 0.18
+
+    if "Heater-Heavy" in label:
+        if heater_dominant:
+            return -0.45
+        return -0.18 if heater >= 0.60 else 0.25
+    if "Kitchen Sink" in label:
+        if heater_dominant:
+            return 0.25
+        return -0.12 if active_pitches >= 4 and active_families >= 3 else 0.20
+    if "Triple Threat" in label:
+        return -0.08 if active_pitches >= 3 else 0.15
+    if "Snake" in label and _mix_family_share(pitch_mix, "slider") >= 0.10:
+        return -0.06
+    return 0.0
+
+
+def assign_current_cluster(features, profiles, scales):
+    """Assign a 2026 pitcher to the nearest existing archetype profile."""
+    hand = "RHP" if features.get("is_rhp", 1) else "LHP"
+    candidates = [
+        (cid, profile)
+        for cid, profile in profiles.items()
+        if profile.get("hand") == hand
+    ]
+    if not candidates:
+        candidates = list(profiles.items())
+
+    ranked = []
+    for cid, profile in candidates:
+        distance = _cluster_distance(features, profile, scales)
+        penalty = _pitch_family_penalty(features, profile)
+        ranked.append((cid, distance + penalty))
+    ranked = sorted(ranked, key=lambda item: item[1])
+    ranked = [(cid, d) for cid, d in ranked if math.isfinite(d)]
+    if not ranked:
+        fallback = f"{'R' if hand == 'RHP' else 'L'}_UT"
+        return fallback, {fallback: 1.0}
+
+    top = ranked[:CLUSTER_TOP_N]
+    best = top[0][0]
+
+    raw = [math.exp(-d / CLUSTER_PROBA_TEMP) for _, d in top]
+    total = sum(raw) or 1.0
+    proba = {
+        cid: round(score / total, 4)
+        for (cid, _), score in zip(top, raw)
+    }
+    return best, proba
 
 
 # ─── Step 3: Compute hitter-vs-cluster stats for 2026 ───────────────────────
@@ -450,10 +706,10 @@ def merge_batters(new_records, name_map):
 
 # ─── Step 5: Compute pitcher season features for 2026 ───────────────────────
 
-def compute_pitcher_seasons(df, pitcher_idx):
+def compute_pitcher_seasons(df, pitcher_idx, cluster_profiles, cluster_scales, clusters_meta):
     """
     Compute 2026 pitcher-season features from Statcast data.
-    For known pitchers, inherit cluster from their most recent season.
+    Assign current-season clusters from 2026 Statcast features.
     """
     print(f"\n{'='*60}")
     print(f"COMPUTING PITCHER SEASONS (2026)")
@@ -464,6 +720,7 @@ def compute_pitcher_seasons(df, pitcher_idx):
         prev = pitcher_idx.get(int(pid))
 
         # Pitch mix features
+        pitch_mix = compute_pitch_mix(group)
         pitches = group["pitch_type"].value_counts(normalize=True)
         velo = group.loc[
             group["pitch_type"].isin(["FF", "SI"]), "release_speed"
@@ -496,7 +753,17 @@ def compute_pitcher_seasons(df, pitcher_idx):
         gb = batted[batted["bb_type"] == "ground_ball"]
         gb_rate = round(len(gb) / len(batted), 4) if len(batted) > 0 else 0.0
 
-        # Is SP? Check if they started (at_bat_number == 1 means first AB of game)
+        # Current role metadata. Not used for archetype assignment.
+        appearances = group["game_pk"].nunique() if "game_pk" in group.columns else 1
+        starts = 0
+        if "game_pk" in group.columns and "inning" in group.columns:
+            for _, g in group.groupby("game_pk"):
+                inning = g["inning"].dropna()
+                if len(inning) and int(inning.min()) == 1:
+                    starts += 1
+        avg_pitches_per_app = len(group) / appearances if appearances else len(group)
+        is_sp = 1 if starts > 0 and (starts >= appearances * 0.4 or avg_pitches_per_app >= 45) else 0
+
         p_throws = group["p_throws"].iloc[0] if len(group) > 0 else "R"
         is_rhp = 1 if p_throws == "R" else 0
 
@@ -505,26 +772,32 @@ def compute_pitcher_seasons(df, pitcher_idx):
         # Statcast format: "Last, First"
         pitcher_name = str(pitcher_name)
 
-        # Inherit cluster and other fields from previous season
-        if prev:
-            cluster = prev["cluster"]
-            archetype = prev.get("archetype", "")
-            pca_x = prev.get("pca_x", 0)
-            pca_y = prev.get("pca_y", 0)
-            pca_z = prev.get("pca_z", 0)
-            is_sp = prev.get("is_sp", 0)
-            arm_angle = prev.get("arm_angle", 0)
-            gmm_proba = prev.get("gmm_proba", {})
+        if "arm_angle" in group.columns:
+            arm = group["arm_angle"].dropna()
+            arm_angle = round(float(arm.mean()), 1) if len(arm) > 0 else 0.0
         else:
-            # Unknown pitcher — assign to generic cluster
-            cluster = f"{'R' if is_rhp else 'L'}_UT"
-            archetype = "Untyped"
-            pca_x = 0
-            pca_y = 0
-            pca_z = 0
-            is_sp = 0
-            arm_angle = 0
-            gmm_proba = {cluster: 1.0}
+            arm_angle = prev.get("arm_angle", 0) if prev else 0
+
+        features = {
+            "is_rhp": is_rhp,
+            "is_sp": is_sp,
+            "avg_velo_FF": avg_velo,
+            "whiff_rate": whiff_rate,
+            "groundball_rate": gb_rate,
+            "spin_overall": avg_spin,
+            "pfx_x_avg": avg_pfx_x,
+            "pfx_z_avg": avg_pfx_z,
+            "arm_angle": arm_angle,
+            "pitch_mix": pitch_mix,
+        }
+        cluster, gmm_proba = assign_current_cluster(
+            features, cluster_profiles, cluster_scales
+        )
+        archetype = _cluster_short_label(cluster, clusters_meta) or "Untyped"
+        profile = cluster_profiles.get(cluster, {})
+        pca_x = profile.get("pca_x", prev.get("pca_x", 0) if prev else 0)
+        pca_y = profile.get("pca_y", prev.get("pca_y", 0) if prev else 0)
+        pca_z = profile.get("pca_z", prev.get("pca_z", 0) if prev else 0)
 
         records.append({
             "pitcher": int(pid),
@@ -539,6 +812,11 @@ def compute_pitcher_seasons(df, pitcher_idx):
             "pca_z": pca_z,
             "avg_velo_FF": avg_velo,
             "whiff_rate": whiff_rate,
+            "groundball_rate": gb_rate,
+            "spin_overall": avg_spin,
+            "pitch_mix": pitch_mix,
+            "starts": int(starts),
+            "appearances": int(appearances),
             "arm_angle": arm_angle,
             "pfx_x_avg": avg_pfx_x,
             "pfx_z_avg": avg_pfx_z,
@@ -848,21 +1126,26 @@ def main():
 
     # 2. Build pitcher cluster index from existing data
     pitcher_idx = build_pitcher_cluster_index()
+    cluster_profiles, cluster_scales, clusters_meta = build_cluster_assignment_model()
 
     # 3. Build batter name lookup
     name_map = build_batter_names(df)
 
-    # 4. Compute hitter-vs-cluster for 2026
-    hvc_records = compute_hitter_vs_cluster(df, pitcher_idx)
+    # 4. Compute pitcher seasons for 2026 first, so hitter-vs-cluster uses
+    # current-year pitcher assignments instead of stale inherited clusters.
+    ps_records = compute_pitcher_seasons(
+        df, pitcher_idx, cluster_profiles, cluster_scales, clusters_meta
+    )
+    current_pitcher_idx = {r["pitcher"]: r for r in ps_records}
+
+    # 5. Compute hitter-vs-cluster for 2026
+    hvc_records = compute_hitter_vs_cluster(df, current_pitcher_idx)
     # Fill in batter names
     for r in hvc_records:
         r["batter_name"] = name_map.get(r["batter"], "")
 
-    # 4b. Compute hitter season totals for 2026 (powers atlas/batters.json)
+    # 5b. Compute hitter season totals for 2026 (powers atlas/batters.json)
     hs_records = compute_hitter_seasons(df, name_map)
-
-    # 5. Compute pitcher seasons for 2026
-    ps_records = compute_pitcher_seasons(df, pitcher_idx)
 
     # 6. Estimate SIERA
     siera_records = compute_siera_estimates(df, ps_records)
