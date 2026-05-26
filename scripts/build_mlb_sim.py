@@ -17,23 +17,41 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 ATLAS_DIR = os.path.join(REPO_ROOT, "atlas")
 OUTPUT = os.path.join(REPO_ROOT, "mlbsim", "index.html")
-RECORD_PATH = os.path.join(REPO_ROOT, "mlbsim", "record.json")
+PICKS_DIR = os.path.join(REPO_ROOT, "picks")
+BASELINES_PATH = os.path.join(PICKS_DIR, "baselines.json")
+MLB_PICKS_PATH = os.path.join(PICKS_DIR, "mlb.json")
 
-# ─── Season record (single source of truth) ──────────────────────────────────
-# Read from mlbsim/record.json so updating the record never requires editing
-# this script. Falls back to a sane default if file is missing/malformed.
-try:
-    with open(RECORD_PATH) as _rf:
-        _rec = json.load(_rf)
-    SEASON_RECORD = f'{_rec["wins"]}-{_rec["losses"]}'
-    _roi = _rec["roi_pct"]
-    SEASON_ROI_VALUE = f'{"+" if _roi >= 0 else ""}{_roi:.1f}%'
-    SEASON_ROI = f'{SEASON_ROI_VALUE} ROI'
-except Exception as _e:
-    print(f"  WARN record.json: {_e} — falling back to placeholder")
-    SEASON_RECORD = "0-0"
-    SEASON_ROI_VALUE = "+0.0%"
-    SEASON_ROI = "+0.0% ROI"
+
+def load_season_record():
+    """Use the same baseline + picks contract as the homepage dispatch."""
+    try:
+        with open(BASELINES_PATH) as f:
+            baseline = json.load(f).get("mlb", {})
+        wins = baseline.get("wins") or 0
+        losses = baseline.get("losses") or 0
+        risked = baseline.get("risked") or 0
+        pl = baseline.get("pl") or 0
+
+        if os.path.exists(MLB_PICKS_PATH):
+            with open(MLB_PICKS_PATH) as f:
+                picks = json.load(f)
+            for p in picks:
+                if p.get("status") not in ("win", "loss", "push"):
+                    continue
+                wins += 1 if p.get("status") == "win" else 0
+                losses += 1 if p.get("status") == "loss" else 0
+                risked += p.get("units") or 0
+                pl += p.get("pl") or 0
+
+        roi = (pl / risked * 100) if risked else 0
+        return f"{wins}-{losses}", f'{"+" if roi >= 0 else ""}{roi:.1f}%'
+    except Exception as _e:
+        print(f"  WARN season record contract: {_e} — falling back to placeholder")
+        return "0-0", "+0.0%"
+
+
+SEASON_RECORD, SEASON_ROI_VALUE = load_season_record()
+SEASON_ROI = f"{SEASON_ROI_VALUE} ROI"
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
 ET = timezone(timedelta(hours=-4))
