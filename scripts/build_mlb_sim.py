@@ -163,9 +163,12 @@ clusters_meta = load_atlas("clusters.json")
 # Build indexes
 # pitcher_id → most recent pitcher_season record
 pitcher_idx = {}
+current_pitcher_idx = {}
 for ps in pitcher_seasons:
     pid = ps["pitcher"]
     yr = ps["game_year"]
+    if yr == 2026:
+        current_pitcher_idx[pid] = ps
     if pid not in pitcher_idx or yr > pitcher_idx[pid]["game_year"]:
         pitcher_idx[pid] = ps
 
@@ -176,6 +179,24 @@ for k, v in pitcher_tiers.items():
     yr = v["game_year"]
     if pid not in tier_idx or yr > tier_idx[pid]["game_year"]:
         tier_idx[pid] = v
+
+
+def get_current_pitcher_info(pid):
+    """Return only current-season atlas classification; never show stale labels."""
+    current = current_pitcher_idx.get(pid)
+    if current:
+        return current
+
+    historical = pitcher_idx.get(pid, {})
+    is_rhp = historical.get("is_rhp", 1)
+    return {
+        "pitcher": pid,
+        "game_year": 2026,
+        "is_rhp": is_rhp,
+        "cluster": "R_UT" if is_rhp else "L_UT",
+        "archetype": "Untyped",
+        "gmm_proba": {"R_UT" if is_rhp else "L_UT": 1.0},
+    }
 
 # (batter_id, cluster) → BLENDED hvc record across recent years (2025+2026)
 # Weight 2026 at 1.5x to favor current form, but keep 2025 for sample size
@@ -794,8 +815,8 @@ for g in games_raw:
     home_sp_name = home_sp_data.get("fullName", "TBD")
 
     # Pitcher info from atlas
-    away_ps = pitcher_idx.get(away_sp_id, {})
-    home_ps = pitcher_idx.get(home_sp_id, {})
+    away_ps = get_current_pitcher_info(away_sp_id)
+    home_ps = get_current_pitcher_info(home_sp_id)
     away_cluster = away_ps.get("cluster", "R_UT")
     home_cluster = home_ps.get("cluster", "R_UT")
     away_arch = away_ps.get("archetype", "Unknown")
@@ -851,7 +872,7 @@ for g in games_raw:
     if not away_sp_id and ext.get("away_sp_id"):
         away_sp_id = ext["away_sp_id"]
         away_sp_name = ext.get("away_sp_name", away_sp_name)
-        away_ps = pitcher_idx.get(away_sp_id, {})
+        away_ps = get_current_pitcher_info(away_sp_id)
         away_cluster = away_ps.get("cluster", "R_UT")
         away_arch = away_ps.get("archetype", "Unknown")
         away_hand = "LHP" if away_ps.get("is_rhp", 1) == 0 else "RHP"
@@ -861,7 +882,7 @@ for g in games_raw:
     if not home_sp_id and ext.get("home_sp_id"):
         home_sp_id = ext["home_sp_id"]
         home_sp_name = ext.get("home_sp_name", home_sp_name)
-        home_ps = pitcher_idx.get(home_sp_id, {})
+        home_ps = get_current_pitcher_info(home_sp_id)
         home_cluster = home_ps.get("cluster", "R_UT")
         home_arch = home_ps.get("archetype", "Unknown")
         home_hand = "LHP" if home_ps.get("is_rhp", 1) == 0 else "RHP"
