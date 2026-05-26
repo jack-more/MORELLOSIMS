@@ -164,28 +164,40 @@ clusters_meta = load_atlas("clusters.json")
 # pitcher_id → most recent pitcher_season record
 pitcher_idx = {}
 current_pitcher_idx = {}
+recent_pitcher_idx = {}
 for ps in pitcher_seasons:
     pid = ps["pitcher"]
     yr = ps["game_year"]
     if yr == 2026:
         current_pitcher_idx[pid] = ps
+    if yr in {2025, 2026} and (
+        pid not in recent_pitcher_idx or yr > recent_pitcher_idx[pid]["game_year"]
+    ):
+        recent_pitcher_idx[pid] = ps
     if pid not in pitcher_idx or yr > pitcher_idx[pid]["game_year"]:
         pitcher_idx[pid] = ps
 
-# pitcher_id → most recent tier record
+# pitcher_id/year → tier record
+tier_by_pid_year = {}
 tier_idx = {}
 for k, v in pitcher_tiers.items():
     pid = v["pitcher"]
     yr = v["game_year"]
+    tier_by_pid_year[(pid, yr)] = v
     if pid not in tier_idx or yr > tier_idx[pid]["game_year"]:
         tier_idx[pid] = v
 
 
-def get_current_pitcher_info(pid):
-    """Return only current-season atlas classification; never show stale labels."""
+def get_pitcher_info(pid):
+    """Return a recent atlas classification; never fall back before 2025."""
     current = current_pitcher_idx.get(pid)
     if current:
-        return {**current, "has_current_atlas": True}
+        return {**current, "has_recent_atlas": True, "sample_year": 2026}
+
+    recent = recent_pitcher_idx.get(pid)
+    if recent:
+        sample_year = recent.get("game_year")
+        return {**recent, "has_recent_atlas": True, "sample_year": sample_year}
 
     historical = pitcher_idx.get(pid, {})
     is_rhp = historical.get("is_rhp", 1)
@@ -194,10 +206,18 @@ def get_current_pitcher_info(pid):
         "game_year": 2026,
         "is_rhp": is_rhp,
         "cluster": "R_UT" if is_rhp else "L_UT",
-        "archetype": "No 2026 Sample",
+        "archetype": "No 2026/25 Sample",
         "gmm_proba": {"R_UT" if is_rhp else "L_UT": 1.0},
-        "has_current_atlas": False,
+        "has_recent_atlas": False,
+        "sample_year": None,
     }
+
+
+def get_pitcher_tier(pid, sample_year):
+    """Match tier to the atlas sample year; avoid stale quality fallbacks."""
+    if sample_year:
+        return tier_by_pid_year.get((pid, sample_year), {})
+    return {}
 
 # (batter_id, cluster) → BLENDED hvc record across recent years (2025+2026)
 # Weight 2026 at 1.5x to favor current form, but keep 2025 for sample size
@@ -816,8 +836,8 @@ for g in games_raw:
     home_sp_name = home_sp_data.get("fullName", "TBD")
 
     # Pitcher info from atlas
-    away_ps = get_current_pitcher_info(away_sp_id)
-    home_ps = get_current_pitcher_info(home_sp_id)
+    away_ps = get_pitcher_info(away_sp_id)
+    home_ps = get_pitcher_info(home_sp_id)
     away_cluster = away_ps.get("cluster", "R_UT")
     home_cluster = home_ps.get("cluster", "R_UT")
     away_arch = away_ps.get("archetype", "Unknown")
@@ -826,8 +846,8 @@ for g in games_raw:
     home_hand = "LHP" if home_ps.get("is_rhp", 1) == 0 else "RHP"
 
     # Tier info
-    away_tier = tier_idx.get(away_sp_id, {})
-    home_tier = tier_idx.get(home_sp_id, {})
+    away_tier = get_pitcher_tier(away_sp_id, away_ps.get("sample_year"))
+    home_tier = get_pitcher_tier(home_sp_id, home_ps.get("sample_year"))
     away_tier_name = away_tier.get("tier", "T3_Standard")
     home_tier_name = home_tier.get("tier", "T3_Standard")
     away_tier_mult = away_tier.get("effective_multiplier", 1.0)
@@ -873,21 +893,21 @@ for g in games_raw:
     if not away_sp_id and ext.get("away_sp_id"):
         away_sp_id = ext["away_sp_id"]
         away_sp_name = ext.get("away_sp_name", away_sp_name)
-        away_ps = get_current_pitcher_info(away_sp_id)
+        away_ps = get_pitcher_info(away_sp_id)
         away_cluster = away_ps.get("cluster", "R_UT")
         away_arch = away_ps.get("archetype", "Unknown")
         away_hand = "LHP" if away_ps.get("is_rhp", 1) == 0 else "RHP"
-        away_tier = tier_idx.get(away_sp_id, {})
+        away_tier = get_pitcher_tier(away_sp_id, away_ps.get("sample_year"))
         away_tier_name = away_tier.get("tier", "T3_Standard")
         away_tier_mult = away_tier.get("effective_multiplier", 1.0)
     if not home_sp_id and ext.get("home_sp_id"):
         home_sp_id = ext["home_sp_id"]
         home_sp_name = ext.get("home_sp_name", home_sp_name)
-        home_ps = get_current_pitcher_info(home_sp_id)
+        home_ps = get_pitcher_info(home_sp_id)
         home_cluster = home_ps.get("cluster", "R_UT")
         home_arch = home_ps.get("archetype", "Unknown")
         home_hand = "LHP" if home_ps.get("is_rhp", 1) == 0 else "RHP"
-        home_tier = tier_idx.get(home_sp_id, {})
+        home_tier = get_pitcher_tier(home_sp_id, home_ps.get("sample_year"))
         home_tier_name = home_tier.get("tier", "T3_Standard")
         home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
@@ -1083,8 +1103,8 @@ for g in games_raw:
     # MUST-PICK rule: any matchup with run_diff >= 1.8 AND both pitchers having
     # full stats (in atlas index, non-default archetype) qualifies regardless
     # of the C:10 confidence floor. Captures real edges the binary cutoff misses.
-    away_has_full = bool(away_ps) and away_ps.get("has_current_atlas") is True
-    home_has_full = bool(home_ps) and home_ps.get("has_current_atlas") is True
+    away_has_full = bool(away_ps) and away_ps.get("has_recent_atlas") is True
+    home_has_full = bool(home_ps) and home_ps.get("has_recent_atlas") is True
     must_pick = run_diff >= 1.8 and away_has_full and home_has_full
 
     # FULL COVERAGE rule: do NOT rate games where any batter in either lineup
