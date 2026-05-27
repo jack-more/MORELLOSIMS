@@ -95,14 +95,46 @@ def fetch(url):
         print(f"  WARN fetch {url}: {e}")
         return None
 
-# ─── wOBA → MS ───────────────────────────────────────────────────────────────
-def woba_to_ms(woba):
-    if woba >= .400: return min(99, 90 + int((woba - .400) / .005))
-    if woba >= .370: return 80 + int((woba - .370) / .003)
-    if woba >= .340: return 70 + int((woba - .340) / .003)
-    if woba >= .310: return 60 + int((woba - .310) / .003)
-    if woba >= .270: return 50 + int((woba - .270) / .004)
-    return max(40, 40 + int((woba - .200) / .007))
+# ─── Batter Score Helpers ───────────────────────────────────────────────────
+def run_contrib_to_ms(run_contrib):
+    """Map marginal BaseRuns contribution to a 35-99 display score.
+
+    This score is intentionally tied to the run engine: run_contrib is the
+    difference between the team's projected BaseRuns with this batter included
+    and with this batter removed. Unlike the old wOBA-only score, this accounts
+    for event mix, lineup-slot PA, and BaseRuns nonlinearity.
+    """
+    rc = max(0.0, float(run_contrib or 0.0))
+    if rc >= 2.00:
+        return 99
+    if rc >= 1.85:
+        return 98
+    if rc >= 1.70:
+        return 97
+    if rc >= 1.55:
+        return 96
+    if rc >= 1.40:
+        return 95
+    if rc >= 1.25:
+        return 94
+    if rc >= 1.10:
+        return 91 + int((rc - 1.10) / 0.05)
+    if rc >= 0.90:
+        return 85 + int((rc - 0.90) / 0.033)
+    if rc >= 0.70:
+        return 76 + int((rc - 0.70) / 0.022)
+    if rc >= 0.50:
+        return 64 + int((rc - 0.50) / 0.017)
+    if rc >= 0.30:
+        return 50 + int((rc - 0.30) / 0.014)
+    return max(35, 35 + int(rc / 0.020))
+
+
+def matchup_swing_to_momi(base_woba, vs_woba):
+    """Map hitter-vs-pitcher-DNA wOBA swing to a 1-99 matchup index."""
+    diff = float(vs_woba or 0.0) - float(base_woba or 0.0)
+    return max(1, min(99, int(round(50 + diff * 500))))
+
 
 def ms_class(ms):
     if ms >= 85: return "ms-elite"
@@ -1001,10 +1033,6 @@ for g in games_raw:
             LINEUP_PA = [4.62, 4.51, 4.40, 4.30, 4.20, 4.10, 4.00, 3.90, 3.80]
             pa = LINEUP_PA[i] if i < len(LINEUP_PA) else 3.80
 
-            ms = woba_to_ms(vs_woba)
-            ms_lo = max(40, ms - 4)
-            ms_hi = min(99, ms + 4)
-
             proj_h = h_rate * pa
             proj_bb = bb_rate * pa
             proj_hr = hr_rate * pa
@@ -1023,28 +1051,58 @@ for g in games_raw:
                 "id": pid,
                 "pos": pos,
                 "bat_side": bat_side,
-                "ms": ms,
-                "ms_lo": ms_lo,
-                "ms_hi": ms_hi,
+                # Filled after team totals are known. The score is based on
+                # marginal BaseRuns contribution, not a saturated wOBA badge.
+                "ms": 0,
+                "ms_lo": 0,
+                "ms_hi": 0,
+                "run_contrib": 0.0,
+                "momi": matchup_swing_to_momi(base_w, vs_woba),
+                "woba_delta": round(vs_woba - base_w, 3),
                 "base_woba": round(base_w, 3),
                 "vs_woba": round(vs_woba, 3),
                 "total_pa": round(total_pa),
                 "hr_rate": round(hr_rate, 4),
-            })
-            all_batter_matchups.append({
-                "id": pid,
-                "name": name,
-                "team": team_abbr,
-                "ms": ms,
-                "base_woba": round(base_w, 3),
-                "vs_woba": round(vs_woba, 3),
-                "hr_rate": round(hr_rate, 4),
-                "opp_pitcher": "",  # filled later
-                "opp_team": "",
+                "proj_pa": pa,
+                "proj_h": proj_h,
+                "proj_bb": proj_bb,
+                "proj_hr": proj_hr,
+                "proj_tb": proj_tb,
             })
 
         team_avg_woba = team_woba_sum / max(len(lineup_raw), 1)
         runs = base_runs(team_pa, team_h, team_bb, team_hr, team_tb)
+
+        for b in batters:
+            without_runs = base_runs(
+                max(0.0, team_pa - b["proj_pa"]),
+                max(0.0, team_h - b["proj_h"]),
+                max(0.0, team_bb - b["proj_bb"]),
+                max(0.0, team_hr - b["proj_hr"]),
+                max(0.0, team_tb - b["proj_tb"]),
+            )
+            run_contrib = max(0.0, runs - without_runs)
+            ms = run_contrib_to_ms(run_contrib)
+            b["ms"] = ms
+            b["ms_lo"] = run_contrib_to_ms(max(0.0, run_contrib - 0.05))
+            b["ms_hi"] = run_contrib_to_ms(run_contrib + 0.05)
+            b["run_contrib"] = round(run_contrib, 2)
+
+            all_batter_matchups.append({
+                "id": b["id"],
+                "name": b["name"],
+                "team": team_abbr,
+                "ms": b["ms"],
+                "run_contrib": b["run_contrib"],
+                "momi": b["momi"],
+                "woba_delta": b["woba_delta"],
+                "base_woba": b["base_woba"],
+                "vs_woba": b["vs_woba"],
+                "hr_rate": b["hr_rate"],
+                "opp_pitcher": "",  # filled later
+                "opp_team": "",
+            })
+
         return batters, round(runs, 1), round(team_avg_woba, 3), team_pa
 
     # Get GMM probabilities for opposing pitchers (multi-cluster DNA)
@@ -1241,17 +1299,21 @@ def h(s):
 
 def render_batter(b):
     mc = ms_class(b["ms"])
+    mic = ms_class(b.get("momi", 50))
     wc = woba_class(b["base_woba"], b["vs_woba"])
     pa_str = f'{b["total_pa"]}PA' if b["total_pa"] > 0 else "NEW"
     return f'''<div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">{b["order"]}</span>
     <span class="batter-name">{h(b["name"])}</span>
-    <span class="batter-ms {mc}">{b["ms"]}</span>
+    <span class="batter-metrics">
+      <span class="batter-metric {mc}"><span>MOMO</span>{b["ms"]}</span>
+      <span class="batter-metric {mic}"><span>MOMI</span>{b.get("momi", 50)}</span>
+    </span>
   </div>
   <div class="batter-bottom">
     <span class="batter-stats">{(h(b["pos"]) + " &middot; ") if b.get("pos") else ""}{b["bat_side"]}</span>
-    <span class="batter-range">{b["ms_lo"]}-{b["ms_hi"]}</span>
+    <span class="batter-range">+{b.get("run_contrib", 0):.2f} R</span>
   </div>
   <div class="batter-woba">
     <span class="woba-base">.{str(b["base_woba"])[2:]}</span>
@@ -1417,7 +1479,7 @@ def render_game(g, idx):
 
 # ─── Fetch hitting streaks for all batters in today's lineups ─────────────────
 print("\nFetching hitting streaks...")
-batter_streaks = {}  # pid -> {"streak": int, "last7_avg": float, "last7_ops": float}
+batter_streaks = {}  # pid -> {"streak": int, "last7_avg": float}
 all_lineup_pids = set()
 for g in games:
     if g["has_lineups"]:
@@ -1435,7 +1497,6 @@ for pid in all_lineup_pids:
         splits = stats_list[0].get("splits", [])
         if not splits:
             continue
-        # Current consecutive hitting streak (walk backwards)
         streak = 0
         for s in reversed(splits):
             hits = s.get("stat", {}).get("hits", 0)
@@ -1443,7 +1504,6 @@ for pid in all_lineup_pids:
                 streak += 1
             else:
                 break
-        # Last 7 games rolling avg/OPS
         recent = splits[-7:] if len(splits) >= 7 else splits
         total_h = sum(s.get("stat", {}).get("hits", 0) for s in recent)
         total_ab = sum(s.get("stat", {}).get("atBats", 0) for s in recent)
@@ -1455,9 +1515,8 @@ for pid in all_lineup_pids:
 print(f"  Fetched streaks for {len(batter_streaks)} batters")
 print(f"  Batters on 3+ game streaks: {sum(1 for v in batter_streaks.values() if v['streak'] >= 3)}")
 
-# ─── Render HR Watch tab ─────────────────────────────────────────────────────
+
 def render_hr_watch_tab():
-    # Sort all batters by HR rate (highest probability of going yard)
     hr_candidates = sorted(
         [bm for bm in all_batter_matchups if bm.get("hr_rate", 0) > 0],
         key=lambda x: -x.get("hr_rate", 0)
@@ -1466,8 +1525,6 @@ def render_hr_watch_tab():
     hr_html = ""
     for i, bm in enumerate(hr_candidates):
         hr_pct = round(bm["hr_rate"] * 100, 1)
-        mc = ms_class(bm["ms"])
-        # Heat level based on HR rate
         if bm["hr_rate"] >= 0.06:
             heat = "hr-fire"
             heat_icon = "\U0001f525"
@@ -1485,7 +1542,7 @@ def render_hr_watch_tab():
   <div class="hr-rank">{i+1}</div>
   <div class="hr-info">
     <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
-    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 MS {bm["ms"]}</div>
+    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
   </div>
   <div class="hr-rate-col">
     <div class="hr-rate">{hr_pct}%</div>
@@ -1493,9 +1550,6 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
-    # Heating Up: batters on real hitting streaks + favorable archetype matchup
-    # Per SABR research: consecutive game hitting streaks are non-random signal
-    # Compound signal = streak length * archetype wOBA advantage
     heating_candidates = []
     for bm in all_batter_matchups:
         pid = bm.get("id")
@@ -1503,10 +1557,7 @@ def render_hr_watch_tab():
         streak = streak_data.get("streak", 0)
         last7 = streak_data.get("last7_avg", 0)
         woba_bump = bm["vs_woba"] - bm["base_woba"]
-        # Must be on at least a 2-game streak
         if streak >= 2:
-            # Score: streak length weighted by archetype advantage
-            # A 5-game streak + .050 wOBA bump >> a 2-game streak + .100 bump
             heat_score = streak * (1 + max(0, woba_bump) * 5)
             heating_candidates.append({
                 **bm, "streak": streak, "last7_avg": last7,
@@ -1522,7 +1573,6 @@ def render_hr_watch_tab():
         avg_str = f'.{str(bm["last7_avg"])[2:]}' if bm["last7_avg"] > 0 else ""
         bump = bm["woba_bump"]
         bump_str = f'+.{str(abs(round(bump,3)))[2:]}' if bump > 0 else ""
-        # Streak fire icons
         if bm["streak"] >= 7:
             icon = "\U0001f525\U0001f525"
         elif bm["streak"] >= 4:
@@ -1533,14 +1583,13 @@ def render_hr_watch_tab():
   <div class="trend-rank">{i+1}</div>
   <div class="trend-info">
     <div class="trend-name">{icon} {h(bm["name"])}</div>
-    <div class="trend-meta">{streak_str} &middot; L7 {avg_str} &middot; {h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}){"" if not bump_str else " &middot; wOBA " + bump_str}</div>
+    <div class="trend-meta">{streak_str} &middot; L7 {avg_str} &middot; MOMO {bm["ms"]} &middot; MOMI {bm.get("momi", 50)} &middot; {h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}){"" if not bump_str else " &middot; wOBA " + bump_str}</div>
   </div>
   <div class="trend-right">
     <div class="trend-ms {mc}">{bm["ms"]}</div>
   </div>
 </div>'''
 
-    # Today's Picks column — ranked by confidence, heavy faves excluded
     edges = sorted(
         [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))],
         key=lambda x: -x["conf"]
@@ -1596,50 +1645,40 @@ css_start = CSS.find("<style>")
 css_end = CSS.find("</style>") + len("</style>")
 css_block = CSS[css_start:css_end] if css_start >= 0 else ""
 
-# Inject Daily tab CSS if missing
 DAILY_CSS = """
-/* ── Daily Dashboard ── */
-.daily-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:8px 0}
-@media(max-width:900px){.daily-grid{grid-template-columns:1fr}}
-.daily-col .section-title{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;margin-bottom:2px}
-.daily-col .section-sub{font-size:11px;color:#888;margin-bottom:10px}
-.hr-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222);transition:background .15s}
-.hr-row:hover{background:rgba(255,255,255,.03)}
-.hr-fire{border-left:3px solid #ff4444}
-.hr-hot{border-left:3px solid #00cc44}
-.hr-warm{border-left:3px solid #ffcc00}
-.hr-mild{border-left:3px solid #555}
-.hr-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
+/* ═══ DAILY 3-COL GRID ═══ */
+#tab-daily{position:relative;left:50%;transform:translateX(-50%);width:96vw;max-width:1300px;padding:0 24px;box-sizing:border-box}
+.daily-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:12px}
+@media(max-width:900px){.daily-grid{grid-template-columns:1fr}#tab-daily{width:100%;left:0;transform:none;padding:0}}
+.daily-col .section-title{font-size:14px;margin-bottom:4px}
+.daily-col .section-sub{font-size:10px;margin-bottom:8px}
+.hr-row{display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:56px;border-bottom:1px solid #eee}
+.hr-row:last-child{border-bottom:none}
+.hr-rank{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--color-meta);min-width:20px;text-align:center}
 .hr-info{flex:1;min-width:0}
-.hr-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hr-meta{font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hr-rate-col{text-align:right;min-width:55px}
-.hr-rate{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:#ff6644}
-.hr-rate-label{font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px}
-.trend-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222)}
-.trend-row:hover{background:rgba(255,255,255,.03)}
-.trend-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
-.trend-info{flex:1;min-width:0}
-.trend-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trend-meta{font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trend-right{text-align:right}
-.trend-ms{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;padding:2px 6px;border-radius:4px}
-.pick-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border,#222)}
-.pick-row:hover{background:rgba(255,255,255,.03)}
-.pick-rank{font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;min-width:18px;text-align:center}
-.pick-info{flex:1;min-width:0}
-.pick-label{font-weight:700;font-size:14px}
-.pick-matchup{font-size:11px;color:#999}
-.pick-edge{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:#00cc44;min-width:40px;text-align:right}
-.mc-conf-num{font-size:12px;margin-left:4px}
-.empty-state{text-align:center;padding:40px 20px;color:#666;font-size:13px}
-.picks-container{max-height:500px;overflow-y:auto}
+.hr-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-meta{font-size:10px;color:var(--color-meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-rate-col{text-align:right;min-width:50px}
+.hr-rate{font-family:var(--font-mono);font-weight:800;font-size:14px;color:var(--color-elite)}
+.hr-rate-label{font-size:8px;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.5px}
+.hr-fire .hr-rate{color:#FF3333}
+.hr-hot .hr-rate{color:var(--color-elite)}
+.hr-warm .hr-rate{color:var(--color-neutral)}
+.hr-mild .hr-rate{color:var(--color-meta)}
+"""
+if "tab-daily" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_CSS + "\n</style>")
 
-/* ── Team season record (sits between team abbr + moneyline) ── */
+PLAYER_METRIC_CSS = """
+/* ── Player MOMO/MOMI chips ── */
+.batter-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.batter-metrics{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:6px}
+.batter-metric{display:flex;align-items:baseline;gap:3px;font-family:var(--font-mono);font-size:11px;font-weight:800;line-height:1;padding:3px 5px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.04)}
+.batter-metric span{font-size:7px;font-weight:800;color:var(--color-meta);letter-spacing:0.4px}
 .team-record{font-family:'JetBrains Mono',monospace;font-size:10px;color:#888;letter-spacing:0.5px;margin-top:2px;text-align:center}
 """
-if "daily-grid" not in css_block:
-    css_block = css_block.replace("</style>", DAILY_CSS + "\n</style>")
+if "batter-metrics" not in css_block:
+    css_block = css_block.replace("</style>", PLAYER_METRIC_CSS + "\n</style>")
 
 html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -1723,27 +1762,41 @@ html = f'''<!DOCTYPE html>
             <div class="info-card">
                 <h2>HOW MLB SIM WORKS</h2>
                 <p>MLB SIM uses the <strong>Pitcher DNA</strong> system (Gaussian Mixture Model clustering) to classify every pitcher into one of 26 archetypes (15 RHP + 11 LHP) based on their pitch mix, velocity, movement, and approach. Every batter has historical performance data against each archetype \u2014 because baseball is fundamentally a 1v1 sport, the specific pitcher a batter faces defines their expected performance.</p>
-                <p>When lineups are released, MLB SIM projects every batter's performance based on how they've historically hit against the opposing pitcher's archetype. This produces per-game <strong>Matchup Scores</strong> that change daily depending on the starter.</p>
+                <p>When lineups are released, MLB SIM projects every batter's event rates based on how they've historically hit against the opposing pitcher's archetype. Those rates feed directly into BaseRuns, producing per-game <strong>MOMO</strong> scores that reflect how much each batter is actually moving today's run projection. <strong>MOMI</strong> shows the batter's matchup swing vs their baseline wOBA.</p>
             </div>
             <div class="info-card">
-                <h2>MATCHUP SCORE (MS) \u2014 40 TO 99</h2>
-                <p>MS is a context-dependent metric that changes each game based on the specific pitcher archetype a batter faces.</p>
+                <h2>MOMO \u2014 35 TO 99</h2>
+                <p>MOMO is a run-contribution score. It is calculated from the same projected H, BB, HR, TB, and lineup-slot PA that feed the team BaseRuns projection.</p>
                 <table class="tier-table">
-                    <tr><td class="tier-label" style="color:var(--color-elite)">85-99</td><td>Elite Matchup \u2014 historically dominant vs this archetype</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-favorable)">70-84</td><td>Favorable \u2014 above-average performance expected</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-neutral)">55-69</td><td>Neutral \u2014 roughly league-average</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-tough)">40-54</td><td>Tough Matchup \u2014 historically struggles vs this archetype</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-elite)">85-99</td><td>Elite run contribution \u2014 meaningfully lifts the team projection</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-favorable)">70-84</td><td>Strong \u2014 above-average projected run value today</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-neutral)">55-69</td><td>Neutral \u2014 ordinary lineup contribution</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-tough)">35-54</td><td>Low impact \u2014 limited projected run contribution</td></tr>
                 </table>
-                <div class="formula-block ma-premium">MS FORMULA (wOBA-based):
-wOBA >= .400  \u2192  MS 90-99
-wOBA .370-.399 \u2192  MS 80-89
-wOBA .340-.369 \u2192  MS 70-79
-wOBA .310-.339 \u2192  MS 60-69
-wOBA .270-.309 \u2192  MS 50-59
-wOBA < .270    \u2192  MS 40-49
+                <div class="formula-block ma-premium">MOMO FORMULA (run-based):
+1. Project hitter H / BB / HR / TB rates vs pitcher DNA
+2. Multiply by expected PA from lineup slot
+3. Compute team BaseRuns with the hitter included
+4. Remove the hitter's projected PA/H/BB/HR/TB and recompute BaseRuns
+5. MOMO = score mapped from the marginal run contribution
 
-H2H BONUS: +0-5 pts when PA >= 10
-vs specific pitcher (not just archetype)</div>
+Example:
+team BaseRuns with hitter      = 5.20
+team BaseRuns without hitter   = 4.54
+marginal run contribution      = +0.66 R
+MOMO                           = 83</div>
+            </div>
+            <div class="info-card">
+                <h2>MOMI \u2014 1 TO 99</h2>
+                <p>MOMI is the matchup index for the player. It compares today's pitcher-DNA projected wOBA against the hitter's baseline wOBA, so 50 is neutral, 70+ is a plus matchup, and sub-45 is a tough matchup.</p>
+                <div class="formula-block ma-premium">MOMI FORMULA (matchup swing):
+MOMI = 50 + ((vs pitcher-DNA wOBA - baseline wOBA) * 500)
+
+Example:
+baseline wOBA       = .320
+vs pitcher-DNA wOBA = .370
+wOBA swing          = +.050
+MOMI                = 75</div>
             </div>
             <div class="info-card">
                 <h2>PROJECTION METHODOLOGY</h2>
@@ -1763,7 +1816,7 @@ O/U Total = Home Runs + Away Runs</div>
                 <p>MLB SIM predicts bullpen deployment using three layers:</p>
                 <p><strong>Layer 1 \u2014 Availability:</strong> Tracks reliever workload history to determine who CAN pitch.</p>
                 <p><strong>Layer 2 \u2014 Usage Order:</strong> Estimates starter expected innings, then ranks available relievers by role hierarchy.</p>
-                <p><strong>Layer 3 \u2014 Matchup Integration:</strong> For each predicted reliever, computes MS against the lineup slots they'll likely face.</p>
+                <p><strong>Layer 3 \u2014 Matchup Integration:</strong> For each predicted reliever, computes MOMO/MOMI against the lineup slots they'll likely face.</p>
             </div>
         </div>
     </div>

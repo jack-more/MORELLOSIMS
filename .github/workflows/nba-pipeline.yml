@@ -2,7 +2,7 @@ name: NBA Pipeline
 
 # In-repo replacement for jack-more/NBAsim's daily-update.yml.
 # All NBA logic now lives in nba_pipeline/. This workflow runs that project's
-# scripts in place, then copies the generated dashboard up to nbasim/index.html
+# scripts in place, then builds the public page at nbasim/index.html
 # with the auth injection MORELLOSIMS' navbar expects.
 #
 # Bot identity: "NBA Pipeline Bot"  (distinct from MLB Pipeline Bot and
@@ -179,20 +179,14 @@ jobs:
         working-directory: nba_pipeline
         run: python scripts/generate_blog_entry.py
 
-      - name: Sync NBA dashboard to nbasim/ (with auth injection)
-        run: |
-          mkdir -p nbasim
-          cp nba_pipeline/index.html nbasim/index.html
-          # Auth CSS + Firebase SDK already included by generate_frontend.py.
-          # Only inject MORELLOSIMS-specific additions:
-          sed -i 's|<body>|<body data-ma-theme="dark">|' nbasim/index.html
-          sed -i 's|<div class="top-picks">|<div class="top-picks" style="display:flex;align-items:center;gap:8px;">\n                <div class="status-indicators" style="display:flex;align-items:center;"></div>|' nbasim/index.html
+      - name: Sync NBA picks to contract format (picks/nba.json)
+        run: python3 nba_pipeline/scripts/sync_to_picks_json.py
+
+      - name: Build public NBA dashboard at /nbasim/
+        run: python3 scripts/build_nbasim_app.py
 
       - name: Build standalone NBA Simulator app at /sim/
         run: python3 scripts/build_sim_app.py
-
-      - name: Sync NBA picks to contract format (picks/nba.json)
-        run: python3 nba_pipeline/scripts/sync_to_picks_json.py
 
       - name: Commit and push
         run: |
@@ -270,18 +264,14 @@ jobs:
         working-directory: nba_pipeline
         run: python scripts/generate_blog_entry.py
 
-      - name: Sync NBA dashboard to nbasim/
-        run: |
-          mkdir -p nbasim
-          cp nba_pipeline/index.html nbasim/index.html
-          sed -i 's|<body>|<body data-ma-theme="dark">|' nbasim/index.html
-          sed -i 's|<div class="top-picks">|<div class="top-picks" style="display:flex;align-items:center;gap:8px;">\n                <div class="status-indicators" style="display:flex;align-items:center;"></div>|' nbasim/index.html
+      - name: Sync NBA picks to contract format (picks/nba.json)
+        run: python3 nba_pipeline/scripts/sync_to_picks_json.py
+
+      - name: Build public NBA dashboard at /nbasim/
+        run: python3 scripts/build_nbasim_app.py
 
       - name: Build standalone NBA Simulator app at /sim/
         run: python3 scripts/build_sim_app.py
-
-      - name: Sync NBA picks to contract format (picks/nba.json)
-        run: python3 nba_pipeline/scripts/sync_to_picks_json.py
 
       - name: Commit and push
         run: |
@@ -332,6 +322,9 @@ jobs:
       - name: Sync NBA picks to contract format (picks/nba.json)
         run: python3 nba_pipeline/scripts/sync_to_picks_json.py
 
+      - name: Refresh public NBA dashboard record
+        run: python3 scripts/build_nbasim_app.py
+
       - name: Commit settlement
         run: |
           git config user.name "NBA Pipeline Bot"
@@ -339,6 +332,7 @@ jobs:
           DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
 
           git add picks/nba.json
+          git add nbasim/index.html
           if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
           if [ -f nba_pipeline/data/settlement_results.json ]; then git add nba_pipeline/data/settlement_results.json; fi
 
