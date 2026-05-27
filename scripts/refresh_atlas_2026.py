@@ -23,6 +23,7 @@ import os
 import sys
 import argparse
 import re
+import urllib.request
 from datetime import datetime, date, timedelta
 from collections import defaultdict
 import math
@@ -102,6 +103,70 @@ def save_atlas(filename, data):
     with open(path, "w") as f:
         json.dump(data, f, separators=(",", ":"))
     print(f"  Saved {path} ({os.path.getsize(path):,} bytes)")
+
+
+def parse_float(value):
+    if value in (None, "", "-.--"):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_innings(value):
+    if value in (None, ""):
+        return None
+    whole, _, frac = str(value).partition(".")
+    try:
+        outs = int(whole) * 3 + (int(frac) if frac else 0)
+    except ValueError:
+        return None
+    return outs / 3.0
+
+
+def fetch_mlb_pitching_stats(season=SEASON):
+    """Return real MLB season pitching stats keyed by player id."""
+    url = (
+        "https://statsapi.mlb.com/api/v1/stats"
+        f"?stats=season&group=pitching&season={season}&playerPool=ALL&limit=5000"
+    )
+    print(f"\nFetching real MLB pitching stats for {season}...")
+    with urllib.request.urlopen(url, timeout=30) as resp:
+        data = json.load(resp)
+
+    stats = {}
+    splits = data.get("stats", [{}])[0].get("splits", [])
+    for split in splits:
+        player = split.get("player", {})
+        pid = player.get("id")
+        stat = split.get("stat", {})
+        if not pid:
+            continue
+
+        bf = parse_float(stat.get("battersFaced"))
+        strikeouts = parse_float(stat.get("strikeOuts"))
+        walks = parse_float(stat.get("baseOnBalls"))
+        k_pct = (strikeouts / bf) if bf else None
+        bb_pct = (walks / bf) if bf else None
+        kbb_pct = (k_pct - bb_pct) if k_pct is not None and bb_pct is not None else None
+
+        stats[int(pid)] = {
+            "player_name": player.get("fullName", ""),
+            "era": parse_float(stat.get("era")),
+            "whip": parse_float(stat.get("whip")),
+            "ip": parse_innings(stat.get("inningsPitched")),
+            "k_pct": k_pct,
+            "bb_pct": bb_pct,
+            "kbb_pct": kbb_pct,
+            "strikeouts": int(strikeouts or 0),
+            "walks": int(walks or 0),
+            "batters_faced": int(bf or 0),
+            "games_started": int(parse_float(stat.get("gamesStarted")) or 0),
+        }
+
+    print(f"  MLB pitching stats loaded: {len(stats)} pitchers")
+    return stats
 
 
 def event_to_hit_type(event):
@@ -831,7 +896,7 @@ def compute_pitcher_seasons(df, pitcher_idx, cluster_profiles, cluster_scales, c
 
 # ─── Step 6: Estimate SIERA for 2026 pitchers ───────────────────────────────
 
-def compute_siera_estimates(df, pitcher_seasons_2026):
+def compute_siera_estimates(df, pitcher_seasons_2026, actual_pitching_stats=None):
     """
     Estimate SIERA from Statcast data for 2026 pitchers.
     SIERA ≈ f(K%, BB%, GB/FB ratio).
@@ -841,6 +906,7 @@ def compute_siera_estimates(df, pitcher_seasons_2026):
     print(f"ESTIMATING SIERA (2026)")
     print(f"{'='*60}")
 
+    actual_pitching_stats = actual_pitching_stats or {}
     records = {}
     for pid, group in df.groupby("pitcher"):
         # Only pitches that ended a PA
@@ -879,25 +945,36 @@ def compute_siera_estimates(df, pitcher_seasons_2026):
 
         pitcher_name = str(group["player_name"].iloc[0])
 
-        # Estimate ERA from earned runs (rough)
         outs = events.isin([
             "field_out", "grounded_into_double_play", "force_out",
             "double_play", "fielders_choice", "fielders_choice_out",
             "strikeout", "strikeout_double_play", "sac_fly",
             "sac_bunt", "triple_play",
         ]).sum()
-        ip = outs / 3.0 if outs > 0 else 0
+        statcast_ip = outs / 3.0 if outs > 0 else 0
+        actual = actual_pitching_stats.get(int(pid), {})
+        real_ip = actual.get("ip")
+        real_k_pct = actual.get("k_pct")
+        real_bb_pct = actual.get("bb_pct")
 
         key = f"{int(pid)}_{SEASON}"
         records[key] = {
             "pitcher": int(pid),
-            "player_name": pitcher_name,
+            "player_name": actual.get("player_name") or pitcher_name,
             "game_year": SEASON,
-            "era": round(siera + 0.3, 2),  # rough ERA estimate from SIERA
+            "era": round(actual["era"], 2) if actual.get("era") is not None else None,
+            "whip": round(actual["whip"], 2) if actual.get("whip") is not None else None,
             "siera": round(siera, 2),
-            "ip": round(ip, 1),
-            "k_pct": round(k_pct, 4),
-            "bb_pct": round(bb_pct, 4),
+            "siera_source": "statcast_estimate",
+            "ip": round(real_ip if real_ip is not None else statcast_ip, 1),
+            "ip_source": "mlb_stats_api" if real_ip is not None else "statcast_pa_outs",
+            "k_pct": round(real_k_pct if real_k_pct is not None else k_pct, 4),
+            "bb_pct": round(real_bb_pct if real_bb_pct is not None else bb_pct, 4),
+            "kbb_pct": round(actual["kbb_pct"], 4) if actual.get("kbb_pct") is not None else round(k_pct - bb_pct, 4),
+            "strikeouts": actual.get("strikeouts"),
+            "walks": actual.get("walks"),
+            "batters_faced": actual.get("batters_faced"),
+            "games_started": actual.get("games_started"),
             "gb_fb": round(gb_fb, 2),
         }
 
@@ -1029,6 +1106,13 @@ BASE_TIER_MULTIPLIERS = {
     "T4_Fringe": 1.10,
 }
 
+TIER_RANK = {
+    "T1_Apex": 1,
+    "T2_Core": 2,
+    "T3_Standard": 3,
+    "T4_Fringe": 4,
+}
+
 
 def assign_tier_by_siera(siera):
     """Assign tier based on pure SIERA thresholds."""
@@ -1036,6 +1120,62 @@ def assign_tier_by_siera(siera):
         if siera < cutoff:
             return tier
     return DEFAULT_TIER
+
+
+def cap_tier(tier, max_tier):
+    return max(tier, max_tier, key=lambda t: TIER_RANK[t])
+
+
+def apply_real_stat_guardrails(tier, rec):
+    """Prevent estimated SIERA from outranking ugly real-season production."""
+    ip = rec.get("ip") or 0
+    batters_faced = rec.get("batters_faced") or 0
+    if ip < 20 and batters_faced < 80:
+        return tier, ""
+
+    era = rec.get("era")
+    whip = rec.get("whip")
+    kbb_pct = rec.get("kbb_pct")
+    reasons = []
+
+    max_tier = "T1_Apex"
+    if era is not None:
+        if era >= 5.00:
+            max_tier = cap_tier(max_tier, "T4_Fringe")
+            reasons.append(f"ERA {era:.2f} >= 5.00")
+        elif era >= 4.25:
+            max_tier = cap_tier(max_tier, "T3_Standard")
+            reasons.append(f"ERA {era:.2f} >= 4.25")
+        elif era >= 3.75:
+            max_tier = cap_tier(max_tier, "T2_Core")
+            reasons.append(f"ERA {era:.2f} >= 3.75")
+
+    if whip is not None:
+        if whip >= 1.40:
+            max_tier = cap_tier(max_tier, "T4_Fringe")
+            reasons.append(f"WHIP {whip:.2f} >= 1.40")
+        elif whip >= 1.30:
+            max_tier = cap_tier(max_tier, "T3_Standard")
+            reasons.append(f"WHIP {whip:.2f} >= 1.30")
+        elif whip >= 1.25:
+            max_tier = cap_tier(max_tier, "T2_Core")
+            reasons.append(f"WHIP {whip:.2f} >= 1.25")
+
+    if kbb_pct is not None:
+        if kbb_pct < 0.08:
+            max_tier = cap_tier(max_tier, "T4_Fringe")
+            reasons.append(f"K-BB% {kbb_pct:.1%} < 8%")
+        elif kbb_pct < 0.12:
+            max_tier = cap_tier(max_tier, "T3_Standard")
+            reasons.append(f"K-BB% {kbb_pct:.1%} < 12%")
+        elif kbb_pct < 0.15:
+            max_tier = cap_tier(max_tier, "T2_Core")
+            reasons.append(f"K-BB% {kbb_pct:.1%} < 15%")
+
+    guarded = cap_tier(tier, max_tier)
+    if guarded != tier:
+        return guarded, "; ".join(reasons)
+    return tier, ""
 
 
 def recompute_pitcher_tiers():
@@ -1057,17 +1197,19 @@ def recompute_pitcher_tiers():
         pid = rec.get("pitcher")
         yr = rec.get("game_year")
         if pid and yr:
-            siera_idx[(pid, yr)] = rec.get("siera")
+            siera_idx[(pid, yr)] = rec
 
     # Match SIERA to pitcher-seasons
     matched = 0
     for ps in pitcher_seasons:
-        siera = siera_idx.get((ps["pitcher"], ps["game_year"]))
-        if siera is not None:
-            ps["siera"] = siera
+        siera_rec = siera_idx.get((ps["pitcher"], ps["game_year"]))
+        if siera_rec is not None and siera_rec.get("siera") is not None:
+            ps["siera"] = siera_rec.get("siera")
+            ps["_siera_rec"] = siera_rec
             matched += 1
         else:
             ps["siera"] = None
+            ps["_siera_rec"] = {}
 
     print(f"  SIERA matched: {matched}/{len(pitcher_seasons)}")
 
@@ -1077,7 +1219,9 @@ def recompute_pitcher_tiers():
     for ps in pitcher_seasons:
         if ps["siera"] is None:
             continue
-        tier = assign_tier_by_siera(ps["siera"])
+        siera_rec = ps.get("_siera_rec", {})
+        raw_tier = assign_tier_by_siera(ps["siera"])
+        tier, guardrail = apply_real_stat_guardrails(raw_tier, siera_rec)
         mult = BASE_TIER_MULTIPLIERS[tier]
         tier_counts[tier] += 1
 
@@ -1090,6 +1234,13 @@ def recompute_pitcher_tiers():
             "archetype": ps.get("archetype", ""),
             "siera": round(ps["siera"], 2),
             "tier": tier,
+            "raw_siera_tier": raw_tier,
+            "tier_guardrail": guardrail,
+            "era": siera_rec.get("era"),
+            "whip": siera_rec.get("whip"),
+            "k_pct": siera_rec.get("k_pct"),
+            "bb_pct": siera_rec.get("bb_pct"),
+            "kbb_pct": siera_rec.get("kbb_pct"),
             "base_multiplier": mult,
             "effective_multiplier": mult,
         }
@@ -1147,8 +1298,9 @@ def main():
     # 5b. Compute hitter season totals for 2026 (powers atlas/batters.json)
     hs_records = compute_hitter_seasons(df, name_map)
 
-    # 6. Estimate SIERA
-    siera_records = compute_siera_estimates(df, ps_records)
+    # 6. Estimate SIERA and overlay real MLB season stats for guardrails.
+    actual_pitching_stats = fetch_mlb_pitching_stats(SEASON)
+    siera_records = compute_siera_estimates(df, ps_records, actual_pitching_stats)
 
     # 7. Merge everything
     print(f"\n{'='*60}")
