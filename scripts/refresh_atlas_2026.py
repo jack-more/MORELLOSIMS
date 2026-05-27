@@ -147,6 +147,7 @@ def fetch_mlb_pitching_stats(season=SEASON):
         bf = parse_float(stat.get("battersFaced"))
         strikeouts = parse_float(stat.get("strikeOuts"))
         walks = parse_float(stat.get("baseOnBalls"))
+        intentional_walks = parse_float(stat.get("intentionalWalks"))
         k_pct = (strikeouts / bf) if bf else None
         bb_pct = (walks / bf) if bf else None
         kbb_pct = (k_pct - bb_pct) if k_pct is not None and bb_pct is not None else None
@@ -161,7 +162,10 @@ def fetch_mlb_pitching_stats(season=SEASON):
             "kbb_pct": kbb_pct,
             "strikeouts": int(strikeouts or 0),
             "walks": int(walks or 0),
+            "intentional_walks": int(intentional_walks or 0),
             "batters_faced": int(bf or 0),
+            "ground_outs": int(parse_float(stat.get("groundOuts")) or 0),
+            "air_outs": int(parse_float(stat.get("airOuts")) or 0),
             "games_started": int(parse_float(stat.get("gamesStarted")) or 0),
         }
 
@@ -894,16 +898,34 @@ def compute_pitcher_seasons(df, pitcher_idx, cluster_profiles, cluster_scales, c
     return records
 
 
-# ─── Step 6: Estimate SIERA for 2026 pitchers ───────────────────────────────
+# ─── Step 6: Calculate SIERA for 2026 pitchers ──────────────────────────────
+
+def calculate_siera(k_pct, bb_pct, net_gb_pa):
+    """
+    Baseball Prospectus / MLB glossary SIERA formula.
+    net_gb_pa = (GB - FB - PU) / PA, with the squared term negative when
+    net_gb_pa is positive and positive when net_gb_pa is negative.
+    """
+    net_gb_sq = net_gb_pa ** 2
+    signed_net_gb_sq_term = -6.664 * net_gb_sq if net_gb_pa >= 0 else 6.664 * net_gb_sq
+    return (
+        6.145
+        - 16.986 * k_pct
+        + 11.434 * bb_pct
+        - 1.858 * net_gb_pa
+        + 7.653 * (k_pct ** 2)
+        + signed_net_gb_sq_term
+        + 10.130 * k_pct * net_gb_pa
+        - 5.195 * bb_pct * net_gb_pa
+    )
 
 def compute_siera_estimates(df, pitcher_seasons_2026, actual_pitching_stats=None):
     """
-    Estimate SIERA from Statcast data for 2026 pitchers.
-    SIERA ≈ f(K%, BB%, GB/FB ratio).
-    Uses the simplified SIERA formula.
+    Calculate SIERA from official MLB season strikeout/walk/BF totals, using
+    Statcast batted-ball types for the GB/FB/PU component.
     """
     print(f"\n{'='*60}")
-    print(f"ESTIMATING SIERA (2026)")
+    print(f"CALCULATING SIERA (2026)")
     print(f"{'='*60}")
 
     actual_pitching_stats = actual_pitching_stats or {}
@@ -915,33 +937,33 @@ def compute_siera_estimates(df, pitcher_seasons_2026, actual_pitching_stats=None
             continue
 
         events = pa_pitches["events"]
-        total_pa = len(events)
-        k = events.isin(["strikeout", "strikeout_double_play"]).sum()
-        bb = events.isin(["walk", "intent_walk"]).sum()
+        statcast_pa = len(events)
+        statcast_k = events.isin(["strikeout", "strikeout_double_play"]).sum()
+        statcast_bb = events.isin(["walk", "intent_walk"]).sum()
 
-        k_pct = k / total_pa if total_pa > 0 else 0
-        bb_pct = bb / total_pa if total_pa > 0 else 0
+        actual = actual_pitching_stats.get(int(pid), {})
+        official_pa = actual.get("batters_faced")
+        pa = official_pa if official_pa else statcast_pa
+        if not pa:
+            continue
 
-        # GB/FB ratio from batted balls
+        k_pct = actual.get("k_pct")
+        bb_pct = actual.get("bb_pct")
+        if k_pct is None:
+            k_pct = statcast_k / statcast_pa if statcast_pa else 0
+        if bb_pct is None:
+            bb_pct = statcast_bb / statcast_pa if statcast_pa else 0
+
+        # Statcast provides all batted-ball types; MLB season stats only expose
+        # ground/air outs, which is not enough for the SIERA GB-FB-PU term.
         batted = group[group["bb_type"].notna()]
         gb = (batted["bb_type"] == "ground_ball").sum()
         fb = (batted["bb_type"] == "fly_ball").sum()
+        pu = (batted["bb_type"] == "popup").sum()
         gb_fb = gb / fb if fb > 0 else 1.0
+        net_gb_pa = (gb - fb - pu) / pa
 
-        # Simplified SIERA formula:
-        # SIERA ≈ 6.145 - 16.986*(K%) + 11.434*(BB%) - 1.858*(GB/FB)
-        #        + 7.653*(K%^2) + 6.664*(BB%^2) + 0.9*(GB/FB^2)
-        #        - 2.0*(K%*GB/FB) + 0.1*(BB%*GB/FB)
-        siera = (
-            6.145
-            - 16.986 * k_pct
-            + 11.434 * bb_pct
-            - 1.858 * (gb_fb / (gb_fb + 1))  # normalize
-            + 7.653 * (k_pct ** 2)
-            + 6.664 * (bb_pct ** 2)
-        )
-        # Clamp to reasonable range
-        siera = max(1.5, min(7.0, siera))
+        siera = calculate_siera(k_pct, bb_pct, net_gb_pa)
 
         pitcher_name = str(group["player_name"].iloc[0])
 
@@ -952,10 +974,7 @@ def compute_siera_estimates(df, pitcher_seasons_2026, actual_pitching_stats=None
             "sac_bunt", "triple_play",
         ]).sum()
         statcast_ip = outs / 3.0 if outs > 0 else 0
-        actual = actual_pitching_stats.get(int(pid), {})
         real_ip = actual.get("ip")
-        real_k_pct = actual.get("k_pct")
-        real_bb_pct = actual.get("bb_pct")
 
         key = f"{int(pid)}_{SEASON}"
         records[key] = {
@@ -965,20 +984,27 @@ def compute_siera_estimates(df, pitcher_seasons_2026, actual_pitching_stats=None
             "era": round(actual["era"], 2) if actual.get("era") is not None else None,
             "whip": round(actual["whip"], 2) if actual.get("whip") is not None else None,
             "siera": round(siera, 2),
-            "siera_source": "statcast_estimate",
+            "siera_source": "mlb_stats_api_plus_statcast_batted_ball",
+            "pa": int(pa),
+            "pa_source": "mlb_stats_api" if official_pa else "statcast_pa",
             "ip": round(real_ip if real_ip is not None else statcast_ip, 1),
             "ip_source": "mlb_stats_api" if real_ip is not None else "statcast_pa_outs",
-            "k_pct": round(real_k_pct if real_k_pct is not None else k_pct, 4),
-            "bb_pct": round(real_bb_pct if real_bb_pct is not None else bb_pct, 4),
+            "k_pct": round(k_pct, 4),
+            "bb_pct": round(bb_pct, 4),
             "kbb_pct": round(actual["kbb_pct"], 4) if actual.get("kbb_pct") is not None else round(k_pct - bb_pct, 4),
             "strikeouts": actual.get("strikeouts"),
             "walks": actual.get("walks"),
+            "intentional_walks": actual.get("intentional_walks"),
             "batters_faced": actual.get("batters_faced"),
+            "ground_balls": int(gb),
+            "fly_balls": int(fb),
+            "popups": int(pu),
+            "net_gb_pa": round(net_gb_pa, 4),
             "games_started": actual.get("games_started"),
             "gb_fb": round(gb_fb, 2),
         }
 
-    print(f"  Estimated SIERA for {len(records)} pitchers")
+    print(f"  Calculated SIERA for {len(records)} pitchers")
     return records
 
 
