@@ -352,17 +352,15 @@ def get_base_woba(bid):
 
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
-MIN_CONF_PICK = 8  # C:8+ qualifies (8, 9, 10) — opens up the slate
+MIN_CONF_PICK = 9  # C:9+ qualifies as an official pick.
 STAKE_BY_CONF = {
     10: 100,
     9: 50,
-    8: 30,
 }
 MAX_FAV_BY_CONF = {
     # Per-confidence cap on max favorite odds (more negative = bigger fav).
     # Anything more favored than the cap gets filtered as odds_too_heavy.
     # Tuned 2026-05: all qualifying confidence levels can take -340 juice.
-    8: -340,
     9: -340,
     10: -340,
 }
@@ -1721,7 +1719,7 @@ html = f'''<!DOCTYPE html>
       </div>
       <div style="text-align:right;flex:1;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
-        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:8+<br><span style="color:#888;">|ODDS|&lt;340</span></div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:9+<br><span style="color:#888;">|ODDS|&lt;340</span></div>
       </div>
     </div>
   </div>
@@ -1904,7 +1902,7 @@ function sortGames(mode, el) {{
 with open(OUTPUT, "w") as f:
     f.write(html)
 
-# ─── Picks log — append today's C:7+ picks to CSV ──────────────────────────
+# ─── Picks log — append today's C:9+ picks to CSV ──────────────────────────
 PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
 qualified_picks = [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))]
 skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]]
