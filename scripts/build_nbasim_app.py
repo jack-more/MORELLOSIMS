@@ -93,6 +93,35 @@ def install_record_card(html: str) -> str:
     raise RuntimeError("Could not find an insertion point for the NBA record card.")
 
 
+def remove_block(html: str, start_marker: str, end_marker: str) -> str:
+    start = html.find(start_marker)
+    end = html.find(end_marker)
+    if start < 0 or end < 0 or end <= start:
+        return html
+    return html[:start] + html[end:]
+
+
+def strip_legacy_tabs(html: str) -> str:
+    for tab in ("sim", "props", "trends"):
+        html = re.sub(
+            rf'\n\s*<button class="filter-btn" data-tab="{tab}">.*?</button>',
+            "",
+            html,
+            flags=re.IGNORECASE,
+        )
+        html = re.sub(
+            rf'\n\s*<button class="nav-btn" data-tab="{tab}">.*?</button>',
+            "",
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+    html = remove_block(html, "        <!-- PROPS TAB -->", "        <!-- TRENDS TAB -->")
+    html = remove_block(html, "        <!-- TRENDS TAB -->", "        <!-- SIM TAB -->")
+    html = remove_block(html, "        <!-- SIM TAB -->", "        <!-- INFO TAB -->")
+    return html
+
+
 def inject_morello_shell(html: str) -> str:
     html = re.sub(r"<body(?:\s[^>]*)?>", '<body data-ma-theme="dark">', html, count=1)
     html = html.replace(
@@ -115,6 +144,7 @@ def main() -> None:
 
     html = SOURCE.read_text()
     html = inject_morello_shell(html)
+    html = strip_legacy_tabs(html)
     html = install_record_card(html)
     html = strip_trailing_whitespace(html)
 
