@@ -1299,25 +1299,24 @@ def render_batter(b):
     mc = ms_class(b["ms"])
     mic = ms_class(b.get("momi", 50))
     wc = woba_class(b["base_woba"], b["vs_woba"])
-    pa_str = f'{b["total_pa"]}PA' if b["total_pa"] > 0 else "NEW"
+    pos = h(b["pos"]) if b.get("pos") else "UTIL"
     return f'''<div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">{b["order"]}</span>
     <span class="batter-name">{h(b["name"])}</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-stats">{pos}</span>
     <span class="batter-metrics">
       <span class="batter-metric {mc}"><span>MOMO</span>{b["ms"]}</span>
       <span class="batter-metric {mic}"><span>MOMI</span>{b.get("momi", 50)}</span>
     </span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-stats">{(h(b["pos"]) + " &middot; ") if b.get("pos") else ""}{b["bat_side"]}</span>
     <span class="batter-range">+{b.get("run_contrib", 0):.2f} R</span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base">.{str(b["base_woba"])[2:]}</span>
+    <span class="woba-base"><span>WOBA</span>.{str(b["base_woba"])[2:]}</span>
     <span class="woba-dna">\U0001f9ec</span>
-    <span class="woba-vs {wc}">.{str(b["vs_woba"])[2:]}</span>
-    <span class="woba-pa">{pa_str}</span>
+    <span class="woba-vs {wc}"><span>ARCH</span>.{str(b["vs_woba"])[2:]}</span>
   </div>
 </div>'''
 
@@ -1670,12 +1669,18 @@ if "tab-daily" not in css_block:
 PLAYER_METRIC_CSS = """
 /* ── Player MOMO/MOMI chips ── */
 .lineup-col{min-width:0;overflow:hidden}
-.batter-top{display:grid;grid-template-columns:16px minmax(0,1fr);grid-template-areas:"order name" ". metrics";align-items:center;column-gap:6px;row-gap:4px;justify-content:normal}
-.batter-order{grid-area:order;margin-right:0}
-.batter-name{grid-area:name;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.batter-metrics{grid-area:metrics;display:flex;align-items:center;justify-content:flex-start;gap:3px;min-width:0}
-.batter-metric{display:flex;align-items:baseline;gap:2px;font-family:var(--font-mono);font-size:10px;font-weight:800;line-height:1;padding:3px 4px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.04)}
-.batter-metric span{font-size:7px;font-weight:800;color:var(--color-meta);letter-spacing:0}
+.batter-top{display:grid;grid-template-columns:16px minmax(0,1fr);align-items:center;column-gap:6px;justify-content:normal}
+.batter-order{margin-right:0}
+.batter-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.batter-bottom{display:grid;grid-template-columns:16px auto minmax(0,1fr) auto;align-items:center;column-gap:4px;margin-top:4px}
+.batter-stats{grid-column:2;white-space:nowrap}
+.batter-metrics{grid-column:3;display:flex;align-items:center;justify-content:flex-start;gap:3px;min-width:0}
+.batter-range{grid-column:4;white-space:nowrap;font-size:9px}
+.batter-metric{display:flex;align-items:baseline;gap:2px;font-family:var(--font-mono);font-size:9px;font-weight:800;line-height:1;padding:2px 3px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.04)}
+.batter-metric span{font-size:6px;font-weight:800;color:var(--color-meta);letter-spacing:0}
+.batter-woba{padding-left:0}
+.woba-base,.woba-vs{display:flex;align-items:baseline;gap:3px}
+.woba-base span,.woba-vs span{font-size:7px;font-weight:800;color:var(--color-meta);letter-spacing:0}
 .team-record{font-family:'JetBrains Mono',monospace;font-size:10px;color:#888;letter-spacing:0.5px;margin-top:2px;text-align:center}
 """
 if "batter-metrics" not in css_block:
