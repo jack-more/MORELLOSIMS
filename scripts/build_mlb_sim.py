@@ -1283,18 +1283,23 @@ def render_batter(b):
     mic = ms_class(b.get("momi", 50))
     wc = woba_class(b["base_woba"], b["vs_woba"])
     pos = h(b["pos"]) if b.get("pos") else "UTIL"
+    total_pa = int(round(float(b.get("total_pa") or 0)))
+    pa_html = f'<span class="batter-pa">{total_pa}PA</span>'
     return f'''<div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">{b["order"]}</span>
     <span class="batter-name">{h(b["name"])}</span>
   </div>
   <div class="batter-bottom">
-    <span class="batter-stats">{pos}</span>
+    <span class="batter-detail">
+      <span class="batter-stats">{pos}</span>
+      {pa_html}
+      <span class="batter-range">+{b.get("run_contrib", 0):.2f} R</span>
+    </span>
     <span class="batter-metrics">
       <span class="batter-metric {mc}"><span>MOMO</span>{b["ms"]}</span>
       <span class="batter-metric {mic}"><span>MOMI</span>{b.get("momi", 50)}</span>
     </span>
-    <span class="batter-range">+{b.get("run_contrib", 0):.2f} R</span>
   </div>
   <div class="batter-woba">
     <span class="woba-base"><span>WOBA</span>.{str(b["base_woba"])[2:]}</span>
@@ -1670,16 +1675,20 @@ PLAYER_METRIC_CSS = """
 .batter-top{display:grid;grid-template-columns:16px minmax(0,1fr);align-items:center;column-gap:6px;justify-content:normal}
 .batter-order{margin-right:0}
 .batter-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.batter-bottom{display:grid;grid-template-columns:16px auto minmax(0,1fr) auto;align-items:center;column-gap:4px;margin-top:4px}
-.batter-stats{grid-column:2;white-space:nowrap}
-.batter-metrics{grid-column:3;display:flex;align-items:center;justify-content:flex-start;gap:3px;min-width:0}
-.batter-range{grid-column:4;white-space:nowrap;font-size:9px}
-.batter-metric{display:flex;align-items:baseline;gap:2px;font-family:var(--font-mono);font-size:9px;font-weight:800;line-height:1;padding:2px 3px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.04)}
-.batter-metric span{font-size:6px;font-weight:800;color:var(--color-meta);letter-spacing:0}
+.batter-bottom{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;column-gap:6px;margin-top:5px}
+.batter-detail{grid-column:2;display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden;white-space:nowrap}
+.batter-stats{white-space:nowrap}
+.batter-pa{font-family:var(--font-mono);font-size:10px;font-weight:700;color:#aaa;white-space:nowrap}
+.batter-range{white-space:nowrap;font-size:10px}
+.batter-metrics{grid-column:3;display:flex;align-items:center;justify-content:flex-end;justify-self:end;gap:4px;min-width:max-content}
+.batter-metric{display:flex;align-items:baseline;justify-content:center;gap:3px;min-width:43px;font-family:var(--font-mono);font-size:11px;font-weight:900;line-height:1;padding:4px 5px;border:1px solid rgba(0,0,0,0.14);border-radius:5px;background:rgba(0,0,0,0.04)}
+.batter-metric span{font-size:7px;font-weight:900;color:var(--color-meta);letter-spacing:0}
 .batter-woba{padding-left:0}
 .woba-base,.woba-vs{display:flex;align-items:baseline;gap:3px}
 .woba-base span,.woba-vs span{font-size:7px;font-weight:800;color:var(--color-meta);letter-spacing:0}
 .team-record{font-family:'JetBrains Mono',monospace;font-size:10px;color:#888;letter-spacing:0.5px;margin-top:2px;text-align:center}
+@media(max-width:560px){.lineup-grid.open{grid-template-columns:1fr}.lineup-col:first-child{border-right:0;border-bottom:1px solid #ddd}}
+@media(max-width:380px){.batter-bottom{column-gap:4px}.batter-detail{gap:4px}.batter-pa,.batter-range{font-size:9px}.batter-metric{min-width:39px;font-size:10px;padding:3px 4px}}
 """
 if "batter-metrics" not in css_block:
     css_block = css_block.replace("</style>", PLAYER_METRIC_CSS + "\n</style>")
