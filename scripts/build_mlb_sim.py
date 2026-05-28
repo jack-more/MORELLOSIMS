@@ -991,16 +991,18 @@ for g in games_raw:
             team_tb += proj_tb
             team_woba_sum += vs_woba
 
+            momo_score = matchup_swing_to_momo(base_w, vs_woba)
+
             batters.append({
                 "order": i + 1,
                 "name": name,
                 "id": pid,
                 "pos": pos,
                 # MOMO: optimized matchup output from pitcher-DNA wOBA swing.
-                "ms": matchup_swing_to_momo(base_w, vs_woba),
+                "ms": momo_score,
                 "run_contrib": 0.0,
-                # MOMI becomes MOMO plus live streak/recent-form adjustment.
-                "momi": matchup_swing_to_momo(base_w, vs_woba),
+                # MOMI starts at MOMO, then moves up/down with live momentum.
+                "momi": momo_score,
                 "woba_delta": round(vs_woba - base_w, 3),
                 "base_woba": round(base_w, 3),
                 "vs_woba": round(vs_woba, 3),

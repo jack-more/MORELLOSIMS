@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from mlb_momo import matchup_swing_to_momo
+from mlb_momo import matchup_swing_to_momo, momentum_to_momi
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HTML_PATH = REPO_ROOT / "mlbsim" / "index.html"
@@ -53,6 +53,40 @@ def check_formula_guardrails():
                 f'{scenario["name"]}: MOMO {score} outside '
                 f'{scenario["min_momo"]}-{scenario["max_momo"]}'
             )
+
+    momi_scenarios = [
+        {
+            "name": "cold/no-streak form pushes MOMO down",
+            "momo": 64,
+            "streak": 0,
+            "last7_avg": 0.120,
+            "direction": "down",
+        },
+        {
+            "name": "neutral form keeps MOMI close to MOMO",
+            "momo": 64,
+            "streak": 1,
+            "last7_avg": 0.250,
+            "direction": "flat",
+        },
+        {
+            "name": "hot streak pushes MOMO up",
+            "momo": 64,
+            "streak": 7,
+            "last7_avg": 0.375,
+            "direction": "up",
+        },
+    ]
+
+    for scenario in momi_scenarios:
+        momi = momentum_to_momi(scenario["momo"], scenario["streak"], scenario["last7_avg"])
+        delta = momi - scenario["momo"]
+        if scenario["direction"] == "down" and delta >= 0:
+            errors.append(f'{scenario["name"]}: MOMI {momi} did not move below MOMO {scenario["momo"]}')
+        if scenario["direction"] == "up" and delta <= 0:
+            errors.append(f'{scenario["name"]}: MOMI {momi} did not move above MOMO {scenario["momo"]}')
+        if scenario["direction"] == "flat" and abs(delta) > 3:
+            errors.append(f'{scenario["name"]}: MOMI {momi} drifted too far from MOMO {scenario["momo"]}')
     return errors
 
 
