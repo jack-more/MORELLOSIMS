@@ -33,26 +33,73 @@ def matchup_swing_to_momo(base_woba, vs_woba):
     return max(1, min(99, int(round(score))))
 
 
-def momentum_to_momi(momo, streak, last7_avg):
+def momentum_to_momi(
+    momo,
+    streak,
+    last7_avg,
+    hit_games_last5=0,
+    games_last5=0,
+    hit_games_last7=0,
+    games_last7=0,
+    hit_games_last10=0,
+    games_last10=0,
+):
     """Apply active momentum to MOMO and return a 1-99 momentum impact.
 
-    No active streak is neutral: MOMI stays equal to MOMO.
+    No active streak and no recent hit-game density is neutral. A hitter who
+    went 4-for-5 hit-games, 5-for-7, etc. still gets momentum credit even if
+    the streak was interrupted.
     """
     momo = max(1, min(99, int(round(float(momo or 50)))))
     streak = int(streak or 0)
     last7 = float(last7_avg or 0.0)
+    hit5 = int(hit_games_last5 or 0)
+    games5 = int(games_last5 or 0)
+    hit7 = int(hit_games_last7 or 0)
+    games7 = int(games_last7 or 0)
+    hit10 = int(hit_games_last10 or 0)
+    games10 = int(games_last10 or 0)
 
-    if streak <= 0:
+    density_bonus = 0.0
+    if games5 >= 5:
+        if hit5 >= 5:
+            density_bonus = max(density_bonus, 9.0)
+        elif hit5 >= 4:
+            density_bonus = max(density_bonus, 6.0)
+        elif hit5 >= 3:
+            density_bonus = max(density_bonus, 2.0)
+    if games7 >= 7:
+        if hit7 >= 7:
+            density_bonus = max(density_bonus, 10.0)
+        elif hit7 >= 6:
+            density_bonus = max(density_bonus, 8.0)
+        elif hit7 >= 5:
+            density_bonus = max(density_bonus, 5.0)
+        elif hit7 >= 4:
+            density_bonus = max(density_bonus, 2.0)
+    if games10 >= 10:
+        if hit10 >= 9:
+            density_bonus = max(density_bonus, 9.0)
+        elif hit10 >= 8:
+            density_bonus = max(density_bonus, 7.0)
+        elif hit10 >= 7:
+            density_bonus = max(density_bonus, 4.0)
+
+    if streak <= 0 and density_bonus <= 0:
         return momo
 
     adjustment = 0.0
     if streak >= 2:
         adjustment += 2.0 + streak * 1.4 + max(0, streak - 5) * 0.8 + max(0, streak - 10) * 1.0
-    else:
+    elif streak == 1:
         adjustment += 1.0
 
+    adjustment += density_bonus
+
     if last7 > 0:
-        adjustment += max(-12.0, min(15.0, (last7 - 0.250) * 55.0))
+        adjustment += max(-6.0, min(8.0, (last7 - 0.250) * 45.0))
+
+    adjustment = max(-10.0, min(28.0, adjustment))
 
     return max(1, min(99, int(round(momo + adjustment))))
 

@@ -56,11 +56,26 @@ def check_formula_guardrails():
 
     momi_scenarios = [
         {
-            "name": "no active streak keeps MOMI at MOMO",
+            "name": "no streak and no density keeps MOMI at MOMO",
             "momo": 64,
             "streak": 0,
             "last7_avg": 0.120,
+            "hit_games_last5": 2,
+            "games_last5": 5,
+            "hit_games_last7": 3,
+            "games_last7": 7,
             "direction": "flat",
+        },
+        {
+            "name": "four of last five hit games pushes MOMO up",
+            "momo": 64,
+            "streak": 0,
+            "last7_avg": 0.320,
+            "hit_games_last5": 4,
+            "games_last5": 5,
+            "hit_games_last7": 5,
+            "games_last7": 7,
+            "direction": "up",
         },
         {
             "name": "cold active form can push MOMO down",
@@ -86,7 +101,17 @@ def check_formula_guardrails():
     ]
 
     for scenario in momi_scenarios:
-        momi = momentum_to_momi(scenario["momo"], scenario["streak"], scenario["last7_avg"])
+        momi = momentum_to_momi(
+            scenario["momo"],
+            scenario["streak"],
+            scenario["last7_avg"],
+            scenario.get("hit_games_last5", 0),
+            scenario.get("games_last5", 0),
+            scenario.get("hit_games_last7", 0),
+            scenario.get("games_last7", 0),
+            scenario.get("hit_games_last10", 0),
+            scenario.get("games_last10", 0),
+        )
         delta = momi - scenario["momo"]
         if scenario["direction"] == "down" and delta >= 0:
             errors.append(f'{scenario["name"]}: MOMI {momi} did not move below MOMO {scenario["momo"]}')

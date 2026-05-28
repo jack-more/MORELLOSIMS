@@ -1450,15 +1450,27 @@ for pid in all_lineup_pids:
             else:
                 break
         recent = splits[-7:] if len(splits) >= 7 else splits
+        recent5 = splits[-5:] if len(splits) >= 5 else splits
+        recent10 = splits[-10:] if len(splits) >= 10 else splits
         total_h = sum(s.get("stat", {}).get("hits", 0) for s in recent)
         total_ab = sum(s.get("stat", {}).get("atBats", 0) for s in recent)
         last7_avg = total_h / max(total_ab, 1)
-        batter_streaks[pid] = {"streak": streak, "last7_avg": round(last7_avg, 3)}
+        batter_streaks[pid] = {
+            "streak": streak,
+            "last7_avg": round(last7_avg, 3),
+            "hit_games_5": sum(1 for s in recent5 if s.get("stat", {}).get("hits", 0) > 0),
+            "games_5": len(recent5),
+            "hit_games_7": sum(1 for s in recent if s.get("stat", {}).get("hits", 0) > 0),
+            "games_7": len(recent),
+            "hit_games_10": sum(1 for s in recent10 if s.get("stat", {}).get("hits", 0) > 0),
+            "games_10": len(recent10),
+        }
     except Exception:
         continue
 
 print(f"  Fetched streaks for {len(batter_streaks)} batters")
 print(f"  Batters on 3+ game streaks: {sum(1 for v in batter_streaks.values() if v['streak'] >= 3)}")
+print(f"  Batters with hits in 4 of last 5: {sum(1 for v in batter_streaks.values() if v.get('games_5', 0) >= 5 and v.get('hit_games_5', 0) >= 4)}")
 
 for g in games:
     if not g["has_lineups"]:
@@ -1467,13 +1479,35 @@ for g in games:
         streak_data = batter_streaks.get(b["id"], {})
         b["streak"] = streak_data.get("streak", 0)
         b["last7_avg"] = streak_data.get("last7_avg", 0)
-        b["momi"] = momentum_to_momi(b["ms"], b["streak"], b["last7_avg"])
+        b["hit_games_5"] = streak_data.get("hit_games_5", 0)
+        b["games_5"] = streak_data.get("games_5", 0)
+        b["hit_games_7"] = streak_data.get("hit_games_7", 0)
+        b["games_7"] = streak_data.get("games_7", 0)
+        b["hit_games_10"] = streak_data.get("hit_games_10", 0)
+        b["games_10"] = streak_data.get("games_10", 0)
+        b["momi"] = momentum_to_momi(
+            b["ms"], b["streak"], b["last7_avg"],
+            b["hit_games_5"], b["games_5"],
+            b["hit_games_7"], b["games_7"],
+            b["hit_games_10"], b["games_10"],
+        )
 
 for bm in all_batter_matchups:
     streak_data = batter_streaks.get(bm.get("id"), {})
     bm["streak"] = streak_data.get("streak", 0)
     bm["last7_avg"] = streak_data.get("last7_avg", 0)
-    bm["momi"] = momentum_to_momi(bm["ms"], bm["streak"], bm["last7_avg"])
+    bm["hit_games_5"] = streak_data.get("hit_games_5", 0)
+    bm["games_5"] = streak_data.get("games_5", 0)
+    bm["hit_games_7"] = streak_data.get("hit_games_7", 0)
+    bm["games_7"] = streak_data.get("games_7", 0)
+    bm["hit_games_10"] = streak_data.get("hit_games_10", 0)
+    bm["games_10"] = streak_data.get("games_10", 0)
+    bm["momi"] = momentum_to_momi(
+        bm["ms"], bm["streak"], bm["last7_avg"],
+        bm["hit_games_5"], bm["games_5"],
+        bm["hit_games_7"], bm["games_7"],
+        bm["hit_games_10"], bm["games_10"],
+    )
 
 
 def render_hr_watch_tab():
@@ -1510,6 +1544,17 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
+    def recent_hit_label(bm):
+        if bm.get("streak", 0) >= 2:
+            return f'{bm["streak"]}G streak'
+        if bm.get("games_5", 0) >= 5 and bm.get("hit_games_5", 0) >= 4:
+            return f'{bm["hit_games_5"]}/5 hit games'
+        if bm.get("games_7", 0) >= 7 and bm.get("hit_games_7", 0) >= 5:
+            return f'{bm["hit_games_7"]}/7 hit games'
+        if bm.get("games_10", 0) >= 10 and bm.get("hit_games_10", 0) >= 7:
+            return f'{bm["hit_games_10"]}/10 hit games'
+        return f'{bm.get("streak", 0)}G streak'
+
     heating_candidates = []
     for bm in all_batter_matchups:
         pid = bm.get("id")
@@ -1517,10 +1562,25 @@ def render_hr_watch_tab():
         streak = streak_data.get("streak", 0)
         last7 = streak_data.get("last7_avg", 0)
         woba_bump = bm["vs_woba"] - bm["base_woba"]
-        if streak >= 2:
-            heat_score = streak * (1 + max(0, woba_bump) * 5)
+        momentum_delta = bm.get("momi", bm["ms"]) - bm["ms"]
+        hit5 = streak_data.get("hit_games_5", 0)
+        games5 = streak_data.get("games_5", 0)
+        hit7 = streak_data.get("hit_games_7", 0)
+        games7 = streak_data.get("games_7", 0)
+        hit10 = streak_data.get("hit_games_10", 0)
+        games10 = streak_data.get("games_10", 0)
+        has_density = (
+            (games5 >= 5 and hit5 >= 4) or
+            (games7 >= 7 and hit7 >= 5) or
+            (games10 >= 10 and hit10 >= 7)
+        )
+        if momentum_delta > 0 and (streak >= 2 or has_density):
+            heat_score = momentum_delta + max(0, woba_bump) * 20
             heating_candidates.append({
                 **bm, "streak": streak, "last7_avg": last7,
+                "hit_games_5": hit5, "games_5": games5,
+                "hit_games_7": hit7, "games_7": games7,
+                "hit_games_10": hit10, "games_10": games10,
                 "woba_bump": woba_bump, "heat_score": heat_score
             })
 
@@ -1529,7 +1589,7 @@ def render_hr_watch_tab():
     heat_html = ""
     for i, bm in enumerate(heating):
         mc = ms_class(bm["ms"])
-        streak_str = f'{bm["streak"]}G streak'
+        streak_str = recent_hit_label(bm)
         avg_str = f'.{str(bm["last7_avg"])[2:]}' if bm["last7_avg"] > 0 else ""
         bump = bm["woba_bump"]
         bump_str = f'+.{str(abs(round(bump,3)))[2:]}' if bump > 0 else ""
@@ -1735,7 +1795,7 @@ html = f'''<!DOCTYPE html>
             <div class="info-card">
                 <h2>HOW MLB SIM WORKS</h2>
                 <p>MLB SIM uses the <strong>Pitcher DNA</strong> system (Gaussian Mixture Model clustering) to classify every pitcher into one of 26 archetypes (15 RHP + 11 LHP) based on their pitch mix, velocity, movement, and approach. Every batter has historical performance data against each archetype \u2014 because baseball is fundamentally a 1v1 sport, the specific pitcher a batter faces defines their expected performance.</p>
-                <p>When lineups are released, MLB SIM projects every batter's event rates based on how they've historically hit against the opposing pitcher's archetype. <strong>MOMO</strong> is the matchup output score from that pitcher-DNA projection, anchored to projected output with baseline talent and matchup swing as modifiers. <strong>MOMI</strong> is MOMO with a live momentum adjustment from current hitting streak and last-7 form, because hitter game logs are not treated as independent coin flips.</p>
+                <p>When lineups are released, MLB SIM projects every batter's event rates based on how they've historically hit against the opposing pitcher's archetype. <strong>MOMO</strong> is the matchup output score from that pitcher-DNA projection, anchored to projected output with baseline talent and matchup swing as modifiers. <strong>MOMI</strong> is MOMO with a live momentum adjustment from consecutive streak, recent hit-game density, and last-7 form, because hitter game logs are not treated as independent coin flips.</p>
             </div>
             <div class="info-card">
                 <h2>MOMO \u2014 1 TO 99</h2>
@@ -1760,19 +1820,20 @@ MOMO                = 64</div>
             </div>
             <div class="info-card">
                 <h2>MOMI \u2014 1 TO 99</h2>
-                <p>MOMI is Optimized Momentum Impact. It starts with MOMO, then adjusts for active hitting streak length and last-7 batting average. Streaks are intentionally treated as signal: the ramp gets stronger at 5+ and 10+ games, reflecting research that real hitting streaks occur more often than random rearrangements of the same game logs.</p>
+                <p>MOMI is Optimized Momentum Impact. It starts with MOMO, then adjusts for active hitting streak length, recent hit-game density, and last-7 batting average. Consecutive streaks are signal, but so are interrupted hot patterns like 4 of the last 5 games with a hit.</p>
                 <div class="formula-block ma-premium">MOMI FORMULA (momentum impact):
 MOMI starts with MOMO
 + active-streak bonus when a streak exists
 + nonlinear 5+ / 10+ streak ramp
-+ last-7 AVG adjustment when a streak exists
-no active streak = MOMI remains MOMO
++ recent hit-game density bonus (4/5, 5/7, 7/10)
++ last-7 AVG strength modifier when a momentum signal exists
+no streak + no hit-density signal = MOMI remains MOMO
 
 Example:
 MOMO                = 75
-active streak       = 7 games
+active/recent form  = 4 of last 5 hit games
 last-7 AVG          = .375
-MOMI                = 91</div>
+MOMI                = 86</div>
             </div>
             <div class="info-card">
                 <h2>PROJECTION METHODOLOGY</h2>
