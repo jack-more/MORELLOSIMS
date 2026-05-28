@@ -1670,10 +1670,10 @@ if "tab-daily" not in css_block:
 PLAYER_METRIC_CSS = """
 /* ── Player MOMO/MOMI chips ── */
 .lineup-col{min-width:0;overflow:hidden}
-.batter-top{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:6px;justify-content:normal}
-.batter-order{margin-right:0}
-.batter-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.batter-metrics{display:flex;align-items:center;justify-content:flex-end;gap:3px;min-width:0}
+.batter-top{display:grid;grid-template-columns:16px minmax(0,1fr);grid-template-areas:"order name" ". metrics";align-items:center;column-gap:6px;row-gap:4px;justify-content:normal}
+.batter-order{grid-area:order;margin-right:0}
+.batter-name{grid-area:name;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.batter-metrics{grid-area:metrics;display:flex;align-items:center;justify-content:flex-start;gap:3px;min-width:0}
 .batter-metric{display:flex;align-items:baseline;gap:2px;font-family:var(--font-mono);font-size:10px;font-weight:800;line-height:1;padding:3px 4px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.04)}
 .batter-metric span{font-size:7px;font-weight:800;color:var(--color-meta);letter-spacing:0}
 .team-record{font-family:'JetBrains Mono',monospace;font-size:10px;color:#888;letter-spacing:0.5px;margin-top:2px;text-align:center}
