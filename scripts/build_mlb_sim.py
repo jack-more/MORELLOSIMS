@@ -96,44 +96,35 @@ def fetch(url):
         return None
 
 # ─── Batter Score Helpers ───────────────────────────────────────────────────
-def run_contrib_to_ms(run_contrib):
-    """Map marginal BaseRuns contribution to a 35-99 display score.
-
-    This score is intentionally tied to the run engine: run_contrib is the
-    difference between the team's projected BaseRuns with this batter included
-    and with this batter removed. Unlike the old wOBA-only score, this accounts
-    for event mix, lineup-slot PA, and BaseRuns nonlinearity.
-    """
-    rc = max(0.0, float(run_contrib or 0.0))
-    if rc >= 2.00:
-        return 99
-    if rc >= 1.85:
-        return 98
-    if rc >= 1.70:
-        return 97
-    if rc >= 1.55:
-        return 96
-    if rc >= 1.40:
-        return 95
-    if rc >= 1.25:
-        return 94
-    if rc >= 1.10:
-        return 91 + int((rc - 1.10) / 0.05)
-    if rc >= 0.90:
-        return 85 + int((rc - 0.90) / 0.033)
-    if rc >= 0.70:
-        return 76 + int((rc - 0.70) / 0.022)
-    if rc >= 0.50:
-        return 64 + int((rc - 0.50) / 0.017)
-    if rc >= 0.30:
-        return 50 + int((rc - 0.30) / 0.014)
-    return max(35, 35 + int(rc / 0.020))
-
-
-def matchup_swing_to_momi(base_woba, vs_woba):
-    """Map hitter-vs-pitcher-DNA wOBA swing to a 1-99 matchup index."""
+def matchup_swing_to_momo(base_woba, vs_woba):
+    """Map hitter-vs-pitcher-DNA wOBA swing to a 1-99 matchup output."""
     diff = float(vs_woba or 0.0) - float(base_woba or 0.0)
     return max(1, min(99, int(round(50 + diff * 500))))
+
+
+def momentum_to_momi(momo, streak, last7_avg):
+    """Apply live hitting form to MOMO and return a 1-99 momentum impact.
+
+    MOMI is not standalone heat. It is MOMO adjusted by streak/recent form.
+    Streaks are treated as signal, not random noise; the ramp gets steeper at
+    5+ and 10+ games, mirroring the SABR hot-hand/streak evidence.
+    """
+    momo = max(1, min(99, int(round(float(momo or 50)))))
+    streak = int(streak or 0)
+    last7 = float(last7_avg or 0.0)
+
+    adjustment = 0.0
+    if streak >= 2:
+        adjustment += 2.0 + streak * 1.4 + max(0, streak - 5) * 0.8 + max(0, streak - 10) * 1.0
+    elif streak == 1:
+        adjustment += 1.0
+    else:
+        adjustment -= 4.0
+
+    if last7 > 0:
+        adjustment += max(-12.0, min(15.0, (last7 - 0.250) * 55.0))
+
+    return max(1, min(99, int(round(momo + adjustment))))
 
 
 def ms_class(ms):
@@ -971,7 +962,6 @@ for g in games_raw:
             pid = p.get("id")
             name = p.get("fullName", "Unknown")
             pos = lookup_position(pid, p)  # '' if unknown — caller must handle
-            bat_side = p.get("batSide", {}).get("code", "R")
 
             base_w = get_base_woba(pid)
             base_h, base_bb, base_hr, base_tb = get_base_rates(pid)
@@ -1048,14 +1038,11 @@ for g in games_raw:
                 "name": name,
                 "id": pid,
                 "pos": pos,
-                "bat_side": bat_side,
-                # Filled after team totals are known. The score is based on
-                # marginal BaseRuns contribution, not a saturated wOBA badge.
-                "ms": 0,
-                "ms_lo": 0,
-                "ms_hi": 0,
+                # MOMO: optimized matchup output from pitcher-DNA wOBA swing.
+                "ms": matchup_swing_to_momo(base_w, vs_woba),
                 "run_contrib": 0.0,
-                "momi": matchup_swing_to_momi(base_w, vs_woba),
+                # MOMI becomes MOMO plus live streak/recent-form adjustment.
+                "momi": matchup_swing_to_momo(base_w, vs_woba),
                 "woba_delta": round(vs_woba - base_w, 3),
                 "base_woba": round(base_w, 3),
                 "vs_woba": round(vs_woba, 3),
@@ -1080,10 +1067,6 @@ for g in games_raw:
                 max(0.0, team_tb - b["proj_tb"]),
             )
             run_contrib = max(0.0, runs - without_runs)
-            ms = run_contrib_to_ms(run_contrib)
-            b["ms"] = ms
-            b["ms_lo"] = run_contrib_to_ms(max(0.0, run_contrib - 0.05))
-            b["ms_hi"] = run_contrib_to_ms(run_contrib + 0.05)
             b["run_contrib"] = round(run_contrib, 2)
 
             all_batter_matchups.append({
@@ -1512,6 +1495,21 @@ for pid in all_lineup_pids:
 print(f"  Fetched streaks for {len(batter_streaks)} batters")
 print(f"  Batters on 3+ game streaks: {sum(1 for v in batter_streaks.values() if v['streak'] >= 3)}")
 
+for g in games:
+    if not g["has_lineups"]:
+        continue
+    for b in g["away_batters"] + g["home_batters"]:
+        streak_data = batter_streaks.get(b["id"], {})
+        b["streak"] = streak_data.get("streak", 0)
+        b["last7_avg"] = streak_data.get("last7_avg", 0)
+        b["momi"] = momentum_to_momi(b["ms"], b["streak"], b["last7_avg"])
+
+for bm in all_batter_matchups:
+    streak_data = batter_streaks.get(bm.get("id"), {})
+    bm["streak"] = streak_data.get("streak", 0)
+    bm["last7_avg"] = streak_data.get("last7_avg", 0)
+    bm["momi"] = momentum_to_momi(bm["ms"], bm["streak"], bm["last7_avg"])
+
 
 def render_hr_watch_tab():
     hr_candidates = sorted(
@@ -1768,41 +1766,41 @@ html = f'''<!DOCTYPE html>
             <div class="info-card">
                 <h2>HOW MLB SIM WORKS</h2>
                 <p>MLB SIM uses the <strong>Pitcher DNA</strong> system (Gaussian Mixture Model clustering) to classify every pitcher into one of 26 archetypes (15 RHP + 11 LHP) based on their pitch mix, velocity, movement, and approach. Every batter has historical performance data against each archetype \u2014 because baseball is fundamentally a 1v1 sport, the specific pitcher a batter faces defines their expected performance.</p>
-                <p>When lineups are released, MLB SIM projects every batter's event rates based on how they've historically hit against the opposing pitcher's archetype. Those rates feed directly into BaseRuns, producing per-game <strong>MOMO</strong> scores that reflect how much each batter is actually moving today's run projection. <strong>MOMI</strong> shows the batter's matchup swing vs their baseline wOBA.</p>
+                <p>When lineups are released, MLB SIM projects every batter's event rates based on how they've historically hit against the opposing pitcher's archetype. <strong>MOMO</strong> is the baseline matchup output from that pitcher-DNA projection. <strong>MOMI</strong> is MOMO with a live momentum adjustment from current hitting streak and last-7 form, because hitter game logs are not treated as independent coin flips.</p>
             </div>
             <div class="info-card">
-                <h2>MOMO \u2014 35 TO 99</h2>
-                <p>MOMO is a run-contribution score. It is calculated from the same projected H, BB, HR, TB, and lineup-slot PA that feed the team BaseRuns projection.</p>
+                <h2>MOMO \u2014 1 TO 99</h2>
+                <p>MOMO is Optimized Matchup Output. It compares today's pitcher-DNA projected wOBA against the hitter's own baseline wOBA, so 50 is neutral, 70+ is a plus matchup, and sub-45 is a tough matchup.</p>
                 <table class="tier-table">
-                    <tr><td class="tier-label" style="color:var(--color-elite)">85-99</td><td>Elite run contribution \u2014 meaningfully lifts the team projection</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-favorable)">70-84</td><td>Strong \u2014 above-average projected run value today</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-neutral)">55-69</td><td>Neutral \u2014 ordinary lineup contribution</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-tough)">35-54</td><td>Low impact \u2014 limited projected run contribution</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-elite)">85-99</td><td>Elite matchup \u2014 archetype strongly favors the hitter</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-favorable)">70-84</td><td>Plus matchup \u2014 above-baseline pitcher-DNA projection</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-neutral)">55-69</td><td>Neutral to slight plus matchup</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-tough)">1-54</td><td>Tough matchup \u2014 projected below hitter baseline</td></tr>
                 </table>
-                <div class="formula-block ma-premium">MOMO FORMULA (run-based):
-1. Project hitter H / BB / HR / TB rates vs pitcher DNA
-2. Multiply by expected PA from lineup slot
-3. Compute team BaseRuns with the hitter included
-4. Remove the hitter's projected PA/H/BB/HR/TB and recompute BaseRuns
-5. MOMO = score mapped from the marginal run contribution
-
-Example:
-team BaseRuns with hitter      = 5.20
-team BaseRuns without hitter   = 4.54
-marginal run contribution      = +0.66 R
-MOMO                           = 83</div>
-            </div>
-            <div class="info-card">
-                <h2>MOMI \u2014 1 TO 99</h2>
-                <p>MOMI is the matchup index for the player. It compares today's pitcher-DNA projected wOBA against the hitter's baseline wOBA, so 50 is neutral, 70+ is a plus matchup, and sub-45 is a tough matchup.</p>
-                <div class="formula-block ma-premium">MOMI FORMULA (matchup swing):
-MOMI = 50 + ((vs pitcher-DNA wOBA - baseline wOBA) * 500)
+                <div class="formula-block ma-premium">MOMO FORMULA (matchup output):
+MOMO = 50 + ((vs pitcher-DNA wOBA - baseline wOBA) * 500)
 
 Example:
 baseline wOBA       = .320
 vs pitcher-DNA wOBA = .370
 wOBA swing          = +.050
-MOMI                = 75</div>
+MOMO                = 75</div>
+            </div>
+            <div class="info-card">
+                <h2>MOMI \u2014 1 TO 99</h2>
+                <p>MOMI is Optimized Momentum Impact. It starts with MOMO, then adjusts for active hitting streak length and last-7 batting average. Streaks are intentionally treated as signal: the ramp gets stronger at 5+ and 10+ games, reflecting research that real hitting streaks occur more often than random rearrangements of the same game logs.</p>
+                <div class="formula-block ma-premium">MOMI FORMULA (momentum impact):
+MOMI starts with MOMO
++ active-streak bonus
++ nonlinear 5+ / 10+ streak ramp
++ last-7 AVG adjustment
+- cold-form penalty when no streak is active
+
+Example:
+MOMO                = 75
+active streak       = 7 games
+last-7 AVG          = .375
+MOMI                = 91</div>
             </div>
             <div class="info-card">
                 <h2>PROJECTION METHODOLOGY</h2>
