@@ -96,10 +96,36 @@ def fetch(url):
         return None
 
 # ─── Batter Score Helpers ───────────────────────────────────────────────────
+def woba_to_output_score(woba):
+    """Convert projected wOBA into the main 1-99 matchup-output scale."""
+    w = max(0.0, float(woba or 0.0))
+    if w >= 0.400:
+        return min(99, 90 + int((w - 0.400) / 0.030 * 9))
+    if w >= 0.370:
+        return 80 + int((w - 0.370) / 0.030 * 9)
+    if w >= 0.340:
+        return 70 + int((w - 0.340) / 0.030 * 9)
+    if w >= 0.310:
+        return 60 + int((w - 0.310) / 0.030 * 9)
+    if w >= 0.270:
+        return 50 + int((w - 0.270) / 0.040 * 9)
+    return max(40, 40 + int((w - 0.200) / 0.070 * 9))
+
+
 def matchup_swing_to_momo(base_woba, vs_woba):
-    """Map hitter-vs-pitcher-DNA wOBA swing to a 1-99 matchup output."""
-    diff = float(vs_woba or 0.0) - float(base_woba or 0.0)
-    return max(1, min(99, int(round(50 + diff * 500))))
+    """Map pitcher-DNA output to MOMO without erasing elite baselines.
+
+    MOMO is Optimized Matchup Output, so the score is anchored by the
+    absolute pitcher-DNA projection. The hitter's own baseline and the
+    matchup swing still matter, but they behave as modifiers.
+    """
+    base = float(base_woba or 0.0)
+    vs = float(vs_woba or 0.0)
+    base_score = woba_to_output_score(base)
+    matchup_score = woba_to_output_score(vs)
+    swing_adjust = (vs - base) * 80.0
+    score = matchup_score * 0.75 + base_score * 0.25 + swing_adjust
+    return max(1, min(99, int(round(score))))
 
 
 def momentum_to_momi(momo, streak, last7_avg):
@@ -130,7 +156,7 @@ def momentum_to_momi(momo, streak, last7_avg):
 def ms_class(ms):
     if ms >= 85: return "ms-elite"
     if ms >= 70: return "ms-favorable"
-    if ms >= 55: return "ms-neutral"
+    if ms >= 50: return "ms-neutral"
     return "ms-tough"
 
 def woba_class(base, vs):
@@ -1775,25 +1801,28 @@ html = f'''<!DOCTYPE html>
             <div class="info-card">
                 <h2>HOW MLB SIM WORKS</h2>
                 <p>MLB SIM uses the <strong>Pitcher DNA</strong> system (Gaussian Mixture Model clustering) to classify every pitcher into one of 26 archetypes (15 RHP + 11 LHP) based on their pitch mix, velocity, movement, and approach. Every batter has historical performance data against each archetype \u2014 because baseball is fundamentally a 1v1 sport, the specific pitcher a batter faces defines their expected performance.</p>
-                <p>When lineups are released, MLB SIM projects every batter's event rates based on how they've historically hit against the opposing pitcher's archetype. <strong>MOMO</strong> is the baseline matchup output from that pitcher-DNA projection. <strong>MOMI</strong> is MOMO with a live momentum adjustment from current hitting streak and last-7 form, because hitter game logs are not treated as independent coin flips.</p>
+                <p>When lineups are released, MLB SIM projects every batter's event rates based on how they've historically hit against the opposing pitcher's archetype. <strong>MOMO</strong> is the matchup output score from that pitcher-DNA projection, anchored to projected output with baseline talent and matchup swing as modifiers. <strong>MOMI</strong> is MOMO with a live momentum adjustment from current hitting streak and last-7 form, because hitter game logs are not treated as independent coin flips.</p>
             </div>
             <div class="info-card">
                 <h2>MOMO \u2014 1 TO 99</h2>
-                <p>MOMO is Optimized Matchup Output. It compares today's pitcher-DNA projected wOBA against the hitter's own baseline wOBA, so 50 is neutral, 70+ is a plus matchup, and sub-45 is a tough matchup.</p>
+                <p>MOMO is Optimized Matchup Output. It is anchored by today's pitcher-DNA projected wOBA, then modified by the hitter's own baseline and the matchup swing. That means an elite hitter in a below-baseline matchup can be downgraded without being incorrectly treated like a zero-impact bat.</p>
                 <table class="tier-table">
                     <tr><td class="tier-label" style="color:var(--color-elite)">85-99</td><td>Elite matchup \u2014 archetype strongly favors the hitter</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-favorable)">70-84</td><td>Plus matchup \u2014 above-baseline pitcher-DNA projection</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-neutral)">55-69</td><td>Neutral to slight plus matchup</td></tr>
-                    <tr><td class="tier-label" style="color:var(--color-tough)">1-54</td><td>Tough matchup \u2014 projected below hitter baseline</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-favorable)">70-84</td><td>Plus matchup \u2014 strong pitcher-DNA output today</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-neutral)">50-69</td><td>Neutral to playable matchup output</td></tr>
+                    <tr><td class="tier-label" style="color:var(--color-tough)">1-49</td><td>Tough matchup \u2014 weak projected output after baseline adjustment</td></tr>
                 </table>
                 <div class="formula-block ma-premium">MOMO FORMULA (matchup output):
-MOMO = 50 + ((vs pitcher-DNA wOBA - baseline wOBA) * 500)
+projected output score = pitcher-DNA wOBA mapped to 1-99
+baseline talent score   = season wOBA mapped to 1-99
+matchup swing modifier = (pitcher-DNA wOBA - baseline wOBA) * 80
+MOMO = 75% output score + 25% talent score + matchup modifier
 
 Example:
-baseline wOBA       = .320
-vs pitcher-DNA wOBA = .370
-wOBA swing          = +.050
-MOMO                = 75</div>
+baseline wOBA       = .417
+vs pitcher-DNA wOBA = .325
+wOBA swing          = -.092
+MOMO                = 64</div>
             </div>
             <div class="info-card">
                 <h2>MOMI \u2014 1 TO 99</h2>
