@@ -1763,10 +1763,10 @@ MOMO                = 64</div>
                 <p>MOMI is Optimized Momentum Impact. It starts with MOMO, then adjusts for active hitting streak length and last-7 batting average. Streaks are intentionally treated as signal: the ramp gets stronger at 5+ and 10+ games, reflecting research that real hitting streaks occur more often than random rearrangements of the same game logs.</p>
                 <div class="formula-block ma-premium">MOMI FORMULA (momentum impact):
 MOMI starts with MOMO
-+ active-streak bonus
++ active-streak bonus when a streak exists
 + nonlinear 5+ / 10+ streak ramp
-+ last-7 AVG adjustment
-- cold-form penalty when no streak is active
++ last-7 AVG adjustment when a streak exists
+no active streak = MOMI remains MOMO
 
 Example:
 MOMO                = 75

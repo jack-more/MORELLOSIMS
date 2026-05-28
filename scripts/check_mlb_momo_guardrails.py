@@ -56,14 +56,21 @@ def check_formula_guardrails():
 
     momi_scenarios = [
         {
-            "name": "cold/no-streak form pushes MOMO down",
+            "name": "no active streak keeps MOMI at MOMO",
             "momo": 64,
             "streak": 0,
+            "last7_avg": 0.120,
+            "direction": "flat",
+        },
+        {
+            "name": "cold active form can push MOMO down",
+            "momo": 64,
+            "streak": 1,
             "last7_avg": 0.120,
             "direction": "down",
         },
         {
-            "name": "neutral form keeps MOMI close to MOMO",
+            "name": "neutral active form keeps MOMI close to MOMO",
             "momo": 64,
             "streak": 1,
             "last7_avg": 0.250,

@@ -34,18 +34,22 @@ def matchup_swing_to_momo(base_woba, vs_woba):
 
 
 def momentum_to_momi(momo, streak, last7_avg):
-    """Apply live hitting form to MOMO and return a 1-99 momentum impact."""
+    """Apply active momentum to MOMO and return a 1-99 momentum impact.
+
+    No active streak is neutral: MOMI stays equal to MOMO.
+    """
     momo = max(1, min(99, int(round(float(momo or 50)))))
     streak = int(streak or 0)
     last7 = float(last7_avg or 0.0)
 
+    if streak <= 0:
+        return momo
+
     adjustment = 0.0
     if streak >= 2:
         adjustment += 2.0 + streak * 1.4 + max(0, streak - 5) * 0.8 + max(0, streak - 10) * 1.0
-    elif streak == 1:
-        adjustment += 1.0
     else:
-        adjustment -= 4.0
+        adjustment += 1.0
 
     if last7 > 0:
         adjustment += max(-12.0, min(15.0, (last7 - 0.250) * 55.0))
