@@ -112,6 +112,9 @@ jobs:
           set -o pipefail
           python3 scripts/build_mlb_sim.py 2>&1 | tee /tmp/mlb_output.txt
 
+      - name: Guard MLB MOMO/MOMI scores
+        run: python3 scripts/check_mlb_momo_guardrails.py
+
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.
       - name: Commit and push
@@ -157,6 +160,9 @@ jobs:
         run: |
           set -o pipefail
           python3 scripts/build_mlb_sim.py 2>&1 | tee -a /tmp/mlb_output.txt
+
+      - name: Guard MLB MOMO/MOMI scores
+        run: python3 scripts/check_mlb_momo_guardrails.py
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.
