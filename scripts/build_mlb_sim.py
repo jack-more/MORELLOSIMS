@@ -358,6 +358,28 @@ def normalize_abbr(abbr):
     """Normalize team abbreviation to match MLB API style."""
     return TEAM_ALIAS.get(abbr, abbr)
 
+def team_key_variants(abbr):
+    """Return acceptable abbrev variants for cross-source matching.
+
+    Some providers use ARI where MLB renders AZ, CHW where we render CWS, etc.
+    This keeps odds joins strict to real-book lines without dropping games on
+    provider abbreviation drift.
+    """
+    variants = []
+    for value in (abbr, TEAM_ALIAS.get(abbr, abbr)):
+        if value and value not in variants:
+            variants.append(value)
+    return variants
+
+def lookup_game_odds(odds_map, away_abbr, home_abbr):
+    """Find a game's real-book odds across known team abbreviation variants."""
+    for away_key in team_key_variants(away_abbr):
+        for home_key in team_key_variants(home_abbr):
+            game_odds = odds_map.get((away_key, home_key))
+            if game_odds:
+                return game_odds
+    return {}
+
 def fetch_baseballmonster_lineups():
     """Fetch structured CSV lineups from BaseballMonster — includes MLB IDs directly."""
     try:
@@ -1165,7 +1187,7 @@ for g in games_raw:
     # published. If the odds source doesn't have this game, we leave the line
     # blank ("—") and exclude the pick from picks/mlb.json. Tracking a pick
     # against a fabricated price is dishonest and breaks settlement math.
-    game_odds = real_odds.get((away_abbr, home_abbr), {})
+    game_odds = lookup_game_odds(real_odds, away_abbr, home_abbr)
     if game_odds and game_odds.get("away_ml") and game_odds.get("home_ml"):
         away_ml = f"{game_odds['away_ml']:+d}"
         home_ml = f"{game_odds['home_ml']:+d}"
