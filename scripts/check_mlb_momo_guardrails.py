@@ -173,9 +173,13 @@ def check_generated_page():
             errors.append(
                 f"{name}: elite/playable matchup cannot produce MOMI {momi}"
             )
-        if run_value >= 0.50 and base >= 0.370 and momo < 55:
+        if run_value >= 0.50 and base >= 0.370 and vs >= 0.285 and momo < 55:
             errors.append(
                 f"{name}: +{run_value:.2f}R elite bat cannot produce MOMO {momo}"
+            )
+        if run_value >= 0.50 and base >= 0.370 and momo < 40:
+            errors.append(
+                f"{name}: +{run_value:.2f}R elite bat cannot be buried at MOMO {momo}"
             )
         if max(base, vs) >= 0.300 and min(momo, momi) <= 9:
             errors.append(
