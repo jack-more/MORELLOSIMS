@@ -1711,9 +1711,13 @@ def render_hr_watch_tab():
     games_with_lu = sum(1 for g in games if g["has_lineups"])
     no_data = '<div class="empty-state">UPDATES WHEN LINEUPS ARE RELEASED</div>' if not (hr_html or longshot_html or heat_html) else ''
     hr_empty = '<div class="empty-state">NO 9%+ HR PROBABILITY EDGES</div>' if not hr_html else ''
+    def criteria_row(*items):
+        return '<div class="criteria-row">' + ''.join(f'<span>{h(item)}</span>' for item in items) + '</div>'
+
     longshot_block = f'''<div class="daily-subsection">
+                    <div class="edge-kicker">SECONDARY</div>
                     <div class="section-title mini-title">\U0001f4a5 DAMAGE LONGSHOTS</div>
-                    <div class="section-sub">7.5-8.9% HR rate &middot; MOMO 70+ &middot; MOMI 70+ &middot; +0.85R</div>
+                    {criteria_row("7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
@@ -1726,19 +1730,22 @@ def render_hr_watch_tab():
         {no_data}
         <div class="daily-grid">
             <div class="daily-col">
+                <div class="edge-kicker primary">PRIMARY</div>
                 <div class="section-title">\U0001f4a3 HR PROBABILITY</div>
-                <div class="section-sub">9%+ projected HR rate</div>
+                {criteria_row("9%+ projected HR", "top probability only")}
                 <div class="picks-container">{hr_html or hr_empty}</div>
                 {longshot_block}
             </div>
             <div class="daily-col">
+                <div class="edge-kicker momentum">MOMENTUM</div>
                 <div class="section-title">\U0001f525 HOT BAT HR FIT</div>
-                <div class="section-sub">5G+ streak or 4/5 hits &middot; MOMI 85+ &middot; MOMO 60+</div>
+                {criteria_row("5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
                 <div class="picks-container">{heat_html or heat_empty}</div>
             </div>
             <div class="daily-col">
+                <div class="edge-kicker picks">BOARD</div>
                 <div class="section-title">\U0001f3af TODAY'S PICKS</div>
-                <div class="section-sub">Best projected spreads</div>
+                {criteria_row("best ML edges", "line available", "full coverage")}
                 <div class="picks-container ma-premium">{edges_html}</div>
             </div>
         </div>
@@ -1785,6 +1792,14 @@ DAILY_REFINEMENT_CSS = """
 .daily-subsection .mini-title{font-size:12px;margin-bottom:3px;color:var(--color-favorable)}
 .daily-subsection .section-sub{line-height:1.35;white-space:normal}
 .daily-col>.section-sub{line-height:1.35;white-space:normal}
+.edge-kicker{display:inline-flex;align-items:center;width:max-content;margin-bottom:5px;padding:3px 6px;border:1px solid rgba(0,0,0,0.18);border-radius:3px;background:#111;color:#fff;font-family:var(--font-mono);font-size:8px;font-weight:900;letter-spacing:0.8px;text-transform:uppercase}
+.edge-kicker.primary{background:#FF3333;border-color:#FF3333;color:#fff}
+.edge-kicker.momentum{background:#00A651;border-color:#00A651;color:#fff}
+.edge-kicker.picks{background:#FFEA00;border-color:#111;color:#111}
+.criteria-row{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 9px}
+.criteria-row span{display:inline-flex;align-items:center;min-height:18px;padding:2px 6px;border:1px solid rgba(0,0,0,0.14);border-radius:3px;background:rgba(0,0,0,0.04);font-family:var(--font-mono);font-size:8px;font-weight:800;color:#555;letter-spacing:0;text-transform:uppercase}
+.daily-col>.section-title{font-size:16px;margin-bottom:5px}
+.daily-subsection .picks-container{margin-bottom:0}
 """
 if "daily-subsection" not in css_block:
     css_block = css_block.replace("</style>", DAILY_REFINEMENT_CSS + "\n</style>")
