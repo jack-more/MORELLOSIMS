@@ -1712,12 +1712,18 @@ def render_hr_watch_tab():
     no_data = '<div class="empty-state">UPDATES WHEN LINEUPS ARE RELEASED</div>' if not (hr_html or longshot_html or heat_html) else ''
     hr_empty = '<div class="empty-state">NO 9%+ HR PROBABILITY EDGES</div>' if not hr_html else ''
     def criteria_row(*items):
-        return '<div class="criteria-row">' + ''.join(f'<span>{h(item)}</span>' for item in items) + '</div>'
+        return '<div class="criteria-row">' + ' '.join(f'<span>{h(item)}</span>' for item in items) + '</div>'
 
-    longshot_block = f'''<div class="daily-subsection">
-                    <div class="edge-kicker">SECONDARY</div>
-                    <div class="section-title mini-title">\U0001f4a5 DAMAGE LONGSHOTS</div>
-                    {criteria_row("7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
+    def bucket_header(kind, kicker, title, copy, *criteria):
+        return f'''<div class="bucket-head {kind}">
+                    <div class="edge-kicker {kind}">{h(kicker)}</div>
+                    <div class="bucket-title">{h(title)}</div>
+                    <div class="bucket-copy">{h(copy)}</div>
+                    {criteria_row(*criteria)}
+                </div>'''
+
+    longshot_block = f'''<div class="daily-bucket daily-subsection secondary">
+                    {bucket_header("secondary", "SECONDARY", "DAMAGE LONGSHOTS", "Power profiles that barely miss the primary HR-rate board.", "7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
@@ -1730,23 +1736,23 @@ def render_hr_watch_tab():
         {no_data}
         <div class="daily-grid">
             <div class="daily-col">
-                <div class="edge-kicker primary">PRIMARY</div>
-                <div class="section-title">\U0001f4a3 HR PROBABILITY</div>
-                {criteria_row("9%+ projected HR", "top probability only")}
-                <div class="picks-container">{hr_html or hr_empty}</div>
+                <div class="daily-bucket primary">
+                    {bucket_header("primary", "PRIMARY", "HR PROBABILITY", "The true homer board. No low-rate filler.", "9%+ projected HR", "top probability only")}
+                    <div class="picks-container">{hr_html or hr_empty}</div>
+                </div>
                 {longshot_block}
             </div>
             <div class="daily-col">
-                <div class="edge-kicker momentum">MOMENTUM</div>
-                <div class="section-title">\U0001f525 HOT BAT HR FIT</div>
-                {criteria_row("5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
-                <div class="picks-container">{heat_html or heat_empty}</div>
+                <div class="daily-bucket momentum">
+                    {bucket_header("momentum", "MOMENTUM", "HOT BAT HR FIT", "Timing plus matchup. This is the streak/rhythm layer.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
+                    <div class="picks-container">{heat_html or heat_empty}</div>
+                </div>
             </div>
             <div class="daily-col">
-                <div class="edge-kicker picks">BOARD</div>
-                <div class="section-title">\U0001f3af TODAY'S PICKS</div>
-                {criteria_row("best ML edges", "line available", "full coverage")}
-                <div class="picks-container ma-premium">{edges_html}</div>
+                <div class="daily-bucket board">
+                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "The moneyline board, separate from HR edges.", "best ML edges", "line available", "full coverage")}
+                    <div class="picks-container ma-premium">{edges_html}</div>
+                </div>
             </div>
         </div>
     </div>'''
@@ -1787,21 +1793,36 @@ if "tab-daily" not in css_block:
     css_block = css_block.replace("</style>", DAILY_CSS + "\n</style>")
 
 DAILY_REFINEMENT_CSS = """
-/* DAILY HR EDGE GROUPS */
-.daily-subsection{margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.08)}
-.daily-subsection .mini-title{font-size:12px;margin-bottom:3px;color:var(--color-favorable)}
-.daily-subsection .section-sub{line-height:1.35;white-space:normal}
-.daily-col>.section-sub{line-height:1.35;white-space:normal}
-.edge-kicker{display:inline-flex;align-items:center;width:max-content;margin-bottom:5px;padding:3px 6px;border:1px solid rgba(0,0,0,0.18);border-radius:3px;background:#111;color:#fff;font-family:var(--font-mono);font-size:8px;font-weight:900;letter-spacing:0.8px;text-transform:uppercase}
-.edge-kicker.primary{background:#FF3333;border-color:#FF3333;color:#fff}
-.edge-kicker.momentum{background:#00A651;border-color:#00A651;color:#fff}
+/* DAILY_HR_HIERARCHY_V2 */
+#tab-daily .daily-grid{grid-template-columns:minmax(340px,1.05fr) minmax(430px,1.35fr) minmax(220px,.65fr);align-items:start;gap:18px}
+#tab-daily .daily-col{min-width:0}
+.daily-bucket{background:#f8f8f5;border:2px solid #111;box-shadow:4px 4px 0 #111;margin-bottom:18px;overflow:hidden}
+.daily-bucket.primary{border-top:6px solid #FF3333}
+.daily-bucket.secondary{border-top:5px solid #111;box-shadow:3px 3px 0 #111}
+.daily-bucket.momentum{border-top:6px solid #00A651}
+.daily-bucket.board{border-top:6px solid #FFEA00}
+.daily-bucket .picks-container{margin:0;border:0;box-shadow:none;background:#fff}
+.daily-subsection{margin-top:16px}
+.bucket-head{padding:12px 14px 10px;border-bottom:2px solid #111;background:#f2f2ee}
+.bucket-head.primary{background:#fff1f1}
+.bucket-head.secondary{background:#f1f1ee}
+.bucket-head.momentum{background:#effaf2}
+.bucket-head.picks{background:#fffbe0}
+.edge-kicker{display:inline-flex;align-items:center;width:max-content;margin-bottom:7px;padding:3px 7px;border:1px solid #111;border-radius:2px;background:#111;color:#fff;font-family:var(--font-mono);font-size:8px;font-weight:900;letter-spacing:0.8px;text-transform:uppercase;line-height:1}
+.edge-kicker.primary{background:#FF3333;border-color:#111;color:#fff}
+.edge-kicker.secondary{background:#111;border-color:#111;color:#fff}
+.edge-kicker.momentum{background:#00A651;border-color:#111;color:#fff}
 .edge-kicker.picks{background:#FFEA00;border-color:#111;color:#111}
-.criteria-row{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 9px}
-.criteria-row span{display:inline-flex;align-items:center;min-height:18px;padding:2px 6px;border:1px solid rgba(0,0,0,0.14);border-radius:3px;background:rgba(0,0,0,0.04);font-family:var(--font-mono);font-size:8px;font-weight:800;color:#555;letter-spacing:0;text-transform:uppercase}
-.daily-col>.section-title{font-size:16px;margin-bottom:5px}
-.daily-subsection .picks-container{margin-bottom:0}
+.bucket-title{font-family:var(--font-display);font-size:20px;line-height:1;letter-spacing:1.4px;text-transform:uppercase;color:#050505}
+.bucket-copy{margin-top:5px;font-size:11px;line-height:1.35;color:#333;max-width:44ch}
+.criteria-row{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 0}
+.criteria-row span{display:inline-flex;align-items:center;min-height:20px;padding:3px 7px;border:1px solid #111;border-radius:2px;background:#fff;font-family:var(--font-mono);font-size:8px;font-weight:900;color:#111;letter-spacing:0;text-transform:uppercase;line-height:1;box-shadow:1px 1px 0 rgba(0,0,0,.2)}
+.daily-bucket.board .criteria-row span{background:#FFEA00}
+.daily-bucket .hr-row,.daily-bucket .trend-row,.daily-bucket .pick-row{background:#fff}
+@media(max-width:1100px){#tab-daily .daily-grid{grid-template-columns:1fr 1fr}.daily-col:last-child{grid-column:1/-1}}
+@media(max-width:760px){#tab-daily .daily-grid{grid-template-columns:1fr}.daily-col:last-child{grid-column:auto}.bucket-title{font-size:18px}}
 """
-if "daily-subsection" not in css_block:
+if "DAILY_HR_HIERARCHY_V2" not in css_block:
     css_block = css_block.replace("</style>", DAILY_REFINEMENT_CSS + "\n</style>")
 
 PLAYER_METRIC_CSS = """
