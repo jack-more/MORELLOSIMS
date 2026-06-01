@@ -1710,7 +1710,7 @@ def render_hr_watch_tab():
 
     games_with_lu = sum(1 for g in games if g["has_lineups"])
     no_data = '<div class="empty-state">UPDATES WHEN LINEUPS ARE RELEASED</div>' if not (hr_html or longshot_html or heat_html) else ''
-    hr_empty = '<div class="empty-state">NO 9%+ HR PROBABILITY EDGES</div>' if not hr_html else ''
+    hr_empty = '<div class="empty-state">NO TIER 1 HR % EDGES</div>' if not hr_html else ''
     def criteria_row(*items):
         return '<div class="criteria-row">' + ' '.join(f'<span>{h(item)}</span>' for item in items) + '</div>'
 
@@ -1723,7 +1723,7 @@ def render_hr_watch_tab():
                 </div>'''
 
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary">
-                    {bucket_header("secondary", "SECONDARY", "DAMAGE LONGSHOTS", "Power profiles that barely miss the primary HR-rate board.", "7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
+                    {bucket_header("secondary", "TIER 2", "TIER 2 HR %", "Power profiles that clear the model floor below the top HR tier.", "7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
@@ -1737,14 +1737,14 @@ def render_hr_watch_tab():
         <div class="daily-grid">
             <div class="daily-col">
                 <div class="daily-bucket primary">
-                    {bucket_header("primary", "PRIMARY", "HR PROBABILITY", "The true homer board. No low-rate filler.", "9%+ projected HR", "top probability only")}
+                    {bucket_header("primary", "TIER 1", "TIER 1 HR %", "The top homer-rate board. No low-rate filler.", "9%+ projected HR", "top probability only")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}
             </div>
             <div class="daily-col">
                 <div class="daily-bucket momentum">
-                    {bucket_header("momentum", "MOMENTUM", "HOT BAT HR FIT", "Timing plus matchup. This is the streak/rhythm layer.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
+                    {bucket_header("momentum", "MOMENTUM", "HOT BATS", "Recent timing plus matchup support.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
                     <div class="picks-container">{heat_html or heat_empty}</div>
                 </div>
             </div>
