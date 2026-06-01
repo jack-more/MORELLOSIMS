@@ -784,8 +784,12 @@
       </div>
     `;
 
-    // Insert at top of main content area
-    const main = document.querySelector('main, .container, .sim-container, body');
+    // Insert at top of the app content area. Keep body as the final fallback so
+    // the banner does not jump above sticky app headers.
+    const main = document.querySelector('main') ||
+      document.querySelector('.container') ||
+      document.querySelector('.sim-container') ||
+      document.body;
     if (main) {
       main.insertBefore(banner, main.firstChild);
     }

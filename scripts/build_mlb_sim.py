@@ -1858,8 +1858,8 @@ html = f'''<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 {css_block}
-<link rel="stylesheet" href="https://morellosims.com/morello-auth.css">
-    <link rel="stylesheet" href="../morello-auth.css">
+<link rel="stylesheet" href="https://morellosims.com/morello-auth.css?v=20260601-promo-fix">
+    <link rel="stylesheet" href="../morello-auth.css?v=20260601-promo-fix">
 </head>
 <body data-ma-theme="mlb">
 
@@ -2017,7 +2017,7 @@ O/U Total = Home Runs + Away Runs</div>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 <!-- Auth -->
-<script src="https://morellosims.com/morello-auth.js" data-ma-theme="mlb"></script>
+<script src="https://morellosims.com/morello-auth.js?v=20260601-promo-fix" data-ma-theme="mlb"></script>
 
 <script>
 
