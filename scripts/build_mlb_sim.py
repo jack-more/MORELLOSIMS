@@ -1533,13 +1533,21 @@ for bm in all_batter_matchups:
 
 
 def render_hr_watch_tab():
-    hr_candidates = sorted(
-        [bm for bm in all_batter_matchups if bm.get("hr_rate", 0) > 0],
-        key=lambda x: -x.get("hr_rate", 0)
-    )[:25]
+    HR_CORE_MIN = 0.090
+    HR_LONGSHOT_MIN = 0.075
+    HR_CORE_MAX_ROWS = 10
+    HR_LONGSHOT_MAX_ROWS = 6
+    HR_HEAT_MAX_ROWS = 10
 
-    hr_html = ""
-    for i, bm in enumerate(hr_candidates):
+    def hr_damage_score(bm):
+        return (
+            bm.get("hr_rate", 0) * 100
+            + bm.get("run_contrib", 0) * 2.0
+            + max(0, bm.get("momi", 50) - 50) * 0.04
+            + max(0, bm.get("ms", 50) - 50) * 0.03
+        )
+
+    def render_hr_row(rank, bm):
         hr_pct = round(bm["hr_rate"] * 100, 1)
         if bm["hr_rate"] >= 0.06:
             heat = "hr-fire"
@@ -1554,8 +1562,8 @@ def render_hr_watch_tab():
             heat = "hr-mild"
             heat_icon = "\u26aa"
 
-        hr_html += f'''<div class="hr-row {heat}">
-  <div class="hr-rank">{i+1}</div>
+        return f'''<div class="hr-row {heat}">
+  <div class="hr-rank">{rank}</div>
   <div class="hr-info">
     <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
     <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
@@ -1566,8 +1574,36 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
+    def render_hr_rows(candidates, rank_prefix=""):
+        rows = []
+        for i, bm in enumerate(candidates):
+            rank = f"{rank_prefix}{i+1}" if rank_prefix else f"{i+1}"
+            rows.append(render_hr_row(rank, bm))
+        return "".join(rows)
+
+    core_hr = sorted(
+        [bm for bm in all_batter_matchups if bm.get("hr_rate", 0) >= HR_CORE_MIN],
+        key=lambda x: (-x.get("hr_rate", 0), -hr_damage_score(x))
+    )[:HR_CORE_MAX_ROWS]
+
+    core_ids = {bm.get("id") for bm in core_hr}
+    longshot_damage = sorted(
+        [
+            bm for bm in all_batter_matchups
+            if bm.get("id") not in core_ids
+            and HR_LONGSHOT_MIN <= bm.get("hr_rate", 0) < HR_CORE_MIN
+            and bm.get("ms", 0) >= 70
+            and bm.get("momi", 50) >= 70
+            and bm.get("run_contrib", 0) >= 0.85
+        ],
+        key=lambda x: (-x.get("hr_rate", 0), -hr_damage_score(x))
+    )[:HR_LONGSHOT_MAX_ROWS]
+
+    hr_html = render_hr_rows(core_hr)
+    longshot_html = render_hr_rows(longshot_damage, "L")
+
     def recent_hit_label(bm):
-        if bm.get("streak", 0) >= 2:
+        if bm.get("streak", 0) >= 5:
             return f'{bm["streak"]}G streak'
         if bm.get("games_5", 0) >= 5 and bm.get("hit_games_5", 0) >= 4:
             return f'{bm["hit_games_5"]}/5 hit games'
@@ -1575,11 +1611,16 @@ def render_hr_watch_tab():
             return f'{bm["hit_games_7"]}/7 hit games'
         if bm.get("games_10", 0) >= 10 and bm.get("hit_games_10", 0) >= 7:
             return f'{bm["hit_games_10"]}/10 hit games'
+        if bm.get("streak", 0) >= 2:
+            return f'{bm["streak"]}G streak'
         return f'{bm.get("streak", 0)}G streak'
 
     heating_candidates = []
+    featured_hr_ids = core_ids | {bm.get("id") for bm in longshot_damage}
     for bm in all_batter_matchups:
         pid = bm.get("id")
+        if pid in featured_hr_ids:
+            continue
         streak_data = batter_streaks.get(pid, {})
         streak = streak_data.get("streak", 0)
         last7 = streak_data.get("last7_avg", 0)
@@ -1596,8 +1637,27 @@ def render_hr_watch_tab():
             (games7 >= 7 and hit7 >= 5) or
             (games10 >= 10 and hit10 >= 7)
         )
-        if momentum_delta > 0 and (streak >= 2 or has_density):
-            heat_score = momentum_delta + max(0, woba_bump) * 20
+        has_rhythm = streak >= 5 or has_density
+        has_matchup_heat = bm.get("momi", 50) >= 85 and bm.get("ms", 0) >= 60
+        has_damage_context = (
+            bm.get("run_contrib", 0) >= 0.65
+            or bm.get("hr_rate", 0) >= 0.035
+            or woba_bump >= 0.020
+        )
+        if momentum_delta > 0 and has_rhythm and has_matchup_heat and has_damage_context:
+            density_score = max(
+                hit5 if games5 >= 5 else 0,
+                hit7 if games7 >= 7 else 0,
+                hit10 * 0.7 if games10 >= 10 else 0,
+            )
+            heat_score = (
+                momentum_delta
+                + streak * 0.8
+                + density_score
+                + max(0, woba_bump) * 20
+                + bm.get("run_contrib", 0) * 2.0
+                + bm.get("hr_rate", 0) * 30
+            )
             heating_candidates.append({
                 **bm, "streak": streak, "last7_avg": last7,
                 "hit_games_5": hit5, "games_5": games5,
@@ -1606,7 +1666,7 @@ def render_hr_watch_tab():
                 "woba_bump": woba_bump, "heat_score": heat_score
             })
 
-    heating = sorted(heating_candidates, key=lambda x: -x["heat_score"])[:15]
+    heating = sorted(heating_candidates, key=lambda x: -x["heat_score"])[:HR_HEAT_MAX_ROWS]
 
     heat_html = ""
     for i, bm in enumerate(heating):
@@ -1649,7 +1709,14 @@ def render_hr_watch_tab():
 </div>'''
 
     games_with_lu = sum(1 for g in games if g["has_lineups"])
-    no_data = '<div class="empty-state">UPDATES WHEN LINEUPS ARE RELEASED</div>' if not hr_html else ''
+    no_data = '<div class="empty-state">UPDATES WHEN LINEUPS ARE RELEASED</div>' if not (hr_html or longshot_html or heat_html) else ''
+    hr_empty = '<div class="empty-state">NO 9%+ HR PROBABILITY EDGES</div>' if not hr_html else ''
+    longshot_block = f'''<div class="daily-subsection">
+                    <div class="section-title mini-title">\U0001f4a5 DAMAGE LONGSHOTS</div>
+                    <div class="section-sub">7.5-8.9% HR rate &middot; MOMO 70+ &middot; MOMI 70+ &middot; +0.85R</div>
+                    <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
+                </div>'''
+    heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
 
     return f'''<div class="tab-content" id="tab-daily">
         <div style="padding-top:12px">
@@ -1659,14 +1726,15 @@ def render_hr_watch_tab():
         {no_data}
         <div class="daily-grid">
             <div class="daily-col">
-                <div class="section-title">\U0001f4a3 HR WATCH</div>
-                <div class="section-sub">Most likely to go yard</div>
-                <div class="picks-container">{hr_html}</div>
+                <div class="section-title">\U0001f4a3 HR PROBABILITY</div>
+                <div class="section-sub">9%+ projected HR rate</div>
+                <div class="picks-container">{hr_html or hr_empty}</div>
+                {longshot_block}
             </div>
             <div class="daily-col">
-                <div class="section-title">\U0001f525 HEATING UP</div>
-                <div class="section-sub">Active hitting streaks + archetype edge</div>
-                <div class="picks-container">{heat_html}</div>
+                <div class="section-title">\U0001f525 HOT BAT HR FIT</div>
+                <div class="section-sub">5G+ streak or 4/5 hits &middot; MOMI 85+ &middot; MOMO 60+</div>
+                <div class="picks-container">{heat_html or heat_empty}</div>
             </div>
             <div class="daily-col">
                 <div class="section-title">\U0001f3af TODAY'S PICKS</div>
@@ -1710,6 +1778,16 @@ DAILY_CSS = """
 """
 if "tab-daily" not in css_block:
     css_block = css_block.replace("</style>", DAILY_CSS + "\n</style>")
+
+DAILY_REFINEMENT_CSS = """
+/* DAILY HR EDGE GROUPS */
+.daily-subsection{margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.08)}
+.daily-subsection .mini-title{font-size:12px;margin-bottom:3px;color:var(--color-favorable)}
+.daily-subsection .section-sub{line-height:1.35;white-space:normal}
+.daily-col>.section-sub{line-height:1.35;white-space:normal}
+"""
+if "daily-subsection" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_REFINEMENT_CSS + "\n</style>")
 
 PLAYER_METRIC_CSS = """
 /* ── Player MOMO/MOMI chips ── */
@@ -1808,7 +1886,7 @@ html = f'''<!DOCTYPE html>
         <div class="gen-badge">Generated {gen_time} \u00b7 Powered by ATLAS Pitcher DNA</div>
     </div>
 
-    <!-- HR WATCH TAB -->
+    <!-- DAILY TAB -->
     {render_hr_watch_tab()}
 
     <!-- INFO TAB -->
@@ -1890,7 +1968,7 @@ O/U Total = Home Runs + Away Runs</div>
     </button>
     <button class="nav-btn" data-tab="daily">
         <span class="nav-icon">\U0001f4a3</span>
-        <span>HR WATCH</span>
+        <span>HR EDGES</span>
     </button>
     <button class="nav-btn" data-tab="info">
         <span class="nav-icon">\u2139\ufe0f</span>
