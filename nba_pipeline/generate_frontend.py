@@ -5718,7 +5718,7 @@ def render_matchup_card(m, idx, team_map):
         "draftkings": "https://sportsbook.draftkings.com",
         "fanduel": "https://sportsbook.fanduel.com",
         "betmgm": "https://sports.betmgm.com",
-        "bovada": "https://www.bovada.lv",
+        "bovada": "https://www.bovada.lv/welcome/P1BXDI3/join?extcmpid=rafcopy",
         "pointsbetus": "https://www.pointsbet.com",
         "bethog": "https://bethog.com/r/alphamale",
     }
@@ -5786,6 +5786,15 @@ def render_matchup_card(m, idx, team_map):
                 <svg class="sb-logo" style="height:16px;width:16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#1a1a1a"/><path d="M6 6h5l3 3-3 3H6V6zm0 6h6l3 3-3 3H6v-6z" fill="#fff"/></svg>
                 <span class="sb-name" style="color:{BOOK_COLORS['bethog']}">BetHOG</span>
                 <span class="sb-line">BET NOW</span>
+            </a>
+        </div>'''
+
+    # Bovada button: always rendered beside the other partner CTAs
+    bovada_btn = f'''
+        <div class="mc-sportsbooks mc-bovada-row">
+            <a href="{AFFILIATE_LINKS['bovada']}" target="_blank" rel="noopener" class="sb-btn sb-btn-bovada" style="border-color:{BOOK_COLORS['bovada']}60">
+                <span class="sb-name" style="color:{BOOK_COLORS['bovada']}">BOVADA</span>
+                <span class="sb-line">JOIN NOW</span>
             </a>
         </div>'''
 
@@ -5873,6 +5882,7 @@ def render_matchup_card(m, idx, team_map):
         {sportsbook_btns}
         {prediction_btns}
         {bethog_btn}
+        {bovada_btn}
 
         <!-- Expand button -->
         <button class="expand-btn" onclick="toggleExpand(this)">
