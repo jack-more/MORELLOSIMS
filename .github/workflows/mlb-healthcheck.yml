@@ -1,0 +1,27 @@
+name: MLB Live Healthcheck
+
+on:
+  schedule:
+    - cron: '20 11 * * *'
+    - cron: '20 14 * * *'
+    - cron: '20 16 * * *'
+    - cron: '20 19 * * *'
+    - cron: '20 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-healthcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify live MLB page freshness
+        run: python3 scripts/verify_mlb_publish.py --base-url https://morellosims.com

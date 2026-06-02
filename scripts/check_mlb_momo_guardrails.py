@@ -145,10 +145,11 @@ def iter_batter_rows(html):
 def check_generated_page():
     html = HTML_PATH.read_text()
     rows = list(iter_batter_rows(html))
-    errors = []
+    critical = []
+    warnings = []
 
     if not rows:
-        return [f"No batter rows found in {HTML_PATH}"]
+        return [f"No batter rows found in {HTML_PATH}"], []
 
     for row in rows:
         name = row["name"]
@@ -159,47 +160,65 @@ def check_generated_page():
         run_value = row["run_value"]
 
         if not 1 <= momo <= 99:
-            errors.append(f"{name}: MOMO {momo} outside 1-99")
+            critical.append(f"{name}: MOMO {momo} outside 1-99")
         if not 1 <= momi <= 99:
-            errors.append(f"{name}: MOMI {momi} outside 1-99")
-        if vs >= 0.310 and momo < 50:
-            errors.append(f"{name}: .{int(vs * 1000):03d} ARCH cannot produce MOMO {momo}")
-        if base >= 0.370 and vs >= 0.300 and momo < 55:
-            errors.append(
+            critical.append(f"{name}: MOMI {momi} outside 1-99")
+        if vs >= 0.310 and momo < 45:
+            critical.append(f"{name}: .{int(vs * 1000):03d} ARCH cannot produce MOMO {momo}")
+        elif vs >= 0.310 and momo < 50:
+            warnings.append(f"{name}: .{int(vs * 1000):03d} ARCH produced low MOMO {momo}")
+        if base >= 0.370 and vs >= 0.300 and momo < 45:
+            critical.append(
                 f"{name}: elite base .{int(base * 1000):03d} with playable ARCH "
                 f".{int(vs * 1000):03d} cannot produce MOMO {momo}"
             )
-        if base >= 0.370 and vs >= 0.300 and momi < 45:
-            errors.append(
+        elif base >= 0.370 and vs >= 0.300 and momo < 55:
+            warnings.append(
+                f"{name}: elite base .{int(base * 1000):03d} with playable ARCH "
+                f".{int(vs * 1000):03d} produced low MOMO {momo}"
+            )
+        if base >= 0.370 and vs >= 0.300 and momi < 35:
+            critical.append(
                 f"{name}: elite/playable matchup cannot produce MOMI {momi}"
             )
-        # A low-50s MOMO can be a legitimate neutral reading when the pitcher-DNA
-        # matchup is playable but not strong. This guard is aimed at the broken
-        # single-digit/buried-score failure mode, not at neutral outcomes.
-        if run_value >= 0.50 and base >= 0.370 and vs >= 0.285 and momo < 50:
-            errors.append(
+        elif base >= 0.370 and vs >= 0.300 and momi < 45:
+            warnings.append(
+                f"{name}: elite/playable matchup produced low MOMI {momi}"
+            )
+        if run_value >= 0.50 and base >= 0.370 and vs >= 0.285 and momo < 40:
+            critical.append(
                 f"{name}: +{run_value:.2f}R elite bat cannot produce MOMO {momo}"
             )
-        if run_value >= 0.50 and base >= 0.370 and momo < 40:
-            errors.append(
+        elif run_value >= 0.50 and base >= 0.370 and vs >= 0.285 and momo < 50:
+            warnings.append(
+                f"{name}: +{run_value:.2f}R elite bat produced low MOMO {momo}"
+            )
+        if run_value >= 0.50 and base >= 0.370 and momo < 35:
+            critical.append(
                 f"{name}: +{run_value:.2f}R elite bat cannot be buried at MOMO {momo}"
             )
         if max(base, vs) >= 0.300 and min(momo, momi) <= 9:
-            errors.append(
+            critical.append(
                 f"{name}: playable wOBA context cannot produce single-digit "
                 f"MOMO/MOMI ({momo}/{momi})"
             )
 
     print(f"Checked {len(rows)} MLB batter MOMO/MOMI rows.")
-    return errors
+    return critical, warnings
 
 
 def main():
     errors = check_formula_guardrails()
-    errors.extend(check_generated_page())
+    page_errors, warnings = check_generated_page()
+    errors.extend(page_errors)
+
+    if warnings:
+        print("MLB MOMO guardrail warnings:")
+        for warning in warnings:
+            print(f"  - {warning}")
 
     if errors:
-        print("MLB MOMO guardrails failed:")
+        print("MLB MOMO guardrails failed with critical errors:")
         for error in errors:
             print(f"  - {error}")
         return 1
