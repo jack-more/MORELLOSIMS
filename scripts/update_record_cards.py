@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Update the SEASON RECORD BOX on /mlbsim/index.html and /nbasim/index.html
+Update the tracked picks card on /mlbsim/index.html and /nbasim/index.html
 from picks/{nba,mlb}.json + picks/baselines.json.
 
 Combines manual baselines (historical season-to-date) with newly settled picks
@@ -45,12 +45,12 @@ def aggregate(picks_json_path, baseline):
 
 def render_card(sport, wins, losses, roi, filter_text, accent):
     return f'''<!-- RECORD-CARD:{sport.upper()}:BEGIN -->
-<!-- ─── SEASON RECORD BOX ────────────────────────────────────── -->
+<!-- ─── TRACKED PICKS BOX ────────────────────────────────────── -->
 <div style="max-width:560px;margin:14px auto 18px;padding:0 12px;">
   <div style="background:#0a0a0a;border:2px solid {accent};border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 {accent};">
     <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;gap:18px;">
       <div style="text-align:left;flex:1;">
-        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">SEASON</div>
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">TRACKED</div>
         <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{wins}-{losses}</div>
       </div>
       <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 22px;flex:1;">
@@ -75,10 +75,10 @@ def install_or_replace(html, sport, new_block):
     if bi >= 0 and ei >= 0:
         return html[:bi] + new_block + html[ei + len(end):]
 
-    # First-time install: locate existing inline record box and wrap it
-    # mlbsim has the box between <!-- ─── SEASON RECORD BOX ──...
+    # First-time install: locate an existing inline record box and wrap it.
+    # Keep the old marker in the matcher so older generated pages migrate cleanly.
     pattern = re.compile(
-        r'<!-- ─── SEASON RECORD BOX[^>]*?-->\s*<div[^>]*>\s*<div[^>]*border:2px solid[^>]*>.*?</div>\s*</div>\s*</div>',
+        r'<!-- ─── (?:SEASON RECORD|TRACKED PICKS) BOX[^>]*?-->\s*<div[^>]*>\s*<div[^>]*border:2px solid[^>]*>.*?</div>\s*</div>\s*</div>',
         re.DOTALL,
     )
     m = pattern.search(html)
@@ -172,7 +172,7 @@ def main():
     with open(BASELINES) as f:
         baselines = json.load(f)
 
-    # Per-sport SEASON RECORD BOX on /mlbsim/ and /nbasim/
+    # Per-sport tracked picks card on /mlbsim/ and /nbasim/
     for sport, (page_path, picks_path, accent) in PAGES.items():
         if not os.path.exists(page_path):
             print(f"  [WARN] {page_path} missing — skipping {sport}")

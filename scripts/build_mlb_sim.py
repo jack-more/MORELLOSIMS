@@ -48,7 +48,7 @@ def load_season_record():
         roi = (pl / risked * 100) if risked else 0
         return f"{wins}-{losses}", f'{"+" if roi >= 0 else ""}{roi:.1f}%'
     except Exception as _e:
-        print(f"  WARN season record contract: {_e} — falling back to placeholder")
+        print(f"  WARN tracked picks card contract: {_e}; falling back to placeholder")
         return "0-0", "+0.0%"
 
 
@@ -1985,12 +1985,12 @@ html = f'''<!DOCTYPE html>
     </div>
 </header>
 
-<!-- ─── SEASON RECORD BOX ────────────────────────────────────── -->
+<!-- ─── TRACKED PICKS BOX ────────────────────────────────────── -->
 <div style="max-width:560px;margin:14px auto 18px;padding:0 12px;">
   <div style="background:#0a0a0a;border:2px solid #FFEA00;border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 #FFEA00;">
     <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;gap:18px;">
       <div style="text-align:left;flex:1;">
-        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">SEASON</div>
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">TRACKED</div>
         <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{SEASON_RECORD}</div>
       </div>
       <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 22px;flex:1;">

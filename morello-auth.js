@@ -30,6 +30,22 @@
     checkoutUrl: 'https://us-central1-morello-sims.cloudfunctions.net/createCheckoutSession'
   };
 
+  const GA_MEASUREMENT_ID = 'G-00PNGPWNPV';
+  const GA_TRACKING_HOSTS = [
+    'morellosims.com',
+    'www.morellosims.com',
+    'morello-sims.web.app',
+    'morello-sims.firebaseapp.com',
+    'jack-more.github.io'
+  ];
+
+  const PRODUCT_ANALYTICS = {
+    pickmaker_nba: { name: 'NBA Pickmaker', price: 11.99, billing: 'monthly' },
+    pickmaker_mlb: { name: 'MLB Pickmaker', price: 11.99, billing: 'monthly' },
+    pickmaker_dual: { name: 'Dual Pickmaker', price: 19.99, billing: 'monthly' },
+    all_access: { name: 'All-Access Methodology', price: 899, billing: 'one_time' }
+  };
+
   const ADMIN_EMAIL = 'jaidanmorello@gmail.com';
 
   // ── Pre-assigned email → tier whitelist ──
@@ -67,6 +83,8 @@
   let currentTier = 'free';
   let adminOverrideTier = null; // For admin view-as feature
   let firebaseReady = false;
+  let analyticsReady = false;
+  let packageViewTracked = false;
 
   // ── Detect which page we're on ──
   const PAGE = detectPage();
@@ -83,6 +101,112 @@
     if (path.includes('mlbsim.html')) return 'mlbsim';
     if (host.includes('nbasim')) return 'nbasim';
     return 'home';
+  }
+
+  function shouldTrackAnalytics() {
+    if (!GA_MEASUREMENT_ID) return false;
+    try {
+      if (window.localStorage && window.localStorage.getItem('morelloAnalyticsOptOut') === 'true') return false;
+    } catch (err) {
+      // Some privacy modes block localStorage. Keep analytics loading rules host-based.
+    }
+    return GA_TRACKING_HOSTS.includes(window.location.hostname);
+  }
+
+  function initAnalytics() {
+    if (!shouldTrackAnalytics() || window.__morelloAnalyticsLoaded) return;
+
+    window.__morelloAnalyticsLoaded = true;
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = window.gtag || function () {
+      window.dataLayer.push(arguments);
+    };
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(GA_MEASUREMENT_ID);
+    document.head.appendChild(script);
+
+    window.gtag('js', new Date());
+    window.gtag('config', GA_MEASUREMENT_ID, {
+      page_title: document.title,
+      page_path: window.location.pathname + window.location.search,
+      page_location: window.location.href
+    });
+    analyticsReady = true;
+    setAnalyticsUserProperties();
+  }
+
+  function productAnalyticsParams(product) {
+    const meta = PRODUCT_ANALYTICS[product] || {};
+    return {
+      product_id: product,
+      product_name: meta.name || product || 'Unknown Product',
+      value: meta.price || 0,
+      currency: 'USD',
+      billing_period: meta.billing || 'unknown'
+    };
+  }
+
+  function productEcommerceParams(product) {
+    const params = productAnalyticsParams(product);
+    return Object.assign({}, params, {
+      items: [{
+        item_id: params.product_id,
+        item_name: params.product_name,
+        price: params.value,
+        quantity: 1
+      }]
+    });
+  }
+
+  function trackEvent(name, params) {
+    if (!analyticsReady || typeof window.gtag !== 'function') return;
+    window.gtag('event', name, Object.assign({
+      page_surface: PAGE,
+      access_tier: getEffectiveTier()
+    }, params || {}));
+  }
+
+  function setAnalyticsUserProperties() {
+    if (!analyticsReady || typeof window.gtag !== 'function') return;
+    window.gtag('set', 'user_properties', {
+      access_tier: getEffectiveTier(),
+      page_surface: PAGE
+    });
+  }
+
+  function observePackageSection() {
+    const section = document.querySelector('.packages-section');
+    if (!section || packageViewTracked) return;
+
+    const trackView = () => {
+      if (packageViewTracked) return;
+      packageViewTracked = true;
+      trackEvent('view_package_section', {
+        item_list_name: 'Homepage Packages',
+        items: Object.keys(PRODUCT_ANALYTICS).map(product => {
+          const params = productAnalyticsParams(product);
+          return {
+            item_id: params.product_id,
+            item_name: params.product_name,
+            price: params.value
+          };
+        })
+      });
+    };
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          trackView();
+          observer.disconnect();
+        }
+      }, { threshold: 0.3 });
+      observer.observe(section);
+    } else {
+      setTimeout(trackView, 1000);
+    }
   }
 
   // ── Get effective tier (respects admin override) ──
@@ -165,6 +289,7 @@
   function onAuthReady(user) {
     renderProfileButton();
     applyAccessControl();
+    setAnalyticsUserProperties();
     if (currentTier === 'admin') {
       renderAdminToolbar();
     }
@@ -193,7 +318,7 @@
       const link = document.createElement('a');
       link.href = site.path;
       link.className = 'ma-site-link' + (PAGE === site.page ? ' active' : '');
-      link.innerHTML = '<span class="ma-site-dot" style="background:' + site.color + '"></span>' + site.label;
+      link.innerHTML = '<span class="ma-site-dot" style="background:' + site.color + '"></span><span class="ma-site-label">' + site.label + '</span>';
       nav.appendChild(link);
     });
 
@@ -296,6 +421,11 @@
   }
 
   function openModal(view) {
+    trackEvent('modal_open', {
+      modal_view: view,
+      logged_in: Boolean(currentUser)
+    });
+
     const overlay = createModalOverlay();
     const modal = document.createElement('div');
     modal.className = 'ma-modal';
@@ -484,6 +614,7 @@
         return;
       }
       await firebase.auth().createUserWithEmailAndPassword(email, password);
+      trackEvent('sign_up', { method: 'email' });
       closeModal();
       // After brief delay, show pricing
       setTimeout(() => openModal('pricing'), 500);
@@ -507,6 +638,7 @@
         return;
       }
       await firebase.auth().signInWithEmailAndPassword(email, password);
+      trackEvent('login', { method: 'email' });
       closeModal();
     } catch (err) {
       showError(err.message);
@@ -514,6 +646,7 @@
   }
 
   async function handleSignout() {
+    trackEvent('logout');
     if (typeof firebase !== 'undefined') {
       await firebase.auth().signOut();
     }
@@ -533,13 +666,25 @@
   // STRIPE CHECKOUT
   // ══════════════════════════════════════════════════
 
+  function openUpgradeModal(source) {
+    trackEvent('upgrade_prompt_click', {
+      prompt_source: source || 'unknown',
+      logged_in: Boolean(currentUser)
+    });
+    openModal(currentUser ? 'pricing' : 'signup');
+  }
+
   async function checkout(product) {
+    trackEvent('package_cta_click', productAnalyticsParams(product));
+
     if (!currentUser) {
+      trackEvent('checkout_auth_required', productAnalyticsParams(product));
       openModal('signup');
       return;
     }
 
     try {
+      trackEvent('begin_checkout', productEcommerceParams(product));
       const resp = await fetch(STRIPE_CONFIG.checkoutUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -553,12 +698,19 @@
       });
       const data = await resp.json();
       if (data.url) {
+        trackEvent('checkout_redirect', productAnalyticsParams(product));
         window.location.href = data.url;
       } else {
+        trackEvent('checkout_error', Object.assign(productAnalyticsParams(product), {
+          error_type: 'missing_url'
+        }));
         alert('Checkout error. Please try again.');
       }
     } catch (err) {
       console.error('[morello-auth] Checkout error:', err);
+      trackEvent('checkout_error', Object.assign(productAnalyticsParams(product), {
+        error_type: 'request_failed'
+      }));
       alert('Payment system not yet configured. Contact @morello for access.');
     }
   }
@@ -606,8 +758,30 @@
       }
     });
 
-    // 3) Add pricing tooltips to dashboard cards
+    // 3) Lock/unlock pick-history dispatch rows by sport package.
+    lockHomePickHistory('.post-nba-picks', 'pickmaker_nba', 'NBA PICKMAKER');
+    lockHomePickHistory('.post-mlb-picks', 'pickmaker_mlb', 'MLB PICKMAKER');
+
+    // 4) Add pricing tooltips to dashboard cards
     addPricingTooltips();
+  }
+
+  function lockHomePickHistory(selector, requiredTier, label) {
+    const post = document.querySelector(selector);
+    if (!post) return;
+
+    if (hasAccess(requiredTier)) {
+      post.classList.remove('ma-locked', 'ma-pick-locked');
+      post.removeAttribute('data-locked');
+      post.removeAttribute('data-lock-label');
+      post.removeAttribute('data-required-tier');
+    } else {
+      post.classList.add('ma-locked', 'ma-pick-locked');
+      post.setAttribute('data-locked', 'true');
+      post.setAttribute('data-lock-label', label);
+      post.setAttribute('data-required-tier', requiredTier);
+      post.open = false;
+    }
   }
 
   // ── ATLAS (cosmos.html) — Free access, no gate ──
@@ -743,7 +917,7 @@
         <p class="gate-desc">${subtitle}</p>
         <div class="gate-price">${price}<span class="gate-period">${period}</span></div>
         <div class="gate-dual">${dual}</div>
-        <button class="ma-gate-btn" onclick="window.morelloAuth.openModal(currentUser ? 'pricing' : 'signup')">
+        <button class="ma-gate-btn" onclick="window.morelloAuth.openUpgradeModal('page_gate')">
           ${currentUser ? 'VIEW PLANS' : 'SIGN UP'}
         </button>
         <div class="ma-gate-signin">
@@ -775,10 +949,10 @@
         <strong>UNLOCK ${sport} PICKS</strong> — Projected spreads, confidence scores, edge calculations & pick recommendations
       </div>
       <div class="premium-banner-actions">
-        <button class="cta-btn" onclick="window.morelloAuth.openModal(currentUser ? 'pricing' : 'signup')" style="background:${accentColor}">
+        <button class="cta-btn" onclick="window.morelloAuth.openUpgradeModal('premium_banner_${singleProduct}')" style="background:${accentColor}">
           ${singlePrice}/mo
         </button>
-        <button class="cta-btn cta-btn-dual" onclick="window.morelloAuth.openModal(currentUser ? 'pricing' : 'signup')">
+        <button class="cta-btn cta-btn-dual" onclick="window.morelloAuth.openUpgradeModal('premium_banner_dual')">
           DUAL $19.99/mo
         </button>
       </div>
@@ -847,7 +1021,10 @@
       // Check access at the moment of click (respects admin view-as)
       if (!hasAccess(requiredTier)) {
         e.preventDefault();
-        openModal(currentUser ? 'pricing' : 'signup');
+        trackEvent('dashboard_card_locked_click', {
+          required_tier: requiredTier
+        });
+        openUpgradeModal('dashboard_card');
       }
       // If hasAccess → event proceeds normally, <a> navigates
     });
@@ -859,11 +1036,28 @@
 
   function interceptBlogExpand() {
     document.querySelectorAll('.blog-card[data-locked="true"]').forEach(details => {
+      if (details.dataset.maBlogListenerSet) return;
+      details.dataset.maBlogListenerSet = 'true';
+
+      const source = details.classList.contains('post-nba-picks') ? 'locked_nba_pick_history' :
+        details.classList.contains('post-mlb-picks') ? 'locked_mlb_pick_history' :
+        'locked_methodology';
+
+      const trackLockedClick = (interaction) => {
+        trackEvent('locked_content_click', {
+          prompt_source: source,
+          interaction,
+          lock_label: details.getAttribute('data-lock-label') || '',
+          required_tier: details.getAttribute('data-required-tier') || ''
+        });
+      };
+
       details.addEventListener('toggle', function (e) {
         if (this.getAttribute('data-locked') === 'true' && this.open) {
           e.preventDefault();
           this.open = false;
-          openModal(currentUser ? 'pricing' : 'signup');
+          trackLockedClick('toggle');
+          openUpgradeModal(source);
         }
       });
 
@@ -873,7 +1067,8 @@
         summary.addEventListener('click', function (e) {
           if (details.getAttribute('data-locked') === 'true' && !details.open) {
             e.preventDefault();
-            openModal(currentUser ? 'pricing' : 'signup');
+            trackLockedClick('summary_click');
+            openUpgradeModal(source);
           }
         });
       }
@@ -923,6 +1118,7 @@
         // Re-apply access control
         renderProfileButton();
         applyAccessControl();
+        setAnalyticsUserProperties();
       };
       toolbar.appendChild(btn);
     });
@@ -936,8 +1132,11 @@
   // ══════════════════════════════════════════════════
 
   function init() {
+    initAnalytics();
+
     // Render site navigation immediately (no auth needed)
     renderSiteNav();
+    observePackageSection();
 
     initFirebase();
 
@@ -956,11 +1155,13 @@
   // ── Public API ──
   window.morelloAuth = {
     openModal,
+    openUpgradeModal,
     closeModal,
     handleSignup,
     handleSignin,
     handleSignout,
     checkout,
+    trackEvent,
     getEffectiveTier,
     getCurrentUser: () => currentUser,
     getCurrentTier: () => currentTier

@@ -83,10 +83,11 @@ def aggregate(picks, baseline=None):
     bankroll = 1000 + pl
     roi = (pl / risked * 100) if risked else 0
 
-    # Streak — last N settled, newest first (pure auto-tracked picks only;
-    # baseline doesn't contribute since we don't have per-pick history there)
+    # Streak — last N non-push settled picks, newest first (pure auto-tracked
+    # picks only; baseline doesn't contribute since we don't have per-pick
+    # history there). Pushes are neutral, so they should not display as L1.
     settled_sorted = sorted(
-        (p for p in settled if p["status"] in ("win", "loss")),
+        [p for p in settled if p["status"] in ("win", "loss")],
         key=lambda p: p["date"],
         reverse=True,
     )
@@ -356,6 +357,39 @@ def install_or_replace_dispatch(html, nba_html, mlb_html):
     return mlb_replaced
 
 
+def render_home_stat_bubbles(sport, agg):
+    sport_upper = sport.upper()
+    return f'''
+                <div class="home-stat-bubbles mono" aria-label="{sport_upper} tracked record and ROI">
+                    <div class="home-stat-bubble"><span class="bubble-label">REC</span><span class="bubble-value">{agg["wins"]}-{agg["losses"]}</span></div>
+                    <div class="home-stat-bubble"><span class="bubble-label">ROI</span><span class="bubble-value">{agg["roi"]:+.1f}%</span></div>
+                </div>'''
+
+
+def update_home_card_bubbles(html, sport, agg):
+    """Keep homepage dashboard card bubbles synced to the picks contract."""
+    block = render_home_stat_bubbles(sport, agg)
+    card_re = re.compile(
+        rf'(<article class="card card-{sport}"[^>]*>)(.*?)(\n\s*<div class="card-header">)',
+        re.DOTALL,
+    )
+    m = card_re.search(html)
+    if not m:
+        return html
+
+    bubble_re = re.compile(
+        r'\s*<div class="home-stat-bubbles mono" aria-label="[^"]+">\s*'
+        r'<div class="home-stat-bubble">.*?</div>\s*'
+        r'<div class="home-stat-bubble">.*?</div>\s*'
+        r'</div>\s*',
+        re.DOTALL,
+    )
+    middle = bubble_re.sub("", m.group(2))
+    middle = block + middle
+
+    return html[:m.start()] + m.group(1) + middle + m.group(3) + html[m.end():]
+
+
 def main():
     with open(NBA_PATH) as f:
         nba_picks = json.load(f)
@@ -373,6 +407,12 @@ def main():
         html = f.read()
 
     new_html = install_or_replace_dispatch(html, nba_html, mlb_html)
+    new_html = update_home_card_bubbles(
+        new_html, "nba", aggregate(nba_picks, baseline=nba_baseline)
+    )
+    new_html = update_home_card_bubbles(
+        new_html, "mlb", aggregate(mlb_picks, baseline=mlb_baseline)
+    )
 
     with open(INDEX, "w") as f:
         f.write(new_html)
