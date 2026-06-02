@@ -301,15 +301,21 @@ def get_base_woba(bid):
 
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
-MIN_CONF_PICK = 9  # C:9+ qualifies as an official pick.
+MIN_CONF_PICK = 8  # C:8+ qualifies as an official pick.
+VALUE_DOG_MIN_CONF = 7
+VALUE_DOG_MIN_RUN_DIFF = 1.0
+MAX_MISSING_BATTERS_FOR_PICK = 1
 STAKE_BY_CONF = {
     10: 100,
     9: 50,
+    8: 30,
+    7: 20,
 }
 MAX_FAV_BY_CONF = {
     # Per-confidence cap on max favorite odds (more negative = bigger fav).
     # Anything more favored than the cap gets filtered as odds_too_heavy.
     # Tuned 2026-05: all qualifying confidence levels can take -340 juice.
+    8: -340,
     9: -340,
     10: -340,
 }
@@ -838,13 +844,19 @@ for g in games_raw:
     home_abbr = home_team.get("abbreviation", "???")
     venue = g.get("venue", {}).get("name", "")
     game_time_utc = g.get("gameDate", "")
+    game_status = g.get("status", {})
 
     # Parse game time to ET
+    starts_at = None
     try:
         gt = datetime.fromisoformat(game_time_utc.replace("Z", "+00:00")).astimezone(ET)
+        starts_at = gt
         time_str = gt.strftime("%-I:%M %p ET")
     except:
         time_str = "TBD"
+    state = game_status.get("abstractGameState", "")
+    detailed_state = game_status.get("detailedState", "")
+    has_started = bool((starts_at and NOW >= starts_at) or state in {"Live", "Final"} or detailed_state in {"In Progress", "Final"})
 
     # Probable pitchers
     away_sp_data = g["teams"]["away"].get("probablePitcher", {})
@@ -1159,6 +1171,7 @@ for g in games_raw:
         if not acc or acc.get("pa_w", 0) <= 0:
             missing_coverage.append(p.get("fullName", f"id:{pid}") if isinstance(p, dict) else str(pid))
     has_full_coverage = len(missing_coverage) == 0 and away_has_full and home_has_full
+    pick_coverage_ok = len(missing_coverage) <= MAX_MISSING_BATTERS_FOR_PICK and away_has_full and home_has_full
     if missing_coverage:
         print(f"  [COVERAGE] {away_abbr} @ {home_abbr}: missing {len(missing_coverage)} batter(s): {', '.join(missing_coverage[:3])}{'...' if len(missing_coverage) > 3 else ''}")
 
@@ -1240,9 +1253,11 @@ for g in games_raw:
         "odds_too_heavy": odds_too_heavy,
         "must_pick": must_pick,
         "has_full_coverage": has_full_coverage,
+        "pick_coverage_ok": pick_coverage_ok,
         "missing_coverage_count": len(missing_coverage),
         "pick_odds": pick_odds_raw,
         "venue": venue, "time_str": time_str, "game_pk": game_pk,
+        "has_started": has_started,
         "total": round(away_runs + home_runs, 1),
     })
 
@@ -1259,6 +1274,61 @@ print("\nGenerating HTML...")
 def h(s):
     """HTML escape."""
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+def load_published_mlb_picks():
+    try:
+        with open(MLB_PICKS_PATH) as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+_PUBLISHED_TODAY_PICK_KEYS = None
+_PUBLISHED_TODAY_BY_GAME = None
+
+def published_today_pick_keys():
+    global _PUBLISHED_TODAY_PICK_KEYS
+    if _PUBLISHED_TODAY_PICK_KEYS is None:
+        _PUBLISHED_TODAY_PICK_KEYS = {
+            (p.get("away"), p.get("home"), p.get("side"))
+            for p in load_published_mlb_picks()
+            if p.get("sport") == "mlb" and p.get("date") == TODAY and p.get("bet_type") == "ml"
+        }
+    return _PUBLISHED_TODAY_PICK_KEYS
+
+def published_today_by_game():
+    global _PUBLISHED_TODAY_BY_GAME
+    if _PUBLISHED_TODAY_BY_GAME is None:
+        _PUBLISHED_TODAY_BY_GAME = {
+            (p.get("away"), p.get("home")): p
+            for p in load_published_mlb_picks()
+            if p.get("sport") == "mlb" and p.get("date") == TODAY and p.get("bet_type") == "ml"
+        }
+    return _PUBLISHED_TODAY_BY_GAME
+
+def published_pick_for_game(g):
+    return published_today_by_game().get((g.get("away_abbr"), g.get("home_abbr")))
+
+def is_published_pick(g):
+    return (g.get("away_abbr"), g.get("home_abbr"), g.get("pick_team")) in published_today_pick_keys()
+
+def is_value_dog(g):
+    return (
+        g.get("conf", 0) >= VALUE_DOG_MIN_CONF
+        and g.get("edge", 0) >= VALUE_DOG_MIN_RUN_DIFF
+        and g.get("pick_odds", 0) > 0
+    )
+
+def qualifies_as_pick(g):
+    if not g.get("has_lineups"):
+        return False
+    if g.get("odds_too_heavy") or g.get("odds_source") == "NO_LINE":
+        return False
+    if not g.get("pick_coverage_ok"):
+        return False
+    if g.get("has_started") and not is_published_pick(g):
+        return False
+    return g.get("conf", 0) >= MIN_CONF_PICK or g.get("must_pick") or is_value_dog(g)
 
 def render_batter(b):
     mc = ms_class(b["ms"])
@@ -1305,7 +1375,13 @@ def render_game(g, idx):
 
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
-    if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick")):
+    published_pick = published_pick_for_game(g)
+    if published_pick:
+        conf = int(published_pick.get("conf") or g["conf"])
+        cc = conf_color(conf)
+        side = published_pick.get("side") or g["pick_team"]
+        pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(side)} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{conf}</span></div>'''
+    elif qualifies_as_pick(g):
         cc = conf_color(g["conf"])
         pick_html = f'''<div class="sim-pick"><span class="pick-type-label">ML</span> {h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}" title="Confidence">C:{g["conf"]}</span></div>'''
     elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g.get("odds_source") == "NO_LINE":
@@ -1692,19 +1768,48 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
-    edges = sorted(
-        [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))],
-        key=lambda x: -x["conf"]
-    )
+    games_by_matchup = {(g["away_abbr"], g["home_abbr"]): g for g in games}
+    published_today = [
+        p for p in load_published_mlb_picks()
+        if p.get("sport") == "mlb" and p.get("date") == TODAY and p.get("bet_type") == "ml"
+    ]
+    rows = []
+    seen = set()
+    for p in published_today:
+        key = (p.get("away"), p.get("home"), p.get("side"))
+        seen.add(key)
+        g = games_by_matchup.get((p.get("away"), p.get("home")))
+        rows.append({
+            "pick_text": p.get("pick_text") or f'{p.get("side", "")} ML',
+            "matchup": p.get("matchup") or f'{p.get("away", "")} @ {p.get("home", "")}',
+            "conf": int(p.get("conf") or (g.get("conf") if g else 0) or 0),
+            "sort_conf": int(p.get("conf") or (g.get("conf") if g else 0) or 0),
+            "sort_edge": float((g or {}).get("edge") or p.get("sim_edge") or 0),
+        })
+
+    edges = sorted(qualified_picks, key=lambda x: (-x["conf"], -x.get("edge", 0)))
+    for g in edges:
+        key = (g["away_abbr"], g["home_abbr"], g["pick_team"])
+        if key in seen:
+            continue
+        rows.append({
+            "pick_text": f'{g["pick_team"]} ML',
+            "matchup": f'{g["away_abbr"]} @ {g["home_abbr"]}',
+            "conf": g["conf"],
+            "sort_conf": g["conf"],
+            "sort_edge": g.get("edge", 0),
+        })
+
+    rows = sorted(rows, key=lambda x: (-x["sort_conf"], -x["sort_edge"]))[:12]
     edges_html = ""
-    for i, g in enumerate(edges[:12]):
-        cc = conf_color(g["conf"])
-        prem = ' ma-premium' if g["conf"] >= 8 else ''
+    for i, row in enumerate(rows):
+        cc = conf_color(row["conf"])
+        prem = ' ma-premium' if row["conf"] >= 8 else ''
         edges_html += f'''<div class="pick-row{prem}">
   <div class="pick-rank">{i+1}</div>
   <div class="pick-info">
-    <div class="pick-label gp-pick-strong">{h(g["pick_team"])} ML <span class="mc-conf-num" style="color:{cc}">C:{g["conf"]}</span></div>
-    <div class="pick-matchup">{g["away_abbr"]} @ {g["home_abbr"]}</div>
+    <div class="pick-label gp-pick-strong">{h(row["pick_text"])} <span class="mc-conf-num" style="color:{cc}">C:{row["conf"]}</span></div>
+    <div class="pick-matchup">{h(row["matchup"])}</div>
   </div>
 </div>'''
 
@@ -1750,7 +1855,7 @@ def render_hr_watch_tab():
             </div>
             <div class="daily-col">
                 <div class="daily-bucket board">
-                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "The moneyline board, separate from HR edges.", "best ML edges", "line available", "full coverage")}
+                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "C:7 plus-money value", "posted picks persist")}
                     <div class="picks-container ma-premium">{edges_html}</div>
                 </div>
             </div>
@@ -1759,6 +1864,10 @@ def render_hr_watch_tab():
 
 
 # ─── Assemble full page ──────────────────────────────────────────────────────
+qualified_picks = sorted(
+    [g for g in games if qualifies_as_pick(g)],
+    key=lambda x: (-x["conf"], -x.get("edge", 0)),
+)
 game_cards = "".join(render_game(g, i) for i, g in enumerate(games))
 gen_time = NOW.strftime("%Y-%m-%d %H:%M ET")
 
@@ -2077,9 +2186,9 @@ function sortGames(mode, el) {{
 with open(OUTPUT, "w") as f:
     f.write(html)
 
-# ─── Picks log — append today's C:9+ picks to CSV ──────────────────────────
+# ─── Picks log — append today's pregame publishable picks to CSV ───────────
 PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
-qualified_picks = [g for g in games if g["has_lineups"] and not g["odds_too_heavy"] and g.get("has_full_coverage") and g.get("odds_source") != "NO_LINE" and (g["conf"] >= MIN_CONF_PICK or g.get("must_pick"))]
+writeable_picks = [g for g in qualified_picks if not g.get("has_started")]
 skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]]
 if skipped_heavy:
     print(f"  Skipped {len(skipped_heavy)} heavy faves: " + ", ".join(f'{g["pick_team"]} ({g["pick_odds"]:+d})' for g in skipped_heavy))
@@ -2090,7 +2199,7 @@ if not os.path.exists(PICKS_LOG):
         f.write("date,time,pick,conf,value,away,home,away_runs,home_runs,away_wp,home_wp,away_ml,home_ml,away_sp,home_sp,result\n")
 
 with open(PICKS_LOG, "a") as f:
-    for g in qualified_picks:
+    for g in writeable_picks:
         f.write(f'{TODAY},{g["time_str"]},{g["pick_team"]},{g["conf"]},{g["value"]},{g["away_abbr"]},{g["home_abbr"]},{g["away_runs"]},{g["home_runs"]},{g["away_wp"]},{g["home_wp"]},{g["away_ml"]},{g["home_ml"]},{g["away_sp"]},{g["home_sp"]},\n')
 
 # ─── Picks JSON contract — upsert today's picks into picks/mlb.json ────────
@@ -2107,7 +2216,7 @@ if os.path.exists(PICKS_JSON):
         existing = []
 by_id = {p["id"]: p for p in existing}
 matchup_counts = {}
-for g in qualified_picks:
+for g in writeable_picks:
     key = (g["away_abbr"], g["home_abbr"])
     matchup_counts[key] = matchup_counts.get(key, 0) + 1
 
@@ -2122,22 +2231,14 @@ def pick_id_for_game(g):
     return f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}{game_suffix}-ml'
 
 
-for g in qualified_picks:
+for g in writeable_picks:
     qualified_ids.add(pick_id_for_game(g))
 
-# A rebuild is the source of truth for today's not-yet-settled MLB slate. If a
-# pending same-day pick no longer qualifies after lineup/atlas/odds refreshes,
-# remove it instead of leaving a stale bet in the homepage contract.
-for pid, pick in list(by_id.items()):
-    if (
-        pick.get("sport") == "mlb"
-        and pick.get("date") == TODAY
-        and pick.get("status") == "pending"
-        and pid not in qualified_ids
-    ):
-        del by_id[pid]
+# Once a same-day pick reaches the public contract, keep it there. Late lineup,
+# odds, or coverage refreshes can change the card context, but they should not
+# silently erase a pick that users already saw or bet.
 
-for g in qualified_picks:
+for g in writeable_picks:
     pick_team = g["pick_team"]
     pick_ml = g["away_ml"] if pick_team == g["away_abbr"] else g["home_ml"]
     pick_id = pick_id_for_game(g)
@@ -2172,10 +2273,14 @@ with open(PICKS_JSON, "w") as f:
 print(f"  picks/mlb.json: {len(merged)} total picks ({sum(1 for p in merged if p['status'] == 'pending')} pending)")
 
 # Print picks summary to stdout (used by commit message)
-picks_summary = " | ".join(f'{g["pick_team"]} ML (C:{g["conf"]})' for g in qualified_picks)
+today_board = sorted(
+    [p for p in merged if p.get("sport") == "mlb" and p.get("date") == TODAY and p.get("bet_type") == "ml"],
+    key=lambda p: (-int(p.get("conf") or 0), p.get("matchup", "")),
+)
+picks_summary = " | ".join(f'{p["pick_text"]} (C:{p["conf"]})' for p in today_board)
 if not picks_summary:
     picks_summary = "NO PLAYS"
-print(f"\n  PICKS: {picks_summary}")
+print(f"\n  OFFICIAL BOARD: {picks_summary}")
 
 size = os.path.getsize(OUTPUT)
 print(f"\n{'='*60}")
