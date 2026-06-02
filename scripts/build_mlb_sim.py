@@ -1516,6 +1516,9 @@ def render_game(g, idx):
   <a href="https://bethog.com/r/alphamale" target="_blank" rel="noopener" class="aff-btn aff-bethog">
     <span class="aff-name">BETHOG</span><span class="aff-cta">BET NOW</span>
   </a>
+  <a href="https://www.bovada.lv/welcome/P1BXDI3/join?extcmpid=rafcopy" target="_blank" rel="noopener" class="aff-btn aff-bovada">
+    <span class="aff-name">BOVADA</span><span class="aff-cta">JOIN NOW</span>
+  </a>
 </div>
   {lineup_html}
 </div>'''
