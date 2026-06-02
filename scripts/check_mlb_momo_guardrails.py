@@ -173,7 +173,10 @@ def check_generated_page():
             errors.append(
                 f"{name}: elite/playable matchup cannot produce MOMI {momi}"
             )
-        if run_value >= 0.50 and base >= 0.370 and vs >= 0.285 and momo < 55:
+        # A low-50s MOMO can be a legitimate neutral reading when the pitcher-DNA
+        # matchup is playable but not strong. This guard is aimed at the broken
+        # single-digit/buried-score failure mode, not at neutral outcomes.
+        if run_value >= 0.50 and base >= 0.370 and vs >= 0.285 and momo < 50:
             errors.append(
                 f"{name}: +{run_value:.2f}R elite bat cannot produce MOMO {momo}"
             )
