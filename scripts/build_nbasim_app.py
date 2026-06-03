@@ -18,6 +18,24 @@ SOURCE = ROOT / "nba_pipeline" / "index.html"
 TARGET = ROOT / "nbasim" / "index.html"
 PICKS_JSON = ROOT / "picks" / "nba.json"
 BASELINES_JSON = ROOT / "picks" / "baselines.json"
+DK_PREDICTIONS_URL = "https://predictions.draftkings.com/r/pd/jack0_FC/PREDICT/US-CA"
+KALSHI_URL = "https://kalshi.com/sign-up/?referral=88acd325-1cbe-44b0-9358-f0cf92cf9fc7"
+
+
+MARKET_CTA_ROW = f'''
+        <!-- Prediction Markets -->
+        <div class="mc-sportsbooks mc-prediction-markets">
+            <span class="sb-header">MARKETS</span>
+            <a href="{KALSHI_URL}" target="_blank" rel="noopener" class="sb-btn pm-btn pm-btn-kalshi" style="border-color:#00C48040">
+                <svg class="sb-logo" style="height:16px;width:16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#00C480"/><path d="M8 6l4 6-4 6h3l4-6-4-6H8z" fill="#fff"/></svg>
+                <span class="sb-name" style="color:#00C480">KALSHI</span>
+                <span class="sb-line">TRADE NOW</span>
+            </a>
+            <a href="{DK_PREDICTIONS_URL}" target="_blank" rel="noopener" class="sb-btn pm-btn pm-btn-dk" style="border-color:#53d33740">
+                <span class="sb-name" style="color:#53d337">DK</span>
+                <span class="sb-line">PREDICT</span>
+            </a>
+        </div>'''
 
 
 def aggregate_nba_record() -> tuple[int, int, float, str]:
@@ -133,6 +151,12 @@ def inject_morello_shell(html: str) -> str:
     return html
 
 
+def inject_market_ctas(html: str) -> str:
+    if DK_PREDICTIONS_URL in html:
+        return html
+    return html.replace("\n        <!-- Expand button -->", f"{MARKET_CTA_ROW}\n\n        <!-- Expand button -->")
+
+
 def strip_trailing_whitespace(html: str) -> str:
     ending = "\n" if html.endswith("\n") else ""
     return "\n".join(line.rstrip() for line in html.splitlines()) + ending
@@ -146,6 +170,7 @@ def main() -> None:
     html = inject_morello_shell(html)
     html = strip_legacy_tabs(html)
     html = install_record_card(html)
+    html = inject_market_ctas(html)
     html = strip_trailing_whitespace(html)
 
     TARGET.parent.mkdir(parents=True, exist_ok=True)

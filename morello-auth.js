@@ -217,13 +217,13 @@
 
   function hasAccess(requiredTier) {
     const tier = getEffectiveTier();
-    const hierarchy = ['free', 'fnf', 'pickmaker_nba', 'pickmaker_mlb', 'pickmaker_dual', 'all_access', 'admin'];
-    // Special: pickmaker_dual grants both nba and mlb
-    if (requiredTier === 'pickmaker_nba' && (tier === 'pickmaker_dual' || tier === 'pickmaker_nba')) return true;
-    if (requiredTier === 'pickmaker_mlb' && (tier === 'pickmaker_dual' || tier === 'pickmaker_mlb')) return true;
+    if (requiredTier === 'free') return true;
     if (tier === 'admin' || tier === 'all_access') return true;
     if (tier === 'fnf' && requiredTier !== 'all_access' && requiredTier !== 'admin') return true;
-    return hierarchy.indexOf(tier) >= hierarchy.indexOf(requiredTier);
+    if (requiredTier === 'pickmaker_nba') return tier === 'pickmaker_nba' || tier === 'pickmaker_dual';
+    if (requiredTier === 'pickmaker_mlb') return tier === 'pickmaker_mlb' || tier === 'pickmaker_dual';
+    if (requiredTier === 'pickmaker_dual') return tier === 'pickmaker_dual';
+    return tier === requiredTier;
   }
 
   // ══════════════════════════════════════════════════
@@ -764,6 +764,100 @@
 
     // 4) Add pricing tooltips to dashboard cards
     addPricingTooltips();
+
+    // 5) Keep the homepage package shelf honest for members
+    updateHomePackageSection();
+  }
+
+  function updateHomePackageSection() {
+    const section = document.querySelector('.packages-section');
+    if (!section) return;
+
+    const tier = getEffectiveTier();
+    const hasNba = hasAccess('pickmaker_nba');
+    const hasMlb = hasAccess('pickmaker_mlb');
+    const hasMethodology = tier === 'all_access' || tier === 'admin';
+    const hasAnyPaidSurface = Boolean(currentUser && (hasNba || hasMlb || hasMethodology));
+    const panel = section.querySelector('[data-ma-member-panel]');
+    const title = section.querySelector('[data-ma-member-title]');
+    const copy = section.querySelector('[data-ma-member-copy]');
+    const eyebrow = section.querySelector('[data-ma-member-eyebrow]');
+
+    section.classList.toggle('ma-member-active', hasAnyPaidSurface);
+
+    if (panel) {
+      panel.classList.toggle('is-visible', hasAnyPaidSurface);
+      if (hasAnyPaidSurface) {
+        if (eyebrow) eyebrow.textContent = TIER_LABELS[tier] || 'MEMBER ACCESS';
+        if (title) {
+          if (hasMethodology) title.textContent = 'All-Access Active';
+          else if (hasNba && hasMlb) title.textContent = 'Dual Pickmaker Active';
+          else if (hasNba) title.textContent = 'NBA Pickmaker Active';
+          else title.textContent = 'MLB Pickmaker Active';
+        }
+        if (copy) {
+          if (hasMethodology) {
+            copy.textContent = 'The methodology room, NBA board, MLB board, and Atlas are open. No need to see checkout cards for access you already own.';
+          } else if (hasNba && hasMlb) {
+            copy.textContent = 'Both daily pick boards are active. Jump straight to the dashboards instead of staring at the sales shelf.';
+          } else if (hasNba) {
+            copy.textContent = 'Your NBA board is active. We hid the NBA checkout card and left only relevant upgrades below.';
+          } else {
+            copy.textContent = 'Your MLB board is active. We hid the MLB checkout card and left only relevant upgrades below.';
+          }
+        }
+      }
+    }
+
+    section.querySelectorAll('[data-ma-member-link]').forEach(link => {
+      const surface = link.getAttribute('data-ma-member-link');
+      const visible =
+        hasAnyPaidSurface &&
+        (surface === 'atlas' ||
+          (surface === 'nba' && hasNba) ||
+          (surface === 'mlb' && hasMlb));
+      link.classList.toggle('is-visible', visible);
+    });
+
+    section.querySelectorAll('[data-ma-product]').forEach(card => {
+      const product = card.getAttribute('data-ma-product');
+      let owned = false;
+
+      if (hasAnyPaidSurface) {
+        if (product === 'pickmaker_nba') owned = hasNba;
+        if (product === 'pickmaker_mlb') owned = hasMlb;
+        if (product === 'pickmaker_dual') owned = hasNba || hasMlb;
+        if (product === 'all_access') owned = hasMethodology;
+      }
+
+      card.classList.toggle('ma-owned-hidden', owned);
+    });
+
+    const grid = section.querySelector('.packages-grid');
+    if (grid) {
+      const visibleCards = Array.from(grid.querySelectorAll('[data-ma-product]'))
+        .filter(card => !card.classList.contains('ma-owned-hidden')).length;
+      grid.style.display = visibleCards ? 'grid' : 'none';
+      grid.classList.toggle('ma-single-offer', visibleCards === 1);
+    }
+  }
+
+  function lockHomePickHistory(selector, requiredTier, label) {
+    const post = document.querySelector(selector);
+    if (!post) return;
+
+    if (hasAccess(requiredTier)) {
+      post.classList.remove('ma-locked', 'ma-pick-locked');
+      post.removeAttribute('data-locked');
+      post.removeAttribute('data-lock-label');
+      post.removeAttribute('data-required-tier');
+    } else {
+      post.classList.add('ma-locked', 'ma-pick-locked');
+      post.setAttribute('data-locked', 'true');
+      post.setAttribute('data-lock-label', label);
+      post.setAttribute('data-required-tier', requiredTier);
+      post.open = false;
+    }
   }
 
   function lockHomePickHistory(selector, requiredTier, label) {

@@ -5716,11 +5716,13 @@ def render_matchup_card(m, idx, team_map):
     # Affiliate link templates
     AFFILIATE_LINKS = {
         "draftkings": "https://sportsbook.draftkings.com",
+        "draftkings_predictions": "https://predictions.draftkings.com/r/pd/jack0_FC/PREDICT/US-CA",
         "fanduel": "https://sportsbook.fanduel.com",
         "betmgm": "https://sports.betmgm.com",
         "bovada": "https://www.bovada.lv/welcome/P1BXDI3/join?extcmpid=rafcopy",
         "pointsbetus": "https://www.pointsbet.com",
         "bethog": "https://bethog.com/r/alphamale",
+        "kalshi": "https://kalshi.com/sign-up/?referral=88acd325-1cbe-44b0-9358-f0cf92cf9fc7",
     }
 
     BOOK_DISPLAY = {
@@ -5734,11 +5736,13 @@ def render_matchup_card(m, idx, team_map):
 
     BOOK_COLORS = {
         "draftkings": "#53d337",
+        "draftkings_predictions": "#53d337",
         "fanduel": "#1493ff",
         "betmgm": "#c4a44a",
         "bovada": "#cc0000",
         "pointsbetus": "#ed1c24",
         "bethog": "#ff6b00",
+        "kalshi": "#00C480",
     }
 
     sportsbook_btns = ""
@@ -5798,11 +5802,11 @@ def render_matchup_card(m, idx, team_map):
             </a>
         </div>'''
 
-    # ── Prediction Markets row (Kalshi win probabilities) ──
+    # Prediction Markets row. Market CTAs should stay visible even when a
+    # probability feed does not return a slate match.
     pm_data = m.get("prediction_markets", {})
-    prediction_btns = ""
-
     kalshi_data = pm_data.get("kalshi") if pm_data else None
+    kalshi_line = "TRADE NOW"
 
     if kalshi_data:
         k_home = kalshi_data["home_prob"]
@@ -5814,18 +5818,21 @@ def render_matchup_card(m, idx, team_map):
         else:
             k_team = aa
             k_prob = k_away
-        k_link = "https://kalshi.com/sign-up/?referral=88acd325-1cbe-44b0-9358-f0cf92cf9fc7"
-        pm_btn_html = f'''<a href="{k_link}" target="_blank" rel="noopener" class="sb-btn pm-btn" style="border-color:#00C48040">
-            <svg class="sb-logo" style="height:16px;width:16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#00C480"/><path d="M8 6l4 6-4 6h3l4-6-4-6H8z" fill="#fff"/></svg>
-            <span class="sb-name" style="color:#00C480">KALSHI</span>
-            <span class="sb-line">{k_team} {k_prob*100:.0f}%</span>
-        </a>'''
+        kalshi_line = f"{k_team} {k_prob*100:.0f}%"
 
-        prediction_btns = f'''
+    prediction_btns = f'''
         <!-- Prediction Markets -->
         <div class="mc-sportsbooks mc-prediction-markets">
             <span class="sb-header">MARKETS</span>
-            {pm_btn_html}
+            <a href="{AFFILIATE_LINKS['kalshi']}" target="_blank" rel="noopener" class="sb-btn pm-btn pm-btn-kalshi" style="border-color:{BOOK_COLORS['kalshi']}40">
+            <svg class="sb-logo" style="height:16px;width:16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#00C480"/><path d="M8 6l4 6-4 6h3l4-6-4-6H8z" fill="#fff"/></svg>
+                <span class="sb-name" style="color:{BOOK_COLORS['kalshi']}">KALSHI</span>
+                <span class="sb-line">{kalshi_line}</span>
+            </a>
+            <a href="{AFFILIATE_LINKS['draftkings_predictions']}" target="_blank" rel="noopener" class="sb-btn pm-btn pm-btn-dk" style="border-color:{BOOK_COLORS['draftkings_predictions']}40">
+                <span class="sb-name" style="color:{BOOK_COLORS['draftkings_predictions']}">DK</span>
+                <span class="sb-line">PREDICT</span>
+            </a>
         </div>'''
 
     return f"""

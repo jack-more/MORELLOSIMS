@@ -2,8 +2,7 @@
 """
 capture_picks.py — Automated pick capture from daily_picks.json.
 
-Reads the SIM's pre-game predictions, filters by confidence threshold,
-requires tracked picks to be C8 or better,
+Reads the SIM's pre-game predictions, filters to tracked C8+ picks,
 and logs actionable picks to:
   1. data/picks.csv (backward compat with grade_picks.py / settle_blog.py)
   2. picks DB table (full metadata)
@@ -82,6 +81,10 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
     now = datetime.now(timezone.utc).isoformat()
     games = snapshot.get("games") or []
 
+    if not games:
+        print(f"[capture] Blank slate: no games in daily_picks.json ({raw_slate_date}).")
+        return []
+
     # Normalize date to YYYY-MM-DD format (daily_picks.json uses "MAR 4" format)
     if raw_slate_date and not raw_slate_date[0].isdigit():
         try:
@@ -111,12 +114,7 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
         adjacent_dates = []
 
     print(f"[capture] Slate: {slate_date} | Generated: {generated_at}")
-    print(f"[capture] Threshold: >{threshold} or <{100 - threshold}")
-    print(f"[capture] Tracking floor: C:{min_conf_grade}+")
-
-    if not games:
-        print(f"[capture] Blank slate: no games in daily_picks.json ({raw_slate_date}).")
-        return []
+    print(f"[capture] Threshold: >{threshold} or <{100 - threshold}; tracked minimum C:{min_conf_grade}")
 
     already = existing_picks(slate_date)
     # Also check adjacent dates to prevent cross-day duplicates
@@ -150,9 +148,8 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
 
         c10 = conf_to_1_10(conf)
         if c10 < min_conf_grade:
-            print(f"  SKIP (below C:{min_conf_grade}): {matchup} -> {pick_text} | conf={conf:.0f} ({c10}/10)")
+            print(f"  SKIP (below C:{min_conf_grade}): {matchup} → {pick_text} | conf={conf:.0f} ({c10}/10)")
             continue
-
         risk = risk_amount(c10)
 
         # Extract line value from pick_text (e.g., "LAL +3.5" → 3.5)
@@ -199,8 +196,7 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
             "ml_odds": ml_odds,
         }
         picks.append(pick)
-        tag = "W" if c10 >= 8 else "M"  # max or mid unit
-        print(f"  PICK [{tag}]: {matchup} → {pick_text} | conf={conf:.0f} ({c10}/10) | edge={edge:+.1f} | {risk} $PP")
+        print(f"  PICK [C{c10}]: {matchup} → {pick_text} | conf={conf:.0f} ({c10}/10) | edge={edge:+.1f} | {risk} $PP")
 
     if not picks:
         print("[capture] No actionable picks found.")
@@ -213,7 +209,7 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
     # ── Write to CSV ──
     csv_exists = os.path.exists(PICKS_CSV)
     with open(PICKS_CSV, "a", newline="") as f:
-        writer = csv.writer(f, lineterminator="\n")
+        writer = csv.writer(f)
         if not csv_exists:
             writer.writerow(["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score"])
         for p in picks:
@@ -268,7 +264,7 @@ def main():
     parser.add_argument("--threshold", type=int, default=65,
                         help="Confidence threshold (default 65 = picks >65 or <35)")
     parser.add_argument("--min-conf-grade", type=int, default=MIN_TRACKED_CONF_GRADE,
-                        help="Minimum 1-10 confidence grade to track (default 8)")
+                        help="Minimum displayed confidence grade to track (default 8 = C8+ only)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Preview picks without saving")
     args = parser.parse_args()

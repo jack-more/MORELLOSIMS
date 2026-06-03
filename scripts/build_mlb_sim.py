@@ -1823,8 +1823,8 @@ def render_hr_watch_tab():
                     {criteria_row(*criteria)}
                 </div>'''
 
-    longshot_block = f'''<div class="daily-bucket daily-subsection secondary">
-                    {bucket_header("secondary", "TIER 2", "TIER 2 HR %", "Power profiles that clear the model floor below the top HR tier.", "7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
+    longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
+                    {bucket_header("secondary", "TIER 2", "TIER 2 HR LOTTO", "Power profiles that clear the model floor below the top HR tier.", "7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
@@ -1835,21 +1835,21 @@ def render_hr_watch_tab():
             <div class="section-sub">{DATE_SHORT} \u00b7 {games_with_lu} games with lineups</div>
         </div>
         {no_data}
-        <div class="daily-grid">
-            <div class="daily-col">
-                <div class="daily-bucket primary">
-                    {bucket_header("primary", "TIER 1", "TIER 1 HR %", "The top homer-rate board. No low-rate filler.", "9%+ projected HR", "top probability only")}
-                    <div class="picks-container">{hr_html or hr_empty}</div>
-                </div>
-                {longshot_block}
-            </div>
-            <div class="daily-col">
+        <div class="daily-grid daily-grid-lotto">
+            <div class="daily-col daily-side daily-hot-side">
                 <div class="daily-bucket momentum">
                     {bucket_header("momentum", "MOMENTUM", "HOT BATS", "Recent timing plus matchup support.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
                     <div class="picks-container">{heat_html or heat_empty}</div>
                 </div>
             </div>
-            <div class="daily-col">
+            <div class="daily-col daily-center daily-hr-lotto">
+                <div class="daily-bucket primary hr-lotto">
+                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "The center board for the strongest homer swings on the slate.", "Tier 1: 9%+ projected HR", "top probability only", "DNA matchup")}
+                    <div class="picks-container">{hr_html or hr_empty}</div>
+                </div>
+                {longshot_block}
+            </div>
+            <div class="daily-col daily-side daily-board-side">
                 <div class="daily-bucket board">
                     {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "|ODDS|<340", "posted picks persist")}
                     <div class="picks-container ma-premium">{edges_html}</div>
@@ -1929,6 +1929,35 @@ DAILY_REFINEMENT_CSS = """
 """
 if "DAILY_HR_HIERARCHY_V2" not in css_block:
     css_block = css_block.replace("</style>", DAILY_REFINEMENT_CSS + "\n</style>")
+
+DAILY_LOTTO_CSS = """
+/* DAILY_HR_LOTTO_LAYOUT_V3 */
+#tab-daily .daily-grid-lotto{grid-template-columns:minmax(240px,.72fr) minmax(520px,1.65fr) minmax(250px,.78fr);align-items:start;gap:20px}
+#tab-daily .daily-hr-lotto{order:2}
+#tab-daily .daily-hot-side{order:1}
+#tab-daily .daily-board-side{order:3}
+.daily-bucket.hr-lotto{border:3px solid #111;border-top:10px solid #FF3333;box-shadow:8px 8px 0 #111;background:#fff;transform:translateY(-6px)}
+.daily-bucket.hr-lotto .bucket-head{padding:16px 18px 14px;background:linear-gradient(135deg,#fff1f1 0%,#fff 72%)}
+.daily-bucket.hr-lotto .edge-kicker{font-size:10px;padding:5px 9px;box-shadow:2px 2px 0 #111}
+.daily-bucket.hr-lotto .bucket-title{font-size:34px;letter-spacing:2px;color:#FF3333;text-shadow:2px 2px 0 #111}
+.daily-bucket.hr-lotto .bucket-copy{font-size:12px;max-width:58ch;color:#111}
+.daily-bucket.hr-lotto .criteria-row span{background:#FF3333;color:#fff}
+.daily-bucket.hr-lotto .hr-row{min-height:66px;padding:12px 14px}
+.daily-bucket.hr-lotto .hr-rank{font-size:14px;color:#111}
+.daily-bucket.hr-lotto .hr-name{font-size:15px}
+.daily-bucket.hr-lotto .hr-rate{font-size:18px}
+.daily-bucket.hr-lotto .hr-rate-label{font-size:9px}
+.daily-bucket.hr-lotto-secondary{box-shadow:5px 5px 0 #111;border-top:6px solid #FF3333}
+.daily-side .bucket-title{font-size:17px}
+.daily-side .bucket-copy{font-size:10px}
+.daily-side .criteria-row span{font-size:7px}
+.daily-hot-side .trend-row{min-height:54px;padding:9px 10px}
+.daily-hot-side .trend-meta{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+@media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr 1.3fr}.daily-hot-side{order:2}.daily-hr-lotto{order:1}.daily-board-side{order:3;grid-column:1/-1}.daily-bucket.hr-lotto{transform:none}}
+@media(max-width:760px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-hot-side,.daily-hr-lotto,.daily-board-side{order:initial}.daily-board-side{grid-column:auto}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row{min-height:58px}}
+"""
+if "DAILY_HR_LOTTO_LAYOUT_V3" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_LOTTO_CSS + "\n</style>")
 
 PLAYER_METRIC_CSS = """
 /* ── Player MOMO/MOMI chips ── */
