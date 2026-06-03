@@ -1836,18 +1836,18 @@ def render_hr_watch_tab():
         </div>
         {no_data}
         <div class="daily-grid daily-grid-lotto">
-            <div class="daily-col daily-side daily-hot-side">
-                <div class="daily-bucket momentum">
-                    {bucket_header("momentum", "MOMENTUM", "HOT BATS", "Recent timing plus matchup support.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
-                    <div class="picks-container">{heat_html or heat_empty}</div>
-                </div>
-            </div>
             <div class="daily-col daily-center daily-hr-lotto">
                 <div class="daily-bucket primary hr-lotto">
                     {bucket_header("primary", "HR LOTTO", "HR LOTTO", "The center board for the strongest homer swings on the slate.", "Tier 1: 9%+ projected HR", "top probability only", "DNA matchup")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}
+            </div>
+            <div class="daily-col daily-side daily-hot-side">
+                <div class="daily-bucket momentum">
+                    {bucket_header("momentum", "MOMENTUM", "HOT BATS", "Recent timing plus matchup support.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
+                    <div class="picks-container">{heat_html or heat_empty}</div>
+                </div>
             </div>
             <div class="daily-col daily-side daily-board-side">
                 <div class="daily-bucket board">
@@ -1954,7 +1954,7 @@ DAILY_LOTTO_CSS = """
 .daily-hot-side .trend-row{min-height:54px;padding:9px 10px}
 .daily-hot-side .trend-meta{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 @media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr 1.3fr}.daily-hot-side{order:2}.daily-hr-lotto{order:1}.daily-board-side{order:3;grid-column:1/-1}.daily-bucket.hr-lotto{transform:none}}
-@media(max-width:760px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-hot-side,.daily-hr-lotto,.daily-board-side{order:initial}.daily-board-side{grid-column:auto}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row{min-height:58px}}
+@media(max-width:760px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-hr-lotto{order:1}.daily-hot-side{order:2}.daily-board-side{order:3;grid-column:auto}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row{min-height:58px}}
 """
 if "DAILY_HR_LOTTO_LAYOUT_V3" not in css_block:
     css_block = css_block.replace("</style>", DAILY_LOTTO_CSS + "\n</style>")
