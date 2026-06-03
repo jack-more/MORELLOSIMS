@@ -18,6 +18,7 @@ INDEX = os.path.join(REPO, "index.html")
 NBA_PATH = os.path.join(REPO, "picks", "nba.json")
 MLB_PATH = os.path.join(REPO, "picks", "mlb.json")
 BASELINES_PATH = os.path.join(REPO, "picks", "baselines.json")
+TRACKED_MIN_CONF = {"mlb": 8}
 
 
 def load_baselines():
@@ -29,6 +30,23 @@ def load_baselines():
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
+
+
+def official_picks(picks, sport):
+    """Filter pick rows down to the public tracking contract."""
+    min_conf = TRACKED_MIN_CONF.get(sport)
+    if min_conf is None:
+        return picks
+
+    filtered = []
+    for pick in picks:
+        try:
+            conf = int(pick.get("conf") or 0)
+        except (TypeError, ValueError):
+            conf = 0
+        if conf >= min_conf:
+            filtered.append(pick)
+    return filtered
 
 NBA_BEGIN = "<!-- DISPATCH:NBA:BEGIN -->"
 NBA_END = "<!-- DISPATCH:NBA:END -->"
@@ -399,6 +417,8 @@ def main():
     baselines = load_baselines()
     nba_baseline = baselines.get("nba")
     mlb_baseline = baselines.get("mlb")
+    nba_picks = official_picks(nba_picks, "nba")
+    mlb_picks = official_picks(mlb_picks, "mlb")
 
     nba_html = render_sport_block(nba_picks, "nba", "#00FF55", baseline=nba_baseline)
     mlb_html = render_sport_block(mlb_picks, "mlb", "#FFEA00", baseline=mlb_baseline)

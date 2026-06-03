@@ -47,3 +47,4 @@ Append-only — settled picks should never have their `result`/`pl` mutated.
 2. **One id per pick**: format `{date}-{sport}-{away}-{home}-{bet_type}`. Duplicates → render fails.
 3. **Settle, don't replace**: when settling, the pipeline mutates the existing pick in place (`status`, `result`, `pl`, `settled_at`). Don't delete-and-readd.
 4. **No HTML in JSON**: this file is data only. Render layer owns presentation.
+5. **MLB official tracking is C:8+ only**: below-C8 MLB rows may remain in historical JSON for auditability, but renderers and record cards must exclude them.

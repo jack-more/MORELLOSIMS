@@ -22,6 +22,7 @@ OUTPUT = os.path.join(REPO_ROOT, "mlbsim", "index.html")
 PICKS_DIR = os.path.join(REPO_ROOT, "picks")
 BASELINES_PATH = os.path.join(PICKS_DIR, "baselines.json")
 MLB_PICKS_PATH = os.path.join(PICKS_DIR, "mlb.json")
+MLB_TRACKED_MIN_CONF = 8
 
 
 def load_season_record():
@@ -38,6 +39,12 @@ def load_season_record():
             with open(MLB_PICKS_PATH) as f:
                 picks = json.load(f)
             for p in picks:
+                try:
+                    conf = int(p.get("conf") or 0)
+                except (TypeError, ValueError):
+                    conf = 0
+                if conf < MLB_TRACKED_MIN_CONF:
+                    continue
                 if p.get("status") not in ("win", "loss", "push"):
                     continue
                 wins += 1 if p.get("status") == "win" else 0
@@ -301,9 +308,7 @@ def get_base_woba(bid):
 
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
-MIN_CONF_PICK = 8  # C:8+ qualifies as an official pick.
-VALUE_DOG_MIN_CONF = 7
-VALUE_DOG_MIN_RUN_DIFF = 1.0
+MIN_CONF_PICK = MLB_TRACKED_MIN_CONF  # C:8+ qualifies as an official pick.
 MAX_MISSING_BATTERS_FOR_PICK = 1
 STAKE_BY_CONF = {
     10: 100,
@@ -1151,12 +1156,8 @@ for g in games_raw:
     elif run_diff > 0:     conf = 1
     else:                  conf = 0
 
-    # MUST-PICK rule: any matchup with run_diff >= 1.8 AND both pitchers having
-    # full stats (in atlas index, non-default archetype) qualifies regardless
-    # of the C:10 confidence floor. Captures real edges the binary cutoff misses.
     away_has_full = bool(away_ps) and away_ps.get("has_recent_atlas") is True
     home_has_full = bool(home_ps) and home_ps.get("has_recent_atlas") is True
-    must_pick = run_diff >= 1.8 and away_has_full and home_has_full
 
     # FULL COVERAGE rule: do NOT rate games where any batter in either lineup
     # lacks atlas data (pa_w == 0). Rookies, NPB imports, fresh call-ups all
@@ -1251,7 +1252,6 @@ for g in games_raw:
         "edge": round(edge, 1),
         "pick_team": pick_team,
         "odds_too_heavy": odds_too_heavy,
-        "must_pick": must_pick,
         "has_full_coverage": has_full_coverage,
         "pick_coverage_ok": pick_coverage_ok,
         "missing_coverage_count": len(missing_coverage),
@@ -1312,13 +1312,6 @@ def published_pick_for_game(g):
 def is_published_pick(g):
     return (g.get("away_abbr"), g.get("home_abbr"), g.get("pick_team")) in published_today_pick_keys()
 
-def is_value_dog(g):
-    return (
-        g.get("conf", 0) >= VALUE_DOG_MIN_CONF
-        and g.get("edge", 0) >= VALUE_DOG_MIN_RUN_DIFF
-        and g.get("pick_odds", 0) > 0
-    )
-
 def qualifies_as_pick(g):
     if not g.get("has_lineups"):
         return False
@@ -1328,7 +1321,7 @@ def qualifies_as_pick(g):
         return False
     if g.get("has_started") and not is_published_pick(g):
         return False
-    return g.get("conf", 0) >= MIN_CONF_PICK or g.get("must_pick") or is_value_dog(g)
+    return g.get("conf", 0) >= MIN_CONF_PICK
 
 def render_batter(b):
     mc = ms_class(b["ms"])
@@ -1858,7 +1851,7 @@ def render_hr_watch_tab():
             </div>
             <div class="daily-col">
                 <div class="daily-bucket board">
-                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "C:7 plus-money value", "posted picks persist")}
+                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "|ODDS|<340", "posted picks persist")}
                     <div class="picks-container ma-premium">{edges_html}</div>
                 </div>
             </div>
@@ -2002,7 +1995,7 @@ html = f'''<!DOCTYPE html>
       </div>
       <div style="text-align:right;flex:1;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
-        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:9+<br><span style="color:#888;">|ODDS|&lt;340</span></div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:8+<br><span style="color:#888;">|ODDS|&lt;340</span></div>
       </div>
     </div>
   </div>
