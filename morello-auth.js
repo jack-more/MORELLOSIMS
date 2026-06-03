@@ -533,8 +533,8 @@
 
         <div class="ma-pricing-card">
           <div>
-            <div class="ma-pricing-name">NBA PICKMAKER</div>
-            <div class="ma-pricing-desc">Daily NBA SIM picks + spread analysis</div>
+            <div class="ma-pricing-name">NBA BOARD</div>
+            <div class="ma-pricing-desc">Daily NBA card with MOJO, MOJI, and SYN notes</div>
           </div>
           <div style="text-align:right">
             <div class="ma-pricing-amount">$11.99<span class="ma-pricing-period">/mo</span></div>
@@ -544,8 +544,8 @@
 
         <div class="ma-pricing-card">
           <div>
-            <div class="ma-pricing-name">MLB PICKMAKER</div>
-            <div class="ma-pricing-desc">Daily MLB SIM matchups + batting props</div>
+            <div class="ma-pricing-name">MLB BOARD</div>
+            <div class="ma-pricing-desc">C:8+ MLB card, HR LOTTO, and pitcher DNA notes</div>
           </div>
           <div style="text-align:right">
             <div class="ma-pricing-amount">$11.99<span class="ma-pricing-period">/mo</span></div>
@@ -555,8 +555,8 @@
 
         <div class="ma-pricing-card highlight">
           <div>
-            <div class="ma-pricing-name">DUAL PICKMAKER</div>
-            <div class="ma-pricing-desc">NBA + MLB SIM access — best value</div>
+            <div class="ma-pricing-name">DAILY BOARD</div>
+            <div class="ma-pricing-desc">NBA picks, MLB picks, HR LOTTO, and model notes</div>
           </div>
           <div style="text-align:right">
             <div class="ma-pricing-amount">$19.99<span class="ma-pricing-period">/mo</span></div>
@@ -567,8 +567,8 @@
         <div class="ma-pricing-card limited">
           <span class="ma-limited-tag">LIMITED AVAILABILITY</span>
           <div>
-            <div class="ma-pricing-name">ALL-ACCESS</div>
-            <div class="ma-pricing-desc">Full methodology — NBA + MLB systems revealed</div>
+            <div class="ma-pricing-name">MODEL ROOM</div>
+            <div class="ma-pricing-desc">Full methodology, Atlas, and system notes</div>
           </div>
           <div style="text-align:right">
             <div class="ma-pricing-amount">$899<span class="ma-pricing-period"> ONE-TIME</span></div>

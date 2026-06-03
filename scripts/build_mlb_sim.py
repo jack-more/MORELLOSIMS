@@ -1953,8 +1953,8 @@ DAILY_LOTTO_CSS = """
 .daily-side .criteria-row span{font-size:7px}
 .daily-hot-side .trend-row{min-height:54px;padding:9px 10px}
 .daily-hot-side .trend-meta{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-@media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr 1.3fr}.daily-hot-side{order:2}.daily-hr-lotto{order:1}.daily-board-side{order:3;grid-column:1/-1}.daily-bucket.hr-lotto{transform:none}}
-@media(max-width:760px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-hr-lotto{order:1}.daily-hot-side{order:2}.daily-board-side{order:3;grid-column:auto}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row{min-height:58px}}
+@media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:1.35fr .9fr}#tab-daily .daily-hr-lotto{order:1}#tab-daily .daily-board-side{order:2;grid-column:auto}#tab-daily .daily-hot-side{order:3;grid-column:1/-1}.daily-bucket.hr-lotto{transform:none}}
+@media(max-width:760px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr}#tab-daily .daily-hr-lotto{order:1}#tab-daily .daily-board-side{order:2;grid-column:auto}#tab-daily .daily-hot-side{order:3;grid-column:auto}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row{min-height:58px}}
 """
 if "DAILY_HR_LOTTO_LAYOUT_V3" not in css_block:
     css_block = css_block.replace("</style>", DAILY_LOTTO_CSS + "\n</style>")
