@@ -21,9 +21,9 @@
   const STRIPE_CONFIG = {
     publishableKey: 'pk_live_51IgymQA9KGX7mrlm4mMSnHke0kSV7SkFtrJOMDat2cffozI5Y0Ih5V4sqawFIhnEWpuJ18WTtItxBmvUsCSb95y100kulsQoe8',
     prices: {
-      pickmaker_nba: 'price_1T3rqNA9KGX7mrlmCQi4QcnU',
-      pickmaker_mlb: 'price_1T3rqqA9KGX7mrlmHncjyPlp',
-      pickmaker_dual: 'price_1T3rvjA9KGX7mrlmxJI5V00r',
+      pickmaker_nba: 'price_1TeeImA9KGX7mrlmZq17WalQ',
+      pickmaker_mlb: 'price_1TeeImA9KGX7mrlmwTtxcd6W',
+      pickmaker_dual: 'price_1TeeImA9KGX7mrlmyQ0usLv9',
       all_access: 'price_1T3s0qA9KGX7mrlmA8KljtHG'
     },
     // Cloud Function endpoint for creating checkout sessions
@@ -40,9 +40,9 @@
   ];
 
   const PRODUCT_ANALYTICS = {
-    pickmaker_nba: { name: 'NBA Pickmaker', price: 11.99, billing: 'monthly' },
-    pickmaker_mlb: { name: 'MLB Pickmaker', price: 11.99, billing: 'monthly' },
-    pickmaker_dual: { name: 'Dual Pickmaker', price: 19.99, billing: 'monthly' },
+    pickmaker_nba: { name: 'NBA Slate Pass', price: 11.99, billing: 'one_time' },
+    pickmaker_mlb: { name: 'MLB Slate Pass', price: 11.99, billing: 'one_time' },
+    pickmaker_dual: { name: 'Full Slate Pass', price: 19.99, billing: 'one_time' },
     all_access: { name: 'All-Access Methodology', price: 899, billing: 'one_time' }
   };
 
@@ -61,9 +61,9 @@
   const TIER_LABELS = {
     free: 'FREE',
     fnf: 'FnF',
-    pickmaker_nba: 'NBA PICKMAKER',
-    pickmaker_mlb: 'MLB PICKMAKER',
-    pickmaker_dual: 'DUAL PICKMAKER',
+    pickmaker_nba: 'NBA SLATE PASS',
+    pickmaker_mlb: 'MLB SLATE PASS',
+    pickmaker_dual: 'FULL SLATE PASS',
     all_access: 'ALL-ACCESS',
     admin: 'ADMIN'
   };
@@ -81,10 +81,12 @@
   // ── State ──
   let currentUser = null;
   let currentTier = 'free';
+  let currentAccessExpiresAt = null;
   let adminOverrideTier = null; // For admin view-as feature
   let firebaseReady = false;
   let analyticsReady = false;
   let packageViewTracked = false;
+  const PICK_PACKAGE_TIERS = ['pickmaker_nba', 'pickmaker_mlb', 'pickmaker_dual'];
 
   // ── Detect which page we're on ──
   const PAGE = detectPage();
@@ -212,7 +214,26 @@
   // ── Get effective tier (respects admin override) ──
   function getEffectiveTier() {
     if (adminOverrideTier && currentTier === 'admin') return adminOverrideTier;
+    if (isCurrentPackageExpired()) return 'free';
     return currentTier;
+  }
+
+  function timestampToMillis(value) {
+    if (!value) return null;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    if (typeof value.seconds === 'number') return value.seconds * 1000;
+    return null;
+  }
+
+  function isCurrentPackageExpired() {
+    if (!PICK_PACKAGE_TIERS.includes(currentTier)) return false;
+    if (!currentAccessExpiresAt) return false;
+    return currentAccessExpiresAt <= Date.now();
   }
 
   function hasAccess(requiredTier) {
@@ -250,14 +271,18 @@
         // 1) Check hardcoded whitelist first (works without Firestore)
         if (EMAIL_WHITELIST[email]) {
           currentTier = EMAIL_WHITELIST[email];
+          currentAccessExpiresAt = null;
         } else {
           // 2) Try Firestore for Stripe-managed tiers
           try {
             const doc = await firebase.firestore().collection('users').doc(user.uid).get();
             if (doc.exists && doc.data().tier) {
-              currentTier = doc.data().tier;
+              const data = doc.data();
+              currentTier = data.tier;
+              currentAccessExpiresAt = timestampToMillis(data.accessExpiresAt);
             } else {
               currentTier = 'free';
+              currentAccessExpiresAt = null;
             }
             // Ensure user doc exists
             if (!doc.exists) {
@@ -271,11 +296,13 @@
             console.warn('[morello-auth] Firestore error, falling back to whitelist:', e);
             // Firestore failed — whitelist already checked above, default to free
             currentTier = EMAIL_WHITELIST[email] || 'free';
+            currentAccessExpiresAt = null;
           }
         }
       } else {
         currentUser = null;
         currentTier = 'free';
+        currentAccessExpiresAt = null;
       }
       firebaseReady = true;
       onAuthReady(user);
@@ -510,7 +537,7 @@
         <button class="ma-btn-primary" onclick="window.morelloAuth.openModal('pricing')" style="background:#FF6B00">UPGRADE ACCOUNT</button>
       ` : ''}
       ${(tier === 'pickmaker_nba' || tier === 'pickmaker_mlb' || tier === 'pickmaker_dual') ? `
-        <button class="ma-btn-secondary" onclick="window.morelloAuth.openModal('pricing')">MANAGE PLAN</button>
+        <button class="ma-btn-secondary" onclick="window.morelloAuth.openModal('pricing')">BUY ANOTHER PASS</button>
       ` : ''}
       <button class="ma-btn-secondary ma-btn-danger" onclick="window.morelloAuth.handleSignout()" style="margin-top:12px">SIGN OUT</button>
     `;
@@ -533,34 +560,34 @@
 
         <div class="ma-pricing-card">
           <div>
-            <div class="ma-pricing-name">NBA BOARD</div>
-            <div class="ma-pricing-desc">Daily NBA card with MOJO, MOJI, and SYN notes</div>
+            <div class="ma-pricing-name">NBA SLATE PASS</div>
+            <div class="ma-pricing-desc">One-time NBA card with MOJO, MOJI, and SYN notes</div>
           </div>
           <div style="text-align:right">
-            <div class="ma-pricing-amount">$11.99<span class="ma-pricing-period">/mo</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_nba')">SUBSCRIBE</button>
+            <div class="ma-pricing-amount">$11.99<span class="ma-pricing-period"> ONE-TIME</span></div>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_nba')">BUY PICKS</button>
           </div>
         </div>
 
         <div class="ma-pricing-card">
           <div>
-            <div class="ma-pricing-name">MLB BOARD</div>
-            <div class="ma-pricing-desc">C:8+ MLB card, HR LOTTO, and pitcher DNA notes</div>
+            <div class="ma-pricing-name">MLB SLATE PASS</div>
+            <div class="ma-pricing-desc">One-time C:8+ MLB card, HR LOTTO, and pitcher DNA notes</div>
           </div>
           <div style="text-align:right">
-            <div class="ma-pricing-amount">$11.99<span class="ma-pricing-period">/mo</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_mlb')">SUBSCRIBE</button>
+            <div class="ma-pricing-amount">$11.99<span class="ma-pricing-period"> ONE-TIME</span></div>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_mlb')">BUY PICKS</button>
           </div>
         </div>
 
         <div class="ma-pricing-card highlight">
           <div>
-            <div class="ma-pricing-name">DAILY BOARD</div>
-            <div class="ma-pricing-desc">NBA picks, MLB picks, HR LOTTO, and model notes</div>
+            <div class="ma-pricing-name">FULL SLATE PASS</div>
+            <div class="ma-pricing-desc">One-time NBA picks, MLB picks, HR LOTTO, and model notes</div>
           </div>
           <div style="text-align:right">
-            <div class="ma-pricing-amount">$19.99<span class="ma-pricing-period">/mo</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_dual')">SUBSCRIBE</button>
+            <div class="ma-pricing-amount">$19.99<span class="ma-pricing-period"> ONE-TIME</span></div>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_dual')">BUY FULL SLATE</button>
           </div>
         </div>
 
@@ -791,9 +818,9 @@
         if (eyebrow) eyebrow.textContent = TIER_LABELS[tier] || 'MEMBER ACCESS';
         if (title) {
           if (hasMethodology) title.textContent = 'All-Access Active';
-          else if (hasNba && hasMlb) title.textContent = 'Dual Pickmaker Active';
-          else if (hasNba) title.textContent = 'NBA Pickmaker Active';
-          else title.textContent = 'MLB Pickmaker Active';
+          else if (hasNba && hasMlb) title.textContent = 'Full Slate Pass Active';
+          else if (hasNba) title.textContent = 'NBA Slate Pass Active';
+          else title.textContent = 'MLB Slate Pass Active';
         }
         if (copy) {
           if (hasMethodology) {
@@ -1044,10 +1071,10 @@
       </div>
       <div class="premium-banner-actions">
         <button class="cta-btn" onclick="window.morelloAuth.openUpgradeModal('premium_banner_${singleProduct}')" style="background:${accentColor}">
-          ${singlePrice}/mo
+          ${singlePrice} TODAY
         </button>
         <button class="cta-btn cta-btn-dual" onclick="window.morelloAuth.openUpgradeModal('premium_banner_dual')">
-          DUAL $19.99/mo
+          FULL SLATE $19.99
         </button>
       </div>
     `;
@@ -1086,7 +1113,7 @@
       if (!hasAccess('pickmaker_nba')) {
         const tip = document.createElement('div');
         tip.className = 'ma-card-price price-pickmaker';
-        tip.innerHTML = '$11.99/mo<br><span style="font-size:8px;opacity:0.6">DUAL: $19.99/mo</span>';
+        tip.innerHTML = '$11.99 today<br><span style="font-size:8px;opacity:0.6">FULL SLATE: $19.99</span>';
         nbaCard.appendChild(tip);
       }
       // Gate the button — one-time listener that checks access dynamically
@@ -1098,7 +1125,7 @@
       if (!hasAccess('pickmaker_mlb')) {
         const tip = document.createElement('div');
         tip.className = 'ma-card-price price-pickmaker-mlb';
-        tip.innerHTML = '$11.99/mo<br><span style="font-size:8px;opacity:0.6">DUAL: $19.99/mo</span>';
+        tip.innerHTML = '$11.99 today<br><span style="font-size:8px;opacity:0.6">FULL SLATE: $19.99</span>';
         mlbCard.appendChild(tip);
       }
       // Gate the button — one-time listener that checks access dynamically

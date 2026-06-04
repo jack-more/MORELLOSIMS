@@ -12,17 +12,21 @@ const db = admin.firestore();
 const stripe = new Stripe(functions.config().stripe?.secret || process.env.STRIPE_SECRET_KEY);
 const WEBHOOK_SECRET = functions.config().stripe?.webhook_secret || process.env.STRIPE_WEBHOOK_SECRET;
 
-// ── Price ID → Tier mapping ──
-const PRICE_TO_TIER = {
-  'price_1T3rqNA9KGX7mrlmCQi4QcnU': 'pickmaker_nba',
-  'price_1T3rqqA9KGX7mrlmHncjyPlp': 'pickmaker_mlb',
-  'price_1T3rvjA9KGX7mrlmxJI5V00r': 'pickmaker_dual',
-  'price_1T3s0qA9KGX7mrlmA8KljtHG': 'all_access'
+// Price ID to checkout package mapping. Old recurring prices are kept so
+// in-flight sessions and existing subscription webhooks still resolve.
+const PRICE_TO_PACKAGE = {
+  'price_1TeeImA9KGX7mrlmZq17WalQ': { tier: 'pickmaker_nba', mode: 'payment', accessHours: 36 },
+  'price_1TeeImA9KGX7mrlmwTtxcd6W': { tier: 'pickmaker_mlb', mode: 'payment', accessHours: 36 },
+  'price_1TeeImA9KGX7mrlmyQ0usLv9': { tier: 'pickmaker_dual', mode: 'payment', accessHours: 36 },
+  'price_1T3rqNA9KGX7mrlmCQi4QcnU': { tier: 'pickmaker_nba', mode: 'subscription' },
+  'price_1T3rqqA9KGX7mrlmHncjyPlp': { tier: 'pickmaker_mlb', mode: 'subscription' },
+  'price_1T3rvjA9KGX7mrlmxJI5V00r': { tier: 'pickmaker_dual', mode: 'subscription' },
+  'price_1T3s0qA9KGX7mrlmA8KljtHG': { tier: 'all_access', mode: 'payment' }
 };
 
 // ══════════════════════════════════════════════════
 // CREATE CHECKOUT SESSION
-// Called from morello-auth.js when user clicks Subscribe/Purchase
+// Called from morello-auth.js when user clicks a checkout CTA
 // ══════════════════════════════════════════════════
 exports.createCheckoutSession = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
@@ -60,25 +64,29 @@ exports.createCheckoutSession = functions.https.onRequest((req, res) => {
         );
       }
 
-      // Determine if this is a one-time or subscription
-      const tier = PRICE_TO_TIER[priceId];
-      const isOneTime = tier === 'all_access';
+      const checkoutPackage = PRICE_TO_PACKAGE[priceId];
+      if (!checkoutPackage) {
+        res.status(400).json({ error: 'Unknown priceId' });
+        return;
+      }
+
+      const { tier, mode, accessHours } = checkoutPackage;
 
       const sessionParams = {
         customer: customerId,
         payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],
-        mode: isOneTime ? 'payment' : 'subscription',
+        mode: mode,
         success_url: successUrl || 'https://morellosims.com/?checkout=success',
         cancel_url: cancelUrl || 'https://morellosims.com/?checkout=cancel',
         metadata: {
           firebaseUid: uid,
-          tier: tier
+          tier: tier,
+          accessHours: accessHours || ''
         }
       };
 
-      // For subscriptions, add subscription metadata too
-      if (!isOneTime) {
+      if (mode === 'subscription') {
         sessionParams.subscription_data = {
           metadata: { firebaseUid: uid, tier: tier }
         };
@@ -114,14 +122,25 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
       const session = event.data.object;
       const uid = session.metadata?.firebaseUid;
       const tier = session.metadata?.tier;
+      const accessHours = Number(session.metadata?.accessHours || 0);
 
       if (uid && tier) {
+        const updates = {
+          tier: tier,
+          stripeCustomerId: session.customer,
+          checkoutMode: session.mode,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (accessHours > 0) {
+          const expiresAtMs = Date.now() + accessHours * 60 * 60 * 1000;
+          updates.accessExpiresAt = admin.firestore.Timestamp.fromMillis(expiresAtMs);
+          updates.packageAccessHours = accessHours;
+          updates.packagePurchasedAt = admin.firestore.FieldValue.serverTimestamp();
+        }
+
         await db.collection('users').doc(uid).set(
-          {
-            tier: tier,
-            stripeCustomerId: session.customer,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          },
+          updates,
           { merge: true }
         );
         console.log(`Updated user ${uid} to tier: ${tier}`);
