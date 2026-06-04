@@ -969,7 +969,7 @@ for g in games_raw:
 
             base_w = get_base_woba(pid)
             base_h, base_bb, base_hr, base_tb = get_base_rates(pid)
-            profile = batter_profile_idx.get(int(pid)) if pid is not None else {}
+            profile = batter_profile_idx.get(int(pid), {}) if pid is not None else {}
             season_pa = float(profile.get("season_PA_2026") or 0)
             season_hr = float(profile.get("season_HR_2026") or 0)
             baseline_pa = float(profile.get("baseline_PA") or 0)
