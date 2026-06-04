@@ -24,6 +24,7 @@
       pickmaker_nba: 'price_1TeeImA9KGX7mrlmZq17WalQ',
       pickmaker_mlb: 'price_1TeeImA9KGX7mrlmwTtxcd6W',
       pickmaker_dual: 'price_1TeeImA9KGX7mrlmyQ0usLv9',
+      weekly_board: 'price_1TefcKA9KGX7mrlmGqxce0pf',
       all_access: 'price_1T3s0qA9KGX7mrlmA8KljtHG'
     },
     // Cloud Function endpoint for creating checkout sessions
@@ -43,6 +44,7 @@
     pickmaker_nba: { name: 'NBA Slate Pass', price: 11.99, billing: 'one_time' },
     pickmaker_mlb: { name: 'MLB Slate Pass', price: 11.99, billing: 'one_time' },
     pickmaker_dual: { name: 'Daily Slate Pass', price: 19.99, billing: 'one_time' },
+    weekly_board: { name: 'Weekly Board Pass', price: 69.99, billing: 'one_time' },
     all_access: { name: 'All-Access Methodology', price: 899, billing: 'one_time' }
   };
 
@@ -561,7 +563,7 @@
           </div>
         </div>
 
-        <div class="ma-pricing-card highlight">
+        <div class="ma-pricing-card">
           <div>
             <div class="ma-pricing-name">DAILY SLATE PASS</div>
             <div class="ma-pricing-desc">Access to the Morello board, HR LOTTO, and model notes. Valid for 24 hours after purchase.</div>
@@ -572,15 +574,14 @@
           </div>
         </div>
 
-        <div class="ma-pricing-card limited">
-          <span class="ma-limited-tag">LIMITED AVAILABILITY</span>
+        <div class="ma-pricing-card highlight">
           <div>
-            <div class="ma-pricing-name">MODEL ROOM</div>
-            <div class="ma-pricing-desc">Full methodology, Atlas, and system notes</div>
+            <div class="ma-pricing-name">WEEKLY BOARD PASS</div>
+            <div class="ma-pricing-desc">Seven days of Morello board access, HR LOTTO, model notes, and tracked context.</div>
           </div>
           <div style="text-align:right">
-            <div class="ma-pricing-amount">$899<span class="ma-pricing-period"> ONE-TIME</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('all_access')">PURCHASE</button>
+            <div class="ma-pricing-amount">$69.99<span class="ma-pricing-period"> ONE-TIME</span></div>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('weekly_board')">BUY WEEKLY BOARD</button>
           </div>
         </div>
 
@@ -833,6 +834,7 @@
         if (product === 'pickmaker_nba') owned = hasNba;
         if (product === 'pickmaker_mlb') owned = hasMlb;
         if (product === 'pickmaker_dual') owned = hasNba || hasMlb;
+        if (product === 'weekly_board') owned = hasNba || hasMlb;
         if (product === 'all_access') owned = hasMethodology;
       }
 
