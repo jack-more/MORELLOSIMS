@@ -25,6 +25,7 @@
       pickmaker_mlb: 'price_1TeeImA9KGX7mrlmwTtxcd6W',
       pickmaker_dual: 'price_1TeeImA9KGX7mrlmyQ0usLv9',
       weekly_board: 'price_1TefcKA9KGX7mrlmGqxce0pf',
+      monthly_board: 'price_1Tefu6A9KGX7mrlmLwobQ7CR',
       all_access: 'price_1T3s0qA9KGX7mrlmA8KljtHG'
     },
     // Cloud Function endpoint for creating checkout sessions
@@ -45,6 +46,7 @@
     pickmaker_mlb: { name: 'MLB Slate Pass', price: 11.99, billing: 'one_time' },
     pickmaker_dual: { name: 'Daily Slate Pass', price: 19.99, billing: 'one_time' },
     weekly_board: { name: 'Weekly Board Pass', price: 69.99, billing: 'one_time' },
+    monthly_board: { name: 'Monthly Board Pass', price: 199.99, billing: 'one_time' },
     all_access: { name: 'All-Access Methodology', price: 899, billing: 'one_time' }
   };
 
@@ -84,6 +86,7 @@
   let currentUser = null;
   let currentTier = 'free';
   let currentAccessExpiresAt = null;
+  let currentPackageAccessHours = null;
   let adminOverrideTier = null; // For admin view-as feature
   let firebaseReady = false;
   let analyticsReady = false;
@@ -241,6 +244,15 @@
     return currentAccessExpiresAt <= Date.now();
   }
 
+  function getCurrentPassLabel(tier) {
+    if (tier === 'pickmaker_dual' || tier === 'pickmaker_nba' || tier === 'pickmaker_mlb') {
+      if (currentPackageAccessHours >= 720) return 'MONTHLY BOARD PASS';
+      if (currentPackageAccessHours >= 168) return 'WEEKLY BOARD PASS';
+      return 'DAILY SLATE PASS';
+    }
+    return TIER_LABELS[tier] || 'MEMBER ACCESS';
+  }
+
   function hasAccess(requiredTier) {
     const tier = getEffectiveTier();
     if (requiredTier === 'free') return true;
@@ -277,6 +289,7 @@
         if (EMAIL_WHITELIST[email]) {
           currentTier = EMAIL_WHITELIST[email];
           currentAccessExpiresAt = null;
+          currentPackageAccessHours = null;
         } else {
           // 2) Try Firestore for Stripe-managed tiers
           try {
@@ -285,9 +298,11 @@
               const data = doc.data();
               currentTier = data.tier;
               currentAccessExpiresAt = timestampToMillis(data.accessExpiresAt);
+              currentPackageAccessHours = Number(data.packageAccessHours || 0) || null;
             } else {
               currentTier = 'free';
               currentAccessExpiresAt = null;
+              currentPackageAccessHours = null;
             }
             // Ensure user doc exists
             if (!doc.exists) {
@@ -302,12 +317,14 @@
             // Firestore failed — whitelist already checked above, default to free
             currentTier = EMAIL_WHITELIST[email] || 'free';
             currentAccessExpiresAt = null;
+            currentPackageAccessHours = null;
           }
         }
       } else {
         currentUser = null;
         currentTier = 'free';
         currentAccessExpiresAt = null;
+        currentPackageAccessHours = null;
       }
       firebaseReady = true;
       onAuthReady(user);
@@ -531,12 +548,13 @@
   function renderProfileView() {
     const tier = getEffectiveTier();
     const tierColor = TIER_COLORS[tier] || '#888';
+    const tierLabel = getCurrentPassLabel(tier);
     return `
       <h2>PROFILE</h2>
       <p class="ma-subtitle">MORELLO SIMS ACCOUNT</p>
       <div class="ma-profile-info">
         <div class="ma-profile-email">${currentUser.email}</div>
-        <div class="ma-profile-tier-display" style="color:${tierColor}">${TIER_LABELS[tier]}</div>
+        <div class="ma-profile-tier-display" style="color:${tierColor}">${tierLabel}</div>
       </div>
       ${tier === 'free' || tier === 'fnf' ? `
         <button class="ma-btn-primary" onclick="window.morelloAuth.openModal('pricing')" style="background:#FF6B00">UPGRADE ACCOUNT</button>
@@ -574,7 +592,7 @@
           </div>
         </div>
 
-        <div class="ma-pricing-card highlight">
+        <div class="ma-pricing-card">
           <div>
             <div class="ma-pricing-name">WEEKLY BOARD PASS</div>
             <div class="ma-pricing-desc">Seven days of Morello board access, HR LOTTO, model notes, and tracked context.</div>
@@ -582,6 +600,17 @@
           <div style="text-align:right">
             <div class="ma-pricing-amount">$69.99<span class="ma-pricing-period"> ONE-TIME</span></div>
             <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('weekly_board')">BUY WEEKLY BOARD</button>
+          </div>
+        </div>
+
+        <div class="ma-pricing-card highlight">
+          <div>
+            <div class="ma-pricing-name">MONTHLY BOARD PASS</div>
+            <div class="ma-pricing-desc">Thirty days of Morello board access, HR LOTTO, model notes, and tracked context.</div>
+          </div>
+          <div style="text-align:right">
+            <div class="ma-pricing-amount">$199.99<span class="ma-pricing-period"> ONE-TIME</span></div>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('monthly_board')">BUY MONTHLY BOARD</button>
           </div>
         </div>
 
@@ -797,10 +826,10 @@
     if (panel) {
       panel.classList.toggle('is-visible', hasAnyPaidSurface);
       if (hasAnyPaidSurface) {
-        if (eyebrow) eyebrow.textContent = TIER_LABELS[tier] || 'MEMBER ACCESS';
+        if (eyebrow) eyebrow.textContent = getCurrentPassLabel(tier);
         if (title) {
           if (hasMethodology) title.textContent = 'All-Access Active';
-          else title.textContent = 'Daily Slate Pass Active';
+          else title.textContent = getCurrentPassLabel(tier) + ' Active';
         }
         if (copy) {
           if (hasMethodology) {
@@ -835,6 +864,7 @@
         if (product === 'pickmaker_mlb') owned = hasMlb;
         if (product === 'pickmaker_dual') owned = hasNba || hasMlb;
         if (product === 'weekly_board') owned = hasNba || hasMlb;
+        if (product === 'monthly_board') owned = hasNba || hasMlb;
         if (product === 'all_access') owned = hasMethodology;
       }
 
