@@ -44,7 +44,7 @@
   const PRODUCT_ANALYTICS = {
     pickmaker_nba: { name: 'NBA Slate Pass', price: 11.99, billing: 'one_time' },
     pickmaker_mlb: { name: 'MLB Slate Pass', price: 11.99, billing: 'one_time' },
-    pickmaker_dual: { name: 'Daily Slate Pass', price: 19.99, billing: 'one_time' },
+    pickmaker_dual: { name: 'Daily Board Pass', price: 19.99, billing: 'one_time' },
     weekly_board: { name: 'Weekly Board Pass', price: 69.99, billing: 'one_time' },
     monthly_board: { name: 'Monthly Board Pass', price: 199.99, billing: 'one_time' },
     all_access: { name: 'All-Access Methodology', price: 899, billing: 'one_time' }
@@ -65,9 +65,9 @@
   const TIER_LABELS = {
     free: 'FREE',
     fnf: 'FnF',
-    pickmaker_nba: 'DAILY SLATE PASS',
-    pickmaker_mlb: 'DAILY SLATE PASS',
-    pickmaker_dual: 'DAILY SLATE PASS',
+    pickmaker_nba: 'DAILY BOARD PASS',
+    pickmaker_mlb: 'DAILY BOARD PASS',
+    pickmaker_dual: 'DAILY BOARD PASS',
     all_access: 'ALL-ACCESS',
     admin: 'ADMIN'
   };
@@ -248,7 +248,7 @@
     if (tier === 'pickmaker_dual' || tier === 'pickmaker_nba' || tier === 'pickmaker_mlb') {
       if (currentPackageAccessHours >= 720) return 'MONTHLY BOARD PASS';
       if (currentPackageAccessHours >= 168) return 'WEEKLY BOARD PASS';
-      return 'DAILY SLATE PASS';
+      return 'DAILY BOARD PASS';
     }
     return TIER_LABELS[tier] || 'MEMBER ACCESS';
   }
@@ -583,12 +583,12 @@
 
         <div class="ma-pricing-card">
           <div>
-            <div class="ma-pricing-name">DAILY SLATE PASS</div>
+            <div class="ma-pricing-name">DAILY BOARD PASS</div>
             <div class="ma-pricing-desc">Access to the Morello board, HR LOTTO, and model notes. Valid for 24 hours after purchase.</div>
           </div>
           <div style="text-align:right">
             <div class="ma-pricing-amount">$19.99<span class="ma-pricing-period"> ONE-TIME</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_dual')">BUY DAILY SLATE</button>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_dual')">BUY DAILY BOARD</button>
           </div>
         </div>
 
@@ -797,8 +797,8 @@
     });
 
     // 3) Lock/unlock pick-history dispatch rows by sport package.
-    lockHomePickHistory('.post-nba-picks', 'pickmaker_nba', 'DAILY SLATE PASS');
-    lockHomePickHistory('.post-mlb-picks', 'pickmaker_mlb', 'DAILY SLATE PASS');
+    lockHomePickHistory('.post-nba-picks', 'pickmaker_nba', 'DAILY BOARD PASS');
+    lockHomePickHistory('.post-mlb-picks', 'pickmaker_mlb', 'DAILY BOARD PASS');
 
     // 4) Add pricing tooltips to dashboard cards
     addPricingTooltips();
@@ -1079,8 +1079,8 @@
         <strong>UNLOCK ${sport} PICKS</strong> — Projected spreads, confidence scores, edge calculations & pick recommendations
       </div>
       <div class="premium-banner-actions">
-        <button class="cta-btn cta-btn-dual" onclick="window.morelloAuth.openUpgradeModal('premium_banner_daily_slate')" style="background:${accentColor}">
-          DAILY SLATE $19.99
+        <button class="cta-btn cta-btn-dual" onclick="window.morelloAuth.openUpgradeModal('premium_banner_daily_board')" style="background:${accentColor}">
+          DAILY BOARD $19.99
         </button>
       </div>
     `;
@@ -1119,7 +1119,7 @@
       if (!hasAccess('pickmaker_nba')) {
         const tip = document.createElement('div');
         tip.className = 'ma-card-price price-pickmaker';
-        tip.innerHTML = '$19.99<br><span style="font-size:8px;opacity:0.6">DAILY SLATE PASS</span>';
+        tip.innerHTML = '$19.99<br><span style="font-size:8px;opacity:0.6">DAILY BOARD PASS</span>';
         nbaCard.appendChild(tip);
       }
       // Gate the button — one-time listener that checks access dynamically
@@ -1131,7 +1131,7 @@
       if (!hasAccess('pickmaker_mlb')) {
         const tip = document.createElement('div');
         tip.className = 'ma-card-price price-pickmaker-mlb';
-        tip.innerHTML = '$19.99<br><span style="font-size:8px;opacity:0.6">DAILY SLATE PASS</span>';
+        tip.innerHTML = '$19.99<br><span style="font-size:8px;opacity:0.6">DAILY BOARD PASS</span>';
         mlbCard.appendChild(tip);
       }
       // Gate the button — one-time listener that checks access dynamically
@@ -1222,7 +1222,7 @@
     const tiers = [
       { key: 'free', label: 'FREE' },
       { key: 'fnf', label: 'FnF' },
-      { key: 'pickmaker_dual', label: 'DAILY SLATE' },
+      { key: 'pickmaker_dual', label: 'DAILY BOARD' },
       { key: 'all_access', label: 'ALL-ACCESS' },
       { key: 'admin', label: 'ADMIN' }
     ];
