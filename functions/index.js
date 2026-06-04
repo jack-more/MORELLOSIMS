@@ -15,9 +15,9 @@ const WEBHOOK_SECRET = functions.config().stripe?.webhook_secret || process.env.
 // Price ID to checkout package mapping. Old recurring prices are kept so
 // in-flight sessions and existing subscription webhooks still resolve.
 const PRICE_TO_PACKAGE = {
-  'price_1TeeImA9KGX7mrlmZq17WalQ': { tier: 'pickmaker_nba', mode: 'payment', accessHours: 36 },
-  'price_1TeeImA9KGX7mrlmwTtxcd6W': { tier: 'pickmaker_mlb', mode: 'payment', accessHours: 36 },
-  'price_1TeeImA9KGX7mrlmyQ0usLv9': { tier: 'pickmaker_dual', mode: 'payment', accessHours: 36 },
+  'price_1TeeImA9KGX7mrlmZq17WalQ': { tier: 'pickmaker_nba', mode: 'payment', accessHours: 24 },
+  'price_1TeeImA9KGX7mrlmwTtxcd6W': { tier: 'pickmaker_mlb', mode: 'payment', accessHours: 24 },
+  'price_1TeeImA9KGX7mrlmyQ0usLv9': { tier: 'pickmaker_dual', mode: 'payment', accessHours: 24 },
   'price_1T3rqNA9KGX7mrlmCQi4QcnU': { tier: 'pickmaker_nba', mode: 'subscription' },
   'price_1T3rqqA9KGX7mrlmHncjyPlp': { tier: 'pickmaker_mlb', mode: 'subscription' },
   'price_1T3rvjA9KGX7mrlmxJI5V00r': { tier: 'pickmaker_dual', mode: 'subscription' },

@@ -564,7 +564,7 @@
         <div class="ma-pricing-card highlight">
           <div>
             <div class="ma-pricing-name">DAILY SLATE PASS</div>
-            <div class="ma-pricing-desc">One-time access to today's Morello board, HR LOTTO, and model notes</div>
+            <div class="ma-pricing-desc">Access to the Morello board, HR LOTTO, and model notes. Valid for 24 hours after purchase.</div>
           </div>
           <div style="text-align:right">
             <div class="ma-pricing-amount">$19.99<span class="ma-pricing-period"> ONE-TIME</span></div>
