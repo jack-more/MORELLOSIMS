@@ -8,7 +8,7 @@ runs the matchup model against atlas data, and renders the full page.
 Usage: python3 scripts/build_mlb_sim.py
 """
 
-import json, os, sys, math, requests, time as _time
+import csv, json, os, sys, math, requests, time as _time
 import urllib.request  # used by _fetch_action_network_odds + _fetch_espn_scoreboard_odds
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -165,6 +165,7 @@ hvc_data = load_atlas("hitter_vs_cluster.json")
 pitcher_tiers = load_atlas("pitcher_tiers.json")
 pitcher_seasons = load_atlas("pitcher_seasons.json")
 clusters_meta = load_atlas("clusters.json")
+batters_atlas = load_atlas("batters.json")
 
 # Build indexes
 # pitcher_id → most recent pitcher_season record
@@ -182,6 +183,12 @@ for ps in pitcher_seasons:
         recent_pitcher_idx[pid] = ps
     if pid not in pitcher_idx or yr > pitcher_idx[pid]["game_year"]:
         pitcher_idx[pid] = ps
+
+batter_profile_idx = {
+    int(b["batter"]): b
+    for b in batters_atlas
+    if b.get("batter") is not None
+}
 
 # pitcher_id/year → tier record
 tier_by_pid_year = {}
@@ -309,7 +316,7 @@ def get_base_woba(bid):
 # League-average fallbacks (used only when batter has zero data at all)
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
 MIN_CONF_PICK = MLB_TRACKED_MIN_CONF  # C:8+ qualifies as an official pick.
-MAX_MISSING_BATTERS_FOR_PICK = 1
+MAX_MISSING_BATTERS_FOR_PICK = 0
 STAKE_BY_CONF = {
     10: 100,
     9: 50,
@@ -319,10 +326,10 @@ STAKE_BY_CONF = {
 MAX_FAV_BY_CONF = {
     # Per-confidence cap on max favorite odds (more negative = bigger fav).
     # Anything more favored than the cap gets filtered as odds_too_heavy.
-    # Tuned 2026-05: all qualifying confidence levels can take -340 juice.
-    8: -340,
-    9: -340,
-    10: -340,
+    # ROI-aware gates: C8 needs a playable price, C10 can tolerate more juice.
+    8: -170,
+    9: -220,
+    10: -280,
 }
 
 def stake_for_conf(conf):
@@ -962,6 +969,12 @@ for g in games_raw:
 
             base_w = get_base_woba(pid)
             base_h, base_bb, base_hr, base_tb = get_base_rates(pid)
+            profile = batter_profile_idx.get(int(pid)) if pid is not None else {}
+            season_pa = float(profile.get("season_PA_2026") or 0)
+            season_hr = float(profile.get("season_HR_2026") or 0)
+            baseline_pa = float(profile.get("baseline_PA") or 0)
+            player_total_pa = float(profile.get("total_PA") or 0)
+            season_hr_rate = season_hr / season_pa if season_pa > 0 else 0.0
 
             # GMM-weighted lookup across ALL pitcher clusters
             # This thickens the dataset by using 2nd/3rd DNA clusterings
@@ -1047,6 +1060,13 @@ for g in games_raw:
                 "vs_woba": round(vs_woba, 3),
                 "total_pa": round(total_pa),
                 "hr_rate": round(hr_rate, 4),
+                "base_hr_rate": round(base_hr, 4),
+                "hr_lift": round(hr_rate - base_hr, 4),
+                "season_pa": round(season_pa),
+                "season_hr": round(season_hr),
+                "season_hr_rate": round(season_hr_rate, 4),
+                "baseline_pa": round(baseline_pa),
+                "player_total_pa": round(player_total_pa),
                 "proj_pa": pa,
                 "proj_h": proj_h,
                 "proj_bb": proj_bb,
@@ -1078,7 +1098,18 @@ for g in games_raw:
                 "woba_delta": b["woba_delta"],
                 "base_woba": b["base_woba"],
                 "vs_woba": b["vs_woba"],
+                "total_pa": b["total_pa"],
                 "hr_rate": b["hr_rate"],
+                "base_hr_rate": b["base_hr_rate"],
+                "hr_lift": b["hr_lift"],
+                "season_pa": b["season_pa"],
+                "season_hr": b["season_hr"],
+                "season_hr_rate": b["season_hr_rate"],
+                "baseline_pa": b["baseline_pa"],
+                "player_total_pa": b["player_total_pa"],
+                "order": b["order"],
+                "pos": b["pos"],
+                "proj_hr": round(b["proj_hr"], 3),
                 "opp_pitcher": "",  # filled later
                 "opp_team": "",
             })
@@ -1119,12 +1150,24 @@ for g in games_raw:
         home_runs = round((home_runs_tiered + home_bp_delta) * pf, 1)
 
         # Fill opp info for daily tab
-        for bm in all_batter_matchups[-len(away_lineup_raw)-len(home_lineup_raw):-len(home_lineup_raw)]:
+        away_matchups = all_batter_matchups[-len(away_lineup_raw)-len(home_lineup_raw):-len(home_lineup_raw)]
+        home_matchups = all_batter_matchups[-len(home_lineup_raw):]
+        for bm in away_matchups:
             bm["opp_pitcher"] = home_sp_name
             bm["opp_team"] = home_abbr
-        for bm in all_batter_matchups[-len(home_lineup_raw):]:
+            bm["opp_tier"] = home_tier_name
+            bm["opp_tier_mult"] = home_tier_mult
+            bm["park_factor"] = pf
+            bm["team_total"] = away_runs
+            bm["opp_bp_delta"] = away_bp_delta
+        for bm in home_matchups:
             bm["opp_pitcher"] = away_sp_name
             bm["opp_team"] = away_abbr
+            bm["opp_tier"] = away_tier_name
+            bm["opp_tier_mult"] = away_tier_mult
+            bm["park_factor"] = pf
+            bm["team_total"] = home_runs
+            bm["opp_bp_delta"] = home_bp_delta
     else:
         away_batters = []
         home_batters = []
@@ -1605,22 +1648,87 @@ for bm in all_batter_matchups:
 
 
 def render_hr_watch_tab():
-    HR_CORE_MIN = 0.090
-    HR_LONGSHOT_MIN = 0.075
-    HR_CORE_MAX_ROWS = 10
-    HR_LONGSHOT_MAX_ROWS = 6
+    HR_CORE_MIN = 0.085
+    HR_LONGSHOT_MIN = 0.070
+    HR_CORE_MAX_ROWS = 6
+    HR_LONGSHOT_MAX_ROWS = 3
     HR_HEAT_MAX_ROWS = 10
+    HR_MIN_MATCHUP_PA = 30
+    HR_MIN_PLAYER_PA = 100
+    HR_MIN_RUN_CONTRIB = 0.90
+    HR_MIN_LIFT = 0.008
+
+    def has_power_profile(bm):
+        baseline_pa = bm.get("baseline_pa", 0) or 0
+        season_pa = bm.get("season_pa", 0) or 0
+        season_hr = bm.get("season_hr", 0) or 0
+        base_hr = bm.get("base_hr_rate", 0) or 0
+        season_hr_rate = bm.get("season_hr_rate", 0) or 0
+        established_power = baseline_pa >= 450 and base_hr >= 0.036
+        current_power = season_pa >= 150 and season_hr >= 7 and season_hr_rate >= 0.035
+        high_impact_sample = season_pa >= 100 and season_hr >= 6 and season_hr_rate >= 0.045
+        elite_track_record = baseline_pa >= 1000 and base_hr >= 0.033 and season_hr_rate >= 0.030
+        return established_power or current_power or high_impact_sample or elite_track_record
+
+    def has_reliable_hr_context(bm):
+        if bm.get("total_pa", 0) < HR_MIN_MATCHUP_PA:
+            return False
+        if bm.get("player_total_pa", 0) < HR_MIN_PLAYER_PA:
+            return False
+        if bm.get("order", 9) > 6 and bm.get("base_hr_rate", 0) < 0.045:
+            return False
+        if bm.get("park_factor", 1.0) < 0.96:
+            return False
+        return True
+
+    def pitcher_context_ok(bm, core=True):
+        tier = bm.get("opp_tier", "")
+        if tier == "T1_Apex":
+            return (
+                bm.get("hr_rate", 0) >= (0.105 if core else 0.090)
+                and bm.get("base_hr_rate", 0) >= 0.045
+            )
+        if tier == "T2_Core" and not core:
+            return bm.get("hr_rate", 0) >= 0.078
+        return True
+
+    def hr_card_qualifies(bm, core=True):
+        hr_rate = bm.get("hr_rate", 0) or 0
+        min_rate = HR_CORE_MIN if core else HR_LONGSHOT_MIN
+        max_rate_ok = True if core else hr_rate < HR_CORE_MIN
+        return (
+            max_rate_ok
+            and hr_rate >= min_rate
+            and has_power_profile(bm)
+            and has_reliable_hr_context(bm)
+            and pitcher_context_ok(bm, core=core)
+            and bm.get("hr_lift", 0) >= (HR_MIN_LIFT if core else 0.010)
+            and bm.get("proj_hr", 0) >= (0.34 if core else 0.30)
+            and bm.get("run_contrib", 0) >= (HR_MIN_RUN_CONTRIB if core else 1.00)
+            and bm.get("ms", 0) >= (75 if core else 82)
+            and bm.get("momi", 50) >= (72 if core else 82)
+        )
 
     def hr_damage_score(bm):
+        tier_penalty = {"T1_Apex": 1.2, "T2_Core": 0.45}.get(bm.get("opp_tier", ""), 0.0)
+        lineup_bonus = max(0, 7 - int(bm.get("order", 7) or 7)) * 0.12
         return (
-            bm.get("hr_rate", 0) * 100
-            + bm.get("run_contrib", 0) * 2.0
-            + max(0, bm.get("momi", 50) - 50) * 0.04
-            + max(0, bm.get("ms", 50) - 50) * 0.03
+            bm.get("proj_hr", 0) * 100
+            + bm.get("base_hr_rate", 0) * 80
+            + max(0, bm.get("hr_lift", 0)) * 130
+            + bm.get("run_contrib", 0) * 2.4
+            + max(0, bm.get("momi", 50) - 70) * 0.05
+            + max(0, bm.get("ms", 50) - 70) * 0.04
+            + max(0, bm.get("park_factor", 1.0) - 1.0) * 12
+            + lineup_bonus
+            - tier_penalty
         )
 
     def render_hr_row(rank, bm):
         hr_pct = round(bm["hr_rate"] * 100, 1)
+        pow_pct = round((bm.get("base_hr_rate", 0) or 0) * 100, 1)
+        lift_pct = round(max(0, bm.get("hr_lift", 0) or 0) * 100, 1)
+        sample_pa = int(round(bm.get("total_pa", 0) or 0))
         if bm["hr_rate"] >= 0.06:
             heat = "hr-fire"
             heat_icon = "\U0001f525"
@@ -1635,11 +1743,11 @@ def render_hr_watch_tab():
             heat_icon = "\u26aa"
 
         return f'''<div class="hr-row {heat}">
-  <div class="hr-rank">{rank}</div>
-  <div class="hr-info">
-    <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
-    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
-  </div>
+	  <div class="hr-rank">{rank}</div>
+	  <div class="hr-info">
+	    <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
+	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 POW {pow_pct}% \u00b7 LIFT +{lift_pct}pp \u00b7 {sample_pa}PA \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
+	  </div>
   <div class="hr-rate-col">
     <div class="hr-rate">{hr_pct}%</div>
     <div class="hr-rate-label">HR Rate</div>
@@ -1654,8 +1762,8 @@ def render_hr_watch_tab():
         return "".join(rows)
 
     core_hr = sorted(
-        [bm for bm in all_batter_matchups if bm.get("hr_rate", 0) >= HR_CORE_MIN],
-        key=lambda x: (-x.get("hr_rate", 0), -hr_damage_score(x))
+        [bm for bm in all_batter_matchups if hr_card_qualifies(bm, core=True)],
+        key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
     )[:HR_CORE_MAX_ROWS]
 
     core_ids = {bm.get("id") for bm in core_hr}
@@ -1663,12 +1771,9 @@ def render_hr_watch_tab():
         [
             bm for bm in all_batter_matchups
             if bm.get("id") not in core_ids
-            and HR_LONGSHOT_MIN <= bm.get("hr_rate", 0) < HR_CORE_MIN
-            and bm.get("ms", 0) >= 70
-            and bm.get("momi", 50) >= 70
-            and bm.get("run_contrib", 0) >= 0.85
+            and hr_card_qualifies(bm, core=False)
         ],
-        key=lambda x: (-x.get("hr_rate", 0), -hr_damage_score(x))
+        key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
     )[:HR_LONGSHOT_MAX_ROWS]
 
     hr_html = render_hr_rows(core_hr)
@@ -1824,7 +1929,7 @@ def render_hr_watch_tab():
                 </div>'''
 
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
-                    {bucket_header("secondary", "TIER 2", "TIER 2 HR LOTTO", "Power profiles that clear the model floor below the top HR tier.", "7.5-8.9% HR", "MOMO 70+", "MOMI 70+", "+0.85R")}
+                    {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary power looks that clear the stricter floor.", "7.0%+ HR", "power baseline", "sample checked", "+1.00R")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
@@ -1838,7 +1943,7 @@ def render_hr_watch_tab():
         <div class="daily-grid daily-grid-lotto">
             <div class="daily-col daily-center daily-hr-lotto">
                 <div class="daily-bucket primary hr-lotto">
-                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "The center board for the strongest homer swings on the slate.", "Tier 1: 9%+ projected HR", "top probability only", "DNA matchup")}
+                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: power, sample, matchup lift, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "no filler")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}
@@ -1851,7 +1956,7 @@ def render_hr_watch_tab():
             </div>
             <div class="daily-col daily-side daily-board-side">
                 <div class="daily-bucket board">
-                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "|ODDS|<340", "posted picks persist")}
+                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "ROI price gates", "posted picks persist")}
                     <div class="picks-container ma-premium">{edges_html}</div>
                 </div>
             </div>
@@ -2024,7 +2129,7 @@ html = f'''<!DOCTYPE html>
       </div>
       <div style="text-align:right;flex:1;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
-        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:8+<br><span style="color:#888;">|ODDS|&lt;340</span></div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:8+<br><span style="color:#888;">PRICE GATES</span></div>
       </div>
     </div>
   </div>
@@ -2218,14 +2323,69 @@ skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_
 if skipped_heavy:
     print(f"  Skipped {len(skipped_heavy)} heavy faves: " + ", ".join(f'{g["pick_team"]} ({g["pick_odds"]:+d})' for g in skipped_heavy))
 
-# Write header if file doesn't exist
-if not os.path.exists(PICKS_LOG):
-    with open(PICKS_LOG, "w") as f:
-        f.write("date,time,pick,conf,value,away,home,away_runs,home_runs,away_wp,home_wp,away_ml,home_ml,away_sp,home_sp,result\n")
+PICKS_LOG_FIELDS = [
+    "date", "time", "pick", "conf", "value", "away", "home",
+    "away_runs", "home_runs", "away_wp", "home_wp", "away_ml", "home_ml",
+    "away_sp", "home_sp", "result",
+]
 
-with open(PICKS_LOG, "a") as f:
-    for g in writeable_picks:
-        f.write(f'{TODAY},{g["time_str"]},{g["pick_team"]},{g["conf"]},{g["value"]},{g["away_abbr"]},{g["home_abbr"]},{g["away_runs"]},{g["home_runs"]},{g["away_wp"]},{g["home_wp"]},{g["away_ml"]},{g["home_ml"]},{g["away_sp"]},{g["home_sp"]},\n')
+
+def _pick_log_key(row):
+    return (
+        row.get("date", ""),
+        row.get("time", ""),
+        row.get("away", ""),
+        row.get("home", ""),
+        row.get("pick", ""),
+    )
+
+
+pick_log_rows = {}
+if os.path.exists(PICKS_LOG):
+    try:
+        with open(PICKS_LOG, newline="") as f:
+            for row in csv.DictReader(f):
+                clean = {field: row.get(field, "") for field in PICKS_LOG_FIELDS}
+                pick_log_rows[_pick_log_key(clean)] = clean
+    except Exception as e:
+        print(f"  WARN: Could not read existing picks CSV, rewriting fresh: {e}")
+
+for g in writeable_picks:
+    row = {
+        "date": TODAY,
+        "time": g["time_str"],
+        "pick": g["pick_team"],
+        "conf": g["conf"],
+        "value": g["value"],
+        "away": g["away_abbr"],
+        "home": g["home_abbr"],
+        "away_runs": g["away_runs"],
+        "home_runs": g["home_runs"],
+        "away_wp": g["away_wp"],
+        "home_wp": g["home_wp"],
+        "away_ml": g["away_ml"],
+        "home_ml": g["home_ml"],
+        "away_sp": g["away_sp"],
+        "home_sp": g["home_sp"],
+        "result": "",
+    }
+    pick_log_rows[_pick_log_key(row)] = row
+
+with open(PICKS_LOG, "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=PICKS_LOG_FIELDS)
+    writer.writeheader()
+    writer.writerows(
+        sorted(
+            pick_log_rows.values(),
+            key=lambda row: (
+                row.get("date", ""),
+                row.get("time", ""),
+                row.get("away", ""),
+                row.get("home", ""),
+                row.get("pick", ""),
+            ),
+        )
+    )
 
 # ─── Picks JSON contract — upsert today's picks into picks/mlb.json ────────
 # This is the source of truth read by scripts/render_dispatch.py.
@@ -2284,7 +2444,7 @@ for g in writeable_picks:
         "conf": g["conf"],
         "units": stake_for_conf(g["conf"]),
         "sim_projection": f'{g["away_abbr"]} {g["away_runs"]} - {g["home_abbr"]} {g["home_runs"]}',
-        "sim_edge": g.get("value"),
+        "sim_edge": g.get("edge"),
         "game_pk": g.get("game_pk"),
         "game_time": g.get("time_str"),
         "status": "pending",

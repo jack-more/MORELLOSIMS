@@ -87,6 +87,8 @@ PITCH_FAMILY_MINIMUMS = {
     "Cutman": ("cutter", 0.12),
     "Boomerang": ("slider", 0.12),
     "Yakker": ("breaking", 0.12),
+    "Snake": ("slider", 0.10),
+    "Heater-Heavy": ("heater", 0.60),
 }
 
 
@@ -441,12 +443,30 @@ def _pitch_family_penalty(features, profile):
             return float("inf")
 
     heater = _mix_family_share(pitch_mix, "heater")
+    cutter = _mix_family_share(pitch_mix, "cutter")
+    curve = _mix_family_share(pitch_mix, "curve")
     split_or_change = _mix_family_share(pitch_mix, "split_or_change")
     breaking = _mix_family_share(pitch_mix, "breaking")
     active_pitches = _active_pitch_count(pitch_mix)
     active_families = _active_family_count(pitch_mix)
     heater_dominant = heater >= 0.75 and split_or_change < 0.08 and breaking < 0.18
 
+    if "Triple Threat" in label and active_pitches < 3:
+        return float("inf")
+    if "Kitchen Sink" in label and (active_pitches < 4 or active_families < 3):
+        return float("inf")
+    if "Cutman" in label:
+        if cutter >= 0.30:
+            return -0.35
+        if cutter >= 0.20:
+            return -0.22
+        return -0.10
+    if "Uncle Charlie" in label:
+        if curve >= 0.25 and cutter < 0.12:
+            return -0.14
+        if cutter >= 0.20 and curve < 0.18:
+            return 0.20
+        return -0.06
     if "Heater-Heavy" in label:
         if heater_dominant:
             return -0.45
@@ -1074,6 +1094,139 @@ def _sync_archetype_labels(records, clusters_meta):
     return synced
 
 
+def _pitcher_assignment_features(record):
+    return {
+        "is_rhp": int(record.get("is_rhp", 1) or 0),
+        "is_sp": int(record.get("is_sp", 0) or 0),
+        "avg_velo_FF": record.get("avg_velo_FF", 0.0),
+        "whiff_rate": record.get("whiff_rate", 0.0),
+        "groundball_rate": record.get("groundball_rate", 0.0),
+        "spin_overall": record.get("spin_overall", 0.0),
+        "pfx_x_avg": record.get("pfx_x_avg", 0.0),
+        "pfx_z_avg": record.get("pfx_z_avg", 0.0),
+        "arm_angle": record.get("arm_angle", 0.0),
+        "pitch_mix": record.get("pitch_mix") or {},
+    }
+
+
+def _pitch_family_label_violation(record):
+    pitch_mix = record.get("pitch_mix") or {}
+    if not pitch_mix:
+        return None
+    label = record.get("archetype") or ""
+    for name, (family, minimum) in PITCH_FAMILY_MINIMUMS.items():
+        if name not in label:
+            continue
+        share = _mix_family_share(pitch_mix, family)
+        if share < minimum:
+            return f"{name} requires {family} >= {minimum:.2f}, saw {share:.3f}"
+    if "Triple Threat" in label:
+        active_pitches = _active_pitch_count(pitch_mix)
+        if active_pitches < 3:
+            return f"Triple Threat requires 3 active pitches, saw {active_pitches}"
+    if "Kitchen Sink" in label:
+        active_pitches = _active_pitch_count(pitch_mix)
+        active_families = _active_family_count(pitch_mix)
+        if active_pitches < 4 or active_families < 3:
+            return (
+                "Kitchen Sink requires 4 active pitches and 3 active families, "
+                f"saw {active_pitches} pitches and {active_families} families"
+            )
+    return None
+
+
+def validate_pitcher_archetype_labels(records, strict=True):
+    """Validate current-year pitch-family labels before they can power picks."""
+    issues = []
+    current = [r for r in records if r.get("game_year") == SEASON]
+    for r in current:
+        violation = _pitch_family_label_violation(r)
+        if violation:
+            issues.append(
+                f'{r.get("player_name", "unknown")} '
+                f'({r.get("cluster", "no_cluster")} {r.get("archetype", "")}): {violation}'
+            )
+
+    cutman_family = PITCH_FAMILY_MINIMUMS["Cutman"][0]
+    cutman_min = PITCH_FAMILY_MINIMUMS["Cutman"][1]
+    rhp_high_cutter = [
+        r for r in current
+        if int(r.get("is_rhp", 0) or 0) == 1
+        and _mix_family_share(r.get("pitch_mix") or {}, cutman_family) >= cutman_min
+    ]
+    rhp_cutman = [
+        r for r in current
+        if int(r.get("is_rhp", 0) or 0) == 1
+        and "Cutman" in (r.get("archetype") or "")
+    ]
+    if len(rhp_high_cutter) >= 5 and not rhp_cutman:
+        names = ", ".join(
+            str(r.get("player_name", "unknown")) for r in rhp_high_cutter[:8]
+        )
+        issues.append(
+            f"RHP Cutman audit failed: {len(rhp_high_cutter)} RHP pitchers "
+            f"clear cutter >= {cutman_min:.2f}, but zero are labeled Cutman. "
+            f"Examples: {names}"
+        )
+
+    if issues:
+        print(f"  WARN: Pitcher label validation found {len(issues)} issue(s)")
+        for issue in issues[:20]:
+            print(f"    - {issue}")
+        if strict:
+            raise RuntimeError("Pitcher archetype label validation failed")
+    else:
+        print("  Pitcher label validation passed")
+    return len(issues)
+
+
+def sync_existing_pitcher_labels():
+    """Reassign current-year pitcher rows from stored features without Statcast."""
+    print(f"\n{'='*60}")
+    print("SYNCING EXISTING PITCHER LABELS")
+    print(f"{'='*60}")
+    records = load_atlas("pitcher_seasons.json")
+    profiles, scales, clusters_meta = build_cluster_assignment_model()
+
+    changed_cluster = 0
+    changed_label = 0
+    examples = []
+    for r in records:
+        if r.get("game_year") != SEASON:
+            continue
+        features = _pitcher_assignment_features(r)
+        old_cluster = r.get("cluster")
+        old_label = r.get("archetype")
+        cluster, gmm_proba = assign_current_cluster(features, profiles, scales)
+        label = _cluster_short_label(cluster, clusters_meta) or "Untyped"
+        if old_cluster != cluster:
+            changed_cluster += 1
+            if len(examples) < 12:
+                examples.append(
+                    f'{r.get("player_name", "unknown")}: '
+                    f'{old_cluster}/{old_label} -> {cluster}/{label}'
+                )
+        if old_label != label:
+            changed_label += 1
+        r["cluster"] = cluster
+        r["archetype"] = label
+        r["gmm_proba"] = gmm_proba
+
+    n_sync = _sync_archetype_labels(records, clusters_meta)
+    validate_pitcher_archetype_labels(records, strict=True)
+    save_atlas("pitcher_seasons.json", records)
+    n_tiers = recompute_pitcher_tiers()
+
+    print(f"  Current-year cluster changes: {changed_cluster}")
+    print(f"  Current-year label changes: {changed_label}")
+    print(f"  Cross-year label syncs: {n_sync}")
+    print(f"  Pitcher tiers recomputed: {n_tiers}")
+    for example in examples:
+        print(f"    {example}")
+    print("  NOTE: This did not rebuild hitter_vs_cluster. Run full refresh for that.")
+    return changed_cluster, changed_label
+
+
 def merge_pitcher_seasons(new_records):
     """Replace all 2026 records, keep everything else.
     Also apply cluster overrides and sync archetype labels across ALL years
@@ -1096,6 +1249,7 @@ def merge_pitcher_seasons(new_records):
     n_sync = _sync_archetype_labels(merged, clusters_meta)
     print(f"    Archetype labels synced: {n_sync}")
 
+    validate_pitcher_archetype_labels(merged, strict=True)
     save_atlas("pitcher_seasons.json", merged)
     return len(new_records)
 
@@ -1287,7 +1441,16 @@ def main():
     parser = argparse.ArgumentParser(description="Refresh atlas with 2026 Statcast data")
     parser.add_argument("--start", default=SEASON_START, help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end", default=date.today().strftime("%Y-%m-%d"), help="End date")
+    parser.add_argument(
+        "--sync-existing-pitcher-labels",
+        action="store_true",
+        help="Reassign existing 2026 pitcher rows from stored pitch mix and sync labels",
+    )
     args = parser.parse_args()
+
+    if args.sync_existing_pitcher_labels:
+        sync_existing_pitcher_labels()
+        return
 
     print(f"\n{'#'*60}")
     print(f"  ATLAS 2026 REFRESH")
