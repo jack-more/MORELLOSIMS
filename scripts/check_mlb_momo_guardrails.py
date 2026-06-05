@@ -9,6 +9,7 @@ from mlb_momo import matchup_swing_to_momo, momentum_to_momi
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HTML_PATH = REPO_ROOT / "mlbsim" / "index.html"
+SIM_SCRIPT_PATH = REPO_ROOT / "scripts" / "build_mlb_sim.py"
 
 
 def _decimal_from_dot(value):
@@ -207,10 +208,51 @@ def check_generated_page():
     return critical, warnings
 
 
+def check_hr_lotto_guardrails():
+    errors = []
+    source = SIM_SCRIPT_PATH.read_text()
+
+    required_source_markers = [
+        ("HR_LONGSHOT_MAX_ROWS = 8", "HR Watchlist must stay wide enough for damage and stack lanes"),
+        ("def hr_damage_score", "HR Lotto must keep the dedicated damage score"),
+        ("def hr_damage_lane_ok", "HR Lotto must keep pure HR-damage overrides"),
+        ("def team_stack_pressure", "HR Lotto must keep team stack-pressure scoring"),
+        ("def hr_stack_lane_ok", "HR Lotto must keep stack-pressure watchlist qualifiers"),
+        ("HR_LONGSHOT_STANDARD_ROWS", "HR Watchlist must reserve standard-lane slots"),
+        ("HR_LONGSHOT_DAMAGE_ROWS", "HR Watchlist must reserve damage-override slots"),
+        ("HR_LONGSHOT_STACK_ROWS", "HR Watchlist must reserve stack-pressure slots"),
+        ("DMG {round(hr_damage_score(bm))}", "Rendered HR rows must show DMG score"),
+        ("stack pressure", "Rendered HR Watchlist copy must expose stack pressure"),
+    ]
+    for marker, message in required_source_markers:
+        if marker not in source:
+            errors.append(f"{message}: missing `{marker}`")
+
+    max_rows = _first(r"HR_LONGSHOT_MAX_ROWS\s*=\s*(\d+)", source)
+    if max_rows is None or int(max_rows) < 8:
+        errors.append("HR Watchlist must allow at least 8 rows after June 4 audit")
+
+    html = HTML_PATH.read_text()
+    required_html_markers = [
+        ("damage score", "HR Lotto page must show damage score criteria"),
+        ("stack pressure", "HR Watchlist page must show stack pressure criteria"),
+    ]
+    for marker, message in required_html_markers:
+        if marker not in html:
+            errors.append(f"{message}: missing `{marker}`")
+
+    hr_rows = re.findall(r'<div class="hr-row [^"]+">.*?</div>\s*</div>', html, re.S)
+    if hr_rows and "DMG " not in html:
+        errors.append("Rendered HR rows exist but do not show DMG score")
+
+    return errors
+
+
 def main():
     errors = check_formula_guardrails()
     page_errors, warnings = check_generated_page()
     errors.extend(page_errors)
+    errors.extend(check_hr_lotto_guardrails())
 
     if warnings:
         print("MLB MOMO guardrail warnings:")
@@ -223,7 +265,7 @@ def main():
             print(f"  - {error}")
         return 1
 
-    print("MLB MOMO guardrails passed.")
+    print("MLB MOMO and HR Lotto guardrails passed.")
     return 0
 
 
