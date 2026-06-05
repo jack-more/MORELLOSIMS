@@ -326,10 +326,11 @@ STAKE_BY_CONF = {
 MAX_FAV_BY_CONF = {
     # Per-confidence cap on max favorite odds (more negative = bigger fav).
     # Anything more favored than the cap gets filtered as odds_too_heavy.
-    # ROI-aware gates: C8 needs a playable price, C10 can tolerate more juice.
-    8: -170,
-    9: -220,
-    10: -280,
+    # ROI-aware gates: the June 1-4 audit showed expensive favorites were
+    # where MLB confidence was bleeding, so even C10 needs a playable price.
+    8: -145,
+    9: -165,
+    10: -185,
 }
 
 def stake_for_conf(conf):
@@ -2555,9 +2556,21 @@ def pick_id_for_game(g):
 for g in writeable_picks:
     qualified_ids.add(pick_id_for_game(g))
 
-# Once a same-day pick reaches the public contract, keep it there. Late lineup,
-# odds, or coverage refreshes can change the card context, but they should not
-# silently erase a pick that users already saw or bet.
+unstarted_game_pks = {g.get("game_pk") for g in games if not g.get("has_started")}
+
+# Once a same-day pick starts, keep it there. Pregame pending picks can still
+# be pulled by later refreshes when the current gate says no play, usually
+# because price moved beyond the ROI cap. Settled picks are never mutated.
+for pick_id, pick in list(by_id.items()):
+    if (
+        pick.get("sport") == "mlb"
+        and pick.get("date") == TODAY
+        and pick.get("bet_type") == "ml"
+        and pick.get("status") == "pending"
+        and pick.get("game_pk") in unstarted_game_pks
+        and pick_id not in qualified_ids
+    ):
+        del by_id[pick_id]
 
 for g in writeable_picks:
     pick_team = g["pick_team"]

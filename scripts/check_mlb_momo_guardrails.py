@@ -248,11 +248,47 @@ def check_hr_lotto_guardrails():
     return errors
 
 
+def check_mlb_pick_gate_guardrails():
+    errors = []
+    source = SIM_SCRIPT_PATH.read_text()
+
+    expected_gates = {
+        8: -145,
+        9: -165,
+        10: -185,
+    }
+    block = _first(r"MAX_FAV_BY_CONF\s*=\s*\{(.*?)\}", source)
+    if block is None:
+        return ["Missing MAX_FAV_BY_CONF price gates"]
+
+    for conf, expected in expected_gates.items():
+        match = re.search(rf"\b{conf}\s*:\s*(-?\d+)", block)
+        if not match:
+            errors.append(f"Missing C{conf} max favorite price gate")
+            continue
+        actual = int(match.group(1))
+        if actual < expected:
+            errors.append(
+                f"C{conf} max favorite gate is too loose: {actual}, expected {expected} or shorter"
+            )
+
+    required_markers = [
+        ("unstarted_game_pks", "Pregame pending stale-pick pruning must stay enabled"),
+        ("pick_id not in qualified_ids", "Pending picks must be removable when current gates say no play"),
+    ]
+    for marker, message in required_markers:
+        if marker not in source:
+            errors.append(f"{message}: missing `{marker}`")
+
+    return errors
+
+
 def main():
     errors = check_formula_guardrails()
     page_errors, warnings = check_generated_page()
     errors.extend(page_errors)
     errors.extend(check_hr_lotto_guardrails())
+    errors.extend(check_mlb_pick_gate_guardrails())
 
     if warnings:
         print("MLB MOMO guardrail warnings:")
