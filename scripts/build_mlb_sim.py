@@ -324,14 +324,32 @@ STAKE_BY_CONF = {
     7: 20,
 }
 MAX_FAV_BY_CONF = {
-    # Per-confidence cap on max favorite odds (more negative = bigger fav).
-    # Anything more favored than the cap gets filtered as odds_too_heavy.
-    # ROI-aware gates: the June 1-4 audit showed expensive favorites were
-    # where MLB confidence was bleeding, so even C10 needs a playable price.
-    8: -145,
-    9: -165,
-    10: -185,
+    # Emergency cap only. The real price gate below compares model win
+    # probability against the sportsbook break-even probability.
+    8: -180,
+    9: -200,
+    10: -220,
 }
+MIN_MODEL_EDGE_BY_CONF = {
+    # Required model probability over market break-even. C8 needs a wider
+    # cushion, while C10 can tolerate a tighter but still positive edge.
+    8: 0.035,
+    9: 0.025,
+    10: 0.015,
+}
+
+
+def moneyline_break_even(odds):
+    """Return implied break-even probability for American odds."""
+    try:
+        odds = int(odds)
+    except (TypeError, ValueError):
+        return None
+    if odds == 0:
+        return None
+    if odds < 0:
+        return abs(odds) / (abs(odds) + 100)
+    return 100 / (odds + 100)
 
 def stake_for_conf(conf):
     """Return $PP risk by confidence grade."""
@@ -1263,15 +1281,24 @@ for g in games_raw:
     else:
         pick_team = home_abbr  # tiebreak to home on exact tie (HFA)
 
-    # Odds filter — kill heavy favorites that bleed ROI
-    # Check final ML (real or model-implied) for the picked side
+    # Odds filter: require model probability to clear sportsbook break-even.
     pick_ml_str = home_ml if pick_team == home_abbr else away_ml
     try:
         pick_odds_raw = int(pick_ml_str)
     except (ValueError, TypeError):
         pick_odds_raw = 0
-    max_fav = MAX_FAV_BY_CONF.get(conf, -150)
-    odds_too_heavy = pick_odds_raw < max_fav and pick_odds_raw != 0
+    pick_model_prob = (home_wp if pick_team == home_abbr else away_wp) / 100
+    pick_break_even = moneyline_break_even(pick_odds_raw)
+    min_price_edge = MIN_MODEL_EDGE_BY_CONF.get(conf, 0.03)
+    hard_favorite_cap = MAX_FAV_BY_CONF.get(conf, -200)
+    pick_price_edge = None
+    odds_too_heavy = False
+    if pick_break_even is not None:
+        pick_price_edge = pick_model_prob - pick_break_even
+        odds_too_heavy = (
+            pick_odds_raw < hard_favorite_cap
+            or pick_price_edge < min_price_edge
+        )
 
     park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
@@ -1296,6 +1323,10 @@ for g in games_raw:
         "edge": round(edge, 1),
         "pick_team": pick_team,
         "odds_too_heavy": odds_too_heavy,
+        "pick_model_prob": round(pick_model_prob, 4),
+        "pick_break_even": round(pick_break_even, 4) if pick_break_even is not None else None,
+        "pick_price_edge": round(pick_price_edge, 4) if pick_price_edge is not None else None,
+        "min_price_edge": min_price_edge,
         "has_full_coverage": has_full_coverage,
         "pick_coverage_ok": pick_coverage_ok,
         "missing_coverage_count": len(missing_coverage),
@@ -1424,7 +1455,15 @@ def render_game(g, idx):
     elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g.get("odds_source") == "NO_LINE":
         pick_html = '<div class="sim-pick" style="background:#FFA500;color:#000;border-color:#000">NO LINE — book has not posted ML</div>'
     elif g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]:
-        pick_html = f'<div class="sim-pick" style="background:#FF3333;color:#fff;border-color:#000">BAD PRICE ({g["pick_odds"]:+d})</div>'
+        model_pct = (g.get("pick_model_prob") or 0) * 100
+        be_pct = (g.get("pick_break_even") or 0) * 100
+        need_pct = (g.get("min_price_edge") or 0) * 100
+        price_label = "MODEL EDGE CLOSE TO JUICE" if g.get("conf") == 8 else "BAD PRICE"
+        price_title = (
+            f'Model {model_pct:.1f}%, break-even {be_pct:.1f}%, '
+            f'needs +{need_pct:.1f}% edge'
+        )
+        pick_html = f'<div class="sim-pick" style="background:#FF3333;color:#fff;border-color:#000" title="{h(price_title)}">{price_label} ({g["pick_odds"]:+d})</div>'
     elif g["has_lineups"] and g["conf"] > 0:
         pick_html = '<div class="sim-pick" style="background:#333;color:#888;border-color:#555">NO PLAY</div>'
 
@@ -2458,7 +2497,12 @@ PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
 writeable_picks = [g for g in qualified_picks if not g.get("has_started")]
 skipped_heavy = [g for g in games if g["has_lineups"] and g["conf"] >= MIN_CONF_PICK and g["odds_too_heavy"]]
 if skipped_heavy:
-    print(f"  Skipped {len(skipped_heavy)} heavy faves: " + ", ".join(f'{g["pick_team"]} ({g["pick_odds"]:+d})' for g in skipped_heavy))
+    def _price_gate_summary(g):
+        edge = g.get("pick_price_edge")
+        edge_txt = f"{edge * 100:+.1f}%" if edge is not None else "n/a"
+        return f'{g["pick_team"]} ({g["pick_odds"]:+d}, edge {edge_txt})'
+
+    print(f"  Skipped {len(skipped_heavy)} price-gated picks: " + ", ".join(_price_gate_summary(g) for g in skipped_heavy))
 
 PICKS_LOG_FIELDS = [
     "date", "time", "pick", "conf", "value", "away", "home",

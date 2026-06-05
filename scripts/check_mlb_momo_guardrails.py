@@ -252,27 +252,33 @@ def check_mlb_pick_gate_guardrails():
     errors = []
     source = SIM_SCRIPT_PATH.read_text()
 
-    expected_gates = {
-        8: -145,
-        9: -165,
-        10: -185,
+    expected_hard_caps = {
+        8: -180,
+        9: -200,
+        10: -220,
     }
     block = _first(r"MAX_FAV_BY_CONF\s*=\s*\{(.*?)\}", source)
     if block is None:
-        return ["Missing MAX_FAV_BY_CONF price gates"]
+        return ["Missing MAX_FAV_BY_CONF emergency price caps"]
 
-    for conf, expected in expected_gates.items():
+    for conf, expected in expected_hard_caps.items():
         match = re.search(rf"\b{conf}\s*:\s*(-?\d+)", block)
         if not match:
-            errors.append(f"Missing C{conf} max favorite price gate")
+            errors.append(f"Missing C{conf} emergency favorite cap")
             continue
         actual = int(match.group(1))
         if actual < expected:
             errors.append(
-                f"C{conf} max favorite gate is too loose: {actual}, expected {expected} or shorter"
+                f"C{conf} emergency favorite cap is too loose: {actual}, expected {expected} or shorter"
             )
 
     required_markers = [
+        ("MIN_MODEL_EDGE_BY_CONF", "MLB price gate must keep confidence-based EV margins"),
+        ("def moneyline_break_even", "MLB price gate must compare odds to market break-even"),
+        ("pick_model_prob", "MLB price gate must store model win probability"),
+        ("pick_break_even", "MLB price gate must store sportsbook break-even"),
+        ("pick_price_edge", "MLB price gate must store model-vs-market price edge"),
+        ("pick_price_edge < min_price_edge", "MLB price gate must block only when edge misses the margin"),
         ("unstarted_game_pks", "Pregame pending stale-pick pruning must stay enabled"),
         ("pick_id not in qualified_ids", "Pending picks must be removable when current gates say no play"),
     ]
