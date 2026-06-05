@@ -221,7 +221,7 @@ def check_hr_lotto_guardrails():
         ("def hr_damage_score", "HR Lotto must keep the dedicated damage score"),
         ("def hr_damage_lane_ok", "HR Lotto must keep pure HR-damage overrides"),
         ("def fetch_live_pitcher_h2h", "HR Lotto must fetch live direct H2H instead of relying on stale atlas H2H"),
-        ("if has_started:", "Live H2H must stay pregame-only to avoid in-game backfill"),
+        ("historical batter-vs-starter context", "Live direct H2H must stay populated after first pitch"),
         ("def hr_h2h_lane_ok", "HR Lotto must keep direct H2H power overrides"),
         ("HR_CORE_H2H_ROWS", "HR Lotto must reserve primary-card H2H override slots"),
         ("HR_LONGSHOT_H2H_ROWS", "HR Watchlist must reserve H2H override slots"),
@@ -231,6 +231,12 @@ def check_hr_lotto_guardrails():
         ("HR_LONGSHOT_DAMAGE_ROWS", "HR Watchlist must reserve damage-override slots"),
         ("HR_LONGSHOT_STACK_ROWS", "HR Watchlist must reserve stack-pressure slots"),
         ("H2H {int(bm.get(\"h2h_hr\", 0))}HR", "Rendered HR rows must expose direct H2H HR history"),
+        ("for batter_id in batter_ids", "Live direct H2H fetch must check every lineup batter"),
+        ("pair_key = (pitcher_id, batter_id)", "Live direct H2H fetch must cache by pitcher-batter pair"),
+        ("vsPlayerTotal", "Live direct H2H fetch must prefer official total rows when MLB returns them"),
+        ("matching_splits", "Live direct H2H fetch must aggregate split rows when total rows are absent"),
+        ("ThreadPoolExecutor(max_workers=max_workers)", "Live direct H2H pair fetch must stay bounded-concurrent"),
+        ("max_workers = min(8", "Live direct H2H pair fetch must keep a safe concurrency cap"),
         ("DMG {round(hr_damage_score(bm))}", "Rendered HR rows must show DMG score"),
         ("stack pressure", "Rendered HR Watchlist copy must expose stack pressure"),
         ("direct H2H", "Rendered HR Watchlist copy must expose direct H2H criteria"),
@@ -238,6 +244,10 @@ def check_hr_lotto_guardrails():
     for marker, message in required_source_markers:
         if marker not in source:
             errors.append(f"{message}: missing `{marker}`")
+    if "anchor_id = batter_ids[0]" in source:
+        errors.append("Live direct H2H fetch must not cache one leadoff-batter lookup as the whole pitcher table")
+    if "away_direct_h2h = {}" in source or "home_direct_h2h = {}" in source:
+        errors.append("Late MLB refreshes must not blank historical direct H2H after first pitch")
 
     max_rows = _first(r"HR_LONGSHOT_MAX_ROWS\s*=\s*(\d+)", source)
     if max_rows is None or int(max_rows) < 8:
@@ -292,6 +302,8 @@ def check_mlb_pick_gate_guardrails():
         ("pick_price_edge", "MLB price gate must store model-vs-market price edge"),
         ("pick_price_edge < min_price_edge", "MLB price gate must block only when edge misses the margin"),
         ("unstarted_game_pks", "Pregame pending stale-pick pruning must stay enabled"),
+        ("odds_feed_has_lines", "Pregame pending pruning must be disabled when every odds source is down"),
+        ("preserving pending MLB picks", "Odds outage path must preserve pending MLB picks"),
         ("pick_id not in qualified_ids", "Pending picks must be removable when current gates say no play"),
     ]
     for marker, message in required_markers:

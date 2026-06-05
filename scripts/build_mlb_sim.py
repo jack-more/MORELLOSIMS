@@ -10,6 +10,7 @@ Usage: python3 scripts/build_mlb_sim.py
 
 import csv, json, os, sys, math, requests, time as _time
 import urllib.request  # used by _fetch_action_network_odds + _fetch_espn_scoreboard_odds
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
@@ -750,6 +751,7 @@ def fetch_espn_odds():
 
 print("\nFetching sportsbook odds...")
 real_odds = fetch_espn_odds()
+odds_feed_has_lines = bool(real_odds)
 
 
 # ─── Fetch team standings (current season W-L) ──────────────────────────────
@@ -865,6 +867,7 @@ def lookup_position(pid, fallback_p: dict | None = None) -> str:
 
 
 _LIVE_H2H_BY_PITCHER: dict[int, dict[int, dict]] = {}
+_LIVE_H2H_FETCHED_PAIRS: set[tuple[int, int]] = set()
 
 
 def _stat_int(stat, key):
@@ -895,54 +898,91 @@ def fetch_live_pitcher_h2h(pitcher_id, batter_ids):
         return {}
 
     pitcher_id = int(pitcher_id)
-    if pitcher_id not in _LIVE_H2H_BY_PITCHER:
-        anchor_id = batter_ids[0]
-        rows = {}
+    rows = _LIVE_H2H_BY_PITCHER.setdefault(pitcher_id, {})
+
+    missing_batter_ids = []
+    for batter_id in batter_ids:
+        pair_key = (pitcher_id, batter_id)
+        if pair_key in _LIVE_H2H_FETCHED_PAIRS:
+            continue
+        _LIVE_H2H_FETCHED_PAIRS.add(pair_key)
+        missing_batter_ids.append(batter_id)
+
+    def fetch_pair(batter_id):
         url = (
-            f"{MLB_API}/people/{anchor_id}/stats"
+            f"{MLB_API}/people/{batter_id}/stats"
             f"?stats=vsPlayer&group=hitting&opposingPlayerId={pitcher_id}&gameType=R"
         )
         data = fetch(url) or {}
+        matching_splits = []
         for bucket in data.get("stats", []) or []:
+            bucket_type = (bucket.get("type") or {}).get("displayName", "")
             for split in bucket.get("splits", []) or []:
                 batter = split.get("batter") or {}
                 pitcher = split.get("pitcher") or {}
-                if pitcher.get("id") != pitcher_id or not batter.get("id"):
+                if pitcher.get("id") != pitcher_id:
+                    continue
+                split_batter_id = int(batter.get("id") or batter_id)
+                if split_batter_id != batter_id:
                     continue
                 stat = split.get("stat") or {}
-                pa = _stat_int(stat, "plateAppearances")
-                ab = _stat_int(stat, "atBats")
-                hits = _stat_int(stat, "hits")
-                hr = _stat_int(stat, "homeRuns")
-                bb = _stat_int(stat, "baseOnBalls")
-                k = _stat_int(stat, "strikeOuts")
-                tb = _stat_int(stat, "totalBases")
-                sf = _stat_int(stat, "sacFlies")
-                if pa <= 0:
-                    continue
-                avg = hits / ab if ab else 0.0
-                obp_den = ab + bb + sf
-                obp = (hits + bb) / obp_den if obp_den else _stat_rate(stat, "obp")
-                slg = tb / ab if ab else _stat_rate(stat, "slg")
-                ops = obp + slg if obp or slg else _stat_rate(stat, "ops")
-                rows[int(batter["id"])] = {
-                    "h2h_pa": pa,
-                    "h2h_ab": ab,
-                    "h2h_h": hits,
-                    "h2h_hr": hr,
-                    "h2h_bb": bb,
-                    "h2h_k": k,
-                    "h2h_tb": tb,
-                    "h2h_avg": round(avg, 3),
-                    "h2h_obp": round(obp, 3),
-                    "h2h_slg": round(slg, 3),
-                    "h2h_ops": round(ops, 3),
-                    "h2h_hr_rate": round(hr / pa, 4) if pa else 0.0,
-                }
-        _LIVE_H2H_BY_PITCHER[pitcher_id] = rows
+                if _stat_int(stat, "plateAppearances") > 0:
+                    matching_splits.append((bucket_type, stat))
+        if not matching_splits:
+            return batter_id, None
 
-    cached = _LIVE_H2H_BY_PITCHER.get(pitcher_id, {})
-    return {bid: cached[bid] for bid in batter_ids if bid in cached}
+        total_stat = next((stat for bucket_type, stat in matching_splits if bucket_type == "vsPlayerTotal"), None)
+        if total_stat:
+            pa = _stat_int(total_stat, "plateAppearances")
+            ab = _stat_int(total_stat, "atBats")
+            hits = _stat_int(total_stat, "hits")
+            hr = _stat_int(total_stat, "homeRuns")
+            bb = _stat_int(total_stat, "baseOnBalls")
+            k = _stat_int(total_stat, "strikeOuts")
+            tb = _stat_int(total_stat, "totalBases")
+            sf = _stat_int(total_stat, "sacFlies")
+        else:
+            stats = [stat for _bucket_type, stat in matching_splits]
+            pa = sum(_stat_int(stat, "plateAppearances") for stat in stats)
+            ab = sum(_stat_int(stat, "atBats") for stat in stats)
+            hits = sum(_stat_int(stat, "hits") for stat in stats)
+            hr = sum(_stat_int(stat, "homeRuns") for stat in stats)
+            bb = sum(_stat_int(stat, "baseOnBalls") for stat in stats)
+            k = sum(_stat_int(stat, "strikeOuts") for stat in stats)
+            tb = sum(_stat_int(stat, "totalBases") for stat in stats)
+            sf = sum(_stat_int(stat, "sacFlies") for stat in stats)
+        if pa <= 0:
+            return batter_id, None
+        avg = hits / ab if ab else 0.0
+        obp_den = ab + bb + sf
+        obp = (hits + bb) / obp_den if obp_den else (total_stat and _stat_rate(total_stat, "obp")) or 0.0
+        slg = tb / ab if ab else (total_stat and _stat_rate(total_stat, "slg")) or 0.0
+        ops = obp + slg
+        return batter_id, {
+            "h2h_pa": pa,
+            "h2h_ab": ab,
+            "h2h_h": hits,
+            "h2h_hr": hr,
+            "h2h_bb": bb,
+            "h2h_k": k,
+            "h2h_tb": tb,
+            "h2h_avg": round(avg, 3),
+            "h2h_obp": round(obp, 3),
+            "h2h_slg": round(slg, 3),
+            "h2h_ops": round(ops, 3),
+            "h2h_hr_rate": round(hr / pa, 4) if pa else 0.0,
+        }
+
+    if missing_batter_ids:
+        max_workers = min(8, len(missing_batter_ids))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(fetch_pair, batter_id) for batter_id in missing_batter_ids]
+            for future in as_completed(futures):
+                batter_id, row = future.result()
+                if row:
+                    rows[batter_id] = row
+
+    return {bid: rows[bid] for bid in batter_ids if bid in rows}
 
 # ─── Process each game ───────────────────────────────────────────────────────
 games = []
@@ -1249,12 +1289,10 @@ for g in games_raw:
     if has_lineups:
         away_batter_ids = [p.get("id") for p in away_lineup_raw if p.get("id")]
         home_batter_ids = [p.get("id") for p in home_lineup_raw if p.get("id")]
-        if has_started:
-            away_direct_h2h = {}
-            home_direct_h2h = {}
-        else:
-            away_direct_h2h = fetch_live_pitcher_h2h(home_sp_id, away_batter_ids)
-            home_direct_h2h = fetch_live_pitcher_h2h(away_sp_id, home_batter_ids)
+        # Direct H2H is historical batter-vs-starter context, not in-game stat
+        # leakage, so keep it populated after first pitch for late refreshes.
+        away_direct_h2h = fetch_live_pitcher_h2h(home_sp_id, away_batter_ids)
+        home_direct_h2h = fetch_live_pitcher_h2h(away_sp_id, home_batter_ids)
 
         # Pre-fetch positions in one bulk call so render shows "C · R" not "? · R"
         _bulk_fetch_positions(
@@ -2786,16 +2824,19 @@ unstarted_game_pks = {g.get("game_pk") for g in games if not g.get("has_started"
 # Once a same-day pick starts, keep it there. Pregame pending picks can still
 # be pulled by later refreshes when the current gate says no play, usually
 # because price moved beyond the ROI cap. Settled picks are never mutated.
-for pick_id, pick in list(by_id.items()):
-    if (
-        pick.get("sport") == "mlb"
-        and pick.get("date") == TODAY
-        and pick.get("bet_type") == "ml"
-        and pick.get("status") == "pending"
-        and pick.get("game_pk") in unstarted_game_pks
-        and pick_id not in qualified_ids
-    ):
-        del by_id[pick_id]
+if odds_feed_has_lines:
+    for pick_id, pick in list(by_id.items()):
+        if (
+            pick.get("sport") == "mlb"
+            and pick.get("date") == TODAY
+            and pick.get("bet_type") == "ml"
+            and pick.get("status") == "pending"
+            and pick.get("game_pk") in unstarted_game_pks
+            and pick_id not in qualified_ids
+        ):
+            del by_id[pick_id]
+else:
+    print("  WARN: odds feed returned zero real-book lines; preserving pending MLB picks")
 
 for g in writeable_picks:
     pick_team = g["pick_team"]
