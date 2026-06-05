@@ -216,13 +216,20 @@ def check_hr_lotto_guardrails():
         ("HR_LONGSHOT_MAX_ROWS = 8", "HR Watchlist must stay wide enough for damage and stack lanes"),
         ("def hr_damage_score", "HR Lotto must keep the dedicated damage score"),
         ("def hr_damage_lane_ok", "HR Lotto must keep pure HR-damage overrides"),
+        ("def fetch_live_pitcher_h2h", "HR Lotto must fetch live direct H2H instead of relying on stale atlas H2H"),
+        ("if has_started:", "Live H2H must stay pregame-only to avoid in-game backfill"),
+        ("def hr_h2h_lane_ok", "HR Lotto must keep direct H2H power overrides"),
+        ("HR_CORE_H2H_ROWS", "HR Lotto must reserve primary-card H2H override slots"),
+        ("HR_LONGSHOT_H2H_ROWS", "HR Watchlist must reserve H2H override slots"),
         ("def team_stack_pressure", "HR Lotto must keep team stack-pressure scoring"),
         ("def hr_stack_lane_ok", "HR Lotto must keep stack-pressure watchlist qualifiers"),
         ("HR_LONGSHOT_STANDARD_ROWS", "HR Watchlist must reserve standard-lane slots"),
         ("HR_LONGSHOT_DAMAGE_ROWS", "HR Watchlist must reserve damage-override slots"),
         ("HR_LONGSHOT_STACK_ROWS", "HR Watchlist must reserve stack-pressure slots"),
+        ("H2H {int(bm.get(\"h2h_hr\", 0))}HR", "Rendered HR rows must expose direct H2H HR history"),
         ("DMG {round(hr_damage_score(bm))}", "Rendered HR rows must show DMG score"),
         ("stack pressure", "Rendered HR Watchlist copy must expose stack pressure"),
+        ("direct H2H", "Rendered HR Watchlist copy must expose direct H2H criteria"),
     ]
     for marker, message in required_source_markers:
         if marker not in source:

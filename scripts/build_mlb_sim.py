@@ -863,6 +863,87 @@ def lookup_position(pid, fallback_p: dict | None = None) -> str:
             return v
     return ""
 
+
+_LIVE_H2H_BY_PITCHER: dict[int, dict[int, dict]] = {}
+
+
+def _stat_int(stat, key):
+    try:
+        return int(stat.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _stat_rate(stat, key, fallback=0.0):
+    value = stat.get(key)
+    if value in (None, "", ".---", "-.--"):
+        return fallback
+    try:
+        return float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def fetch_live_pitcher_h2h(pitcher_id, batter_ids):
+    """Fetch live direct batter-vs-pitcher history from MLB StatsAPI.
+
+    atlas/hitter_vs_pitcher.json can lag behind the public MLB endpoint, so
+    today's HR card uses this live table for direct H2H power overrides.
+    """
+    batter_ids = [int(bid) for bid in batter_ids if bid]
+    if not pitcher_id or not batter_ids:
+        return {}
+
+    pitcher_id = int(pitcher_id)
+    if pitcher_id not in _LIVE_H2H_BY_PITCHER:
+        anchor_id = batter_ids[0]
+        rows = {}
+        url = (
+            f"{MLB_API}/people/{anchor_id}/stats"
+            f"?stats=vsPlayer&group=hitting&opposingPlayerId={pitcher_id}&gameType=R"
+        )
+        data = fetch(url) or {}
+        for bucket in data.get("stats", []) or []:
+            for split in bucket.get("splits", []) or []:
+                batter = split.get("batter") or {}
+                pitcher = split.get("pitcher") or {}
+                if pitcher.get("id") != pitcher_id or not batter.get("id"):
+                    continue
+                stat = split.get("stat") or {}
+                pa = _stat_int(stat, "plateAppearances")
+                ab = _stat_int(stat, "atBats")
+                hits = _stat_int(stat, "hits")
+                hr = _stat_int(stat, "homeRuns")
+                bb = _stat_int(stat, "baseOnBalls")
+                k = _stat_int(stat, "strikeOuts")
+                tb = _stat_int(stat, "totalBases")
+                sf = _stat_int(stat, "sacFlies")
+                if pa <= 0:
+                    continue
+                avg = hits / ab if ab else 0.0
+                obp_den = ab + bb + sf
+                obp = (hits + bb) / obp_den if obp_den else _stat_rate(stat, "obp")
+                slg = tb / ab if ab else _stat_rate(stat, "slg")
+                ops = obp + slg if obp or slg else _stat_rate(stat, "ops")
+                rows[int(batter["id"])] = {
+                    "h2h_pa": pa,
+                    "h2h_ab": ab,
+                    "h2h_h": hits,
+                    "h2h_hr": hr,
+                    "h2h_bb": bb,
+                    "h2h_k": k,
+                    "h2h_tb": tb,
+                    "h2h_avg": round(avg, 3),
+                    "h2h_obp": round(obp, 3),
+                    "h2h_slg": round(slg, 3),
+                    "h2h_ops": round(ops, 3),
+                    "h2h_hr_rate": round(hr / pa, 4) if pa else 0.0,
+                }
+        _LIVE_H2H_BY_PITCHER[pitcher_id] = rows
+
+    cached = _LIVE_H2H_BY_PITCHER.get(pitcher_id, {})
+    return {bid: cached[bid] for bid in batter_ids if bid in cached}
+
 # ─── Process each game ───────────────────────────────────────────────────────
 games = []
 all_batter_matchups = []  # for daily projections tab
@@ -973,9 +1054,10 @@ for g in games_raw:
         home_tier_name = home_tier.get("tier", "T3_Standard")
         home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
-    def process_lineup(lineup_raw, opp_gmm_proba, team_abbr):
+    def process_lineup(lineup_raw, opp_gmm_proba, team_abbr, opp_h2h=None):
         """Process a lineup using GMM-weighted multi-cluster matching.
         opp_gmm_proba: dict of {cluster: probability} from the opposing pitcher's GMM."""
+        opp_h2h = opp_h2h or {}
         batters = []
         team_woba_sum = 0
         team_pa = 0
@@ -994,6 +1076,7 @@ for g in games_raw:
             baseline_pa = float(profile.get("baseline_PA") or 0)
             player_total_pa = float(profile.get("total_PA") or 0)
             season_hr_rate = season_hr / season_pa if season_pa > 0 else 0.0
+            direct_h2h = opp_h2h.get(int(pid), {}) if pid is not None else {}
 
             # GMM-weighted lookup across ALL pitcher clusters
             # This thickens the dataset by using 2nd/3rd DNA clusterings
@@ -1086,6 +1169,18 @@ for g in games_raw:
                 "season_hr_rate": round(season_hr_rate, 4),
                 "baseline_pa": round(baseline_pa),
                 "player_total_pa": round(player_total_pa),
+                "h2h_pa": direct_h2h.get("h2h_pa", 0),
+                "h2h_ab": direct_h2h.get("h2h_ab", 0),
+                "h2h_h": direct_h2h.get("h2h_h", 0),
+                "h2h_hr": direct_h2h.get("h2h_hr", 0),
+                "h2h_bb": direct_h2h.get("h2h_bb", 0),
+                "h2h_k": direct_h2h.get("h2h_k", 0),
+                "h2h_tb": direct_h2h.get("h2h_tb", 0),
+                "h2h_avg": direct_h2h.get("h2h_avg", 0.0),
+                "h2h_obp": direct_h2h.get("h2h_obp", 0.0),
+                "h2h_slg": direct_h2h.get("h2h_slg", 0.0),
+                "h2h_ops": direct_h2h.get("h2h_ops", 0.0),
+                "h2h_hr_rate": direct_h2h.get("h2h_hr_rate", 0.0),
                 "proj_pa": pa,
                 "proj_h": proj_h,
                 "proj_bb": proj_bb,
@@ -1126,6 +1221,18 @@ for g in games_raw:
                 "season_hr_rate": b["season_hr_rate"],
                 "baseline_pa": b["baseline_pa"],
                 "player_total_pa": b["player_total_pa"],
+                "h2h_pa": b["h2h_pa"],
+                "h2h_ab": b["h2h_ab"],
+                "h2h_h": b["h2h_h"],
+                "h2h_hr": b["h2h_hr"],
+                "h2h_bb": b["h2h_bb"],
+                "h2h_k": b["h2h_k"],
+                "h2h_tb": b["h2h_tb"],
+                "h2h_avg": b["h2h_avg"],
+                "h2h_obp": b["h2h_obp"],
+                "h2h_slg": b["h2h_slg"],
+                "h2h_ops": b["h2h_ops"],
+                "h2h_hr_rate": b["h2h_hr_rate"],
                 "order": b["order"],
                 "pos": b["pos"],
                 "proj_hr": round(b["proj_hr"], 3),
@@ -1140,15 +1247,23 @@ for g in games_raw:
     away_gmm = away_ps.get("gmm_proba", {away_cluster: 1.0})
 
     if has_lineups:
+        away_batter_ids = [p.get("id") for p in away_lineup_raw if p.get("id")]
+        home_batter_ids = [p.get("id") for p in home_lineup_raw if p.get("id")]
+        if has_started:
+            away_direct_h2h = {}
+            home_direct_h2h = {}
+        else:
+            away_direct_h2h = fetch_live_pitcher_h2h(home_sp_id, away_batter_ids)
+            home_direct_h2h = fetch_live_pitcher_h2h(away_sp_id, home_batter_ids)
+
         # Pre-fetch positions in one bulk call so render shows "C · R" not "? · R"
         _bulk_fetch_positions(
-            [p.get("id") for p in away_lineup_raw if p.get("id")] +
-            [p.get("id") for p in home_lineup_raw if p.get("id")]
+            away_batter_ids + home_batter_ids
         )
         away_batters, away_runs_raw, away_woba, away_pa = process_lineup(
-            away_lineup_raw, home_gmm, away_abbr)
+            away_lineup_raw, home_gmm, away_abbr, away_direct_h2h)
         home_batters, home_runs_raw, home_woba, home_pa = process_lineup(
-            home_lineup_raw, away_gmm, home_abbr)
+            home_lineup_raw, away_gmm, home_abbr, home_direct_h2h)
 
         # Apply tier multipliers (opposing SP's tier scales the batting team's runs)
         away_runs_tiered = away_runs_raw * home_tier_mult
@@ -1691,8 +1806,10 @@ def render_hr_watch_tab():
     HR_CORE_MIN = 0.085
     HR_LONGSHOT_MIN = 0.065
     HR_CORE_MAX_ROWS = 6
+    HR_CORE_H2H_ROWS = 2
     HR_LONGSHOT_MAX_ROWS = 8
     HR_LONGSHOT_STANDARD_ROWS = 3
+    HR_LONGSHOT_H2H_ROWS = 2
     HR_LONGSHOT_DAMAGE_ROWS = 2
     HR_LONGSHOT_STACK_ROWS = 3
     HR_HEAT_MAX_ROWS = 10
@@ -1791,6 +1908,39 @@ def render_hr_watch_tab():
             pressure += max(0, other.get("hr_lift", 0)) * 45
         return pressure
 
+    def h2h_power_score(bm):
+        pa = bm.get("h2h_pa", 0) or 0
+        hr = bm.get("h2h_hr", 0) or 0
+        if pa < 8 or hr <= 0:
+            return 0.0
+        return min(
+            55.0,
+            hr * 11
+            + min(pa, 24) * 0.45
+            + max(0, bm.get("h2h_slg", 0) - 0.550) * 18
+            + max(0, bm.get("h2h_ops", 0) - 0.900) * 16,
+        )
+
+    def hr_h2h_lane_ok(bm, core=True):
+        """Direct pitcher history can carry proven HR damage into the card."""
+        min_pa = 12 if core else 8
+        min_hr = 2 if core else 1
+        min_ops = 0.950 if core else 0.850
+        min_slg = 0.600 if core else 0.520
+        min_run = 0.50 if core else 0.45
+        return (
+            bm.get("h2h_pa", 0) >= min_pa
+            and bm.get("h2h_hr", 0) >= min_hr
+            and bm.get("h2h_ops", 0) >= min_ops
+            and bm.get("h2h_slg", 0) >= min_slg
+            and bm.get("base_hr_rate", 0) >= 0.030
+            and bm.get("run_contrib", 0) >= min_run
+            and bm.get("team_total", 0) >= 4.4
+            and bm.get("park_factor", 1.0) >= 0.96
+            and bm.get("order", 9) <= 7
+            and h2h_power_score(bm) >= (32.0 if core else 20.0)
+        )
+
     def hr_stack_lane_ok(bm):
         tier = bm.get("opp_tier", "")
         min_rate = 0.070 if tier == "T1_Apex" else 0.055
@@ -1826,13 +1976,19 @@ def render_hr_watch_tab():
         standard_lane = hr_standard_lane_ok(bm, core=core)
         damage_lane = hr_damage_lane_ok(bm, core=core) and (not core or hr_rate >= HR_CORE_MIN)
         stack_lane = False if core else hr_stack_lane_ok(bm)
-        power_ok = has_power_profile(bm) or stack_lane
+        h2h_lane = hr_h2h_lane_ok(bm, core=core)
+        power_ok = has_power_profile(bm) or stack_lane or h2h_lane
+        context_ok = has_reliable_hr_context(bm) or (
+            h2h_lane
+            and bm.get("player_total_pa", 0) >= HR_MIN_PLAYER_PA
+            and bm.get("park_factor", 1.0) >= 0.96
+        )
         return (
             max_rate_ok
             and power_ok
-            and has_reliable_hr_context(bm)
+            and context_ok
             and pitcher_context_ok(bm, core=core)
-            and (standard_lane or damage_lane or stack_lane)
+            and (standard_lane or damage_lane or stack_lane or h2h_lane)
         )
 
     def render_hr_row(rank, bm):
@@ -1840,6 +1996,9 @@ def render_hr_watch_tab():
         pow_pct = round((bm.get("base_hr_rate", 0) or 0) * 100, 1)
         lift_pct = round(max(0, bm.get("hr_lift", 0) or 0) * 100, 1)
         sample_pa = int(round(bm.get("total_pa", 0) or 0))
+        h2h_meta = ""
+        if bm.get("h2h_pa", 0) >= 8 and bm.get("h2h_hr", 0) > 0:
+            h2h_meta = f' \u00b7 H2H {int(bm.get("h2h_hr", 0))}HR/{int(bm.get("h2h_pa", 0))}PA'
         if bm["hr_rate"] >= 0.06:
             heat = "hr-fire"
             heat_icon = "\U0001f525"
@@ -1857,7 +2016,7 @@ def render_hr_watch_tab():
 	  <div class="hr-rank">{rank}</div>
 	  <div class="hr-info">
 	    <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
-	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 DMG {round(hr_damage_score(bm))} \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 POW {pow_pct}% \u00b7 LIFT +{lift_pct}pp \u00b7 {sample_pa}PA \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
+	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 DMG {round(hr_damage_score(bm))}{h2h_meta} \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 POW {pow_pct}% \u00b7 LIFT +{lift_pct}pp \u00b7 {sample_pa}PA \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
 	  </div>
   <div class="hr-rate-col">
     <div class="hr-rate">{hr_pct}%</div>
@@ -1872,10 +2031,17 @@ def render_hr_watch_tab():
             rows.append(render_hr_row(rank, bm))
         return "".join(rows)
 
-    core_hr = sorted(
-        [bm for bm in all_batter_matchups if hr_card_qualifies(bm, core=True)],
+    core_pool = [bm for bm in all_batter_matchups if hr_card_qualifies(bm, core=True)]
+    core_h2h_overrides = sorted(
+        [bm for bm in core_pool if hr_h2h_lane_ok(bm, core=True)],
+        key=lambda x: (-h2h_power_score(x), -hr_damage_score(x), -x.get("hr_rate", 0))
+    )[:HR_CORE_H2H_ROWS]
+    core_ids = {bm.get("id") for bm in core_h2h_overrides}
+    core_standard = sorted(
+        [bm for bm in core_pool if bm.get("id") not in core_ids],
         key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
-    )[:HR_CORE_MAX_ROWS]
+    )[:HR_CORE_MAX_ROWS - len(core_h2h_overrides)]
+    core_hr = (core_h2h_overrides + core_standard)[:HR_CORE_MAX_ROWS]
 
     core_ids = {bm.get("id") for bm in core_hr}
     longshot_pool = [
@@ -1889,6 +2055,16 @@ def render_hr_watch_tab():
     )[:HR_LONGSHOT_STANDARD_ROWS]
 
     used_longshot_ids = {bm.get("id") for bm in longshot_standard}
+    longshot_h2h_overrides = sorted(
+        [
+            bm for bm in longshot_pool
+            if bm.get("id") not in used_longshot_ids
+            and hr_h2h_lane_ok(bm, core=False)
+        ],
+        key=lambda x: (-h2h_power_score(x), -hr_damage_score(x), -x.get("hr_rate", 0))
+    )[:HR_LONGSHOT_H2H_ROWS]
+
+    used_longshot_ids |= {bm.get("id") for bm in longshot_h2h_overrides}
     longshot_damage_overrides = sorted(
         [
             bm for bm in longshot_pool
@@ -1944,7 +2120,12 @@ def render_hr_watch_tab():
             break
 
     used_longshot_ids |= {bm.get("id") for bm in longshot_stack_overrides}
-    longshot_damage = (longshot_standard + longshot_damage_overrides + longshot_stack_overrides)[:HR_LONGSHOT_MAX_ROWS]
+    longshot_damage = (
+        longshot_h2h_overrides
+        + longshot_standard
+        + longshot_damage_overrides
+        + longshot_stack_overrides
+    )[:HR_LONGSHOT_MAX_ROWS]
     if len(longshot_damage) < HR_LONGSHOT_MAX_ROWS:
         backfill = sorted(
             [bm for bm in longshot_pool if bm.get("id") not in used_longshot_ids],
@@ -2105,7 +2286,7 @@ def render_hr_watch_tab():
                 </div>'''
 
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
-                    {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary blast fits. MOMO helps, but HR damage and stack pressure can carry the profile.", "6.5%+ HR", "damage score", "stack pressure", "+0.65R")}
+                    {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary blast fits. MOMO helps, but HR damage, direct H2H, and stack pressure can carry the profile.", "6.5%+ HR", "damage score", "direct H2H", "stack pressure")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
@@ -2119,7 +2300,7 @@ def render_hr_watch_tab():
         <div class="daily-grid daily-grid-lotto">
             <div class="daily-col daily-center daily-hr-lotto">
                 <div class="daily-bucket primary hr-lotto">
-                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: projected HR damage, power, matchup lift, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "damage score")}
+                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: projected HR damage, power, matchup lift, direct H2H, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "direct H2H")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}
