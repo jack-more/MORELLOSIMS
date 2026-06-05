@@ -78,12 +78,19 @@ SLIDER_TYPES = {"SL", "ST", "SV"}
 CHANGE_TYPES = {"CH"}
 SPLIT_TYPES = {"FS", "FO", "SC"}
 KNUCKLE_TYPES = {"KN"}
+EEPHUS_TYPES = {"EP"}
+REAL_FASTBALL_TYPES = {"FF", "SI", "FC"}
+
+KNUCKLEBALL_MIN_SHARE = 0.15
+KNUCKLEBALL_MAX_EEPHUS_SHARE = 0.10
+KNUCKLEBALL_MIN_FASTBALL_VELO = 75.0
+KNUCKLEBALL_MIN_REAL_FASTBALL_SHARE = 0.10
 
 PITCH_FAMILY_MINIMUMS = {
     "Split Demon": ("split", 0.08),
     "Ghost": ("split_or_change", 0.08),
     "Uncle Charlie": ("curve", 0.10),
-    "Knuckleball Wizard": ("knuckle", 0.05),
+    "Knuckleball Wizard": ("knuckle", KNUCKLEBALL_MIN_SHARE),
     "Cutman": ("cutter", 0.12),
     "Boomerang": ("slider", 0.12),
     "Yakker": ("breaking", 0.12),
@@ -431,6 +438,52 @@ def _active_family_count(pitch_mix, threshold=0.05):
     return sum(1 for family in families if _mix_family_share(pitch_mix, family) >= threshold)
 
 
+def _knuckleball_label_violation(features):
+    pitch_mix = features.get("pitch_mix") or {}
+    knuckle = _mix_family_share(pitch_mix, "knuckle")
+    eephus = _mix_share(pitch_mix, EEPHUS_TYPES)
+    real_fastball = _mix_share(pitch_mix, REAL_FASTBALL_TYPES)
+    avg_fastball = parse_float(features.get("avg_velo_FF")) or 0.0
+
+    if knuckle < KNUCKLEBALL_MIN_SHARE:
+        return (
+            f"Knuckleball Wizard requires knuckle >= {KNUCKLEBALL_MIN_SHARE:.2f}, "
+            f"saw {knuckle:.3f}"
+        )
+    if eephus > KNUCKLEBALL_MAX_EEPHUS_SHARE:
+        return (
+            f"Knuckleball Wizard allows eephus <= {KNUCKLEBALL_MAX_EEPHUS_SHARE:.2f}, "
+            f"saw {eephus:.3f}"
+        )
+    if (
+        avg_fastball < KNUCKLEBALL_MIN_FASTBALL_VELO
+        and real_fastball < KNUCKLEBALL_MIN_REAL_FASTBALL_SHARE
+    ):
+        return (
+            "Knuckleball Wizard requires real fastball velocity or arsenal support, "
+            f"saw avg fastball {avg_fastball:.1f} and real fastball share {real_fastball:.3f}"
+        )
+    return None
+
+
+def _knuckleball_noise_shape(features):
+    pitch_mix = features.get("pitch_mix") or {}
+    knuckle = _mix_family_share(pitch_mix, "knuckle")
+    if knuckle <= 0:
+        return False
+
+    eephus = _mix_share(pitch_mix, EEPHUS_TYPES)
+    real_fastball = _mix_share(pitch_mix, REAL_FASTBALL_TYPES)
+    avg_fastball = parse_float(features.get("avg_velo_FF")) or 0.0
+    return (
+        eephus > KNUCKLEBALL_MAX_EEPHUS_SHARE
+        or (
+            avg_fastball < KNUCKLEBALL_MIN_FASTBALL_VELO
+            and real_fastball < KNUCKLEBALL_MIN_REAL_FASTBALL_SHARE
+        )
+    )
+
+
 def _pitch_family_penalty(features, profile):
     """Return inf for pitch-family impossible labels, otherwise a soft penalty."""
     pitch_mix = features.get("pitch_mix") or {}
@@ -438,6 +491,9 @@ def _pitch_family_penalty(features, profile):
         return 0.0
 
     label = profile.get("archetype") or ""
+    if "Knuckleball Wizard" in label and _knuckleball_label_violation(features):
+        return float("inf")
+
     for name, (family, minimum) in PITCH_FAMILY_MINIMUMS.items():
         if name in label and _mix_family_share(pitch_mix, family) < minimum:
             return float("inf")
@@ -485,6 +541,10 @@ def _pitch_family_penalty(features, profile):
 def assign_current_cluster(features, profiles, scales):
     """Assign a 2026 pitcher to the nearest existing archetype profile."""
     hand = "RHP" if features.get("is_rhp", 1) else "LHP"
+    if _knuckleball_noise_shape(features):
+        fallback = f"{'R' if hand == 'RHP' else 'L'}_UT"
+        return fallback, {fallback: 1.0}
+
     candidates = [
         (cid, profile)
         for cid, profile in profiles.items()
@@ -1114,6 +1174,10 @@ def _pitch_family_label_violation(record):
     if not pitch_mix:
         return None
     label = record.get("archetype") or ""
+    if "Knuckleball Wizard" in label:
+        violation = _knuckleball_label_violation(record)
+        if violation:
+            return violation
     for name, (family, minimum) in PITCH_FAMILY_MINIMUMS.items():
         if name not in label:
             continue
