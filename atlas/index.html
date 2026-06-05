@@ -1867,10 +1867,18 @@
             return inside;
         }
 
-        // ── Road Network (Voronoi edges + central boulevard) ──
-        const ROAD_WIDTH = 0.10;
-        const ROAD_DEFAULT = 0x666666;
-        const ROAD_SEGS = 10;
+        // Road Network (Voronoi edges + central boulevard)
+        const ROAD_WIDTH = 0.16;
+        const ROAD_DEFAULT = 0x6f7880;
+        const ROAD_ASPHALT = 0x25292c;
+        const ROAD_SIDEWALK = 0xbab4a5;
+        const ROAD_CURB = 0xe3decf;
+        const ROAD_DASH = 0xf2c66d;
+        const ROAD_SEGS = 14;
+        const DETAIL_WATER = 0x2c84aa;
+        const DETAIL_PARK = 0x3f7d52;
+        const DETAIL_TREE = 0x2e6b43;
+        const DETAIL_TRUNK = 0x7a5435;
         const PERF_GREEN  = new THREE.Color(0x2a9d8f);
         const PERF_YELLOW = new THREE.Color(0xf4a261);
         const PERF_RED    = new THREE.Color(0xe63946);
@@ -1924,32 +1932,155 @@
             return geo;
         }
 
-        function buildRoads() {
-            // Clear old
-            while (roadGroup.children.length) {
-                const c = roadGroup.children[0];
-                if (c.geometry) c.geometry.dispose();
-                if (c.material) c.material.dispose();
-                roadGroup.remove(c);
+        function disposeMaterial(mat) {
+            if (!mat) return;
+            if (mat.map) mat.map.dispose();
+            if (mat.emissiveMap) mat.emissiveMap.dispose();
+            mat.dispose();
+        }
+
+        function disposeObject3D(obj) {
+            const mats = new Set();
+            obj.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => { if (mat) mats.add(mat); });
+                } else if (child.material) {
+                    mats.add(child.material);
+                }
+            });
+            mats.forEach(disposeMaterial);
+        }
+
+        function clearGroup(group) {
+            while (group.children.length) {
+                const child = group.children[0];
+                group.remove(child);
+                disposeObject3D(child);
             }
+        }
+
+        function clonePointsWithYOffset(points, yOffset) {
+            return points.map(p => new THREE.Vector3(p.x, p.y + yOffset, p.z));
+        }
+
+        function makeFacadeTexture(baseColor, height, seed) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 96;
+            canvas.height = 192;
+
+            const base = new THREE.Color(baseColor);
+            const dark = base.clone().multiplyScalar(0.42);
+            const mid = base.clone().multiplyScalar(0.72);
+            const light = base.clone().lerp(new THREE.Color(0xffffff), 0.25);
+            ctx.fillStyle = '#' + dark.getHexString();
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#' + mid.getHexString();
+            for (let x = 0; x < canvas.width; x += 24) {
+                ctx.fillRect(x + 2, 0, 3, canvas.height);
+            }
+
+            const rows = Math.max(4, Math.min(16, Math.round(height * 5)));
+            for (let row = 0; row < rows; row++) {
+                const y = 14 + row * 12;
+                for (let col = 0; col < 5; col++) {
+                    const lit = ((row * 7 + col * 11 + seed) % 5) !== 0;
+                    ctx.fillStyle = lit ? 'rgba(255, 232, 158, 0.82)' : 'rgba(18, 24, 31, 0.85)';
+                    ctx.fillRect(10 + col * 16, y, 7, 5);
+                }
+            }
+
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(0, 0, canvas.width, 2);
+            ctx.strokeStyle = '#' + light.getHexString();
+            ctx.globalAlpha = 0.16;
+            ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+            ctx.globalAlpha = 1;
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(1, Math.max(1, height * 0.85));
+            tex.anisotropy = 4;
+            return tex;
+        }
+
+        function makeBuildingMaterial(baseColor, height, seed) {
+            const color = new THREE.Color(baseColor);
+            const tex = makeFacadeTexture(color, height, seed);
+            return new THREE.MeshStandardMaterial({
+                color,
+                map: tex,
+                metalness: 0.18,
+                roughness: 0.56,
+            });
+        }
+
+        function setBuildingVisual(mesh, color, emissive, intensity, opacity, transparent) {
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            mats.forEach(mat => {
+                if (!mat) return;
+                if (mat.color) mat.color.set(color);
+                if (mat.emissive) mat.emissive.set(emissive || 0x000000);
+                mat.emissiveIntensity = intensity || 0;
+                mat.opacity = opacity;
+                mat.transparent = transparent;
+            });
+        }
+
+        function addStreetLight(x, z, side = 1) {
+            const baseY = getTerrainHeight(x, z) + 0.04;
+            const group = new THREE.Group();
+            group.position.set(x, baseY, z);
+            const pole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.014, 0.018, 0.48, 7),
+                new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.45, metalness: 0.4 })
+            );
+            pole.position.y = 0.24;
+            const lamp = new THREE.Mesh(
+                new THREE.SphereGeometry(0.055, 10, 8),
+                new THREE.MeshStandardMaterial({
+                    color: 0xffe6a8,
+                    emissive: 0xffc96b,
+                    emissiveIntensity: 1.1,
+                    roughness: 0.35,
+                })
+            );
+            lamp.position.set(0.09 * side, 0.5, 0);
+            group.add(pole, lamp);
+            group.userData = { type: 'streetlight' };
+            roadGroup.add(group);
+        }
+
+        function addRoadDash(x, z, angle, length = 0.32, width = 0.025) {
+            const y = getTerrainHeight(x, z) + 0.075;
+            const dash = new THREE.Mesh(
+                new THREE.BoxGeometry(width, 0.018, length),
+                new THREE.MeshStandardMaterial({
+                    color: ROAD_DASH,
+                    emissive: ROAD_DASH,
+                    emissiveIntensity: 0.18,
+                    roughness: 0.45,
+                })
+            );
+            dash.position.set(x, y, z);
+            dash.rotation.y = angle;
+            dash.userData = { type: 'lane-dash' };
+            roadGroup.add(dash);
+        }
+
+        function buildRoads() {
+            clearGroup(roadGroup);
 
             const cells = getVoronoiCells();
             if (!cells) return;
 
             const edges = extractVoronoiEdges(cells);
-            const defaultMat = new THREE.MeshStandardMaterial({
-                color: ROAD_DEFAULT,
-                emissive: new THREE.Color(ROAD_DEFAULT),
-                emissiveIntensity: 0.05,
-                roughness: 0.6,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.8,
-            });
 
-            edges.forEach(edge => {
+            edges.forEach((edge, edgeIndex) => {
                 const { v1, v2, cellA, cellB } = edge;
-                // Subdivide for terrain following
                 const pts = [];
                 for (let t = 0; t <= 1; t += 1 / ROAD_SEGS) {
                     const x = v1.x + (v2.x - v1.x) * t;
@@ -1957,27 +2088,82 @@
                     pts.push(new THREE.Vector3(x, getTerrainHeight(x, z) + 0.02, z));
                 }
 
-                // Perpendicular offset for dual-lane
                 const dx = v2.x - v1.x, dz = v2.z - v1.z;
                 const len = Math.sqrt(dx*dx + dz*dz) || 1;
                 const perpX = -dz / len, perpZ = dx / len;
-                const offset = ROAD_WIDTH * 0.55;
-                const halfW = ROAD_WIDTH * 0.45;
+                const angle = Math.atan2(dx, dz);
 
-                // Lane A (toward cellA)
+                const curbMesh = new THREE.Mesh(
+                    buildRibbonGeometry(clonePointsWithYOffset(pts, 0.006), ROAD_WIDTH * 3.0),
+                    new THREE.MeshStandardMaterial({
+                        color: ROAD_CURB,
+                        roughness: 0.9,
+                        side: THREE.DoubleSide,
+                    })
+                );
+                curbMesh.receiveShadow = true;
+                curbMesh.userData = { type: 'curb' };
+                roadGroup.add(curbMesh);
+
+                const sidewalkMesh = new THREE.Mesh(
+                    buildRibbonGeometry(clonePointsWithYOffset(pts, 0.012), ROAD_WIDTH * 2.45),
+                    new THREE.MeshStandardMaterial({
+                        color: ROAD_SIDEWALK,
+                        roughness: 0.95,
+                        side: THREE.DoubleSide,
+                    })
+                );
+                sidewalkMesh.receiveShadow = true;
+                sidewalkMesh.userData = { type: 'sidewalk' };
+                roadGroup.add(sidewalkMesh);
+
+                const asphaltMesh = new THREE.Mesh(
+                    buildRibbonGeometry(clonePointsWithYOffset(pts, 0.02), ROAD_WIDTH * 1.75),
+                    new THREE.MeshStandardMaterial({
+                        color: ROAD_ASPHALT,
+                        roughness: 0.82,
+                        metalness: 0.02,
+                        side: THREE.DoubleSide,
+                    })
+                );
+                asphaltMesh.receiveShadow = true;
+                asphaltMesh.userData = { type: 'road-asphalt' };
+                roadGroup.add(asphaltMesh);
+
+                const offset = ROAD_WIDTH * 0.34;
+                const halfW = ROAD_WIDTH * 0.16;
+                const makeLaneMat = () => new THREE.MeshStandardMaterial({
+                    color: ROAD_DEFAULT,
+                    emissive: new THREE.Color(ROAD_DEFAULT),
+                    emissiveIntensity: 0.05,
+                    roughness: 0.6,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.86,
+                });
+
                 const ptsA = pts.map(p => new THREE.Vector3(p.x + perpX*offset, p.y, p.z + perpZ*offset));
-                const matA = defaultMat.clone();
-                const meshA = new THREE.Mesh(buildRibbonGeometry(ptsA, halfW), matA);
+                const meshA = new THREE.Mesh(buildRibbonGeometry(clonePointsWithYOffset(ptsA, 0.045), halfW), makeLaneMat());
                 meshA.userData = { type: 'road-lane', forCell: cellA, partner: cellB };
                 roadGroup.add(meshA);
 
-                // Lane B (toward cellB) — only if shared edge
                 if (cellB) {
                     const ptsB = pts.map(p => new THREE.Vector3(p.x - perpX*offset, p.y, p.z - perpZ*offset));
-                    const matB = defaultMat.clone();
-                    const meshB = new THREE.Mesh(buildRibbonGeometry(ptsB, halfW), matB);
+                    const meshB = new THREE.Mesh(buildRibbonGeometry(clonePointsWithYOffset(ptsB, 0.045), halfW), makeLaneMat());
                     meshB.userData = { type: 'road-lane', forCell: cellB, partner: cellA };
                     roadGroup.add(meshB);
+                }
+
+                if (edgeIndex % 3 === 0) {
+                    const mid = pts[Math.floor(pts.length / 2)];
+                    addStreetLight(mid.x + perpX * ROAD_WIDTH * 1.8, mid.z + perpZ * ROAD_WIDTH * 1.8, 1);
+                    if (cellB) addStreetLight(mid.x - perpX * ROAD_WIDTH * 1.8, mid.z - perpZ * ROAD_WIDTH * 1.8, -1);
+                }
+
+                if (edgeIndex % 4 === 0 && len > 1.2) {
+                    const midX = (v1.x + v2.x) / 2;
+                    const midZ = (v1.z + v2.z) / 2;
+                    addRoadDash(midX, midZ, angle, 0.28, 0.022);
                 }
             });
 
@@ -1986,35 +2172,141 @@
         }
 
         function buildCentralBoulevard() {
-            const BLVD_WIDTH = 0.25;
+            const BLVD_WIDTH = 0.48;
             const pts = [];
             for (let z = -15; z <= 15; z += 0.4) {
                 pts.push(new THREE.Vector3(0, getTerrainHeight(0, z) + 0.025, z));
             }
-            const geo = buildRibbonGeometry(pts, BLVD_WIDTH);
-            const mat = new THREE.MeshStandardMaterial({
-                color: 0x666666,
-                emissive: new THREE.Color(0x666666),
-                emissiveIntensity: 0.08,
-                roughness: 0.5,
-                side: THREE.DoubleSide,
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.userData = { type: 'boulevard' };
-            roadGroup.add(mesh);
 
-            // Orange center dashes
-            const dashMat = new THREE.MeshStandardMaterial({
-                color: 0xff6600, emissive: 0xff6600, emissiveIntensity: 0.4,
-            });
-            for (let z = -15; z < 15; z += 0.9) {
-                const y = getTerrainHeight(0, z) + 0.04;
-                const dGeo = new THREE.BoxGeometry(0.03, 0.02, 0.35);
-                const dash = new THREE.Mesh(dGeo, dashMat);
-                dash.position.set(0, y, z);
-                dash.userData = { type: 'boulevard-dash' };
-                roadGroup.add(dash);
+            const sidewalk = new THREE.Mesh(
+                buildRibbonGeometry(clonePointsWithYOffset(pts, 0.004), BLVD_WIDTH * 1.9),
+                new THREE.MeshStandardMaterial({
+                    color: ROAD_SIDEWALK,
+                    roughness: 0.95,
+                    side: THREE.DoubleSide,
+                })
+            );
+            sidewalk.userData = { type: 'boulevard-sidewalk' };
+            roadGroup.add(sidewalk);
+
+            const asphalt = new THREE.Mesh(
+                buildRibbonGeometry(clonePointsWithYOffset(pts, 0.018), BLVD_WIDTH),
+                new THREE.MeshStandardMaterial({
+                    color: ROAD_ASPHALT,
+                    emissive: new THREE.Color(ROAD_ASPHALT),
+                    emissiveIntensity: 0.04,
+                    roughness: 0.72,
+                    metalness: 0.02,
+                    side: THREE.DoubleSide,
+                })
+            );
+            asphalt.userData = { type: 'boulevard' };
+            roadGroup.add(asphalt);
+
+            const median = new THREE.Mesh(
+                buildRibbonGeometry(clonePointsWithYOffset(pts, 0.04), 0.08),
+                new THREE.MeshStandardMaterial({
+                    color: 0x365c3d,
+                    roughness: 0.9,
+                    side: THREE.DoubleSide,
+                })
+            );
+            median.userData = { type: 'boulevard-median' };
+            roadGroup.add(median);
+
+            for (let z = -14.5; z < 15; z += 1.1) {
+                addRoadDash(-0.12, z, 0, 0.38, 0.03);
+                addRoadDash(0.12, z + 0.55, 0, 0.38, 0.03);
             }
+
+            for (let z = -14; z <= 14; z += 2.2) {
+                addStreetLight(-BLVD_WIDTH * 0.78, z, -1);
+                addStreetLight(BLVD_WIDTH * 0.78, z + 1.1, 1);
+            }
+        }
+
+        function addCityTree(x, z, scale = 1) {
+            const y = getTerrainHeight(x, z) + 0.03;
+            const tree = new THREE.Group();
+            tree.position.set(x, y, z);
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.025 * scale, 0.03 * scale, 0.22 * scale, 7),
+                new THREE.MeshStandardMaterial({ color: DETAIL_TRUNK, roughness: 0.8 })
+            );
+            trunk.position.y = 0.11 * scale;
+            const crown = new THREE.Mesh(
+                new THREE.ConeGeometry(0.13 * scale, 0.34 * scale, 10),
+                new THREE.MeshStandardMaterial({ color: DETAIL_TREE, roughness: 0.9 })
+            );
+            crown.position.y = 0.36 * scale;
+            tree.add(trunk, crown);
+            tree.userData = { type: 'tree' };
+            cityDetailGroup.add(tree);
+        }
+
+        function addParkPatch(x, z, rx, rz, seed) {
+            const y = getTerrainHeight(x, z) + 0.035;
+            const park = new THREE.Mesh(
+                new THREE.CircleGeometry(1, 32),
+                new THREE.MeshStandardMaterial({
+                    color: DETAIL_PARK,
+                    roughness: 0.9,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.88,
+                })
+            );
+            park.position.set(x, y, z);
+            park.rotation.x = -Math.PI / 2;
+            park.scale.set(rx, rz, 1);
+            park.userData = { type: 'park' };
+            cityDetailGroup.add(park);
+
+            for (let i = 0; i < 5; i++) {
+                const a = seed * 0.9 + i * 1.25;
+                const tx = x + Math.cos(a) * rx * 0.55;
+                const tz = z + Math.sin(a * 1.2) * rz * 0.55;
+                addCityTree(tx, tz, 0.75 + ((seed + i) % 3) * 0.12);
+            }
+        }
+
+        function buildCityDetails() {
+            clearGroup(cityDetailGroup);
+
+            const waterPts = [];
+            for (let x = -16; x <= 16; x += 0.5) {
+                const z = 11.6 + Math.sin(x * 0.42) * 0.95 + Math.sin(x * 0.13) * 0.55;
+                waterPts.push(new THREE.Vector3(x, getTerrainHeight(x, z) + 0.018, z));
+            }
+            const canal = new THREE.Mesh(
+                buildRibbonGeometry(waterPts, 1.2),
+                new THREE.MeshStandardMaterial({
+                    color: DETAIL_WATER,
+                    emissive: new THREE.Color(DETAIL_WATER),
+                    emissiveIntensity: 0.08,
+                    metalness: 0.05,
+                    roughness: 0.28,
+                    transparent: true,
+                    opacity: 0.78,
+                    side: THREE.DoubleSide,
+                })
+            );
+            canal.userData = { type: 'waterway' };
+            cityDetailGroup.add(canal);
+
+            const cells = getVoronoiCells();
+            const parkIds = Object.keys(DATA.clusters)
+                .filter(id => STATE.visibleClusters.has(id) && cells && cells[id])
+                .sort((a, b) => (DATA.clusters[a].pitcher_count || 0) - (DATA.clusters[b].pitcher_count || 0))
+                .slice(0, 6);
+
+            parkIds.forEach((id, i) => {
+                const poly = cells[id];
+                if (!poly || poly.length < 3) return;
+                const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+                const cz = poly.reduce((s, p) => s + p.z, 0) / poly.length;
+                addParkPatch(cx, cz, 0.38 + (i % 3) * 0.08, 0.24 + (i % 2) * 0.08, i + 2);
+            });
         }
 
         function colorRoadsForBatter(matchups) {
@@ -2140,7 +2432,7 @@
 
         // ── Three.js Scene ──
         let scene, camera, renderer, css2DRenderer, controls;
-        let neighborhoodGroup, buildingGroup, labelGroup, routeGroup, roadGroup;
+        let neighborhoodGroup, cityDetailGroup, buildingGroup, labelGroup, routeGroup, roadGroup;
         const neighborhoodMeshes = new Map(); // clusterId → Mesh
         const buildingMeshes = [];            // all building meshes for raycaster
         const buildingData = new Map();       // mesh.uuid → { pitchers, clusterId }
@@ -2223,6 +2515,10 @@
             neighborhoodGroup = new THREE.Group();
             neighborhoodGroup.name = 'neighborhoods';
             scene.add(neighborhoodGroup);
+
+            cityDetailGroup = new THREE.Group();
+            cityDetailGroup.name = 'city-details';
+            scene.add(cityDetailGroup);
 
             buildingGroup = new THREE.Group();
             buildingGroup.name = 'buildings';
@@ -2334,8 +2630,7 @@
 
         // ── Build Neighborhoods (terrain-projected) ──
         function buildNeighborhoods() {
-            // Clear old
-            while (neighborhoodGroup.children.length) neighborhoodGroup.remove(neighborhoodGroup.children[0]);
+            clearGroup(neighborhoodGroup);
             neighborhoodMeshes.clear();
 
             const cells = getVoronoiCells();
@@ -2390,8 +2685,7 @@
 
         // ── Build Buildings (confined to Voronoi zones, on terrain) ──
         function buildBuildings() {
-            // Clear old
-            while (buildingGroup.children.length) buildingGroup.remove(buildingGroup.children[0]);
+            clearGroup(buildingGroup);
             buildingMeshes.length = 0;
             buildingData.clear();
 
@@ -2464,23 +2758,44 @@
 
                     // Height: 85mph→~0.2, 95mph→~2.2, 100+mph→3.0
                     const height = Math.max(0.2, (avgVelo - 82) / 18 * 3.0);
-                    // Footprint: scales with sqrt of pitcher count
-                    const footprint = Math.min(SLOT_SIZE * 0.85, 0.12 + Math.sqrt(count) * 0.06);
+                    const footprintBase = Math.min(SLOT_SIZE * 0.82, 0.12 + Math.sqrt(count) * 0.055);
+                    const width = footprintBase * (0.85 + ((si + clusterId.length) % 4) * 0.08);
+                    const depth = footprintBase * (0.82 + ((si * 3 + clusterId.length) % 5) * 0.07);
 
-                    // Building base sits on terrain surface
                     const terrainY = getTerrainHeight(slot.x, slot.z);
 
-                    const geo = new THREE.BoxGeometry(footprint, height, footprint);
-                    const mat = new THREE.MeshStandardMaterial({
-                        color: color,
-                        metalness: 0.25,
-                        roughness: 0.65,
-                    });
+                    const geo = new THREE.BoxGeometry(width, height, depth);
+                    const mat = makeBuildingMaterial(color, height, si + clusterId.charCodeAt(0));
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(slot.x, terrainY + height / 2, slot.z);
+                    mesh.rotation.y = ((si % 7) - 3) * 0.035;
                     mesh.castShadow = true;
                     mesh.receiveShadow = true;
-                    mesh.userData = { type: 'building', clusterId, pitchers: pList };
+                    mesh.userData = { type: 'building', clusterId, pitchers: pList, baseColor: cl.color };
+
+                    const roofMat = new THREE.MeshStandardMaterial({
+                        color: color.clone().multiplyScalar(0.38),
+                        roughness: 0.76,
+                        metalness: 0.12,
+                    });
+                    const roof = new THREE.Mesh(
+                        new THREE.BoxGeometry(width * 1.06, 0.045, depth * 1.06),
+                        roofMat
+                    );
+                    roof.position.y = height / 2 + 0.025;
+                    roof.userData = { type: 'roof-cap' };
+                    mesh.add(roof);
+
+                    if (height > 1.2 && si % 3 === 0) {
+                        const antenna = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.01, 0.012, 0.28, 6),
+                            new THREE.MeshStandardMaterial({ color: 0xb9c1c8, metalness: 0.6, roughness: 0.35 })
+                        );
+                        antenna.position.y = height / 2 + 0.18;
+                        antenna.userData = { type: 'antenna' };
+                        mesh.add(antenna);
+                    }
+
                     buildingGroup.add(mesh);
                     buildingMeshes.push(mesh);
                     buildingData.set(mesh.uuid, { pitchers: pList, clusterId });
@@ -2718,6 +3033,7 @@
             _voronoiCache = null; // Force recompute
             buildTerrain();        // FIRST: terrain heightfield (everything depends on it)
             buildNeighborhoods();  // Project onto terrain
+            buildCityDetails();    // Water, parks, trees, and civic texture
             buildBuildings();      // Confined to Voronoi + on terrain
             buildRoads();          // Voronoi edge roads + central boulevard
             buildLabels();         // Terrain-aware Y
