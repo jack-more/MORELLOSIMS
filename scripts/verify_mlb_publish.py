@@ -18,6 +18,10 @@ def today_et():
     return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
 
 
+def now_et():
+    return datetime.now(ZoneInfo("America/New_York"))
+
+
 def read_url(url):
     request = urllib.request.Request(
         url,
@@ -52,6 +56,16 @@ def main():
     parser.add_argument("--base-url", help="Optional live site root, for example https://morellosims.com")
     parser.add_argument("--date", default=today_et(), help="Expected ET slate date, YYYY-MM-DD")
     parser.add_argument(
+        "--max-age-minutes",
+        type=int,
+        help="Fail if the generated MLB page timestamp is older than this many minutes.",
+    )
+    parser.add_argument(
+        "--require-hr-h2h-lane",
+        action="store_true",
+        help="Fail if the HR card was generated without direct H2H lane copy/metadata support.",
+    )
+    parser.add_argument(
         "--require-today-picks",
         action="store_true",
         help="Fail if picks/mlb.json has no pending picks for the expected date.",
@@ -65,10 +79,29 @@ def main():
         errors.append("picks/mlb.json is not a JSON list")
         picks = []
 
-    generated_match = re.search(r"Generated\s+(\d{4}-\d{2}-\d{2})\s+\d{1,2}:\d{2}\s+ET", html)
+    generated_match = re.search(r"Generated\s+(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})\s+ET", html)
     generated_date = generated_match.group(1) if generated_match else None
     if generated_date != args.date:
         errors.append(f"MLB page generated date is {generated_date or 'missing'}, expected {args.date}")
+    if args.max_age_minutes is not None:
+        if not generated_match:
+            errors.append("MLB page generated timestamp is missing")
+        else:
+            generated_dt = datetime.strptime(
+                f"{generated_match.group(1)} {generated_match.group(2)}",
+                "%Y-%m-%d %H:%M",
+            ).replace(tzinfo=ZoneInfo("America/New_York"))
+            age_minutes = (now_et() - generated_dt).total_seconds() / 60
+            if age_minutes < -5:
+                errors.append(f"MLB page generated timestamp is in the future: {generated_dt.isoformat()}")
+            elif age_minutes > args.max_age_minutes:
+                errors.append(
+                    f"MLB page is stale: generated {age_minutes:.0f} minutes ago, "
+                    f"max allowed {args.max_age_minutes}"
+                )
+
+    if args.require_hr_h2h_lane and "direct H2H" not in html:
+        errors.append("MLB HR card missing direct H2H lane copy; generated page is from stale HR logic")
 
     todays = [
         p for p in picks

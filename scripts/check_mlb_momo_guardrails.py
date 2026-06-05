@@ -11,6 +11,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 HTML_PATH = REPO_ROOT / "mlbsim" / "index.html"
 SIM_SCRIPT_PATH = REPO_ROOT / "scripts" / "build_mlb_sim.py"
 REFRESH_SCRIPT_PATH = REPO_ROOT / "scripts" / "refresh_atlas_2026.py"
+VERIFY_SCRIPT_PATH = REPO_ROOT / "scripts" / "verify_mlb_publish.py"
+MLB_PIPELINE_PATH = REPO_ROOT / ".github" / "workflows" / "mlb-pipeline.yml"
+MLB_HEALTHCHECK_PATH = REPO_ROOT / ".github" / "workflows" / "mlb-healthcheck.yml"
 
 
 def _decimal_from_dot(value):
@@ -243,6 +246,7 @@ def check_hr_lotto_guardrails():
     html = HTML_PATH.read_text()
     required_html_markers = [
         ("damage score", "HR Lotto page must show damage score criteria"),
+        ("direct H2H", "HR Lotto page must show direct H2H criteria"),
         ("stack pressure", "HR Watchlist page must show stack pressure criteria"),
     ]
     for marker, message in required_html_markers:
@@ -314,6 +318,27 @@ def check_atlas_refresh_guardrails():
     return errors
 
 
+def check_publish_freshness_guardrails():
+    errors = []
+    verify_source = VERIFY_SCRIPT_PATH.read_text()
+    pipeline = MLB_PIPELINE_PATH.read_text()
+    healthcheck = MLB_HEALTHCHECK_PATH.read_text()
+    required_markers = [
+        (verify_source, "--max-age-minutes", "Publish verifier must support max-age checks"),
+        (verify_source, "--require-hr-h2h-lane", "Publish verifier must require HR H2H lane when requested"),
+        (verify_source, "age_minutes > args.max_age_minutes", "Publish verifier must fail stale generated pages"),
+        (verify_source, "direct H2H", "Publish verifier must detect stale HR-card logic"),
+        (pipeline, "0 23 * * *", "MLB pipeline must keep 7 PM ET late-slate refresh"),
+        (pipeline, "0 0 * * *", "MLB pipeline must keep 8 PM ET West Coast refresh"),
+        (pipeline, "--max-age-minutes 90 --require-hr-h2h-lane", "MLB pipeline must enforce fresh H2H HR-card publish checks"),
+        (healthcheck, "--max-age-minutes 100 --require-hr-h2h-lane", "Live MLB healthcheck must enforce fresh H2H HR-card checks"),
+    ]
+    for text, marker, message in required_markers:
+        if marker not in text:
+            errors.append(f"{message}: missing `{marker}`")
+    return errors
+
+
 def main():
     errors = check_formula_guardrails()
     page_errors, warnings = check_generated_page()
@@ -321,6 +346,7 @@ def main():
     errors.extend(check_hr_lotto_guardrails())
     errors.extend(check_mlb_pick_gate_guardrails())
     errors.extend(check_atlas_refresh_guardrails())
+    errors.extend(check_publish_freshness_guardrails())
 
     if warnings:
         print("MLB MOMO guardrail warnings:")

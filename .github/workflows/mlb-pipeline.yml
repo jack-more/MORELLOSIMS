@@ -22,7 +22,15 @@ on:
     #    Final refresh. Most 7 PM lineups locked.
     - cron: '0 22 * * *'
 
-    # 6) Settle — 2 AM ET (06:00 UTC)
+    # 6) Late slate — 7 PM ET (23:00 UTC)
+    #    Catch late lineup and HR card changes before West Coast games.
+    - cron: '0 23 * * *'
+
+    # 7) West Coast final — 8 PM ET (00:00 UTC)
+    #    Last pregame pass for late starts.
+    - cron: '0 0 * * *'
+
+    # 8) Settle — 2 AM ET (06:00 UTC)
     #    All games done, mark results overnight.
     - cron: '0 6 * * *'
 
@@ -116,7 +124,7 @@ jobs:
         run: python3 scripts/check_mlb_momo_guardrails.py
 
       - name: Verify MLB publish freshness
-        run: python3 scripts/verify_mlb_publish.py
+        run: python3 scripts/verify_mlb_publish.py --max-age-minutes 90 --require-hr-h2h-lane
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.
@@ -168,7 +176,7 @@ jobs:
         run: python3 scripts/check_mlb_momo_guardrails.py
 
       - name: Verify MLB publish freshness
-        run: python3 scripts/verify_mlb_publish.py
+        run: python3 scripts/verify_mlb_publish.py --max-age-minutes 90 --require-hr-h2h-lane
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.
