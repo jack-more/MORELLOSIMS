@@ -10,6 +10,7 @@ from mlb_momo import matchup_swing_to_momo, momentum_to_momi
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HTML_PATH = REPO_ROOT / "mlbsim" / "index.html"
 SIM_SCRIPT_PATH = REPO_ROOT / "scripts" / "build_mlb_sim.py"
+REFRESH_SCRIPT_PATH = REPO_ROOT / "scripts" / "refresh_atlas_2026.py"
 
 
 def _decimal_from_dot(value):
@@ -296,12 +297,30 @@ def check_mlb_pick_gate_guardrails():
     return errors
 
 
+def check_atlas_refresh_guardrails():
+    errors = []
+    source = REFRESH_SCRIPT_PATH.read_text()
+    required_markers = [
+        ("def compute_hitter_vs_pitcher", "Atlas refresh must compute direct batter-vs-pitcher H2H"),
+        ("def merge_hitter_vs_pitcher", "Atlas refresh must merge direct H2H idempotently"),
+        ("save_atlas(\"hitter_vs_pitcher.json\"", "Atlas refresh must save hitter_vs_pitcher.json"),
+        ("baseline_pa", "Direct H2H merge must snapshot pre-2026 baseline to avoid double-counting"),
+        ("hvp_records = compute_hitter_vs_pitcher", "Atlas refresh must run the direct H2H compute step"),
+        ("n_hvp = merge_hitter_vs_pitcher", "Atlas refresh must run the direct H2H merge step"),
+    ]
+    for marker, message in required_markers:
+        if marker not in source:
+            errors.append(f"{message}: missing `{marker}`")
+    return errors
+
+
 def main():
     errors = check_formula_guardrails()
     page_errors, warnings = check_generated_page()
     errors.extend(page_errors)
     errors.extend(check_hr_lotto_guardrails())
     errors.extend(check_mlb_pick_gate_guardrails())
+    errors.extend(check_atlas_refresh_guardrails())
 
     if warnings:
         print("MLB MOMO guardrail warnings:")

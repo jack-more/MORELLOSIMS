@@ -9,6 +9,7 @@ uses current-season data.
 
 Updates:
   - atlas/hitter_vs_cluster.json  (append/update 2026 records)
+  - atlas/hitter_vs_pitcher.json  (merge cumulative 2026 direct H2H)
   - atlas/pitcher_seasons.json    (append/update 2026 records)
   - atlas/pitcher_siera.json      (append/update 2026 SIERA estimates)
   - atlas/pitcher_tiers.json      (recompute tiers including 2026)
@@ -700,6 +701,65 @@ def compute_hitter_vs_cluster(df, pitcher_idx):
     return records
 
 
+def compute_hitter_vs_pitcher(df, pitcher_idx):
+    """Compute cumulative 2026 direct batter-vs-pitcher records.
+
+    hitter_vs_pitcher.json has no game_year column, so merge_hitter_vs_pitcher
+    snapshots the pre-2026 baseline and overlays these fresh cumulative 2026
+    totals idempotently on every refresh.
+    """
+    print(f"\n{'='*60}")
+    print(f"COMPUTING HITTER VS PITCHER (2026)")
+    print(f"{'='*60}")
+
+    pa_df = df[df["events"].notna()].copy()
+    pa_df["hit_type"] = pa_df["events"].apply(event_to_hit_type)
+    print(f"  Plate appearances: {len(pa_df)}")
+
+    records = []
+    for (batter_id, pitcher_id), group in pa_df.groupby(["batter", "pitcher"]):
+        events = group["hit_type"].tolist()
+        singles = events.count("single")
+        doubles = events.count("double")
+        triples = events.count("triple")
+        hr = events.count("home_run")
+        bb = events.count("walk")
+        hbp = events.count("hit_by_pitch")
+        k = events.count("strikeout")
+        outs = events.count("out")
+
+        h = singles + doubles + triples + hr
+        ab = h + k + outs
+        pa = len(events)
+        ba = round(h / ab, 4) if ab else 0.0
+        woba = compute_woba(events)
+
+        ps = pitcher_idx.get(int(pitcher_id), {})
+        cluster = ps.get("cluster")
+        if not cluster:
+            p_throws = group["p_throws"].iloc[0] if "p_throws" in group.columns and len(group) else "R"
+            cluster = f"{p_throws}_UT" if p_throws in {"R", "L"} else "R_UT"
+
+        records.append({
+            "b": int(batter_id),
+            "p": int(pitcher_id),
+            "pn": str(group["player_name"].iloc[0]) if "player_name" in group.columns and len(group) else "",
+            "c": str(cluster),
+            "s": str(group["stand"].iloc[0]) if "stand" in group.columns and len(group) else "",
+            "pa": int(pa),
+            "h": int(h),
+            "hr": int(hr),
+            "k": int(k),
+            "bb": int(bb),
+            "hbp": int(hbp),
+            "w": round(float(woba), 4) if woba is not None else 0.0,
+            "ba": ba,
+        })
+
+    print(f"  Generated {len(records)} batter-vs-pitcher records for 2026")
+    return records
+
+
 # ─── Step 4: Build batter name lookup ────────────────────────────────────────
 
 def build_batter_names(df):
@@ -1102,6 +1162,87 @@ def merge_hitter_vs_cluster(new_records):
 
     merged = kept + new_records
     save_atlas("hitter_vs_cluster.json", merged)
+    return len(new_records)
+
+
+def _ensure_hvp_baseline(record):
+    """Snapshot pre-2026 H2H totals once, then overlay fresh season totals."""
+    if "baseline_pa" in record:
+        return
+    for field in ("pa", "h", "hr", "k", "bb", "hbp"):
+        record[f"baseline_{field}"] = float(record.get(field) or 0)
+    record["baseline_w"] = float(record.get("w") or 0)
+    record["baseline_ba"] = float(record.get("ba") or 0)
+
+
+def merge_hitter_vs_pitcher(new_records):
+    """Merge cumulative 2026 direct H2H into hitter_vs_pitcher.json.
+
+    The legacy H2H atlas has no game_year field. To make this safe for daily
+    cumulative Statcast refreshes, each touched row stores its pre-2026
+    baseline once and recomputes totals as baseline + current 2026.
+    """
+    print(f"\n  Merging hitter_vs_pitcher...")
+    existing = load_atlas("hitter_vs_pitcher.json")
+    by_key = {}
+    for r in existing:
+        key = (int(r.get("b") or 0), int(r.get("p") or 0))
+        by_key[key] = r
+
+    n_updated = 0
+    n_new = 0
+    for season in new_records:
+        key = (season["b"], season["p"])
+        if key in by_key:
+            r = by_key[key]
+            _ensure_hvp_baseline(r)
+            n_updated += 1
+        else:
+            r = {
+                "b": season["b"],
+                "p": season["p"],
+                "pn": season.get("pn", ""),
+                "c": season.get("c", ""),
+                "s": season.get("s", ""),
+                "baseline_pa": 0.0,
+                "baseline_h": 0.0,
+                "baseline_hr": 0.0,
+                "baseline_k": 0.0,
+                "baseline_bb": 0.0,
+                "baseline_hbp": 0.0,
+                "baseline_w": 0.0,
+                "baseline_ba": 0.0,
+            }
+            existing.append(r)
+            by_key[key] = r
+            n_new += 1
+
+        base_pa = float(r.get("baseline_pa") or 0)
+        season_pa = float(season.get("pa") or 0)
+        total_pa = base_pa + season_pa
+
+        for field in ("h", "hr", "k", "bb", "hbp"):
+            r[field] = int(round(float(r.get(f"baseline_{field}") or 0) + float(season.get(field) or 0)))
+            r[f"season_{field}_{SEASON}"] = int(season.get(field) or 0)
+
+        r["pa"] = int(round(total_pa))
+        r[f"season_pa_{SEASON}"] = int(season_pa)
+        r["pn"] = season.get("pn") or r.get("pn", "")
+        r["c"] = season.get("c") or r.get("c", "")
+        r["s"] = season.get("s") or r.get("s", "")
+
+        base_w = float(r.get("baseline_w") or 0)
+        season_w = float(season.get("w") or 0)
+        r["w"] = round(((base_w * base_pa) + (season_w * season_pa)) / total_pa, 4) if total_pa else 0.0
+
+        # Existing legacy rows do not store AB, so approximate BA denominator
+        # from PA minus free passes. HR count and wOBA remain the primary H2H
+        # signals for the sim/atlas UI.
+        ba_den = max(0.0, total_pa - float(r.get("bb") or 0) - float(r.get("hbp") or 0))
+        r["ba"] = round((float(r.get("h") or 0) / ba_den), 4) if ba_den else 0.0
+
+    print(f"    Updated: {n_updated}, New direct H2H pairs: {n_new}")
+    save_atlas("hitter_vs_pitcher.json", existing)
     return len(new_records)
 
 
@@ -1548,6 +1689,10 @@ def main():
     for r in hvc_records:
         r["batter_name"] = name_map.get(r["batter"], "")
 
+    # 5a. Compute direct hitter-vs-pitcher for 2026. This keeps exact H2H
+    # power history synced for atlas tools and HR Lotto pregame overlays.
+    hvp_records = compute_hitter_vs_pitcher(df, current_pitcher_idx)
+
     # 5b. Compute hitter season totals for 2026 (powers atlas/batters.json)
     hs_records = compute_hitter_seasons(df, name_map)
 
@@ -1560,6 +1705,7 @@ def main():
     print(f"MERGING INTO ATLAS")
     print(f"{'='*60}")
     n_hvc = merge_hitter_vs_cluster(hvc_records)
+    n_hvp = merge_hitter_vs_pitcher(hvp_records)
     n_hs = merge_batters(hs_records, name_map)
     n_ps = merge_pitcher_seasons(ps_records)
     n_siera = merge_pitcher_siera(siera_records)
@@ -1571,6 +1717,7 @@ def main():
     print(f"\n{'#'*60}")
     print(f"  REFRESH COMPLETE")
     print(f"  hitter_vs_cluster: +{n_hvc} records")
+    print(f"  hitter_vs_pitcher: +{n_hvp} records")
     print(f"  batters:           {n_hs} batters with 2026 stats")
     print(f"  pitcher_seasons:   +{n_ps} records")
     print(f"  pitcher_siera:     +{n_siera} records")
