@@ -1649,9 +1649,12 @@ for bm in all_batter_matchups:
 
 def render_hr_watch_tab():
     HR_CORE_MIN = 0.085
-    HR_LONGSHOT_MIN = 0.070
+    HR_LONGSHOT_MIN = 0.065
     HR_CORE_MAX_ROWS = 6
-    HR_LONGSHOT_MAX_ROWS = 3
+    HR_LONGSHOT_MAX_ROWS = 8
+    HR_LONGSHOT_STANDARD_ROWS = 3
+    HR_LONGSHOT_DAMAGE_ROWS = 2
+    HR_LONGSHOT_STACK_ROWS = 3
     HR_HEAT_MAX_ROWS = 10
     HR_MIN_MATCHUP_PA = 30
     HR_MIN_PLAYER_PA = 100
@@ -1692,36 +1695,104 @@ def render_hr_watch_tab():
             return bm.get("hr_rate", 0) >= 0.078
         return True
 
-    def hr_card_qualifies(bm, core=True):
-        hr_rate = bm.get("hr_rate", 0) or 0
-        min_rate = HR_CORE_MIN if core else HR_LONGSHOT_MIN
-        max_rate_ok = True if core else hr_rate < HR_CORE_MIN
+    def all_around_heat_ok(bm, core=True):
         return (
-            max_rate_ok
-            and hr_rate >= min_rate
-            and has_power_profile(bm)
-            and has_reliable_hr_context(bm)
-            and pitcher_context_ok(bm, core=core)
-            and bm.get("hr_lift", 0) >= (HR_MIN_LIFT if core else 0.010)
-            and bm.get("proj_hr", 0) >= (0.34 if core else 0.30)
-            and bm.get("run_contrib", 0) >= (HR_MIN_RUN_CONTRIB if core else 1.00)
-            and bm.get("ms", 0) >= (75 if core else 82)
+            bm.get("ms", 0) >= (75 if core else 82)
             and bm.get("momi", 50) >= (72 if core else 82)
         )
 
     def hr_damage_score(bm):
         tier_penalty = {"T1_Apex": 1.2, "T2_Core": 0.45}.get(bm.get("opp_tier", ""), 0.0)
-        lineup_bonus = max(0, 7 - int(bm.get("order", 7) or 7)) * 0.12
+        lineup_bonus = max(0, 7 - int(bm.get("order", 7) or 7)) * 0.18
         return (
             bm.get("proj_hr", 0) * 100
-            + bm.get("base_hr_rate", 0) * 80
-            + max(0, bm.get("hr_lift", 0)) * 130
-            + bm.get("run_contrib", 0) * 2.4
-            + max(0, bm.get("momi", 50) - 70) * 0.05
-            + max(0, bm.get("ms", 50) - 70) * 0.04
+            + bm.get("base_hr_rate", 0) * 90
+            + max(0, bm.get("hr_lift", 0)) * 150
+            + bm.get("run_contrib", 0) * 1.6
+            + max(0, bm.get("momi", 50) - 70) * 0.02
+            + max(0, bm.get("ms", 50) - 70) * 0.015
             + max(0, bm.get("park_factor", 1.0) - 1.0) * 12
             + lineup_bonus
             - tier_penalty
+        )
+
+    def hr_damage_lane_ok(bm, core=True):
+        """Pure HR fit can override all-around MOMO/MOMI for Lotto eligibility."""
+        min_rate = 0.078 if core else HR_LONGSHOT_MIN
+        min_lift = 0.020 if core else 0.012
+        min_proj = 0.320 if core else 0.250
+        min_run = 0.85 if core else 0.70
+        min_base = 0.038 if core else 0.034
+        min_score = 44.0 if core else 40.0
+        return (
+            bm.get("order", 9) <= 6
+            and bm.get("hr_rate", 0) >= min_rate
+            and bm.get("base_hr_rate", 0) >= min_base
+            and bm.get("hr_lift", 0) >= min_lift
+            and bm.get("proj_hr", 0) >= min_proj
+            and bm.get("run_contrib", 0) >= min_run
+            and hr_damage_score(bm) >= min_score
+        )
+
+    def team_stack_pressure(bm):
+        peers = [
+            other for other in all_batter_matchups
+            if other.get("id") != bm.get("id")
+            and other.get("team") == bm.get("team")
+            and other.get("opp_pitcher") == bm.get("opp_pitcher")
+            and other.get("opp_team") == bm.get("opp_team")
+        ]
+        pressure = 0.0
+        for other in peers:
+            if other.get("order", 9) > 6 and other.get("base_hr_rate", 0) < 0.040:
+                continue
+            pressure += max(0, other.get("hr_rate", 0) - 0.045) * 100
+            pressure += max(0, other.get("base_hr_rate", 0) - 0.032) * 40
+            pressure += max(0, other.get("hr_lift", 0)) * 45
+        return pressure
+
+    def hr_stack_lane_ok(bm):
+        tier = bm.get("opp_tier", "")
+        min_rate = 0.070 if tier == "T1_Apex" else 0.055
+        has_stack_context = (
+            bm.get("team_total", 0) >= 4.8
+            or bm.get("opp_tier_mult", 1.0) >= 1.05
+            or team_stack_pressure(bm) >= 4.0
+        )
+        return (
+            bm.get("order", 9) <= 6
+            and bm.get("hr_rate", 0) >= min_rate
+            and bm.get("base_hr_rate", 0) >= 0.034
+            and bm.get("hr_lift", 0) >= 0.010
+            and bm.get("proj_hr", 0) >= 0.230
+            and bm.get("run_contrib", 0) >= 0.65
+            and has_stack_context
+        )
+
+    def hr_standard_lane_ok(bm, core=True):
+        hr_rate = bm.get("hr_rate", 0) or 0
+        min_rate = HR_CORE_MIN if core else HR_LONGSHOT_MIN
+        return (
+            hr_rate >= min_rate
+            and bm.get("hr_lift", 0) >= (HR_MIN_LIFT if core else 0.010)
+            and bm.get("proj_hr", 0) >= (0.34 if core else 0.30)
+            and bm.get("run_contrib", 0) >= (HR_MIN_RUN_CONTRIB if core else 1.00)
+            and all_around_heat_ok(bm, core=core)
+        )
+
+    def hr_card_qualifies(bm, core=True):
+        hr_rate = bm.get("hr_rate", 0) or 0
+        max_rate_ok = True if core else hr_rate < HR_CORE_MIN
+        standard_lane = hr_standard_lane_ok(bm, core=core)
+        damage_lane = hr_damage_lane_ok(bm, core=core) and (not core or hr_rate >= HR_CORE_MIN)
+        stack_lane = False if core else hr_stack_lane_ok(bm)
+        power_ok = has_power_profile(bm) or stack_lane
+        return (
+            max_rate_ok
+            and power_ok
+            and has_reliable_hr_context(bm)
+            and pitcher_context_ok(bm, core=core)
+            and (standard_lane or damage_lane or stack_lane)
         )
 
     def render_hr_row(rank, bm):
@@ -1746,7 +1817,7 @@ def render_hr_watch_tab():
 	  <div class="hr-rank">{rank}</div>
 	  <div class="hr-info">
 	    <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
-	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 POW {pow_pct}% \u00b7 LIFT +{lift_pct}pp \u00b7 {sample_pa}PA \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
+	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 DMG {round(hr_damage_score(bm))} \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 POW {pow_pct}% \u00b7 LIFT +{lift_pct}pp \u00b7 {sample_pa}PA \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
 	  </div>
   <div class="hr-rate-col">
     <div class="hr-rate">{hr_pct}%</div>
@@ -1767,14 +1838,79 @@ def render_hr_watch_tab():
     )[:HR_CORE_MAX_ROWS]
 
     core_ids = {bm.get("id") for bm in core_hr}
-    longshot_damage = sorted(
+    longshot_pool = [
+        bm for bm in all_batter_matchups
+        if bm.get("id") not in core_ids
+        and hr_card_qualifies(bm, core=False)
+    ]
+    longshot_standard = sorted(
+        [bm for bm in longshot_pool if hr_standard_lane_ok(bm, core=False)],
+        key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
+    )[:HR_LONGSHOT_STANDARD_ROWS]
+
+    used_longshot_ids = {bm.get("id") for bm in longshot_standard}
+    longshot_damage_overrides = sorted(
         [
-            bm for bm in all_batter_matchups
-            if bm.get("id") not in core_ids
-            and hr_card_qualifies(bm, core=False)
+            bm for bm in longshot_pool
+            if bm.get("id") not in used_longshot_ids
+            and hr_damage_lane_ok(bm, core=False)
+            and not all_around_heat_ok(bm, core=False)
         ],
         key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
-    )[:HR_LONGSHOT_MAX_ROWS]
+    )[:HR_LONGSHOT_DAMAGE_ROWS]
+
+    used_longshot_ids |= {bm.get("id") for bm in longshot_damage_overrides}
+    core_stack_keys = {
+        (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        for bm in core_hr
+    }
+    damage_stack_keys = {
+        (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        for bm in longshot_damage_overrides
+    }
+    standard_stack_keys = {
+        (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        for bm in longshot_standard
+    }
+
+    def stack_anchor_score(bm):
+        key = (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        if key in core_stack_keys:
+            return 3
+        if key in damage_stack_keys:
+            return 2
+        if key in standard_stack_keys:
+            return 1
+        return 0
+
+    stack_candidates = sorted(
+        [
+            bm for bm in longshot_pool
+            if bm.get("id") not in used_longshot_ids
+            and hr_stack_lane_ok(bm)
+            and stack_anchor_score(bm) > 0
+        ],
+        key=lambda x: (-stack_anchor_score(x), -team_stack_pressure(x), -hr_damage_score(x), -x.get("hr_rate", 0))
+    )
+    longshot_stack_overrides = []
+    used_stack_keys = set()
+    for bm in stack_candidates:
+        key = (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        if key in used_stack_keys:
+            continue
+        longshot_stack_overrides.append(bm)
+        used_stack_keys.add(key)
+        if len(longshot_stack_overrides) >= HR_LONGSHOT_STACK_ROWS:
+            break
+
+    used_longshot_ids |= {bm.get("id") for bm in longshot_stack_overrides}
+    longshot_damage = (longshot_standard + longshot_damage_overrides + longshot_stack_overrides)[:HR_LONGSHOT_MAX_ROWS]
+    if len(longshot_damage) < HR_LONGSHOT_MAX_ROWS:
+        backfill = sorted(
+            [bm for bm in longshot_pool if bm.get("id") not in used_longshot_ids],
+            key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
+        )
+        longshot_damage.extend(backfill[:HR_LONGSHOT_MAX_ROWS - len(longshot_damage)])
 
     hr_html = render_hr_rows(core_hr)
     longshot_html = render_hr_rows(longshot_damage, "L")
@@ -1929,7 +2065,7 @@ def render_hr_watch_tab():
                 </div>'''
 
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
-                    {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary power looks that clear the stricter floor.", "7.0%+ HR", "power baseline", "sample checked", "+1.00R")}
+                    {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary blast fits. MOMO helps, but HR damage and stack pressure can carry the profile.", "6.5%+ HR", "damage score", "stack pressure", "+0.65R")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
@@ -1943,7 +2079,7 @@ def render_hr_watch_tab():
         <div class="daily-grid daily-grid-lotto">
             <div class="daily-col daily-center daily-hr-lotto">
                 <div class="daily-bucket primary hr-lotto">
-                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: power, sample, matchup lift, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "no filler")}
+                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: projected HR damage, power, matchup lift, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "damage score")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}
