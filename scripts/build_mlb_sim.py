@@ -2065,28 +2065,32 @@ def render_hr_watch_tab():
         hr_pct = round(bm["hr_rate"] * 100, 1)
         pow_pct = round((bm.get("base_hr_rate", 0) or 0) * 100, 1)
         lift_pct = round(max(0, bm.get("hr_lift", 0) or 0) * 100, 1)
-        sample_pa = int(round(bm.get("total_pa", 0) or 0))
-        h2h_meta = ""
+        clean_name = str(bm.get("name", "")).replace(" (H)", "").strip()
+        lane = "MODEL"
+        if hr_h2h_lane_ok(bm, core=True) or hr_h2h_lane_ok(bm, core=False):
+            lane = "H2H"
+        elif hr_primary_stack_lane_ok(bm) or hr_stack_lane_ok(bm):
+            lane = "STACK"
+        elif hr_damage_lane_ok(bm, core=True) or hr_damage_lane_ok(bm, core=False):
+            lane = "DAMAGE"
+        h2h_tag = ""
         if bm.get("h2h_pa", 0) >= 8 and bm.get("h2h_hr", 0) > 0:
-            h2h_meta = f' \u00b7 H2H {int(bm.get("h2h_hr", 0))}HR/{int(bm.get("h2h_pa", 0))}PA'
+            h2h_tag = f'<span>H2H {int(bm.get("h2h_hr", 0))}HR/{int(bm.get("h2h_pa", 0))}PA</span>'
         if bm["hr_rate"] >= 0.06:
             heat = "hr-fire"
-            heat_icon = "\U0001f525"
         elif bm["hr_rate"] >= 0.04:
             heat = "hr-hot"
-            heat_icon = "\U0001f7e2"
         elif bm["hr_rate"] >= 0.025:
             heat = "hr-warm"
-            heat_icon = "\U0001f7e1"
         else:
             heat = "hr-mild"
-            heat_icon = "\u26aa"
 
         return f'''<div class="hr-row {heat}">
 	  <div class="hr-rank">{rank}</div>
 	  <div class="hr-info">
-	    <div class="hr-name">{heat_icon} {h(bm["name"])}</div>
-	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) \u00b7 DMG {round(hr_damage_score(bm))}{h2h_meta} \u00b7 MOMO {bm["ms"]} \u00b7 MOMI {bm.get("momi", 50)} \u00b7 POW {pow_pct}% \u00b7 LIFT +{lift_pct}pp \u00b7 {sample_pa}PA \u00b7 +{bm.get("run_contrib", 0):.2f}R</div>
+	    <div class="hr-name">{h(clean_name)}</div>
+	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])})</div>
+	    <div class="hr-tags"><span>{lane}</span><span>DMG {round(hr_damage_score(bm))}</span>{h2h_tag}<span>POW {pow_pct}%</span><span>LIFT +{lift_pct}pp</span></div>
 	  </div>
   <div class="hr-rate-col">
     <div class="hr-rate">{hr_pct}%</div>
@@ -2134,7 +2138,10 @@ def render_hr_watch_tab():
         [bm for bm in core_pool if bm.get("id") not in core_ids and hr_card_qualifies(bm, core=True)],
         key=lambda x: (-hr_selection_score(x), -x.get("hr_rate", 0))
     )[:core_standard_slots]
-    core_hr = (core_h2h_overrides + core_stack_overrides + core_standard)[:HR_CORE_MAX_ROWS]
+    core_hr = sorted(
+        (core_h2h_overrides + core_stack_overrides + core_standard)[:HR_CORE_MAX_ROWS],
+        key=lambda x: (-hr_selection_score(x), -x.get("hr_rate", 0))
+    )
 
     core_ids = {bm.get("id") for bm in core_hr}
     longshot_pool = [
@@ -2437,10 +2444,15 @@ DAILY_CSS = """
 .daily-col .section-sub{font-size:10px;margin-bottom:8px}
 .hr-row{display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:56px;border-bottom:1px solid #eee}
 .hr-row:last-child{border-bottom:none}
-.hr-rank{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--color-meta);min-width:20px;text-align:center}
+.hr-rank{font-family:var(--font-mono);font-size:12px;font-weight:800;color:#111;min-width:28px;height:28px;border:2px solid #111;display:flex;align-items:center;justify-content:center;background:#fff}
 .hr-info{flex:1;min-width:0}
 .hr-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hr-meta{font-size:10px;color:var(--color-meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-meta{font-size:10px;color:var(--color-meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.hr-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.hr-tags span{font-family:var(--font-mono);font-size:8px;font-weight:800;line-height:1;border:1px solid #111;background:#f6f6f2;color:#111;padding:4px 5px;text-transform:uppercase;white-space:nowrap}
+.hr-fire .hr-tags span:first-child{background:#FF3333;color:#fff}
+.hr-hot .hr-tags span:first-child{background:#00A651;color:#fff}
+.hr-warm .hr-tags span:first-child{background:#FFEA00;color:#111}
 .hr-rate-col{text-align:right;min-width:50px}
 .hr-rate{font-family:var(--font-mono);font-weight:800;font-size:14px;color:var(--color-elite)}
 .hr-rate-label{font-size:8px;color:var(--color-meta);text-transform:uppercase;letter-spacing:0.5px}
@@ -2497,7 +2509,7 @@ DAILY_LOTTO_CSS = """
 .daily-bucket.hr-lotto .bucket-title{font-size:34px;letter-spacing:2px;color:#FF3333;text-shadow:2px 2px 0 #111}
 .daily-bucket.hr-lotto .bucket-copy{font-size:12px;max-width:58ch;color:#111}
 .daily-bucket.hr-lotto .criteria-row span{background:#FF3333;color:#fff}
-.daily-bucket.hr-lotto .hr-row{min-height:66px;padding:12px 14px}
+.daily-bucket.hr-lotto .hr-row{min-height:82px;padding:12px 14px}
 .daily-bucket.hr-lotto .hr-rank{font-size:14px;color:#111}
 .daily-bucket.hr-lotto .hr-name{font-size:15px}
 .daily-bucket.hr-lotto .hr-rate{font-size:18px}
@@ -2509,7 +2521,7 @@ DAILY_LOTTO_CSS = """
 .daily-hot-side .trend-row{min-height:54px;padding:9px 10px}
 .daily-hot-side .trend-meta{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 @media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:1.35fr .9fr}#tab-daily .daily-hr-lotto{order:1}#tab-daily .daily-board-side{order:2;grid-column:auto}#tab-daily .daily-hot-side{order:3;grid-column:1/-1}.daily-bucket.hr-lotto{transform:none}}
-@media(max-width:760px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr}#tab-daily .daily-hr-lotto{order:1}#tab-daily .daily-board-side{order:2;grid-column:auto}#tab-daily .daily-hot-side{order:3;grid-column:auto}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row{min-height:58px}}
+@media(max-width:760px){#tab-daily .daily-grid-lotto{grid-template-columns:1fr}#tab-daily .daily-hr-lotto{order:1}#tab-daily .daily-board-side{order:2;grid-column:auto}#tab-daily .daily-hot-side{order:3;grid-column:auto}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row{min-height:76px}.hr-rate-col{min-width:44px}.hr-tags span{font-size:7px;padding:3px 4px}}
 """
 if "DAILY_HR_LOTTO_LAYOUT_V3" not in css_block:
     css_block = css_block.replace("</style>", DAILY_LOTTO_CSS + "\n</style>")
