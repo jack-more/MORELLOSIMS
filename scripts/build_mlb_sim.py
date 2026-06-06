@@ -191,6 +191,31 @@ batter_profile_idx = {
     if b.get("batter") is not None
 }
 
+CURRENT_YEAR = int(TODAY[:4])
+
+
+def atlas_current_enough_for_picks():
+    """Block official picks if the matchup atlas is not current-season aware."""
+    hvc_year = max((int(r.get("game_year") or 0) for r in hvc_data), default=0)
+    pitcher_year = max((int(r.get("game_year") or 0) for r in pitcher_seasons), default=0)
+    season_pa_key = f"season_PA_{CURRENT_YEAR}"
+    current_batter_rows = sum(1 for b in batters_atlas if float(b.get(season_pa_key) or 0) > 0)
+    ok = (
+        hvc_year >= CURRENT_YEAR
+        and pitcher_year >= CURRENT_YEAR
+        and current_batter_rows >= 200
+    )
+    if not ok:
+        print(
+            "  WARN: Atlas freshness gate failed "
+            f"(hvc_year={hvc_year}, pitcher_year={pitcher_year}, "
+            f"{season_pa_key}_rows={current_batter_rows}); no official MLB picks"
+        )
+    return ok
+
+
+ATLAS_CURRENT_FOR_PICKS = atlas_current_enough_for_picks()
+
 # pitcher_id/year → tier record
 tier_by_pid_year = {}
 tier_idx = {}
@@ -332,11 +357,11 @@ MAX_FAV_BY_CONF = {
     10: -220,
 }
 MIN_MODEL_EDGE_BY_CONF = {
-    # Required model probability over market break-even. C8 needs a wider
-    # cushion, while C10 can tolerate a tighter but still positive edge.
-    8: 0.035,
-    9: 0.025,
-    10: 0.015,
+    # Required model probability over market break-even. When the tracked
+    # season is near flat, C8 cannot be a barely-over-juice play.
+    8: 0.055,
+    9: 0.080,
+    10: 0.130,
 }
 
 
@@ -351,6 +376,20 @@ def moneyline_break_even(odds):
     if odds < 0:
         return abs(odds) / (abs(odds) + 100)
     return 100 / (odds + 100)
+
+
+def confidence_cap_from_market_edge(price_edge):
+    if price_edge is None:
+        return 0
+    if price_edge >= 0.130:
+        return 10
+    if price_edge >= 0.080:
+        return 9
+    if price_edge >= 0.055:
+        return 8
+    if price_edge >= 0.035:
+        return 7
+    return 6
 
 def stake_for_conf(conf):
     """Return $PP risk by confidence grade."""
@@ -1387,7 +1426,12 @@ for g in games_raw:
         if not acc or acc.get("pa_w", 0) <= 0:
             missing_coverage.append(p.get("fullName", f"id:{pid}") if isinstance(p, dict) else str(pid))
     has_full_coverage = len(missing_coverage) == 0 and away_has_full and home_has_full
-    pick_coverage_ok = len(missing_coverage) <= MAX_MISSING_BATTERS_FOR_PICK and away_has_full and home_has_full
+    pick_coverage_ok = (
+        len(missing_coverage) <= MAX_MISSING_BATTERS_FOR_PICK
+        and away_has_full
+        and home_has_full
+        and ATLAS_CURRENT_FOR_PICKS
+    )
     if missing_coverage:
         print(f"  [COVERAGE] {away_abbr} @ {home_abbr}: missing {len(missing_coverage)} batter(s): {', '.join(missing_coverage[:3])}{'...' if len(missing_coverage) > 3 else ''}")
 
@@ -1403,13 +1447,9 @@ for g in games_raw:
         away_wp = away_wp_raw
         home_wp = home_wp_raw
 
-    # Legacy "value" field retained as alias of conf for back-compat with the
-    # HTML template's data-value attribute. Single signal now.
-    value = conf
     edge = round(run_diff, 1)
     if not has_lineups:
         conf = 0
-        value = 0
         edge = 0
 
     # Real sportsbook odds — STRICT. We ONLY display prices the book actually
@@ -1442,16 +1482,29 @@ for g in games_raw:
         pick_odds_raw = 0
     pick_model_prob = (home_wp if pick_team == home_abbr else away_wp) / 100
     pick_break_even = moneyline_break_even(pick_odds_raw)
-    min_price_edge = MIN_MODEL_EDGE_BY_CONF.get(conf, 0.03)
-    hard_favorite_cap = MAX_FAV_BY_CONF.get(conf, -200)
     pick_price_edge = None
     odds_too_heavy = False
     if pick_break_even is not None:
         pick_price_edge = pick_model_prob - pick_break_even
+        market_conf_cap = confidence_cap_from_market_edge(pick_price_edge)
+        if pick_odds_raw < -180 and pick_price_edge < 0.130:
+            market_conf_cap = min(market_conf_cap, 8)
+        conf = min(conf, market_conf_cap)
+        if not ATLAS_CURRENT_FOR_PICKS:
+            conf = 0
+        min_price_edge = MIN_MODEL_EDGE_BY_CONF.get(conf, 0.030)
+        hard_favorite_cap = MAX_FAV_BY_CONF.get(conf, -200)
         odds_too_heavy = (
             pick_odds_raw < hard_favorite_cap
             or pick_price_edge < min_price_edge
         )
+    else:
+        min_price_edge = MIN_MODEL_EDGE_BY_CONF.get(conf, 0.030)
+        hard_favorite_cap = MAX_FAV_BY_CONF.get(conf, -200)
+
+    # Legacy "value" field retained as alias of conf for back-compat with the
+    # HTML template's data-value attribute. Single signal now.
+    value = conf
 
     park_factor = PARK_FACTOR.get(home_abbr, 1.00)
     games.append({
@@ -1625,6 +1678,8 @@ def render_game(g, idx):
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
     published_pick = published_pick_for_game(g)
+    if published_pick and not (g.get("has_started") or qualifies_as_pick(g)):
+        published_pick = None
     if published_pick:
         conf = int(published_pick.get("conf") or g["conf"])
         cc = conf_color(conf)
@@ -2413,8 +2468,10 @@ def render_hr_watch_tab():
     seen = set()
     for p in published_today:
         key = (p.get("away"), p.get("home"), p.get("side"))
-        seen.add(key)
         g = games_by_matchup.get((p.get("away"), p.get("home")))
+        if g and not (g.get("has_started") or qualifies_as_pick(g)):
+            continue
+        seen.add(key)
         rows.append({
             "pick_text": p.get("pick_text") or f'{p.get("side", "")} ML',
             "matchup": p.get("matchup") or f'{p.get("away", "")} @ {p.get("home", "")}',
