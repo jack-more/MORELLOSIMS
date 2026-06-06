@@ -1845,6 +1845,8 @@ def render_hr_watch_tab():
     HR_LONGSHOT_MIN = 0.065
     HR_CORE_MAX_ROWS = 6
     HR_CORE_H2H_ROWS = 2
+    HR_CORE_STACK_ROWS = 2
+    HR_CORE_NEAR_MIN = 0.078
     HR_LONGSHOT_MAX_ROWS = 8
     HR_LONGSHOT_STANDARD_ROWS = 3
     HR_LONGSHOT_H2H_ROWS = 2
@@ -1997,6 +1999,26 @@ def render_hr_watch_tab():
             and has_stack_context
         )
 
+    def hr_primary_stack_lane_ok(bm):
+        """Near-core HR bats in a live blast stack can steal primary-card slots."""
+        has_primary_stack_context = (
+            team_stack_pressure(bm) >= 4.0
+            or bm.get("team_total", 0) >= 4.8
+            or bm.get("park_factor", 1.0) >= 1.01
+            or bm.get("opp_tier_mult", 1.0) >= 1.05
+        )
+        return (
+            hr_stack_lane_ok(bm)
+            and bm.get("hr_rate", 0) >= HR_CORE_NEAR_MIN
+            and bm.get("base_hr_rate", 0) >= 0.040
+            and bm.get("hr_lift", 0) >= 0.018
+            and bm.get("proj_hr", 0) >= 0.280
+            and bm.get("run_contrib", 0) >= 0.75
+            and bm.get("order", 9) <= 6
+            and has_primary_stack_context
+            and pitcher_context_ok(bm, core=False)
+        )
+
     def hr_standard_lane_ok(bm, core=True):
         hr_rate = bm.get("hr_rate", 0) or 0
         min_rate = HR_CORE_MIN if core else HR_LONGSHOT_MIN
@@ -2027,6 +2049,16 @@ def render_hr_watch_tab():
             and context_ok
             and pitcher_context_ok(bm, core=core)
             and (standard_lane or damage_lane or stack_lane or h2h_lane)
+        )
+
+    def hr_selection_score(bm):
+        return (
+            hr_damage_score(bm)
+            + h2h_power_score(bm) * 1.05
+            + team_stack_pressure(bm) * 1.20
+            + max(0, bm.get("hr_rate", 0) - 0.060) * 180
+            + max(0, bm.get("base_hr_rate", 0) - 0.040) * 95
+            + max(0, bm.get("park_factor", 1.0) - 1.0) * 16
         )
 
     def render_hr_row(rank, bm):
@@ -2069,17 +2101,40 @@ def render_hr_watch_tab():
             rows.append(render_hr_row(rank, bm))
         return "".join(rows)
 
-    core_pool = [bm for bm in all_batter_matchups if hr_card_qualifies(bm, core=True)]
+    core_pool = [
+        bm for bm in all_batter_matchups
+        if hr_card_qualifies(bm, core=True) or hr_primary_stack_lane_ok(bm)
+    ]
     core_h2h_overrides = sorted(
         [bm for bm in core_pool if hr_h2h_lane_ok(bm, core=True)],
-        key=lambda x: (-h2h_power_score(x), -hr_damage_score(x), -x.get("hr_rate", 0))
+        key=lambda x: (-h2h_power_score(x), -hr_selection_score(x), -x.get("hr_rate", 0))
     )[:HR_CORE_H2H_ROWS]
     core_ids = {bm.get("id") for bm in core_h2h_overrides}
+    core_stack_candidates = sorted(
+        [
+            bm for bm in core_pool
+            if bm.get("id") not in core_ids
+            and hr_primary_stack_lane_ok(bm)
+        ],
+        key=lambda x: (-team_stack_pressure(x), -hr_selection_score(x), -x.get("hr_rate", 0))
+    )
+    core_stack_overrides = []
+    used_core_stack_keys = set()
+    for bm in core_stack_candidates:
+        key = (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        if key in used_core_stack_keys:
+            continue
+        core_stack_overrides.append(bm)
+        used_core_stack_keys.add(key)
+        if len(core_stack_overrides) >= HR_CORE_STACK_ROWS:
+            break
+    core_ids |= {bm.get("id") for bm in core_stack_overrides}
+    core_standard_slots = max(0, HR_CORE_MAX_ROWS - len(core_h2h_overrides) - len(core_stack_overrides))
     core_standard = sorted(
-        [bm for bm in core_pool if bm.get("id") not in core_ids],
-        key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
-    )[:HR_CORE_MAX_ROWS - len(core_h2h_overrides)]
-    core_hr = (core_h2h_overrides + core_standard)[:HR_CORE_MAX_ROWS]
+        [bm for bm in core_pool if bm.get("id") not in core_ids and hr_card_qualifies(bm, core=True)],
+        key=lambda x: (-hr_selection_score(x), -x.get("hr_rate", 0))
+    )[:core_standard_slots]
+    core_hr = (core_h2h_overrides + core_stack_overrides + core_standard)[:HR_CORE_MAX_ROWS]
 
     core_ids = {bm.get("id") for bm in core_hr}
     longshot_pool = [
