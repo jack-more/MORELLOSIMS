@@ -1540,6 +1540,34 @@ def published_pick_for_game(g):
 def is_published_pick(g):
     return (g.get("away_abbr"), g.get("home_abbr"), g.get("pick_team")) in published_today_pick_keys()
 
+def load_locked_hr_lotto_column():
+    """Keep today's posted HR board stable after any game has started."""
+    if os.environ.get("MLB_FORCE_HR_RESELECT") == "1":
+        return ""
+    if not any(g.get("has_started") for g in games):
+        return ""
+    try:
+        with open(os.path.join(REPO_ROOT, "mlbsim", "index.html"), encoding="utf-8") as f:
+            html = f.read()
+    except Exception:
+        return ""
+    generated = _re.search(r"Generated\s+(\d{4}-\d{2}-\d{2})\s+\d{1,2}:\d{2}\s+ET", html)
+    if not generated or generated.group(1) != TODAY:
+        return ""
+    start_marker = '<div class="daily-col daily-center daily-hr-lotto">'
+    end_marker = '<div class="daily-col daily-side daily-hot-side">'
+    start = html.find(start_marker)
+    if start < 0:
+        return ""
+    end = html.find(end_marker, start)
+    if end < 0:
+        return ""
+    snippet = html[start:end].rstrip()
+    if "hr-name" not in snippet:
+        return ""
+    print("  HR Lotto: preserving posted card after first pitch")
+    return snippet
+
 def qualifies_as_pick(g):
     if not g.get("has_lineups"):
         return False
@@ -1844,14 +1872,14 @@ def render_hr_watch_tab():
     HR_CORE_MIN = 0.085
     HR_LONGSHOT_MIN = 0.065
     HR_CORE_MAX_ROWS = 6
-    HR_CORE_H2H_ROWS = 2
-    HR_CORE_STACK_ROWS = 2
+    HR_CORE_H2H_ROWS = 3
+    HR_CORE_STACK_ROWS = 1
     HR_CORE_NEAR_MIN = 0.078
     HR_LONGSHOT_MAX_ROWS = 8
     HR_LONGSHOT_STANDARD_ROWS = 3
     HR_LONGSHOT_H2H_ROWS = 2
     HR_LONGSHOT_DAMAGE_ROWS = 2
-    HR_LONGSHOT_STACK_ROWS = 3
+    HR_LONGSHOT_STACK_ROWS = 2
     HR_HEAT_MAX_ROWS = 10
     HR_MIN_MATCHUP_PA = 30
     HR_MIN_PLAYER_PA = 100
@@ -1961,6 +1989,22 @@ def render_hr_watch_tab():
             + max(0, bm.get("h2h_ops", 0) - 0.900) * 16,
         )
 
+    def h2h_direct_hr_fit(bm, core=True):
+        pa = bm.get("h2h_pa", 0) or 0
+        hr = bm.get("h2h_hr", 0) or 0
+        if hr <= 0 or pa < 8:
+            return False
+        direct_hr_rate = hr / pa if pa else 0.0
+        min_pa = 14 if core else 8
+        min_hr = 2 if core else 1
+        return (
+            pa >= min_pa
+            and hr >= min_hr
+            and direct_hr_rate >= (0.050 if core else 0.040)
+            and bm.get("h2h_slg", 0) >= (0.560 if core else 0.500)
+            and bm.get("h2h_ops", 0) >= (0.850 if core else 0.780)
+        )
+
     def hr_h2h_lane_ok(bm, core=True):
         """Direct pitcher history can carry proven HR damage into the card."""
         min_pa = 12 if core else 8
@@ -1968,17 +2012,20 @@ def render_hr_watch_tab():
         min_ops = 0.950 if core else 0.850
         min_slg = 0.600 if core else 0.520
         min_run = 0.50 if core else 0.45
+        direct_fit = h2h_direct_hr_fit(bm, core=core)
+        team_total_ok = bm.get("team_total", 0) >= (4.0 if direct_fit else 4.4)
+        score_ok = h2h_power_score(bm) >= (28.0 if direct_fit and core else (32.0 if core else 20.0))
         return (
             bm.get("h2h_pa", 0) >= min_pa
             and bm.get("h2h_hr", 0) >= min_hr
-            and bm.get("h2h_ops", 0) >= min_ops
-            and bm.get("h2h_slg", 0) >= min_slg
-            and bm.get("base_hr_rate", 0) >= 0.030
-            and bm.get("run_contrib", 0) >= min_run
-            and bm.get("team_total", 0) >= 4.4
-            and bm.get("park_factor", 1.0) >= 0.96
+            and (direct_fit or bm.get("h2h_ops", 0) >= min_ops)
+            and (direct_fit or bm.get("h2h_slg", 0) >= min_slg)
+            and bm.get("base_hr_rate", 0) >= (0.028 if direct_fit else 0.030)
+            and bm.get("run_contrib", 0) >= (0.42 if direct_fit else min_run)
+            and team_total_ok
+            and bm.get("park_factor", 1.0) >= (0.94 if direct_fit else 0.96)
             and bm.get("order", 9) <= 7
-            and h2h_power_score(bm) >= (32.0 if core else 20.0)
+            and score_ok
         )
 
     def hr_stack_lane_ok(bm):
@@ -2052,27 +2099,53 @@ def render_hr_watch_tab():
         )
 
     def hr_selection_score(bm):
+        stack_weight = 0.35
+        if hr_h2h_lane_ok(bm, core=True) or hr_damage_lane_ok(bm, core=True):
+            stack_weight = 0.70
         return (
             hr_damage_score(bm)
-            + h2h_power_score(bm) * 1.05
-            + team_stack_pressure(bm) * 1.20
+            + h2h_power_score(bm) * 1.35
+            + team_stack_pressure(bm) * stack_weight
             + max(0, bm.get("hr_rate", 0) - 0.060) * 180
             + max(0, bm.get("base_hr_rate", 0) - 0.040) * 95
             + max(0, bm.get("park_factor", 1.0) - 1.0) * 16
         )
+
+    def hr_lane_rank(bm, core=True):
+        if hr_h2h_lane_ok(bm, core=core):
+            return 0
+        if hr_damage_lane_ok(bm, core=core):
+            return 1
+        if hr_standard_lane_ok(bm, core=core):
+            return 2
+        if hr_primary_stack_lane_ok(bm) or hr_stack_lane_ok(bm):
+            return 3
+        return 4
+
+    def hr_lane_sort_key(bm, core=True):
+        return (
+            hr_lane_rank(bm, core=core),
+            -hr_selection_score(bm),
+            -h2h_power_score(bm),
+            -hr_damage_score(bm),
+            -bm.get("hr_rate", 0),
+        )
+
+    def hr_lane_label(bm):
+        if hr_h2h_lane_ok(bm, core=True) or hr_h2h_lane_ok(bm, core=False):
+            return "H2H"
+        if hr_damage_lane_ok(bm, core=True) or hr_damage_lane_ok(bm, core=False):
+            return "DAMAGE"
+        if hr_primary_stack_lane_ok(bm) or hr_stack_lane_ok(bm):
+            return "STACK"
+        return "MODEL"
 
     def render_hr_row(rank, bm):
         hr_pct = round(bm["hr_rate"] * 100, 1)
         pow_pct = round((bm.get("base_hr_rate", 0) or 0) * 100, 1)
         lift_pct = round(max(0, bm.get("hr_lift", 0) or 0) * 100, 1)
         clean_name = str(bm.get("name", "")).replace(" (H)", "").strip()
-        lane = "MODEL"
-        if hr_h2h_lane_ok(bm, core=True) or hr_h2h_lane_ok(bm, core=False):
-            lane = "H2H"
-        elif hr_primary_stack_lane_ok(bm) or hr_stack_lane_ok(bm):
-            lane = "STACK"
-        elif hr_damage_lane_ok(bm, core=True) or hr_damage_lane_ok(bm, core=False):
-            lane = "DAMAGE"
+        lane = hr_lane_label(bm)
         h2h_tag = ""
         if bm.get("h2h_pa", 0) >= 8 and bm.get("h2h_hr", 0) > 0:
             h2h_tag = f'<span>H2H {int(bm.get("h2h_hr", 0))}HR/{int(bm.get("h2h_pa", 0))}PA</span>'
@@ -2119,28 +2192,33 @@ def render_hr_watch_tab():
             bm for bm in core_pool
             if bm.get("id") not in core_ids
             and hr_primary_stack_lane_ok(bm)
+            and not hr_card_qualifies(bm, core=True)
         ],
         key=lambda x: (-team_stack_pressure(x), -hr_selection_score(x), -x.get("hr_rate", 0))
     )
-    core_stack_overrides = []
-    used_core_stack_keys = set()
-    for bm in core_stack_candidates:
-        key = (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
-        if key in used_core_stack_keys:
-            continue
-        core_stack_overrides.append(bm)
-        used_core_stack_keys.add(key)
-        if len(core_stack_overrides) >= HR_CORE_STACK_ROWS:
-            break
-    core_ids |= {bm.get("id") for bm in core_stack_overrides}
-    core_standard_slots = max(0, HR_CORE_MAX_ROWS - len(core_h2h_overrides) - len(core_stack_overrides))
+    core_standard_slots = max(0, HR_CORE_MAX_ROWS - len(core_h2h_overrides))
     core_standard = sorted(
         [bm for bm in core_pool if bm.get("id") not in core_ids and hr_card_qualifies(bm, core=True)],
-        key=lambda x: (-hr_selection_score(x), -x.get("hr_rate", 0))
+        key=lambda x: hr_lane_sort_key(x, core=True)
     )[:core_standard_slots]
+    core_ids |= {bm.get("id") for bm in core_standard}
+
+    core_stack_overrides = []
+    used_core_stack_keys = set()
+    if len(core_h2h_overrides) + len(core_standard) < HR_CORE_MAX_ROWS:
+        for bm in core_stack_candidates:
+            if bm.get("id") in core_ids:
+                continue
+            key = (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+            if key in used_core_stack_keys:
+                continue
+            core_stack_overrides.append(bm)
+            used_core_stack_keys.add(key)
+            if len(core_stack_overrides) >= HR_CORE_STACK_ROWS:
+                break
     core_hr = sorted(
         (core_h2h_overrides + core_stack_overrides + core_standard)[:HR_CORE_MAX_ROWS],
-        key=lambda x: (-hr_selection_score(x), -x.get("hr_rate", 0))
+        key=lambda x: hr_lane_sort_key(x, core=True)
     )
 
     core_ids = {bm.get("id") for bm in core_hr}
@@ -2151,20 +2229,20 @@ def render_hr_watch_tab():
     ]
     longshot_standard = sorted(
         [bm for bm in longshot_pool if hr_standard_lane_ok(bm, core=False)],
-        key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
+        key=lambda x: hr_lane_sort_key(x, core=False)
     )[:HR_LONGSHOT_STANDARD_ROWS]
 
-    used_longshot_ids = {bm.get("id") for bm in longshot_standard}
     longshot_h2h_overrides = sorted(
         [
             bm for bm in longshot_pool
-            if bm.get("id") not in used_longshot_ids
-            and hr_h2h_lane_ok(bm, core=False)
+            if hr_h2h_lane_ok(bm, core=False)
         ],
         key=lambda x: (-h2h_power_score(x), -hr_damage_score(x), -x.get("hr_rate", 0))
     )[:HR_LONGSHOT_H2H_ROWS]
 
-    used_longshot_ids |= {bm.get("id") for bm in longshot_h2h_overrides}
+    used_longshot_ids = {bm.get("id") for bm in longshot_h2h_overrides}
+    longshot_standard = [bm for bm in longshot_standard if bm.get("id") not in used_longshot_ids]
+    used_longshot_ids |= {bm.get("id") for bm in longshot_standard}
     longshot_damage_overrides = sorted(
         [
             bm for bm in longshot_pool
@@ -2222,8 +2300,8 @@ def render_hr_watch_tab():
     used_longshot_ids |= {bm.get("id") for bm in longshot_stack_overrides}
     longshot_damage = (
         longshot_h2h_overrides
-        + longshot_standard
         + longshot_damage_overrides
+        + longshot_standard
         + longshot_stack_overrides
     )[:HR_LONGSHOT_MAX_ROWS]
     if len(longshot_damage) < HR_LONGSHOT_MAX_ROWS:
@@ -2374,6 +2452,7 @@ def render_hr_watch_tab():
     games_with_lu = sum(1 for g in games if g["has_lineups"])
     no_data = '<div class="empty-state">UPDATES WHEN LINEUPS ARE RELEASED</div>' if not (hr_html or longshot_html or heat_html) else ''
     hr_empty = '<div class="empty-state">NO TIER 1 HR % EDGES</div>' if not hr_html else ''
+    locked_hr_column = load_locked_hr_lotto_column()
     def criteria_row(*items):
         return '<div class="criteria-row">' + ' '.join(f'<span>{h(item)}</span>' for item in items) + '</div>'
 
@@ -2390,6 +2469,13 @@ def render_hr_watch_tab():
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
+    hr_column = locked_hr_column or f'''<div class="daily-col daily-center daily-hr-lotto">
+                <div class="daily-bucket primary hr-lotto">
+                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: projected HR damage, power, matchup lift, direct H2H, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "direct H2H")}
+                    <div class="picks-container">{hr_html or hr_empty}</div>
+                </div>
+                {longshot_block}
+            </div>'''
 
     return f'''<div class="tab-content" id="tab-daily">
         <div style="padding-top:12px">
@@ -2398,13 +2484,7 @@ def render_hr_watch_tab():
         </div>
         {no_data}
         <div class="daily-grid daily-grid-lotto">
-            <div class="daily-col daily-center daily-hr-lotto">
-                <div class="daily-bucket primary hr-lotto">
-                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: projected HR damage, power, matchup lift, direct H2H, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "direct H2H")}
-                    <div class="picks-container">{hr_html or hr_empty}</div>
-                </div>
-                {longshot_block}
-            </div>
+            {hr_column}
             <div class="daily-col daily-side daily-hot-side">
                 <div class="daily-bucket momentum">
                     {bucket_header("momentum", "MOMENTUM", "HOT BATS", "Recent timing plus matchup support.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
