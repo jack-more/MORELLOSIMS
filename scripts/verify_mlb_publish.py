@@ -63,7 +63,7 @@ def main():
     parser.add_argument(
         "--require-hr-h2h-lane",
         action="store_true",
-        help="Fail if the HR card was generated without direct H2H lane copy/metadata support.",
+        help="Fail if the HR card was generated without current HR lane copy/metadata support.",
     )
     parser.add_argument(
         "--require-today-picks",
@@ -100,8 +100,8 @@ def main():
                     f"max allowed {args.max_age_minutes}"
                 )
 
-    if args.require_hr_h2h_lane and "direct H2H" not in html:
-        errors.append("MLB HR card missing direct H2H lane copy; generated page is from stale HR logic")
+    if args.require_hr_h2h_lane and not all(marker in html for marker in ("damage score", "surge power", "stack pressure")):
+        errors.append("MLB HR card missing current damage/surge/stack lane copy; generated page is from stale HR logic")
 
     todays = [
         p for p in picks

@@ -1927,14 +1927,16 @@ def render_hr_watch_tab():
     HR_CORE_MIN = 0.085
     HR_LONGSHOT_MIN = 0.065
     HR_CORE_MAX_ROWS = 6
-    HR_CORE_H2H_ROWS = 3
+    HR_CORE_H2H_ROWS = 1
     HR_CORE_STACK_ROWS = 1
     HR_CORE_NEAR_MIN = 0.078
     HR_LONGSHOT_MAX_ROWS = 8
-    HR_LONGSHOT_STANDARD_ROWS = 3
-    HR_LONGSHOT_H2H_ROWS = 2
-    HR_LONGSHOT_DAMAGE_ROWS = 2
-    HR_LONGSHOT_STACK_ROWS = 2
+    HR_LONGSHOT_STANDARD_ROWS = 2
+    HR_LONGSHOT_H2H_ROWS = 0
+    HR_LONGSHOT_DAMAGE_ROWS = 5
+    HR_LONGSHOT_SURGE_ROWS = 3
+    HR_LONGSHOT_FORM_ROWS = 2
+    HR_LONGSHOT_STACK_ROWS = 1
     HR_HEAT_MAX_ROWS = 10
     HR_MIN_MATCHUP_PA = 30
     HR_MIN_PLAYER_PA = 100
@@ -2060,8 +2062,116 @@ def render_hr_watch_tab():
             and bm.get("h2h_ops", 0) >= (0.850 if core else 0.780)
         )
 
+    def h2h_has_model_support(bm, core=True):
+        return (
+            bm.get("hr_rate", 0) >= (0.075 if core else 0.055)
+            and bm.get("base_hr_rate", 0) >= (0.038 if core else 0.034)
+            and bm.get("proj_hr", 0) >= (0.300 if core else 0.220)
+            and bm.get("run_contrib", 0) >= (0.70 if core else 0.55)
+            and hr_damage_score(bm) >= (42.0 if core else 34.0)
+        )
+
+    def recent_power_score(bm):
+        hit5 = bm.get("hit_games_5", 0) if bm.get("games_5", 0) >= 5 else 0
+        hit7 = bm.get("hit_games_7", 0) if bm.get("games_7", 0) >= 7 else 0
+        hit10 = bm.get("hit_games_10", 0) if bm.get("games_10", 0) >= 10 else 0
+        density = max(hit5 * 1.4, hit7, hit10 * 0.7)
+        return (
+            bm.get("hr_rate", 0) * 120
+            + bm.get("base_hr_rate", 0) * 90
+            + bm.get("season_hr_rate", 0) * 45
+            + max(0, bm.get("momi", 50) - 70) * 0.28
+            + max(0, bm.get("streak", 0)) * 0.55
+            + density
+            + min(16.0, team_stack_pressure(bm)) * 0.55
+            + max(0, bm.get("team_total", 0) - 4.5) * 2.2
+        )
+
+    def surge_power_score(bm):
+        hit5 = bm.get("hit_games_5", 0) if bm.get("games_5", 0) >= 5 else 0
+        hit7 = bm.get("hit_games_7", 0) if bm.get("games_7", 0) >= 7 else 0
+        density = max(hit5 * 1.5, hit7)
+        return (
+            bm.get("team_total", 0) * 5.5
+            + min(45.0, team_stack_pressure(bm)) * 0.95
+            + bm.get("run_contrib", 0) * 9.0
+            + bm.get("hr_rate", 0) * 120
+            + bm.get("base_hr_rate", 0) * 115
+            + max(0, bm.get("hr_lift", 0)) * 80
+            + bm.get("season_hr_rate", 0) * 55
+            + max(0, bm.get("momi", 50) - 70) * 0.45
+            + density * 1.3
+            + max(0, bm.get("park_factor", 1.0) - 1.0) * 28
+            + min(6, bm.get("h2h_hr", 0)) * 1.6
+        )
+
+    def hr_surge_lane_ok(bm, core=True):
+        power_or_blast = (
+            bm.get("base_hr_rate", 0) >= (0.036 if core else 0.034)
+            or (
+                bm.get("season_pa", 0) >= 100
+                and bm.get("season_hr", 0) >= 6
+                and bm.get("season_hr_rate", 0) >= 0.030
+            )
+            or (
+                bm.get("hr_rate", 0) >= (0.055 if core else 0.040)
+                and bm.get("hr_lift", 0) >= 0.018
+                and bm.get("run_contrib", 0) >= 0.90
+            )
+        )
+        stack_or_total = (
+            bm.get("team_total", 0) >= 7.0
+            or team_stack_pressure(bm) >= 12.0
+            or bm.get("park_factor", 1.0) >= 1.08
+        )
+        rhythm_or_history = (
+            bm.get("momi", 50) >= 76
+            or bm.get("streak", 0) >= 2
+            or (bm.get("games_5", 0) >= 5 and bm.get("hit_games_5", 0) >= 3)
+        )
+        return (
+            bm.get("order", 9) <= (6 if core else 7)
+            and bm.get("player_total_pa", 0) >= HR_MIN_PLAYER_PA
+            and bm.get("park_factor", 1.0) >= 0.96
+            and bm.get("hr_rate", 0) >= (0.052 if core else 0.040)
+            and bm.get("run_contrib", 0) >= (0.95 if core else 0.80)
+            and power_or_blast
+            and stack_or_total
+            and rhythm_or_history
+            and surge_power_score(bm) >= (86.0 if core else 72.0)
+        )
+
+    def hr_recent_power_lane_ok(bm, core=True):
+        hit_density = (
+            bm.get("streak", 0) >= 3
+            or (bm.get("games_5", 0) >= 5 and bm.get("hit_games_5", 0) >= 4)
+            or bm.get("momi", 50) >= 88
+        )
+        power_or_blast = (
+            bm.get("base_hr_rate", 0) >= (0.038 if core else 0.034)
+            or bm.get("season_hr_rate", 0) >= 0.045
+            or (bm.get("season_pa", 0) >= 120 and bm.get("season_hr", 0) >= 7)
+            or (bm.get("hr_rate", 0) >= (0.095 if core else 0.070) and bm.get("run_contrib", 0) >= 1.15)
+        )
+        stack_or_total = (
+            bm.get("team_total", 0) >= (5.8 if core else 5.4)
+            or team_stack_pressure(bm) >= (10.0 if core else 8.0)
+            or bm.get("park_factor", 1.0) >= 1.04
+        )
+        return (
+            bm.get("order", 9) <= (6 if core else 8)
+            and bm.get("player_total_pa", 0) >= HR_MIN_PLAYER_PA
+            and bm.get("park_factor", 1.0) >= 0.96
+            and bm.get("hr_rate", 0) >= (0.070 if core else 0.040)
+            and bm.get("run_contrib", 0) >= (0.75 if core else 0.45)
+            and power_or_blast
+            and stack_or_total
+            and (hit_density or bm.get("base_hr_rate", 0) >= 0.050 or team_stack_pressure(bm) >= 14.0)
+            and recent_power_score(bm) >= (26.0 if core else 20.0)
+        )
+
     def hr_h2h_lane_ok(bm, core=True):
-        """Direct pitcher history can carry proven HR damage into the card."""
+        """Direct pitcher history can boost proven HR damage, not replace it."""
         min_pa = 12 if core else 8
         min_hr = 2 if core else 1
         min_ops = 0.950 if core else 0.850
@@ -2081,6 +2191,7 @@ def render_hr_watch_tab():
             and bm.get("park_factor", 1.0) >= (0.94 if direct_fit else 0.96)
             and bm.get("order", 9) <= 7
             and score_ok
+            and h2h_has_model_support(bm, core=core)
         )
 
     def hr_stack_lane_ok(bm):
@@ -2137,9 +2248,17 @@ def render_hr_watch_tab():
         max_rate_ok = True if core else hr_rate < HR_CORE_MIN
         standard_lane = hr_standard_lane_ok(bm, core=core)
         damage_lane = hr_damage_lane_ok(bm, core=core) and (not core or hr_rate >= HR_CORE_MIN)
+        surge_lane = hr_surge_lane_ok(bm, core=core)
+        recent_lane = hr_recent_power_lane_ok(bm, core=core)
         stack_lane = False if core else hr_stack_lane_ok(bm)
         h2h_lane = hr_h2h_lane_ok(bm, core=core)
-        power_ok = has_power_profile(bm) or stack_lane or h2h_lane
+        power_ok = (
+            has_power_profile(bm)
+            or surge_lane
+            or recent_lane
+            or stack_lane
+            or (h2h_lane and h2h_has_model_support(bm, core=core))
+        )
         context_ok = has_reliable_hr_context(bm) or (
             h2h_lane
             and bm.get("player_total_pa", 0) >= HR_MIN_PLAYER_PA
@@ -2149,8 +2268,8 @@ def render_hr_watch_tab():
             max_rate_ok
             and power_ok
             and context_ok
-            and pitcher_context_ok(bm, core=core)
-            and (standard_lane or damage_lane or stack_lane or h2h_lane)
+            and (pitcher_context_ok(bm, core=core) or surge_lane)
+            and (standard_lane or damage_lane or surge_lane or recent_lane or stack_lane or h2h_lane)
         )
 
     def hr_selection_score(bm):
@@ -2160,6 +2279,8 @@ def render_hr_watch_tab():
         return (
             hr_damage_score(bm)
             + h2h_power_score(bm) * 1.35
+            + surge_power_score(bm) * 0.65
+            + recent_power_score(bm) * 0.85
             + team_stack_pressure(bm) * stack_weight
             + max(0, bm.get("hr_rate", 0) - 0.060) * 180
             + max(0, bm.get("base_hr_rate", 0) - 0.040) * 95
@@ -2167,15 +2288,19 @@ def render_hr_watch_tab():
         )
 
     def hr_lane_rank(bm, core=True):
-        if hr_h2h_lane_ok(bm, core=core):
-            return 0
         if hr_damage_lane_ok(bm, core=core):
+            return 0
+        if hr_surge_lane_ok(bm, core=core):
             return 1
         if hr_standard_lane_ok(bm, core=core):
             return 2
-        if hr_primary_stack_lane_ok(bm) or hr_stack_lane_ok(bm):
+        if hr_recent_power_lane_ok(bm, core=core):
             return 3
-        return 4
+        if hr_h2h_lane_ok(bm, core=core):
+            return 4
+        if hr_primary_stack_lane_ok(bm) or hr_stack_lane_ok(bm):
+            return 5
+        return 6
 
     def hr_lane_sort_key(bm, core=True):
         return (
@@ -2187,10 +2312,14 @@ def render_hr_watch_tab():
         )
 
     def hr_lane_label(bm):
-        if hr_h2h_lane_ok(bm, core=True) or hr_h2h_lane_ok(bm, core=False):
-            return "H2H"
         if hr_damage_lane_ok(bm, core=True) or hr_damage_lane_ok(bm, core=False):
             return "DAMAGE"
+        if hr_surge_lane_ok(bm, core=True) or hr_surge_lane_ok(bm, core=False):
+            return "SURGE"
+        if hr_recent_power_lane_ok(bm, core=True) or hr_recent_power_lane_ok(bm, core=False):
+            return "FORM"
+        if hr_h2h_lane_ok(bm, core=True) or hr_h2h_lane_ok(bm, core=False):
+            return "H2H"
         if hr_primary_stack_lane_ok(bm) or hr_stack_lane_ok(bm):
             return "STACK"
         return "MODEL"
@@ -2280,7 +2409,11 @@ def render_hr_watch_tab():
     longshot_pool = [
         bm for bm in all_batter_matchups
         if bm.get("id") not in core_ids
-        and hr_card_qualifies(bm, core=False)
+        and (
+            hr_card_qualifies(bm, core=False)
+            or hr_card_qualifies(bm, core=True)
+            or hr_surge_lane_ok(bm, core=False)
+        )
     ]
     longshot_standard = sorted(
         [bm for bm in longshot_pool if hr_standard_lane_ok(bm, core=False)],
@@ -2303,12 +2436,32 @@ def render_hr_watch_tab():
             bm for bm in longshot_pool
             if bm.get("id") not in used_longshot_ids
             and hr_damage_lane_ok(bm, core=False)
-            and not all_around_heat_ok(bm, core=False)
         ],
-        key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
+        key=lambda x: (-hr_selection_score(x), -hr_damage_score(x), -x.get("hr_rate", 0))
     )[:HR_LONGSHOT_DAMAGE_ROWS]
 
     used_longshot_ids |= {bm.get("id") for bm in longshot_damage_overrides}
+    longshot_surge_overrides = sorted(
+        [
+            bm for bm in longshot_pool
+            if bm.get("id") not in used_longshot_ids
+            and hr_surge_lane_ok(bm, core=False)
+        ],
+        key=lambda x: (-surge_power_score(x), -hr_selection_score(x), -x.get("hr_rate", 0))
+    )[:HR_LONGSHOT_SURGE_ROWS]
+
+    used_longshot_ids |= {bm.get("id") for bm in longshot_surge_overrides}
+    longshot_form_overrides = sorted(
+        [
+            bm for bm in longshot_pool
+            if bm.get("id") not in used_longshot_ids
+            and hr_recent_power_lane_ok(bm, core=False)
+            and not all_around_heat_ok(bm, core=False)
+        ],
+        key=lambda x: (-recent_power_score(x), -hr_damage_score(x), -x.get("hr_rate", 0))
+    )[:HR_LONGSHOT_FORM_ROWS]
+
+    used_longshot_ids |= {bm.get("id") for bm in longshot_form_overrides}
     core_stack_keys = {
         (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
         for bm in core_hr
@@ -2316,6 +2469,14 @@ def render_hr_watch_tab():
     damage_stack_keys = {
         (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
         for bm in longshot_damage_overrides
+    }
+    form_stack_keys = {
+        (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        for bm in longshot_form_overrides
+    }
+    surge_stack_keys = {
+        (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
+        for bm in longshot_surge_overrides
     }
     standard_stack_keys = {
         (bm.get("team"), bm.get("opp_pitcher"), bm.get("opp_team"))
@@ -2327,6 +2488,10 @@ def render_hr_watch_tab():
         if key in core_stack_keys:
             return 3
         if key in damage_stack_keys:
+            return 2
+        if key in surge_stack_keys:
+            return 2
+        if key in form_stack_keys:
             return 2
         if key in standard_stack_keys:
             return 1
@@ -2356,6 +2521,8 @@ def render_hr_watch_tab():
     longshot_damage = (
         longshot_h2h_overrides
         + longshot_damage_overrides
+        + longshot_surge_overrides
+        + longshot_form_overrides
         + longshot_standard
         + longshot_stack_overrides
     )[:HR_LONGSHOT_MAX_ROWS]
@@ -2365,6 +2532,68 @@ def render_hr_watch_tab():
             key=lambda x: (-hr_damage_score(x), -x.get("hr_rate", 0))
         )
         longshot_damage.extend(backfill[:HR_LONGSHOT_MAX_ROWS - len(longshot_damage)])
+
+    if os.getenv("MLB_HR_AUDIT"):
+        def audit_row(bm):
+            return {
+                "name": bm.get("name"),
+                "team": bm.get("team"),
+                "order": bm.get("order"),
+                "opp_pitcher": bm.get("opp_pitcher"),
+                "opp_team": bm.get("opp_team"),
+                "lane": hr_lane_label(bm),
+                "core_qualifies": hr_card_qualifies(bm, core=True),
+                "watch_qualifies": hr_card_qualifies(bm, core=False),
+                "damage_core": hr_damage_lane_ok(bm, core=True),
+                "damage_watch": hr_damage_lane_ok(bm, core=False),
+                "surge_core": hr_surge_lane_ok(bm, core=True),
+                "surge_watch": hr_surge_lane_ok(bm, core=False),
+                "form_core": hr_recent_power_lane_ok(bm, core=True),
+                "form_watch": hr_recent_power_lane_ok(bm, core=False),
+                "h2h_core": hr_h2h_lane_ok(bm, core=True),
+                "h2h_watch": hr_h2h_lane_ok(bm, core=False),
+                "stack_watch": hr_stack_lane_ok(bm),
+                "selection_score": round(hr_selection_score(bm), 3),
+                "damage_score": round(hr_damage_score(bm), 3),
+                "surge_power_score": round(surge_power_score(bm), 3),
+                "recent_power_score": round(recent_power_score(bm), 3),
+                "stack_pressure": round(team_stack_pressure(bm), 3),
+                "hr_rate": bm.get("hr_rate"),
+                "base_hr_rate": bm.get("base_hr_rate"),
+                "hr_lift": bm.get("hr_lift"),
+                "proj_hr": bm.get("proj_hr"),
+                "run_contrib": bm.get("run_contrib"),
+                "team_total": bm.get("team_total"),
+                "park_factor": bm.get("park_factor"),
+                "momo": bm.get("ms"),
+                "momi": bm.get("momi"),
+                "streak": bm.get("streak"),
+                "hit_games_5": bm.get("hit_games_5"),
+                "games_5": bm.get("games_5"),
+                "hit_games_7": bm.get("hit_games_7"),
+                "games_7": bm.get("games_7"),
+                "season_pa": bm.get("season_pa"),
+                "season_hr": bm.get("season_hr"),
+                "season_hr_rate": bm.get("season_hr_rate"),
+                "player_total_pa": bm.get("player_total_pa"),
+                "h2h_pa": bm.get("h2h_pa"),
+                "h2h_hr": bm.get("h2h_hr"),
+                "h2h_ops": bm.get("h2h_ops"),
+            }
+
+        audit_path = os.path.join(REPO_ROOT, "mlbsim", "hr_lotto_audit.json")
+        selected_ids = {bm.get("id") for bm in core_hr + longshot_damage}
+        with open(audit_path, "w") as f:
+            json.dump({
+                "generated": NOW.isoformat(),
+                "core": [audit_row(bm) for bm in core_hr],
+                "watch": [audit_row(bm) for bm in longshot_damage],
+                "all": sorted(
+                    [audit_row(bm) | {"selected": bm.get("id") in selected_ids} for bm in all_batter_matchups],
+                    key=lambda row: (-row["selection_score"], -row["damage_score"], -(row.get("hr_rate") or 0)),
+                ),
+            }, f, indent=2)
+        print(f"  HR audit: {audit_path}")
 
     hr_html = render_hr_rows(core_hr)
     longshot_html = render_hr_rows(longshot_damage, "L")
@@ -2522,13 +2751,13 @@ def render_hr_watch_tab():
                 </div>'''
 
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
-                    {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary blast fits. MOMO helps, but HR damage, direct H2H, and stack pressure can carry the profile.", "6.5%+ HR", "damage score", "direct H2H", "stack pressure")}
+                    {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary blast fits. HR damage, surge power, and stack pressure drive the profile.", "6.5%+ HR", "damage score", "surge power", "stack pressure")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
     hr_column = locked_hr_column or f'''<div class="daily-col daily-center daily-hr-lotto">
                 <div class="daily-bucket primary hr-lotto">
-                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: projected HR damage, power, matchup lift, direct H2H, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "direct H2H")}
+                    {bucket_header("primary", "HR LOTTO", "HR LOTTO", "Shortlist only: projected HR damage, power, matchup lift, and run context all have to clear.", "8.5%+ HR", "power baseline", "matchup lift", "run context")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}

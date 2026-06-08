@@ -217,21 +217,24 @@ def check_hr_lotto_guardrails():
     source = SIM_SCRIPT_PATH.read_text()
 
     required_source_markers = [
-        ("HR_LONGSHOT_MAX_ROWS = 8", "HR Watchlist must stay wide enough for damage and stack lanes"),
+        ("HR_LONGSHOT_MAX_ROWS = 8", "HR Watchlist must stay wide enough for damage and surge lanes"),
         ("def hr_damage_score", "HR Lotto must keep the dedicated damage score"),
         ("def hr_damage_lane_ok", "HR Lotto must keep pure HR-damage overrides"),
+        ("def surge_power_score", "HR Lotto must keep surge-power scoring"),
+        ("def hr_surge_lane_ok", "HR Lotto must keep surge-power watchlist qualifiers"),
         ("def fetch_live_pitcher_h2h", "HR Lotto must fetch live direct H2H instead of relying on stale atlas H2H"),
         ("historical batter-vs-starter context", "Live direct H2H must stay populated after first pitch"),
         ("def hr_h2h_lane_ok", "HR Lotto must keep direct H2H power overrides"),
         ("HR_CORE_H2H_ROWS", "HR Lotto must reserve primary-card H2H override slots"),
         ("HR_CORE_STACK_ROWS", "HR Lotto must reserve primary-card stack-pressure override slots"),
         ("def hr_primary_stack_lane_ok", "HR Lotto must promote near-core stack-pressure bats into the primary card"),
-        ("def hr_selection_score", "HR Lotto must rank by H2H, damage, stack pressure, and HR rate together"),
-        ("HR_LONGSHOT_H2H_ROWS", "HR Watchlist must reserve H2H override slots"),
+        ("def hr_selection_score", "HR Lotto must rank by damage, surge power, stack pressure, and HR rate together"),
+        ("HR_LONGSHOT_H2H_ROWS = 0", "HR Watchlist must not reserve stale H2H-only override slots"),
         ("def team_stack_pressure", "HR Lotto must keep team stack-pressure scoring"),
         ("def hr_stack_lane_ok", "HR Lotto must keep stack-pressure watchlist qualifiers"),
         ("HR_LONGSHOT_STANDARD_ROWS", "HR Watchlist must reserve standard-lane slots"),
         ("HR_LONGSHOT_DAMAGE_ROWS", "HR Watchlist must reserve damage-override slots"),
+        ("HR_LONGSHOT_SURGE_ROWS", "HR Watchlist must reserve surge-power slots"),
         ("HR_LONGSHOT_STACK_ROWS", "HR Watchlist must reserve stack-pressure slots"),
         ("H2H {int(bm.get(\"h2h_hr\", 0))}HR", "Rendered HR rows must expose direct H2H HR history"),
         ("for batter_id in batter_ids", "Live direct H2H fetch must check every lineup batter"),
@@ -242,7 +245,7 @@ def check_hr_lotto_guardrails():
         ("max_workers = min(8", "Live direct H2H pair fetch must keep a safe concurrency cap"),
         ("DMG {round(hr_damage_score(bm))}", "Rendered HR rows must show DMG score"),
         ("stack pressure", "Rendered HR Watchlist copy must expose stack pressure"),
-        ("direct H2H", "Rendered HR Watchlist copy must expose direct H2H criteria"),
+        ("surge power", "Rendered HR Watchlist copy must expose surge-power criteria"),
     ]
     for marker, message in required_source_markers:
         if marker not in source:
@@ -259,7 +262,7 @@ def check_hr_lotto_guardrails():
     html = HTML_PATH.read_text()
     required_html_markers = [
         ("damage score", "HR Lotto page must show damage score criteria"),
-        ("direct H2H", "HR Lotto page must show direct H2H criteria"),
+        ("surge power", "HR Lotto page must show surge-power criteria"),
         ("stack pressure", "HR Watchlist page must show stack pressure criteria"),
     ]
     for marker, message in required_html_markers:
@@ -340,9 +343,9 @@ def check_publish_freshness_guardrails():
     healthcheck = MLB_HEALTHCHECK_PATH.read_text()
     required_markers = [
         (verify_source, "--max-age-minutes", "Publish verifier must support max-age checks"),
-        (verify_source, "--require-hr-h2h-lane", "Publish verifier must require HR H2H lane when requested"),
+        (verify_source, "--require-hr-h2h-lane", "Publish verifier must keep the existing HR-card freshness flag"),
         (verify_source, "age_minutes > args.max_age_minutes", "Publish verifier must fail stale generated pages"),
-        (verify_source, "direct H2H", "Publish verifier must detect stale HR-card logic"),
+        (verify_source, "surge power", "Publish verifier must detect stale HR-card logic"),
         (pipeline, "0 23 * * *", "MLB pipeline must keep 7 PM ET late-slate refresh"),
         (pipeline, "0 0 * * *", "MLB pipeline must keep 8 PM ET West Coast refresh"),
         (pipeline, "--max-age-minutes 90 --require-hr-h2h-lane", "MLB pipeline must enforce fresh H2H HR-card publish checks"),
