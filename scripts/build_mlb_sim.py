@@ -2395,15 +2395,60 @@ def render_hr_watch_tab():
             return "STACK"
         return "MODEL"
 
-    def render_hr_row(rank, bm):
+    HR_LANE_META = {
+        "DAMAGE": ("power", "Power Edge", "HR rate, baseline pop, lift, and run context all line up."),
+        "SURGE": ("boost", "Context Boost", "Team total, park, form, or lineup heat is adding lift."),
+        "FORM": ("heater", "Hot Bat", "Recent hit density is carrying the power signal."),
+        "PRESSURE": ("order", "Order Pressure", "Lineup spot and run pressure are stressing the matchup."),
+        "H2H": ("history", "Pitcher History", "Direct track record vs today's pitcher adds support."),
+        "STACK": ("lineup", "Lineup Pressure", "Multiple bats in this lineup are pushing the same pitcher."),
+        "MODEL": ("model", "Model Fit", "Balanced profile across power, matchup, and context."),
+    }
+    HR_LANE_ORDER = ["DAMAGE", "SURGE", "STACK", "FORM", "PRESSURE", "H2H", "MODEL"]
+
+    def hr_lane_key(lane):
+        return HR_LANE_META.get(lane, HR_LANE_META["MODEL"])[0]
+
+    def hr_lane_display(lane):
+        return HR_LANE_META.get(lane, HR_LANE_META["MODEL"])[1]
+
+    def hr_lane_short(lane):
+        return HR_LANE_META.get(lane, HR_LANE_META["MODEL"])[2]
+
+    def fmt_pct(value, digits=1):
+        return f"{round((value or 0) * 100, digits):.{digits}f}%"
+
+    def fmt_num(value, digits=1):
+        return f"{float(value or 0):.{digits}f}"
+
+    def fmt_pp(value):
+        return f"+{round(max(0, value or 0) * 100, 1):.1f}pp"
+
+    def hr_lane_reason(bm):
+        return hr_lane_short(hr_lane_label(bm))
+
+    def blast_score(bm):
+        return round(min(99, max(0, hr_selection_score(bm))))
+
+    def render_hr_metric(label, value, tone=""):
+        return f'''<div class="hr-metric {tone}">
+        <span>{h(label)}</span>
+        <strong>{h(value)}</strong>
+      </div>'''
+
+    def render_hr_row(rank, bm, status="lotto"):
         hr_pct = round(bm["hr_rate"] * 100, 1)
         pow_pct = round((bm.get("base_hr_rate", 0) or 0) * 100, 1)
         lift_pct = round(max(0, bm.get("hr_lift", 0) or 0) * 100, 1)
         clean_name = str(bm.get("name", "")).replace(" (H)", "").strip()
         lane = hr_lane_label(bm)
+        lane_name = hr_lane_display(lane)
+        lane_key = hr_lane_key(lane)
         h2h_tag = ""
+        h2h_value = "0"
         if bm.get("h2h_pa", 0) >= 8 and bm.get("h2h_hr", 0) > 0:
             h2h_tag = f'<span>H2H {int(bm.get("h2h_hr", 0))}HR/{int(bm.get("h2h_pa", 0))}PA</span>'
+            h2h_value = f'{int(bm.get("h2h_hr", 0))}/{int(bm.get("h2h_pa", 0))}'
         if bm["hr_rate"] >= 0.06:
             heat = "hr-fire"
         elif bm["hr_rate"] >= 0.04:
@@ -2412,13 +2457,31 @@ def render_hr_watch_tab():
             heat = "hr-warm"
         else:
             heat = "hr-mild"
+        order = int(bm.get("order", 9) or 9)
+        stack = round(team_stack_pressure(bm), 1)
+        park = fmt_num(bm.get("park_factor", 1.0), 2)
+        team_total = fmt_num(bm.get("team_total", 0), 1)
+        run = fmt_num(bm.get("run_contrib", 0), 2)
+        surge = round(surge_power_score(bm))
 
-        return f'''<div class="hr-row {heat}">
+        return f'''<div class="hr-row {heat}" data-hr-card="1" data-hr-lane="{h(lane)}" data-hr-status="{h(status)}">
 	  <div class="hr-rank">{rank}</div>
 	  <div class="hr-info">
-	    <div class="hr-name">{h(clean_name)}</div>
-	    <div class="hr-meta">{h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])})</div>
+	    <div class="hr-title-line">
+        <div class="hr-name">{h(clean_name)}</div>
+        <span class="hr-lane-pill lane-{h(lane_key)}">{h(lane_name)}</span>
+      </div>
+	    <div class="hr-meta">#{order} {h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) &middot; team {team_total} &middot; park {park}x</div>
+      <div class="hr-signal">{h(hr_lane_reason(bm))}</div>
 	    <div class="hr-tags"><span>{lane}</span><span>DMG {round(hr_damage_score(bm))}</span>{h2h_tag}<span>POW {pow_pct}%</span><span>LIFT +{lift_pct}pp</span></div>
+      <div class="hr-metric-grid">
+        {render_hr_metric("Blast", blast_score(bm), "tone-red")}
+        {render_hr_metric("Power", round(hr_damage_score(bm)))}
+        {render_hr_metric("Boost", surge)}
+        {render_hr_metric("Pressure", stack)}
+        {render_hr_metric("Run", run)}
+        {render_hr_metric("H2H", h2h_value)}
+      </div>
 	  </div>
   <div class="hr-rate-col">
     <div class="hr-rate">{hr_pct}%</div>
@@ -2426,12 +2489,141 @@ def render_hr_watch_tab():
   </div>
 </div>'''
 
-    def render_hr_rows(candidates, rank_prefix=""):
+    def render_hr_rows(candidates, rank_prefix="", status="lotto"):
         rows = []
         for i, bm in enumerate(candidates):
             rank = f"{rank_prefix}{i+1}" if rank_prefix else f"{i+1}"
-            rows.append(render_hr_row(rank, bm))
+            rows.append(render_hr_row(rank, bm, status=status))
         return "".join(rows)
+
+    def hr_board_candidate_ok(bm):
+        power_signal = (
+            bm.get("base_hr_rate", 0) >= 0.030
+            or bm.get("season_hr_rate", 0) >= 0.030
+            or bm.get("hr_lift", 0) >= 0.012
+            or team_stack_pressure(bm) >= 8.0
+        )
+        return (
+            bm.get("order", 9) <= 8
+            and bm.get("player_total_pa", 0) >= 80
+            and bm.get("total_pa", 0) >= 20
+            and bm.get("park_factor", 1.0) >= 0.93
+            and bm.get("hr_rate", 0) >= 0.030
+            and power_signal
+        )
+
+    def render_hr_intel(core, watch, board):
+        if not board:
+            return ""
+        top_rate = max(board, key=lambda x: x.get("hr_rate", 0))
+        top_stack = max(board, key=lambda x: team_stack_pressure(x))
+        top_damage = max(board, key=lambda x: hr_damage_score(x))
+        lane_counts = {}
+        for bm in core + watch:
+            lane_counts[hr_lane_label(bm)] = lane_counts.get(hr_lane_label(bm), 0) + 1
+        lane_mix = " / ".join(
+            f"{hr_lane_display(k)} {v}" for k, v in sorted(lane_counts.items(), key=lambda item: HR_LANE_ORDER.index(item[0]) if item[0] in HR_LANE_ORDER else 99)
+        ) or "Awaiting qualifiers"
+
+        def cell(label, value, sub):
+            return f'''<div class="hr-intel-cell">
+          <span>{h(label)}</span>
+          <strong>{h(value)}</strong>
+          <em>{h(sub)}</em>
+        </div>'''
+
+        return f'''<div class="hr-intel-strip">
+        <div class="hr-intel-head">
+          <div>
+            <div class="edge-kicker primary">HR DATA ROOM</div>
+            <div class="bucket-title">GO YARD BOARD</div>
+          </div>
+          <div class="hr-intel-copy">Model-ranked homer candidates from live lineups, pitcher DNA, park context, stack pressure, direct H2H, and current power form.</div>
+        </div>
+        <div class="hr-intel-grid">
+          {cell("Top HR Fit", f'{top_rate.get("name")} {fmt_pct(top_rate.get("hr_rate"))}', f'{top_rate.get("team")} vs {top_rate.get("opp_pitcher")}')}
+          {cell("Top Damage", f'{top_damage.get("name")} {round(hr_damage_score(top_damage))}', f'Lift {fmt_pp(top_damage.get("hr_lift"))} / POW {fmt_pct(top_damage.get("base_hr_rate"))}')}
+          {cell("Stack Heat", f'{top_stack.get("team")} {round(team_stack_pressure(top_stack), 1)}', f'vs {top_stack.get("opp_pitcher")} / total {fmt_num(top_stack.get("team_total"), 1)}')}
+          {cell("Lane Mix", lane_mix, f'{len(core)} lotto / {len(watch)} watch / {len(board)} on board')}
+        </div>
+      </div>'''
+
+    def render_hr_nav(core, watch, board):
+        counts = {}
+        for bm in board:
+            lane = hr_lane_label(bm)
+            counts[lane] = counts.get(lane, 0) + 1
+
+        lens_buttons = [f'''<button type="button" class="hr-lens active" data-hr-filter="ALL">
+          <span>All Bats</span><strong>{len(board)}</strong>
+        </button>''']
+        for lane in HR_LANE_ORDER:
+            count = counts.get(lane, 0)
+            empty_class = " is-empty" if count <= 0 else ""
+            lens_buttons.append(f'''<button type="button" class="hr-lens lane-{h(hr_lane_key(lane))}{empty_class}" data-hr-filter="{h(lane)}">
+          <span>{h(hr_lane_display(lane))}</span><strong>{count}</strong>
+        </button>''')
+
+        return f'''<div class="hr-control-deck" id="hr-control-deck">
+        <div class="hr-control-head">
+          <div>
+            <div class="edge-kicker secondary">HR LENSES</div>
+            <div class="bucket-title">PICK YOUR VIEW</div>
+          </div>
+          <div class="hr-jump-rail">
+            <button type="button" data-hr-jump=".daily-bucket.hr-lotto">Lotto</button>
+            <button type="button" data-hr-jump=".daily-bucket.hr-lotto-secondary">Watch</button>
+            <button type="button" data-hr-jump=".hr-deep-board">Board</button>
+          </div>
+        </div>
+        <div class="hr-lens-rail">{''.join(lens_buttons)}</div>
+        <div class="hr-filter-empty" id="hr-filter-empty" hidden>No hitters in this lens.</div>
+      </div>'''
+
+    def render_hr_deep_board(board, core_ids, watch_ids):
+        if not board:
+            return '<div class="empty-state">NO HR BOARD QUALIFIERS</div>'
+        body = ""
+        for i, bm in enumerate(board[:24]):
+            clean_name = str(bm.get("name", "")).replace(" (H)", "").strip()
+            lane = hr_lane_label(bm)
+            lane_name = hr_lane_display(lane)
+            lane_key = hr_lane_key(lane)
+            status = "LOTTO" if bm.get("id") in core_ids else ("WATCH" if bm.get("id") in watch_ids else "MODEL")
+            h2h = "0"
+            if bm.get("h2h_pa", 0) >= 8 and bm.get("h2h_hr", 0) > 0:
+                h2h = f'{int(bm.get("h2h_hr", 0))}/{int(bm.get("h2h_pa", 0))}'
+            body += f'''<tr class="hr-board-row {h(status.lower())}" data-hr-card="1" data-hr-lane="{h(lane)}" data-hr-status="{h(status.lower())}">
+          <td class="hr-col-rank">{i+1}</td>
+          <td class="hr-col-hitter"><strong>{h(clean_name)}</strong><span>{h(bm.get("team"))} &middot; #{int(bm.get("order", 9) or 9)} &middot; {h(status)}</span></td>
+          <td class="hr-col-match">{h(bm.get("opp_pitcher"))}<span>{h(bm.get("opp_team"))}</span></td>
+          <td><span class="hr-board-lane lane-{h(lane_key)}">{h(lane_name)}</span></td>
+          <td>{fmt_pct(bm.get("hr_rate"))}</td>
+          <td>{round(hr_damage_score(bm))}</td>
+          <td class="hr-col-sur">{round(surge_power_score(bm))}</td>
+          <td class="hr-col-stack">{round(team_stack_pressure(bm), 1)}</td>
+          <td class="hr-col-park">{fmt_num(bm.get("park_factor", 1.0), 2)}x</td>
+          <td class="hr-col-total">{fmt_num(bm.get("team_total", 0), 1)}</td>
+          <td class="hr-col-h2h">{h2h}</td>
+        </tr>'''
+        return f'''<div class="daily-bucket hr-deep-board">
+        <div class="bucket-head secondary">
+          <div class="edge-kicker secondary">DATA</div>
+          <div class="bucket-title">ADVANCED HR BOARD</div>
+          <div class="bucket-copy">Every hitter here clears the board filter for power, matchup sample, lineup slot, and park context.</div>
+          {criteria_row("HR rate", "damage score", "surge power", "stack pressure", "park factor", "H2H")}
+        </div>
+        <div class="hr-board-scroll">
+          <table class="hr-board-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Hitter</th><th>Pitcher</th><th>Lens</th><th>HR%</th><th>Power</th><th class="hr-col-sur">Boost</th><th class="hr-col-stack">Pressure</th><th class="hr-col-park">Park</th><th class="hr-col-total">Total</th><th class="hr-col-h2h">H2H</th>
+              </tr>
+            </thead>
+            <tbody>{body}</tbody>
+          </table>
+        </div>
+      </div>'''
 
     core_pool = [
         bm for bm in all_batter_matchups
@@ -2688,7 +2880,20 @@ def render_hr_watch_tab():
         print(f"  HR audit: {audit_path}")
 
     hr_html = render_hr_rows(core_hr)
-    longshot_html = render_hr_rows(longshot_damage, "L")
+    longshot_html = render_hr_rows(longshot_damage, "L", status="watch")
+    watch_ids = {bm.get("id") for bm in longshot_damage}
+    hr_board_candidates = sorted(
+        [bm for bm in all_batter_matchups if hr_board_candidate_ok(bm)],
+        key=lambda x: (
+            -hr_selection_score(x),
+            -hr_damage_score(x),
+            -surge_power_score(x),
+            -team_stack_pressure(x),
+            -x.get("hr_rate", 0),
+        )
+    )[:24]
+    hr_intel_html = render_hr_intel(core_hr, longshot_damage, hr_board_candidates)
+    hr_nav_html = render_hr_nav(core_hr, longshot_damage, hr_board_candidates)
 
     def recent_hit_label(bm):
         if bm.get("streak", 0) >= 5:
@@ -2842,6 +3047,7 @@ def render_hr_watch_tab():
                     {criteria_row(*criteria)}
                 </div>'''
 
+    hr_deep_board_html = render_hr_deep_board(hr_board_candidates, core_ids, watch_ids)
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
                     {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary blast fits. HR damage, surge power, and stack pressure drive the profile.", "6.5%+ HR", "damage score", "surge power", "stack pressure")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
@@ -2861,6 +3067,8 @@ def render_hr_watch_tab():
             <div class="section-sub">{DATE_SHORT} \u00b7 {games_with_lu} games with lineups</div>
         </div>
         {no_data}
+        {hr_intel_html}
+        {hr_nav_html}
         <div class="daily-grid daily-grid-lotto">
             {hr_column}
             <div class="daily-col daily-side daily-hot-side">
@@ -2876,6 +3084,7 @@ def render_hr_watch_tab():
                 </div>
             </div>
         </div>
+        {hr_deep_board_html}
     </div>'''
 
 
@@ -2983,6 +3192,86 @@ DAILY_LOTTO_CSS = """
 """
 if "DAILY_HR_LOTTO_LAYOUT_V3" not in css_block:
     css_block = css_block.replace("</style>", DAILY_LOTTO_CSS + "\n</style>")
+
+DAILY_HR_ADVANCED_CSS = """
+/* DAILY_HR_ADVANCED_DATA_V1 */
+.hr-intel-strip{margin:12px 0 20px;background:#fff;border:2px solid #111;box-shadow:5px 5px 0 #111;overflow:hidden}
+.hr-intel-head{display:grid;grid-template-columns:minmax(190px,.5fr) minmax(260px,1fr);gap:16px;align-items:end;padding:14px 16px;background:#fff7d6;border-bottom:2px solid #111}
+.hr-intel-copy{font-size:12px;line-height:1.4;color:#222;max-width:80ch}
+.hr-intel-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#fff}
+.hr-intel-cell{min-width:0;padding:12px 14px;border-right:1px solid #ddd}
+.hr-intel-cell:last-child{border-right:0}
+.hr-intel-cell span{display:block;font-family:var(--font-mono);font-size:8px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#777}
+.hr-intel-cell strong{display:block;margin-top:4px;font-family:var(--font-display);font-size:20px;line-height:1.05;letter-spacing:.7px;text-transform:uppercase;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-intel-cell em{display:block;margin-top:5px;font-family:var(--font-mono);font-size:9px;font-style:normal;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-title-line{display:flex;align-items:center;gap:8px;min-width:0}
+.hr-title-line .hr-name{flex:1}
+.hr-lane-pill{flex:0 0 auto;border:1px solid #111;background:#111;color:#fff;padding:3px 6px;font-family:var(--font-mono);font-size:8px;font-weight:900;line-height:1;text-transform:uppercase}
+.hr-signal{margin-top:5px;font-size:10px;line-height:1.35;color:#222;max-width:78ch}
+.hr-metric-grid{display:grid;grid-template-columns:repeat(6,minmax(50px,1fr));gap:5px;margin-top:8px}
+.hr-metric{min-width:0;border:1px solid #d7d7d0;background:#fbfbf7;padding:5px 6px}
+.hr-metric span{display:block;font-family:var(--font-mono);font-size:7px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:#777;line-height:1}
+.hr-metric strong{display:block;margin-top:3px;font-family:var(--font-mono);font-size:12px;font-weight:900;color:#111;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-metric.tone-red{background:#fff1f1;border-color:#111}
+.daily-bucket.hr-lotto .hr-row{align-items:flex-start}
+.daily-bucket.hr-lotto-secondary .hr-row{align-items:flex-start}
+.daily-bucket.hr-lotto .hr-info,.daily-bucket.hr-lotto-secondary .hr-info{min-width:0}
+.daily-bucket.hr-lotto .hr-rate-col{min-width:76px;padding-top:2px}
+.daily-bucket.hr-lotto-secondary .hr-rate-col{min-width:64px;padding-top:2px}
+.hr-deep-board{margin:20px 0 22px;border-top:6px solid #111}
+.hr-board-scroll{overflow-x:auto;background:#fff}
+.hr-board-table{width:100%;min-width:900px;border-collapse:collapse;font-family:var(--font-mono)}
+.hr-board-table th{position:sticky;top:0;background:#111;color:#fff;padding:9px 8px;border-right:1px solid #333;font-size:8px;font-weight:900;letter-spacing:.6px;text-align:left;text-transform:uppercase;z-index:1}
+.hr-board-table td{padding:9px 8px;border-top:1px solid #e8e8e2;border-right:1px solid #efefea;font-size:10px;font-weight:800;color:#111;vertical-align:middle;white-space:nowrap}
+.hr-board-table td:last-child,.hr-board-table th:last-child{border-right:0}
+.hr-board-row.lotto td{background:#fff1f1}
+.hr-board-row.watch td{background:#fffdf0}
+.hr-col-rank{width:38px;text-align:center;color:#777}
+.hr-col-hitter strong{display:block;font-family:var(--font-body);font-size:12px;line-height:1.1}
+.hr-col-hitter span,.hr-col-match span{display:block;margin-top:3px;font-size:8px;color:#777;text-transform:uppercase}
+.hr-board-lane{display:inline-flex;align-items:center;border:1px solid #111;background:#fff;padding:3px 6px;font-size:8px;font-weight:900;line-height:1}
+@media(max-width:980px){.hr-intel-head{grid-template-columns:1fr}.hr-intel-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-intel-cell:nth-child(2){border-right:0}.hr-intel-cell:nth-child(n+3){border-top:1px solid #ddd}.hr-metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.hr-intel-strip{box-shadow:3px 3px 0 #111}.hr-intel-grid{grid-template-columns:1fr}.hr-intel-cell{border-right:0;border-top:1px solid #ddd}.hr-intel-cell:first-child{border-top:0}.hr-intel-cell strong{font-size:18px}.daily-bucket.hr-lotto .hr-row,.daily-bucket.hr-lotto-secondary .hr-row{display:grid;grid-template-columns:32px minmax(0,1fr);gap:9px}.daily-bucket.hr-lotto .hr-rate-col,.daily-bucket.hr-lotto-secondary .hr-rate-col{grid-column:2;display:flex;align-items:baseline;gap:6px;justify-content:flex-start;min-width:0;text-align:left;padding-top:0}.hr-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-col-sur,.hr-col-stack,.hr-col-park,.hr-col-total,.hr-col-h2h{display:none}.hr-board-table{min-width:560px}}
+"""
+if "DAILY_HR_ADVANCED_DATA_V1" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_HR_ADVANCED_CSS + "\n</style>")
+
+DAILY_HR_FUN_NAV_CSS = """
+/* DAILY_HR_FUN_NAV_V1 */
+.hr-control-deck{margin:0 0 20px;background:#f8f8f5;border:2px solid #111;box-shadow:4px 4px 0 #111;overflow:hidden}
+.hr-control-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;background:#fff;border-bottom:2px solid #111}
+.hr-jump-rail{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.hr-jump-rail button,.hr-lens{appearance:none;border:2px solid #111;background:#fff;color:#111;font-family:var(--font-mono);font-weight:900;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .12s ease,background .12s ease,color .12s ease}
+.hr-jump-rail button{min-height:32px;padding:7px 10px;font-size:9px;box-shadow:2px 2px 0 #111}
+.hr-jump-rail button:hover,.hr-lens:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #111}
+.hr-lens-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;padding:10px;background:#fffdf0}
+.hr-lens{min-height:54px;padding:9px 10px;text-align:left;box-shadow:2px 2px 0 rgba(0,0,0,.35)}
+.hr-lens span{display:block;font-size:9px;line-height:1.1;letter-spacing:0;white-space:normal}
+.hr-lens strong{display:block;margin-top:5px;font-family:var(--font-display);font-size:22px;line-height:1;letter-spacing:.7px}
+.hr-lens.active{background:#111;color:#fff;box-shadow:3px 3px 0 #FFEA00;transform:translate(-1px,-1px)}
+.hr-lens.is-empty{opacity:.58;background:#f6f6f2}
+.hr-lens.is-empty.active{opacity:1;background:#111;color:#fff}
+.hr-filter-empty{padding:16px;text-align:center;border-top:1px solid #ddd;background:#fff;font-family:var(--font-mono);font-size:10px;font-weight:900;text-transform:uppercase;color:#777}
+.hr-filtered{display:none!important}
+.lane-power{background:#FF3333!important;color:#fff!important}
+.lane-boost{background:#00A651!important;color:#fff!important}
+.lane-lineup{background:#FFEA00!important;color:#111!important}
+.lane-heater{background:#111!important;color:#FFEA00!important}
+.lane-order{background:#006CFF!important;color:#fff!important}
+.lane-history{background:#fff!important;color:#111!important}
+.lane-model{background:#f6f6f2!important;color:#111!important}
+.hr-lens.lane-power.active{box-shadow:3px 3px 0 #111;background:#FF3333;color:#fff}
+.hr-lens.lane-boost.active{box-shadow:3px 3px 0 #111;background:#00A651;color:#fff}
+.hr-lens.lane-lineup.active{box-shadow:3px 3px 0 #111;background:#FFEA00;color:#111}
+.hr-lens.lane-heater.active{box-shadow:3px 3px 0 #FFEA00;background:#111;color:#FFEA00}
+.hr-lens.lane-order.active{box-shadow:3px 3px 0 #111;background:#006CFF;color:#fff}
+.hr-lens.lane-history.active{box-shadow:3px 3px 0 #111;background:#fff;color:#111}
+.hr-board-lane{max-width:128px;white-space:normal}
+@media(max-width:760px){.hr-control-head{align-items:flex-start;flex-direction:column}.hr-jump-rail{justify-content:flex-start}.hr-lens-rail{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-lens{min-height:50px;padding:8px}.hr-lens strong{font-size:19px}}
+@media(max-width:390px){.hr-lens-rail{grid-template-columns:1fr}.hr-jump-rail button{flex:1}}
+"""
+if "DAILY_HR_FUN_NAV_V1" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_HR_FUN_NAV_CSS + "\n</style>")
 
 PLAYER_METRIC_CSS = """
 /* ── Player MOMO/MOMI chips ── */
@@ -3229,6 +3518,42 @@ function sortGames(mode, el) {{
   const parent = cards[0].parentNode;
   sorted.forEach(card => parent.appendChild(card));
 }}
+
+function setupHrNavigation() {{
+  const daily = document.getElementById('tab-daily');
+  if (!daily) return;
+
+  const buttons = Array.from(daily.querySelectorAll('[data-hr-filter]'));
+  const rows = Array.from(daily.querySelectorAll('[data-hr-card]'));
+  const empty = document.getElementById('hr-filter-empty');
+
+  function applyFilter(filter) {{
+    let visible = 0;
+    buttons.forEach(btn => btn.classList.toggle('active', btn.dataset.hrFilter === filter));
+    rows.forEach(row => {{
+      const show = filter === 'ALL' || row.dataset.hrLane === filter;
+      row.classList.toggle('hr-filtered', !show);
+      if (show) visible += 1;
+    }});
+    if (empty) empty.hidden = visible > 0;
+  }}
+
+  buttons.forEach(btn => {{
+    btn.addEventListener('click', () => applyFilter(btn.dataset.hrFilter || 'ALL'));
+  }});
+
+  daily.querySelectorAll('[data-hr-jump]').forEach(btn => {{
+    btn.addEventListener('click', () => {{
+      const target = daily.querySelector(btn.dataset.hrJump);
+      if (!target) return;
+      target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+    }});
+  }});
+
+  applyFilter('ALL');
+}}
+
+setupHrNavigation();
 
 </script>
 </body></html>'''
