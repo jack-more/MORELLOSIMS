@@ -2580,6 +2580,52 @@ def render_hr_watch_tab():
         <div class="hr-filter-empty" id="hr-filter-empty" hidden>No hitters in this lens.</div>
       </div>'''
 
+    def render_hr_lens_results(board, core_ids, watch_ids):
+        if not board:
+            return '<div class="empty-state">NO HR BOARD QUALIFIERS</div>'
+        cards = ""
+        for i, bm in enumerate(board[:24]):
+            clean_name = str(bm.get("name", "")).replace(" (H)", "").strip()
+            lane = hr_lane_label(bm)
+            lane_name = hr_lane_display(lane)
+            lane_key = hr_lane_key(lane)
+            status = "LOTTO" if bm.get("id") in core_ids else ("WATCH" if bm.get("id") in watch_ids else "MODEL")
+            status_key = status.lower()
+            h2h = "0"
+            if bm.get("h2h_pa", 0) >= 8 and bm.get("h2h_hr", 0) > 0:
+                h2h = f'{int(bm.get("h2h_hr", 0))}/{int(bm.get("h2h_pa", 0))}'
+            cards += f'''<div class="hr-result-card {h(status_key)} lane-{h(lane_key)}" data-hr-card="1" data-hr-lane="{h(lane)}" data-hr-status="{h(status_key)}">
+          <div class="hr-result-top">
+            <span>#{i+1}</span>
+            <strong>{h(status)}</strong>
+          </div>
+          <div class="hr-result-name">{h(clean_name)}</div>
+          <div class="hr-result-meta">{h(bm.get("team"))} &middot; #{int(bm.get("order", 9) or 9)} vs {h(bm.get("opp_pitcher"))} ({h(bm.get("opp_team"))})</div>
+          <div class="hr-result-band">
+            <span class="hr-board-lane lane-{h(lane_key)}">{h(lane_name)}</span>
+            <strong>{fmt_pct(bm.get("hr_rate"))}</strong>
+          </div>
+          <div class="hr-result-stat-grid">
+            <div><span>Power</span><strong>{round(hr_damage_score(bm))}</strong></div>
+            <div><span>Boost</span><strong>{round(surge_power_score(bm))}</strong></div>
+            <div><span>Pressure</span><strong>{round(team_stack_pressure(bm), 1)}</strong></div>
+            <div><span>Park</span><strong>{fmt_num(bm.get("park_factor", 1.0), 2)}x</strong></div>
+            <div><span>Total</span><strong>{fmt_num(bm.get("team_total", 0), 1)}</strong></div>
+            <div><span>H2H</span><strong>{h2h}</strong></div>
+          </div>
+        </div>'''
+
+        return f'''<div class="hr-results-panel" id="hr-lens-results">
+        <div class="hr-results-head">
+          <div>
+            <div class="edge-kicker secondary">LENS RESULTS</div>
+            <div class="bucket-title">FILTERED HITTERS</div>
+          </div>
+          <div class="hr-results-copy">Tap a lens above and this list changes here first. The full data board stays below.</div>
+        </div>
+        <div class="hr-results-grid">{cards}</div>
+      </div>'''
+
     def render_hr_deep_board(board, core_ids, watch_ids):
         if not board:
             return '<div class="empty-state">NO HR BOARD QUALIFIERS</div>'
@@ -3048,6 +3094,7 @@ def render_hr_watch_tab():
                 </div>'''
 
     hr_deep_board_html = render_hr_deep_board(hr_board_candidates, core_ids, watch_ids)
+    hr_lens_results_html = render_hr_lens_results(hr_board_candidates, core_ids, watch_ids)
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
                     {bucket_header("secondary", "WATCH", "HR WATCHLIST", "Secondary blast fits. HR damage, surge power, and stack pressure drive the profile.", "6.5%+ HR", "damage score", "surge power", "stack pressure")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
@@ -3069,6 +3116,7 @@ def render_hr_watch_tab():
         {no_data}
         {hr_intel_html}
         {hr_nav_html}
+        {hr_lens_results_html}
         <div class="daily-grid daily-grid-lotto">
             {hr_column}
             <div class="daily-col daily-side daily-hot-side">
@@ -3272,6 +3320,38 @@ DAILY_HR_FUN_NAV_CSS = """
 """
 if "DAILY_HR_FUN_NAV_V1" not in css_block:
     css_block = css_block.replace("</style>", DAILY_HR_FUN_NAV_CSS + "\n</style>")
+
+DAILY_HR_RESULTS_TRAY_CSS = """
+/* DAILY_HR_RESULTS_TRAY_V1 */
+.hr-results-panel{margin:-8px 0 22px;background:#fff;border:2px solid #111;box-shadow:4px 4px 0 #111;overflow:hidden}
+.hr-results-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;background:#111;color:#fff;border-bottom:2px solid #111}
+.hr-results-head .bucket-title{color:#fff}
+.hr-results-copy{max-width:420px;font-size:10px;line-height:1.35;font-weight:800;color:#f3f3eb;text-align:right}
+.hr-results-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:8px;padding:10px;background:#f8f8f5}
+.hr-result-card{min-width:0;border:2px solid #111;background:#fff!important;color:#111!important;padding:10px;box-shadow:2px 2px 0 rgba(0,0,0,.28)}
+.hr-result-card.lotto{background:#fff1f1!important}
+.hr-result-card.watch{background:#fffdf0!important}
+.hr-result-card.lane-power{border-top:8px solid #FF3333;background:#fff7f7!important;color:#111!important}
+.hr-result-card.lane-boost{border-top:8px solid #00A651;background:#f4fff8!important;color:#111!important}
+.hr-result-card.lane-lineup{border-top:8px solid #FFEA00;background:#fffdf0!important;color:#111!important}
+.hr-result-card.lane-heater{border-top:8px solid #111;background:#fffef2!important;color:#111!important}
+.hr-result-card.lane-order{border-top:8px solid #006CFF;background:#f5f9ff!important;color:#111!important}
+.hr-result-card.lane-history{border-top:8px solid #111;background:#fff!important;color:#111!important}
+.hr-result-card.lane-model{border-top:8px solid #b9b9af;background:#fff!important;color:#111!important}
+.hr-result-top{display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:var(--font-mono);font-size:9px;font-weight:900;letter-spacing:.3px;text-transform:uppercase}
+.hr-result-top strong{display:inline-flex;align-items:center;min-height:20px;border:1px solid #111;background:#fff;padding:3px 6px;font-size:8px;line-height:1}
+.hr-result-name{margin-top:8px;font-family:var(--font-display);font-size:21px;font-weight:900;line-height:.95;letter-spacing:0;overflow-wrap:anywhere}
+.hr-result-meta{margin-top:7px;font-size:10px;font-weight:800;line-height:1.25;color:#555;overflow-wrap:anywhere}
+.hr-result-band{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.hr-result-band strong{font-family:var(--font-display);font-size:24px;line-height:1;color:#111;white-space:nowrap}
+.hr-result-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:9px}
+.hr-result-stat-grid div{min-width:0;border:1px solid #d7d7d0;background:rgba(255,255,255,.82);padding:5px 6px}
+.hr-result-stat-grid span{display:block;font-family:var(--font-mono);font-size:7px;font-weight:900;line-height:1;text-transform:uppercase;color:#777}
+.hr-result-stat-grid strong{display:block;margin-top:3px;font-family:var(--font-mono);font-size:12px;font-weight:900;line-height:1;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:760px){.hr-results-panel{margin:-6px 0 18px;box-shadow:3px 3px 0 #111}.hr-results-head{align-items:flex-start;flex-direction:column}.hr-results-copy{text-align:left;max-width:none}.hr-results-grid{grid-template-columns:1fr}.hr-result-name{font-size:19px}.hr-result-band strong{font-size:22px}}
+"""
+if "DAILY_HR_RESULTS_TRAY_V1" not in css_block:
+    css_block = css_block.replace("</style>", DAILY_HR_RESULTS_TRAY_CSS + "\n</style>")
 
 PLAYER_METRIC_CSS = """
 /* ── Player MOMO/MOMI chips ── */
