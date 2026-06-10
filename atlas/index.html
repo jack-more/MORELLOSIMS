@@ -42,10 +42,10 @@
             --perf-teal: #a8dadc;
 
             /* ── Layout ── */
-            --sidebar-w: 380px;
+            --sidebar-w: 350px;
             --stat-panel-w: 320px;
             --header-h: 56px;
-            --dock-h: 110px;
+            --dock-h: 96px;
 
             /* ── Fonts ── */
             --font-tech: 'Courier New', Courier, monospace;
@@ -1036,11 +1036,11 @@
             grid-template-columns: repeat(5, minmax(0, 1fr));
             align-items: stretch;
             gap: 10px;
-            padding: 18px 14px 12px;
+            padding: 14px 12px 10px;
             border: 1px solid rgba(255,255,255,0.16);
             border-top-color: rgba(244,162,97,0.36);
             border-radius: 10px;
-            background: linear-gradient(180deg, rgba(17,20,24,0.94), rgba(11,13,16,0.9));
+            background: linear-gradient(180deg, rgba(17,20,24,0.86), rgba(11,13,16,0.78));
             backdrop-filter: blur(18px);
             box-shadow: 0 18px 44px rgba(0,0,0,0.35);
             opacity: 0.86;
@@ -1933,8 +1933,11 @@
         const DETAIL_TRUNK = 0x7a5435;
         const WORLD_OCEAN = 0x17394a;
         const WORLD_SHORE = 0x8a947e;
+        const WORLD_CLIFF = 0x475048;
         const WORLD_MOUNTAIN = 0x5e6a72;
         const WORLD_HAZE = 0xd7c7a8;
+        const WORLD_CLOUD = 0xf6f1dc;
+        const WORLD_BEACON = 0xf4c36a;
         const PERF_GREEN  = new THREE.Color(0x2a9d8f);
         const PERF_YELLOW = new THREE.Color(0xf4a261);
         const PERF_RED    = new THREE.Color(0xe63946);
@@ -2173,6 +2176,68 @@
             roadGroup.add(dash);
         }
 
+        function makeSoftDiscTexture(color = '#ffffff', innerAlpha = 0.8, outerAlpha = 0) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 256;
+            const g = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
+            g.addColorStop(0, color);
+            g.addColorStop(0.45, color);
+            g.addColorStop(1, color);
+            ctx.fillStyle = g;
+            ctx.globalAlpha = innerAlpha;
+            ctx.beginPath();
+            ctx.arc(128, 128, 126, 0, Math.PI * 2);
+            ctx.fill();
+            const fade = ctx.createRadialGradient(128, 128, 20, 128, 128, 128);
+            fade.addColorStop(0, 'rgba(255,255,255,1)');
+            fade.addColorStop(0.62, 'rgba(255,255,255,0.72)');
+            fade.addColorStop(1, `rgba(255,255,255,${outerAlpha})`);
+            ctx.globalCompositeOperation = 'destination-in';
+            ctx.fillStyle = fade;
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.globalCompositeOperation = 'source-over';
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.minFilter = THREE.LinearFilter;
+            return tex;
+        }
+
+        function addCloud(x, y, z, sx, sz, opacity, drift) {
+            const cloud = new THREE.Mesh(
+                new THREE.CircleGeometry(1, 48),
+                new THREE.MeshBasicMaterial({
+                    map: makeSoftDiscTexture('#fff7df', 0.85, 0),
+                    color: WORLD_CLOUD,
+                    transparent: true,
+                    opacity,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                })
+            );
+            cloud.position.set(x, y, z);
+            cloud.scale.set(sx, sz, 1);
+            cloud.userData = { type: 'world-cloud', baseX: x, baseZ: z, drift };
+            worldGroup.add(cloud);
+        }
+
+        function addCliffBand(radius, depth, y) {
+            const cliff = new THREE.Mesh(
+                new THREE.CylinderGeometry(radius * 0.94, radius, depth, 96, 1, false),
+                new THREE.MeshStandardMaterial({
+                    color: WORLD_CLIFF,
+                    roughness: 0.96,
+                    metalness: 0,
+                    flatShading: true,
+                })
+            );
+            cliff.position.y = y;
+            cliff.scale.set(1.12, 1, 0.84);
+            cliff.receiveShadow = true;
+            cliff.userData = { type: 'atlas-cliff' };
+            worldGroup.add(cliff);
+        }
+
         function buildWorldFrame() {
             clearGroup(worldGroup);
 
@@ -2192,6 +2257,24 @@
             ocean.userData = { type: 'world-ocean' };
             worldGroup.add(ocean);
 
+            addCliffBand(18.6, 1.45, -0.82);
+
+            const atlasShadow = new THREE.Mesh(
+                new THREE.CircleGeometry(19.8, 96),
+                new THREE.MeshBasicMaterial({
+                    map: makeSoftDiscTexture('#000000', 0.55, 0),
+                    color: 0x000000,
+                    transparent: true,
+                    opacity: 0.28,
+                    depthWrite: false,
+                })
+            );
+            atlasShadow.rotation.x = -Math.PI / 2;
+            atlasShadow.position.y = -0.18;
+            atlasShadow.scale.set(1.18, 0.82, 1);
+            atlasShadow.userData = { type: 'atlas-shadow' };
+            worldGroup.add(atlasShadow);
+
             const shore = new THREE.Mesh(
                 new THREE.RingGeometry(TERRAIN_SIZE * 0.64, TERRAIN_SIZE * 0.78, 96),
                 new THREE.MeshStandardMaterial({
@@ -2207,6 +2290,22 @@
             shore.scale.set(1.08, 0.82, 1);
             shore.userData = { type: 'world-shore' };
             worldGroup.add(shore);
+
+            const innerGlow = new THREE.Mesh(
+                new THREE.RingGeometry(13.5, 14.7, 96),
+                new THREE.MeshBasicMaterial({
+                    color: 0xf6d08a,
+                    transparent: true,
+                    opacity: 0.16,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                })
+            );
+            innerGlow.rotation.x = -Math.PI / 2;
+            innerGlow.position.y = 0.035;
+            innerGlow.scale.set(1.08, 0.82, 1);
+            innerGlow.userData = { type: 'atlas-inner-glow' };
+            worldGroup.add(innerGlow);
 
             const sunMat = new THREE.MeshBasicMaterial({
                 color: 0xffc873,
@@ -2264,6 +2363,13 @@
                 peak.userData = { type: 'distant-ridge' };
                 worldGroup.add(peak);
             }
+
+            addCloud(-11, 5.2, -10, 3.8, 1.1, 0.18, 0.018);
+            addCloud(8, 6.1, -8.5, 4.8, 1.3, 0.15, 0.013);
+            addCloud(-15, 4.7, 5.5, 3.4, 1.0, 0.13, 0.016);
+            addCloud(13, 5.5, 6.8, 4.2, 1.1, 0.12, 0.011);
+            addCloud(-18, 8.1, -24, 6.8, 1.55, 0.22, 0.009);
+            addCloud(15, 7.7, -23.5, 6.2, 1.35, 0.18, 0.010);
         }
 
         function buildRoads() {
@@ -2480,8 +2586,9 @@
             const color = new THREE.Color(cl.color || '#888');
             const y = getTerrainHeight(center.x, center.z) + 0.055;
             const amp = normalizeCount(cl.pitcher_count || 1);
-            const radius = 0.18 + amp * 0.18;
-            const landmarkH = 0.38 + amp * 0.72;
+            const major = rank < 10;
+            const radius = 0.24 + amp * 0.24 + (major ? 0.08 : 0);
+            const landmarkH = 0.62 + amp * 1.05 + (major ? 0.28 : 0);
 
             const plazaMat = new THREE.MeshStandardMaterial({
                 color: color.clone().lerp(new THREE.Color(0xd4c89d), 0.58),
@@ -2492,10 +2599,26 @@
                 transparent: true,
                 opacity: 0.9,
             });
-            const plaza = new THREE.Mesh(new THREE.CylinderGeometry(radius * 1.55, radius * 1.55, 0.035, 32), plazaMat);
+            const plaza = new THREE.Mesh(new THREE.CylinderGeometry(radius * 1.85, radius * 1.85, 0.04, 32), plazaMat);
             plaza.position.set(center.x, y, center.z);
             plaza.userData = { type: 'district-plaza', clusterId };
             cityDetailGroup.add(plaza);
+
+            const aura = new THREE.Mesh(
+                new THREE.CircleGeometry(radius * 2.45, 40),
+                new THREE.MeshBasicMaterial({
+                    map: makeSoftDiscTexture('#ffffff', 0.9, 0),
+                    color,
+                    transparent: true,
+                    opacity: major ? 0.16 : 0.08,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                })
+            );
+            aura.rotation.x = -Math.PI / 2;
+            aura.position.set(center.x, y + 0.018, center.z);
+            aura.userData = { type: 'district-aura', clusterId };
+            cityDetailGroup.add(aura);
 
             const landmarkGroup = new THREE.Group();
             landmarkGroup.position.set(center.x, y + 0.035, center.z);
@@ -2511,11 +2634,11 @@
 
             let core;
             if (clusterId.startsWith('L_')) {
-                core = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.45, radius * 0.58, landmarkH, 12), towerMat);
+                core = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.50, radius * 0.68, landmarkH, 12), towerMat);
             } else if (rank % 3 === 0) {
-                core = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.72, landmarkH, 5), towerMat);
+                core = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.86, landmarkH, 5), towerMat);
             } else {
-                core = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.78, landmarkH, radius * 0.78), towerMat);
+                core = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.92, landmarkH, radius * 0.92), towerMat);
             }
             core.position.y = landmarkH / 2;
             core.castShadow = true;
@@ -2535,9 +2658,25 @@
             beacon.position.y = landmarkH + radius * 0.32;
             landmarkGroup.add(beacon);
 
+            if (major) {
+                const beam = new THREE.Mesh(
+                    new THREE.CylinderGeometry(radius * 0.10, radius * 0.22, 3.2 + amp * 1.8, 20, 1, true),
+                    new THREE.MeshBasicMaterial({
+                        color,
+                        transparent: true,
+                        opacity: 0.13,
+                        depthWrite: false,
+                        side: THREE.DoubleSide,
+                    })
+                );
+                beam.position.y = landmarkH + 1.65 + amp * 0.9;
+                beam.userData = { type: 'district-beam', clusterId };
+                landmarkGroup.add(beam);
+            }
+
             if (rank % 2 === 0) {
                 const halo = new THREE.Mesh(
-                    new THREE.TorusGeometry(radius * 0.9, 0.012, 8, 36),
+                    new THREE.TorusGeometry(radius * (major ? 1.28 : 0.96), 0.014, 8, 42),
                     new THREE.MeshStandardMaterial({
                         color: color.clone().lerp(new THREE.Color(0xffffff), 0.25),
                         emissive: color,
@@ -3080,8 +3219,8 @@
             const cells = getVoronoiCells();
             if (!cells || !DATA.pitcherSeasons) return;
 
-            const SLOT_SIZE = 0.35; // Tighter grid for clean packing inside Voronoi
-            const DETAIL_BUILDING_LIMIT = 240;
+            const SLOT_SIZE = 0.48; // Larger parcels make pitcher buildings read as architecture
+            const DETAIL_BUILDING_LIMIT = 320;
             let detailedBuildings = 0;
 
             // Group pitchers by cluster
@@ -3146,17 +3285,23 @@
                     const count = pList.length;
                     const avgVelo = pList.reduce((s, p) => s + (p.avg_velo_FF || 90), 0) / count;
 
-                    // Height: 85mph→~0.2, 95mph→~2.2, 100+mph→3.0
-                    const height = Math.max(0.2, (avgVelo - 82) / 18 * 3.0);
-                    const coreHeight = height > 0.7 ? Math.max(0.22, height * 0.76) : height;
-                    const footprintBase = Math.min(SLOT_SIZE * 0.82, 0.12 + Math.sqrt(count) * 0.055);
-                    const width = footprintBase * (0.85 + ((si + clusterId.length) % 4) * 0.08);
-                    const depth = footprintBase * (0.82 + ((si * 3 + clusterId.length) % 5) * 0.07);
+                    // Height: 85mph -> ~0.3, 95mph -> ~2.3, 100+mph -> 3.2
+                    const height = Math.max(0.32, (avgVelo - 82) / 18 * 3.2);
+                    const coreHeight = height > 0.85 ? Math.max(0.32, height * 0.74) : height;
+                    const footprintBase = Math.min(SLOT_SIZE * 0.94, 0.22 + Math.sqrt(count) * 0.075);
+                    const width = footprintBase * (0.92 + ((si + clusterId.length) % 4) * 0.07);
+                    const depth = footprintBase * (0.90 + ((si * 3 + clusterId.length) % 5) * 0.06);
 
                     const terrainY = getTerrainHeight(slot.x, slot.z);
 
                     const seed = si + clusterId.charCodeAt(0);
-                    const geo = new THREE.BoxGeometry(width, coreHeight, depth);
+                    const towerStyle = (seed + count) % 10;
+                    let geo;
+                    if (height > 1.1 && towerStyle < 2) {
+                        geo = new THREE.CylinderGeometry(width * 0.48, width * 0.56, coreHeight, towerStyle === 0 ? 8 : 6);
+                    } else {
+                        geo = new THREE.BoxGeometry(width, coreHeight, depth);
+                    }
                     const mat = makeBuildingMaterial(color, coreHeight, seed);
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(slot.x, terrainY + coreHeight / 2, slot.z);
@@ -3441,6 +3586,15 @@
         function animate() {
             requestAnimationFrame(animate);
             if (controls) controls.update();
+
+            if (worldGroup) {
+                const now = performance.now() * 0.001;
+                worldGroup.children.forEach(child => {
+                    if (!child.userData || child.userData.type !== 'world-cloud') return;
+                    child.position.x = child.userData.baseX + Math.sin(now * child.userData.drift + child.userData.baseZ) * 0.35;
+                    child.position.z = child.userData.baseZ + Math.cos(now * child.userData.drift * 0.7 + child.userData.baseX) * 0.22;
+                });
+            }
 
             // No pulsing/blinking — colors are set once and stay static for clarity
 
