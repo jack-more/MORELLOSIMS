@@ -23,7 +23,18 @@ PAGES = {
 }
 
 
-def aggregate(picks_json_path, baseline):
+def is_tracked_pick(pick, sport):
+    if pick["status"] not in ("win", "loss"):
+        return False
+    if sport == "mlb":
+        try:
+            return int(pick.get("conf") or 0) >= 8
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
+def aggregate(picks_json_path, baseline, sport):
     """Combine baseline + JSON-settled picks → unified record."""
     wins = baseline["wins"]
     losses = baseline["losses"]
@@ -33,7 +44,7 @@ def aggregate(picks_json_path, baseline):
         with open(picks_json_path) as f:
             picks = json.load(f)
         for p in picks:
-            if p["status"] not in ("win", "loss"):
+            if not is_tracked_pick(p, sport):
                 continue
             wins += 1 if p["status"] == "win" else 0
             losses += 1 if p["status"] == "loss" else 0
@@ -44,18 +55,21 @@ def aggregate(picks_json_path, baseline):
 
 
 def render_card(sport, wins, losses, roi, filter_text, accent):
+    card_label = "SEASON" if sport == "nba" else "TRACKED"
+    card_comment = "SEASON RECORD BOX" if sport == "nba" else "─── TRACKED PICKS BOX ──────────────────────────────────────"
+    roi_color = accent if sport == "nba" else "#FFEA00"
     return f'''<!-- RECORD-CARD:{sport.upper()}:BEGIN -->
-<!-- ─── TRACKED PICKS BOX ────────────────────────────────────── -->
+<!-- {card_comment} -->
 <div style="max-width:560px;margin:14px auto 18px;padding:0 12px;">
   <div style="background:#0a0a0a;border:2px solid {accent};border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 {accent};">
     <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;gap:18px;">
       <div style="text-align:left;flex:1;">
-        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">TRACKED</div>
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">{card_label}</div>
         <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{wins}-{losses}</div>
       </div>
       <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 22px;flex:1;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">ROI</div>
-        <div style="font-size:30px;color:#FFEA00;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{roi:+.1f}%</div>
+        <div style="font-size:30px;color:{roi_color};font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{roi:+.1f}%</div>
       </div>
       <div style="text-align:right;flex:1;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
@@ -75,15 +89,26 @@ def install_or_replace(html, sport, new_block):
     if bi >= 0 and ei >= 0:
         return html[:bi] + new_block + html[ei + len(end):]
 
-    # First-time install: locate an existing inline record box and wrap it.
-    # Keep the old marker in the matcher so older generated pages migrate cleanly.
-    pattern = re.compile(
-        r'<!-- ─── (?:SEASON RECORD|TRACKED PICKS) BOX[^>]*?-->\s*<div[^>]*>\s*<div[^>]*border:2px solid[^>]*>.*?</div>\s*</div>\s*</div>',
-        re.DOTALL,
+    # First-time install: locate an existing inline record box and replace it
+    # through the next stable page anchor. This avoids leaving orphan closing
+    # divs when the old card has nested inline markup.
+    old_marker = re.search(
+        r'<!-- (?:SEASON RECORD BOX|─── (?:SEASON RECORD|TRACKED PICKS) BOX.*?-->)',
+        html,
     )
-    m = pattern.search(html)
-    if m:
-        return html[:m.start()] + new_block + html[m.end():]
+    if old_marker:
+        anchors = [
+            "\n<!-- FILTER BAR",
+            "\n        <!-- FILTER BAR",
+            "\n    <!-- MAIN CONTENT AREA",
+            "\n    <main",
+            "\n<main",
+        ]
+        ends = [html.find(anchor, old_marker.start()) for anchor in anchors]
+        ends = [idx for idx in ends if idx >= 0]
+        if ends:
+            end_idx = min(ends)
+            return html[:old_marker.start()] + new_block + html[end_idx:]
 
     # No existing card — inject after </header>
     h_close = html.find("</header>")
@@ -102,7 +127,7 @@ def update_homepage_hero(html, sport, wins, losses, roi, baseline):
         with open(os.path.join(PICKS_DIR, f"{sport}.json")) as f:
             picks = json.load(f)
         for p in picks:
-            if p["status"] in ("win", "loss"):
+            if is_tracked_pick(p, sport):
                 risked += p.get("units") or 50
                 pl += p.get("pl") or 0
     bankroll = 1000 + pl
@@ -178,7 +203,7 @@ def main():
             print(f"  [WARN] {page_path} missing — skipping {sport}")
             continue
 
-        wins, losses, roi = aggregate(picks_path, baselines[sport])
+        wins, losses, roi = aggregate(picks_path, baselines[sport], sport)
         filter_text = baselines[sport]["filter"].replace(" · ", "<br><span style=\"color:#888;\">") + "</span>"
 
         block = render_card(sport, wins, losses, roi, filter_text, accent)
@@ -189,16 +214,7 @@ def main():
             f.write(new_html)
         print(f"  {sport.upper()} card: {wins}-{losses} ({roi:+.1f}% ROI) → {page_path}")
 
-    # Homepage dispatch hero stats (NBA + MLB)
-    if os.path.exists(HOMEPAGE):
-        with open(HOMEPAGE) as f:
-            home_html = f.read()
-        for sport in ("nba", "mlb"):
-            wins, losses, roi = aggregate(os.path.join(PICKS_DIR, f"{sport}.json"), baselines[sport])
-            home_html = update_homepage_hero(home_html, sport, wins, losses, roi, baselines[sport])
-        with open(HOMEPAGE, "w") as f:
-            f.write(home_html)
-        print(f"  Homepage hero stats updated → {HOMEPAGE}")
+    print("  Homepage dispatch is owned by scripts/render_dispatch.py")
 
 
 if __name__ == "__main__":
