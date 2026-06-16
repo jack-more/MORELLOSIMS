@@ -36,6 +36,27 @@ UNIT_SIZE_DEFAULT = 50  # used when CSV row has no `risk` value
 MIN_TRACKED_CONF = 8
 
 
+def stake_for_conf(conf: int) -> int:
+    if conf >= 10:
+        return 100
+    if conf >= 8:
+        return 50
+    if conf >= 5:
+        return 30
+    return 20
+
+
+def profit_for_status(status: str, risk: int, odds: int | None) -> float:
+    if status == "win":
+        line = odds if odds not in (None, 0) else -110
+        if line > 0:
+            return round(risk * line / 100, 2)
+        return round(risk * 100 / abs(line), 2)
+    if status == "loss":
+        return float(-risk)
+    return 0.0
+
+
 def parse_matchup(s: str) -> tuple[str, str]:
     """'BKN @ CLE' -> ('BKN', 'CLE'). Returns ('','') on parse failure."""
     if not s:
@@ -119,20 +140,6 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     except (ValueError, TypeError):
         risk = UNIT_SIZE_DEFAULT
 
-    result_letter = (row.get("result") or "").strip()
-    status = status_from_result(result_letter)
-    if status == "pending":
-        result = None
-        pl = None
-    else:
-        try:
-            pl = float(row.get("profit") or 0)
-        except (ValueError, TypeError):
-            pl = 0.0
-        hs = (row.get("home_score") or "").strip()
-        as_ = (row.get("away_score") or "").strip()
-        result = f"{hs}-{as_}" if hs and as_ else None
-
     odds_raw = (row.get("odds") or "").strip()
     odds: int | None
     if odds_raw:
@@ -150,16 +157,31 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     # If pick_log has no entry (manual injection, direct CSV append, or
     # legacy rows with no metadata), derive a sensible conf floor from the
     # risk amount. Mirrors capture_picks.py's risk_amount() ladder:
+    #   risk 100 -> C:10  (max-confidence plays)
     #   risk 50 -> C:8+   (premium plays)
     #   risk 30 -> C:5-7  (mid-tier, not tracked)
     #   risk 20 -> C:1-4  (light, not tracked)
     if conf == 0 and risk:
-        if risk >= 50: conf = 8
+        if risk >= 100: conf = 10
+        elif risk >= 50: conf = 8
         elif risk >= 30: conf = 5
         elif risk > 0:   conf = 1
 
     if conf < MIN_TRACKED_CONF:
         return None
+
+    risk = stake_for_conf(conf)
+
+    result_letter = (row.get("result") or "").strip()
+    status = status_from_result(result_letter)
+    if status == "pending":
+        result = None
+        pl = None
+    else:
+        pl = profit_for_status(status, risk, odds)
+        hs = (row.get("home_score") or "").strip()
+        as_ = (row.get("away_score") or "").strip()
+        result = f"{hs}-{as_}" if hs and as_ else None
 
     sim_spread = meta.get("sim_spread")
     sim_edge = meta.get("spread_edge")

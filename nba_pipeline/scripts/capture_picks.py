@@ -43,9 +43,11 @@ def conf_to_1_10(confidence):
 
 def risk_amount(conf_1_10):
     """Determine risk amount from 1-10 confidence scale."""
+    if conf_1_10 >= 10:
+        return 100
     if conf_1_10 >= 8:
         return 50
-    elif conf_1_10 >= 5:
+    if conf_1_10 >= 5:
         return 30
     return 20
 

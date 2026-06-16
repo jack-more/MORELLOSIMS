@@ -32,7 +32,7 @@ Append-only — settled picks should never have their `result`/`pl` mutated.
   "odds":          -110,                             // null if standard -110 spread
   "pick_text":     "NYK -2.5",                       // display string
   "conf":          10,                               // 1-10
-  "units":         50,                               // $PP risked (MLB: C10=100, C9=50, C8=30)
+  "units":         50,                               // $PP risked (NBA/MLB: C10=100)
   "sim_projection": "NYK -9.5",                      // model's spread/total projection
   "sim_edge":      7.0,                              // edge in points (spread) or % (ML)
   "status":        "win",                            // "pending" | "win" | "loss" | "push"
