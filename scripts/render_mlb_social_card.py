@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,6 +15,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "mlbsim" / "index.html"
+PICKS_JSON = ROOT / "picks" / "mlb.json"
 POSTERS = ROOT / "posters"
 LOGO = ROOT / "logo-grok-transparent.png"
 
@@ -157,6 +159,11 @@ def generated_label(doc: str) -> str:
     return f"{date_label}  {match.group(2)} ET"
 
 
+def generated_date(doc: str) -> str | None:
+    match = re.search(r"Generated\s+(\d{4}-\d{2}-\d{2})\s+\d{1,2}:\d{2}\s+ET", doc)
+    return match.group(1) if match else None
+
+
 def split_by_marker(doc: str, marker_re: re.Pattern[str], stop: str | None = None) -> list[tuple[re.Match[str], str]]:
     matches = list(marker_re.finditer(doc))
     blocks = []
@@ -248,6 +255,82 @@ def parse_games(doc: str) -> list[GameRow]:
     return rows
 
 
+def load_official_pick_rows(doc: str, parsed_rows: list[GameRow]) -> list[GameRow]:
+    if not PICKS_JSON.exists():
+        return []
+
+    try:
+        picks = json.loads(PICKS_JSON.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    target_date = generated_date(doc)
+    pending_dates = sorted(
+        {
+            str(pick.get("date"))
+            for pick in picks
+            if pick.get("sport") == "mlb" and pick.get("status") == "pending"
+        },
+        reverse=True,
+    )
+    if not target_date and pending_dates:
+        target_date = pending_dates[0]
+
+    html_by_key = {(row.matchup, row.pick_text): row for row in parsed_rows}
+    rows: list[GameRow] = []
+    seen = set()
+    for pick in picks:
+        if pick.get("sport") != "mlb" or pick.get("status") != "pending":
+            continue
+        if target_date and pick.get("date") != target_date:
+            continue
+        try:
+            conf = int(pick.get("conf") or 0)
+        except (TypeError, ValueError):
+            conf = 0
+        if conf < 8:
+            continue
+
+        matchup = str(pick.get("matchup") or f'{pick.get("away", "")} @ {pick.get("home", "")}').strip()
+        pick_text = str(pick.get("pick_text") or f'{pick.get("side", "")} ML').strip()
+        key = (matchup, pick_text)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        html_row = html_by_key.get(key)
+        odds = parse_int_moneyline(str(pick.get("odds") or ""))
+        if odds is None and html_row:
+            odds = html_row.odds
+        if odds is None:
+            continue
+
+        break_even = moneyline_break_even(odds)
+        model_prob = html_row.model_prob if html_row else 0
+        price_edge = model_prob - break_even if model_prob and break_even is not None else None
+        try:
+            run_edge = float(pick.get("sim_edge") or 0)
+        except (TypeError, ValueError):
+            run_edge = 0.0
+        projection = str(pick.get("sim_projection") or (html_row.projection if html_row else matchup))
+
+        rows.append(
+            GameRow(
+                matchup=matchup,
+                pick_text=pick_text,
+                odds=odds,
+                conf=conf,
+                run_edge=run_edge,
+                model_prob=model_prob,
+                break_even=break_even,
+                price_edge=price_edge,
+                projection=projection,
+                status="official",
+            )
+        )
+    return rows
+
+
 def parse_hr_rows(doc: str) -> list[HrRow]:
     row_re = re.compile(
         r'<div class="hr-row [^"]*" data-hr-card="1" data-hr-lane="(?P<lane>[^"]+)" data-hr-status="(?P<status>lotto|watch)">',
@@ -315,10 +398,10 @@ def stat_box(draw: ImageDraw.ImageDraw, x: int, y: int, value: str, label: str):
     center_text(draw, (x + 140, y + 72), label.upper(), load_font("mono", 13), SOFT)
 
 
-def draw_footer(draw: ImageDraw.ImageDraw, note: str):
-    draw.line((86, 1236, 994, 1236), fill=LINE, width=1)
-    draw.text((86, 1268), "morellosims.com/mlbsim", font=load_font("display", 31), fill=INK, anchor="lm")
-    right_text(draw, 994, 1254, note, load_font("mono", 15), SOFT)
+def draw_footer(draw: ImageDraw.ImageDraw, note: str, y: int = 1236):
+    draw.line((86, y, 994, y), fill=LINE, width=1)
+    draw.text((86, y + 32), "morellosims.com/mlbsim", font=load_font("display", 31), fill=INK, anchor="lm")
+    right_text(draw, 994, y + 18, note, load_font("mono", 15), SOFT)
 
 
 def draw_game_row(draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int):
@@ -363,6 +446,17 @@ def draw_hr_row(draw: ImageDraw.ImageDraw, row: HrRow, idx: int, y: int):
 def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Path:
     doc = source.read_text(encoding="utf-8", errors="ignore")
     rows = parse_games(doc)
+    official_source = load_official_pick_rows(doc, rows)
+    if official_source:
+        official_keys = {(row.matchup, row.pick_text) for row in official_source}
+        rows = [
+            *official_source,
+            *[
+                row
+                for row in rows
+                if (row.matchup, row.pick_text) not in official_keys
+            ],
+        ]
     official = sorted(
         [row for row in rows if row.status == "official"],
         key=lambda row: (-row.conf, -(row.price_edge or -9), -row.run_edge),
@@ -385,8 +479,10 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
     y = 510
     draw.text((86, y), "OFFICIAL BOARD", font=load_font("mono", 18), fill=INK)
     y += 52
-    if official:
-        for idx, row in enumerate(official[:max_picks], 1):
+    official_to_draw = official[:max_picks]
+    watch_to_draw = watch[: max(0, min(max_watch, 5 - len(official_to_draw)))]
+    if official_to_draw:
+        for idx, row in enumerate(official_to_draw, 1):
             draw_game_row(draw, row, idx, y)
             y += 126
     else:
@@ -396,7 +492,7 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
     y += 12
     draw.text((86, y), "PRICE WATCH", font=load_font("mono", 18), fill=INK)
     y += 52
-    for idx, row in enumerate(watch[:max_watch], 1):
+    for idx, row in enumerate(watch_to_draw, 1):
         draw_game_row(draw, row, idx, y)
         y += 126
 
@@ -413,24 +509,34 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
     watch = sorted([row for row in rows if row.status == "watch"], key=lambda row: -row.hr_rate)
 
     img, draw = init_card("Go-Yard Card", "HR LOTTO", generated_label(doc))
-    draw.text((88, 296), "Primary homer shortlist from lineup, pitcher, park, and damage signals.", font=load_font("body", 28), fill=SOFT)
+    draw.text((88, 296), "Lotto first, Watch underneath. Same shortlist hierarchy as the board.", font=load_font("body", 28), fill=SOFT)
     top = max([row.hr_rate for row in lotto], default=0)
     stat_box(draw, 86, 354, str(len(lotto)), "lotto")
     stat_box(draw, 400, 354, f"{top:.1f}%", "top HR")
     stat_box(draw, 714, 354, str(len(watch)), "watch")
 
-    y = 510
+    y = 486
     draw.text((86, y), "HR LOTTO", font=load_font("mono", 18), fill=INK)
     y += 52
-    if lotto:
-        for idx, row in enumerate(lotto[:max_lotto], 1):
+    lotto_to_draw = lotto[:max_lotto]
+    watch_to_draw = watch[:max_watch]
+    if lotto_to_draw:
+        for idx, row in enumerate(lotto_to_draw, 1):
             draw_hr_row(draw, row, idx, y)
             y += 108
     else:
         draw.text((86, y), "No HR Lotto qualifiers.", font=load_font("display", 44), fill=SOFT)
         y += 96
 
-    draw_footer(draw, "HR props are volatile")
+    if watch_to_draw:
+        y += 12
+        draw.text((86, y), "HR WATCH", font=load_font("mono", 18), fill=INK)
+        y += 48
+        for idx, row in enumerate(watch_to_draw, 1):
+            draw_hr_row(draw, row, idx, y)
+            y += 108
+
+    draw_footer(draw, "HR props are volatile", y=1252)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
@@ -444,8 +550,8 @@ def main():
     parser.add_argument("--hr-out", default=str(POSTERS / "mlb-hr-card.png"), help="HR PNG output path.")
     parser.add_argument("--max-picks", type=int, default=3)
     parser.add_argument("--max-watch", type=int, default=3)
-    parser.add_argument("--max-hr-lotto", type=int, default=6)
-    parser.add_argument("--max-hr-watch", type=int, default=0)
+    parser.add_argument("--max-hr-lotto", type=int, default=3)
+    parser.add_argument("--max-hr-watch", type=int, default=3)
     args = parser.parse_args()
 
     source = Path(args.source)
