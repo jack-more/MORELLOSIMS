@@ -29,38 +29,66 @@ MLB_TRACKED_MIN_CONF = 8
 def load_season_record():
     """Use the same baseline + picks contract as the homepage dispatch."""
     try:
-        with open(BASELINES_PATH) as f:
-            baseline = json.load(f).get("mlb", {})
-        wins = baseline.get("wins") or 0
-        losses = baseline.get("losses") or 0
-        risked = baseline.get("risked") or 0
-        pl = baseline.get("pl") or 0
+        from render_dispatch import aggregate as dispatch_aggregate, official_picks, load_baselines
 
+        baseline = load_baselines().get("mlb", {})
+        picks = []
         if os.path.exists(MLB_PICKS_PATH):
             with open(MLB_PICKS_PATH) as f:
                 picks = json.load(f)
-            for p in picks:
-                try:
-                    conf = int(p.get("conf") or 0)
-                except (TypeError, ValueError):
-                    conf = 0
-                if conf < MLB_TRACKED_MIN_CONF:
-                    continue
-                if p.get("status") not in ("win", "loss", "push"):
-                    continue
-                wins += 1 if p.get("status") == "win" else 0
-                losses += 1 if p.get("status") == "loss" else 0
-                risked += p.get("units") or 0
-                pl += p.get("pl") or 0
-
-        roi = (pl / risked * 100) if risked else 0
-        return f"{wins}-{losses}", f'{"+" if roi >= 0 else ""}{roi:.1f}%'
+        agg = dispatch_aggregate(official_picks(picks, "mlb"), baseline=baseline)
+        return f'{agg["wins"]}-{agg["losses"]}', f'{agg["roi"]:+.1f}%', agg.get("streak") or "-"
     except Exception as _e:
-        print(f"  WARN tracked picks card contract: {_e}; falling back to placeholder")
-        return "0-0", "+0.0%"
+        print(f"  WARN tracked picks card contract: {_e}; using local fallback")
+
+        try:
+            with open(BASELINES_PATH) as f:
+                baseline = json.load(f).get("mlb", {})
+            wins = baseline.get("wins") or 0
+            losses = baseline.get("losses") or 0
+            risked = baseline.get("risked") or 0
+            pl = baseline.get("pl") or 0
+            settled_for_streak = []
+
+            if os.path.exists(MLB_PICKS_PATH):
+                with open(MLB_PICKS_PATH) as f:
+                    picks = json.load(f)
+                for p in picks:
+                    try:
+                        conf = int(p.get("conf") or 0)
+                    except (TypeError, ValueError):
+                        conf = 0
+                    if conf < MLB_TRACKED_MIN_CONF:
+                        continue
+                    status = p.get("status")
+                    if status not in ("win", "loss", "push"):
+                        continue
+                    wins += 1 if status == "win" else 0
+                    losses += 1 if status == "loss" else 0
+                    risked += p.get("units") or 0
+                    pl += p.get("pl") or 0
+                    if status in ("win", "loss"):
+                        settled_for_streak.append(p)
+
+            settled_for_streak.sort(key=lambda p: p.get("date", ""), reverse=True)
+            streak = 0
+            streak_type = ""
+            if settled_for_streak:
+                streak_type = settled_for_streak[0].get("status", "")
+                for p in settled_for_streak:
+                    if p.get("status") == streak_type:
+                        streak += 1
+                    else:
+                        break
+            streak_label = f'{"W" if streak_type == "win" else "L"}{streak}' if streak else "-"
+            roi = (pl / risked * 100) if risked else 0
+            return f"{wins}-{losses}", f'{"+" if roi >= 0 else ""}{roi:.1f}%', streak_label
+        except Exception as fallback_error:
+            print(f"  WARN tracked picks fallback: {fallback_error}; falling back to placeholder")
+            return "0-0", "+0.0%", "-"
 
 
-SEASON_RECORD, SEASON_ROI_VALUE = load_season_record()
+SEASON_RECORD, SEASON_ROI_VALUE, SEASON_STREAK = load_season_record()
 SEASON_ROI = f"{SEASON_ROI_VALUE} ROI"
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
@@ -3402,21 +3430,25 @@ html = f'''<!DOCTYPE html>
 </header>
 
 <!-- ─── TRACKED PICKS BOX ────────────────────────────────────── -->
-<div style="max-width:560px;margin:14px auto 18px;padding:0 12px;">
+<div style="max-width:640px;margin:14px auto 18px;padding:0 12px;">
   <div style="background:#0a0a0a;border:2px solid #FFEA00;border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 #FFEA00;">
-    <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;gap:18px;">
-      <div style="text-align:left;flex:1;">
+    <div style="display:grid;grid-template-columns:1.35fr 1fr 0.8fr;align-items:center;font-family:'JetBrains Mono',monospace;gap:16px;">
+      <div style="text-align:left;min-width:0;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">TRACKED</div>
         <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{SEASON_RECORD}</div>
       </div>
-      <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 22px;flex:1;">
+      <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 16px;min-width:0;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">ROI</div>
         <div style="font-size:30px;color:#FFEA00;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{SEASON_ROI_VALUE}</div>
       </div>
-      <div style="text-align:right;flex:1;">
-        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
-        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">C:8+<br><span style="color:#888;">PRICE GATES</span></div>
+      <div style="text-align:right;min-width:0;">
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">STREAK</div>
+        <div style="font-size:30px;color:#fff;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{SEASON_STREAK}</div>
       </div>
+    </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #2a2a2a;display:flex;justify-content:space-between;gap:12px;align-items:center;font-family:'JetBrains Mono',monospace;">
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;letter-spacing:0.5px;text-align:right;">C:8+ <span style="color:#888;">PRICE GATES</span></div>
     </div>
   </div>
 </div>

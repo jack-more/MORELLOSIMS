@@ -23,8 +23,25 @@ PAGES = {
 }
 
 
+def html_escape(value):
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def render_filter_text(value):
+    parts = str(value or "").split(" · ", 1)
+    if len(parts) == 1:
+        return html_escape(parts[0])
+    return f'{html_escape(parts[0])} <span style="color:#888;">{html_escape(parts[1])}</span>'
+
+
 def is_tracked_pick(pick, sport):
-    if pick["status"] not in ("win", "loss"):
+    if pick["status"] not in ("win", "loss", "push"):
         return False
     if sport == "mlb":
         try:
@@ -40,6 +57,7 @@ def aggregate(picks_json_path, baseline, sport):
     losses = baseline["losses"]
     risked = baseline["risked"]
     pl = baseline["pl"]
+    settled_for_streak = []
     if os.path.exists(picks_json_path):
         with open(picks_json_path) as f:
             picks = json.load(f)
@@ -50,31 +68,49 @@ def aggregate(picks_json_path, baseline, sport):
             losses += 1 if p["status"] == "loss" else 0
             risked += p.get("units") or 50
             pl += p.get("pl") or 0
+            if p["status"] in ("win", "loss"):
+                settled_for_streak.append(p)
+
+    settled_for_streak.sort(key=lambda p: p.get("date", ""), reverse=True)
+    streak = 0
+    streak_type = ""
+    if settled_for_streak:
+        streak_type = settled_for_streak[0].get("status", "")
+        for p in settled_for_streak:
+            if p.get("status") == streak_type:
+                streak += 1
+            else:
+                break
+    streak_label = f'{"W" if streak_type == "win" else "L"}{streak}' if streak else "-"
     roi = (pl / risked * 100) if risked else 0
-    return wins, losses, roi
+    return wins, losses, roi, streak_label
 
 
-def render_card(sport, wins, losses, roi, filter_text, accent):
+def render_card(sport, wins, losses, roi, streak, filter_text, accent):
     card_label = "SEASON" if sport == "nba" else "TRACKED"
     card_comment = "SEASON RECORD BOX" if sport == "nba" else "─── TRACKED PICKS BOX ──────────────────────────────────────"
     roi_color = accent if sport == "nba" else "#FFEA00"
     return f'''<!-- RECORD-CARD:{sport.upper()}:BEGIN -->
 <!-- {card_comment} -->
-<div style="max-width:560px;margin:14px auto 18px;padding:0 12px;">
+<div style="max-width:640px;margin:14px auto 18px;padding:0 12px;">
   <div style="background:#0a0a0a;border:2px solid {accent};border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 {accent};">
-    <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;gap:18px;">
-      <div style="text-align:left;flex:1;">
+    <div style="display:grid;grid-template-columns:1.35fr 1fr 0.8fr;align-items:center;font-family:'JetBrains Mono',monospace;gap:16px;">
+      <div style="text-align:left;min-width:0;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">{card_label}</div>
         <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{wins}-{losses}</div>
       </div>
-      <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 22px;flex:1;">
+      <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 16px;min-width:0;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">ROI</div>
         <div style="font-size:30px;color:{roi_color};font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{roi:+.1f}%</div>
       </div>
-      <div style="text-align:right;flex:1;">
-        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
-        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;margin-top:6px;letter-spacing:0.5px;">{filter_text}</div>
+      <div style="text-align:right;min-width:0;">
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">STREAK</div>
+        <div style="font-size:30px;color:#fff;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{streak}</div>
       </div>
+    </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #2a2a2a;display:flex;justify-content:space-between;gap:12px;align-items:center;font-family:'JetBrains Mono',monospace;">
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;letter-spacing:0.5px;text-align:right;">{filter_text}</div>
     </div>
   </div>
 </div>
@@ -203,10 +239,10 @@ def main():
             print(f"  [WARN] {page_path} missing — skipping {sport}")
             continue
 
-        wins, losses, roi = aggregate(picks_path, baselines[sport], sport)
-        filter_text = baselines[sport]["filter"].replace(" · ", "<br><span style=\"color:#888;\">") + "</span>"
+        wins, losses, roi, streak = aggregate(picks_path, baselines[sport], sport)
+        filter_text = render_filter_text(baselines[sport].get("filter", ""))
 
-        block = render_card(sport, wins, losses, roi, filter_text, accent)
+        block = render_card(sport, wins, losses, roi, streak, filter_text, accent)
         with open(page_path) as f:
             html = f.read()
         new_html = install_or_replace(html, sport, block)
