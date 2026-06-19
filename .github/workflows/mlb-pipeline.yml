@@ -126,8 +126,17 @@ jobs:
       - name: Verify MLB publish freshness
         run: python3 scripts/verify_mlb_publish.py --max-age-minutes 90 --require-hr-h2h-lane
 
-      - name: Render MLB social card
-        run: python3 scripts/render_mlb_social_card.py --out posters/mlb-social-card.png
+      - name: Render MLB social cards
+        run: python3 scripts/render_mlb_social_card.py --kind both --out posters/mlb-social-card.png --hr-out posters/mlb-hr-card.png
+
+      - name: Send MLB cards to Telegram
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          github.event.schedule == '0 22 * * *'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/send_telegram_cards.py --cards posters/mlb-social-card.png posters/mlb-hr-card.png --caption "Morello Sims MLB cards"
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.
@@ -136,7 +145,7 @@ jobs:
           git config user.name "MLB Pipeline Bot"
           git config user.email "noreply@github.com"
           PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
-          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json posters/mlb-social-card.png
+          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json posters/mlb-social-card.png posters/mlb-hr-card.png
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -181,8 +190,8 @@ jobs:
       - name: Verify MLB publish freshness
         run: python3 scripts/verify_mlb_publish.py --max-age-minutes 90 --require-hr-h2h-lane
 
-      - name: Render MLB social card
-        run: python3 scripts/render_mlb_social_card.py --out posters/mlb-social-card.png
+      - name: Render MLB social cards
+        run: python3 scripts/render_mlb_social_card.py --kind both --out posters/mlb-social-card.png --hr-out posters/mlb-hr-card.png
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).
       # That workflow auto-triggers when picks/mlb.json is pushed below.
@@ -191,7 +200,7 @@ jobs:
           git config user.name "MLB Pipeline Bot"
           git config user.email "noreply@github.com"
           PICKS=$(grep "PICKS:" /tmp/mlb_output.txt | sed 's/.*PICKS: //')
-          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json posters/mlb-social-card.png
+          git add mlbsim/index.html mlbsim/picks_log.csv picks/mlb.json posters/mlb-social-card.png posters/mlb-hr-card.png
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
