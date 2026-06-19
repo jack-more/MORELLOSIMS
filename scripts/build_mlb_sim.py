@@ -2993,8 +2993,6 @@ def render_hr_watch_tab():
     for p in published_today:
         key = (p.get("away"), p.get("home"), p.get("side"))
         g = games_by_matchup.get((p.get("away"), p.get("home")))
-        if g and not (g.get("has_started") or qualifies_as_pick(g)):
-            continue
         seen.add(key)
         rows.append({
             "pick_text": p.get("pick_text") or f'{p.get("side", "")} ML',
