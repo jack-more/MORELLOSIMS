@@ -1706,8 +1706,6 @@ def render_game(g, idx):
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
     published_pick = published_pick_for_game(g)
-    if published_pick and not (g.get("has_started") or qualifies_as_pick(g)):
-        published_pick = None
     if published_pick:
         conf = int(published_pick.get("conf") or g["conf"])
         cc = conf_color(conf)
@@ -3764,9 +3762,6 @@ for g in writeable_picks:
     key = (g["away_abbr"], g["home_abbr"])
     matchup_counts[key] = matchup_counts.get(key, 0) + 1
 
-qualified_ids = set()
-
-
 def pick_id_for_game(g):
     matchup_key = (g["away_abbr"], g["home_abbr"])
     game_suffix = ""
@@ -3775,26 +3770,10 @@ def pick_id_for_game(g):
     return f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}{game_suffix}-ml'
 
 
-for g in writeable_picks:
-    qualified_ids.add(pick_id_for_game(g))
-
-unstarted_game_pks = {g.get("game_pk") for g in games if not g.get("has_started")}
-
-# Once a same-day pick starts, keep it there. Pregame pending picks can still
-# be pulled by later refreshes when the current gate says no play, usually
-# because price moved beyond the ROI cap. Settled picks are never mutated.
-if odds_feed_has_lines:
-    for pick_id, pick in list(by_id.items()):
-        if (
-            pick.get("sport") == "mlb"
-            and pick.get("date") == TODAY
-            and pick.get("bet_type") == "ml"
-            and pick.get("status") == "pending"
-            and pick.get("game_pk") in unstarted_game_pks
-            and pick_id not in qualified_ids
-        ):
-            del by_id[pick_id]
-else:
+# Once a same-day pick is published, keep it visible and in the ledger.
+# Lines move after posting; pulling the pick later makes the page, PNG card,
+# and public tracker disagree.
+if not odds_feed_has_lines:
     print("  WARN: odds feed returned zero real-book lines; preserving pending MLB picks")
 
 for g in writeable_picks:
