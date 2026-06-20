@@ -555,22 +555,6 @@ def draw_centered(draw: ImageDraw.ImageDraw, y: int, text: str, fnt: ImageFont.I
     draw.text(((W - (box[2] - box[0])) / 2, y), text, font=fnt, fill=fill)
 
 
-def draw_spaced_centered(
-    draw: ImageDraw.ImageDraw,
-    y: int,
-    text: str,
-    fnt: ImageFont.ImageFont,
-    fill=INK,
-    tracking: int = 2,
-):
-    widths = [text_w(draw, char, fnt) for char in text]
-    total = sum(widths) + max(0, len(text) - 1) * tracking
-    x = (W - total) / 2
-    for char, width in zip(text, widths):
-        draw.text((x, y), char, font=fnt, fill=fill)
-        x += width + tracking
-
-
 def init_background() -> Image.Image:
     img = Image.new("RGBA", (W, H), BG)
     draw = ImageDraw.Draw(img, "RGBA")
@@ -588,69 +572,73 @@ def init_card(title: str, subtitle: str, date_label: str) -> tuple[Image.Image, 
     draw = ImageDraw.Draw(img, "RGBA")
     draw.line((0, 0, W, 0), fill=(18, 18, 18, 210), width=3)
 
-    brand_font = load_font("mono", 24)
-    brand_text = "morello sims"
+    brand_font = load_font("display", 36)
+    brand_text = "MORELLO SIMS"
     brand_logo = load_morello_logo()
     brand_w = text_w(draw, brand_text, brand_font)
-    brand_total = brand_w + (58 if brand_logo else 0)
+    brand_total = brand_w + (70 if brand_logo else 0)
     brand_x = (W - brand_total) / 2
     if brand_logo:
-        paste_contained(img, brand_logo, (int(brand_x + 22), 92), 44, opacity=0.9)
-        brand_x += 58
-    draw.text((brand_x, 80), brand_text, font=brand_font, fill=INK)
-    draw_spaced_centered(
-        draw,
-        136,
-        "sports simulation \u00d7 matchup intelligence",
-        load_font("mono", 20),
-        (18, 18, 18, 210),
-        tracking=2,
-    )
-    draw_centered(draw, 238, title.lower(), load_font("mono", 60), INK)
-    draw_spaced_centered(draw, 318, subtitle.lower(), load_font("mono", 16), SOFT, tracking=2)
-    draw_spaced_centered(draw, 1216, "morellosims.com/mlbsim", load_font("mono", 20), SOFT, tracking=1)
-    draw_spaced_centered(draw, 1258, date_label.lower(), load_font("mono", 14), MUTED, tracking=1)
+        paste_contained(img, brand_logo, (int(brand_x + 26), 88), 52, opacity=0.95)
+        brand_x += 70
+    draw.text((brand_x, 67), brand_text, font=brand_font, fill=INK)
+    draw_centered(draw, 124, "sports simulation x matchup intelligence", load_font("mono", 19), SOFT)
+    draw_centered(draw, 196, title.upper(), load_font("display", 96), INK)
+    draw_centered(draw, 292, subtitle.upper(), load_font("body", 21), SOFT)
+    draw_centered(draw, 1216, "morellosims.com/mlbsim", load_font("display", 32), INK)
+    draw_centered(draw, 1260, date_label.upper(), load_font("mono", 14), MUTED)
     return img, draw
 
 
 def draw_stat_strip(draw: ImageDraw.ImageDraw, y: int, stats: list[tuple[str, str, tuple[int, int, int]]]):
-    xs = [270, 540, 810]
-    draw.line((170, y - 24, 910, y - 24), fill=FAINT, width=1)
-    draw.line((170, y + 86, 910, y + 86), fill=FAINT, width=1)
-    for x, (label, value, _fill) in zip(xs, stats):
-        center_text(draw, (x, y + 4), label.lower(), load_font("mono", 14), MUTED)
-        center_text(draw, (x, y + 48), value, load_font("mono", 34), INK)
+    x1, x2 = 120, 960
+    draw.rounded_rectangle((x1, y - 18, x2, y + 106), radius=10, fill=(185, 185, 182, 80), outline=FAINT, width=1)
+    xs = [260, 540, 820]
+    for idx, (x, (label, value, _fill)) in enumerate(zip(xs, stats)):
+        if idx:
+            draw.line((x - 138, y + 6, x - 138, y + 80), fill=FAINT, width=1)
+        center_text(draw, (x, y + 18), label.upper(), load_font("mono", 14), MUTED)
+        center_text(draw, (x, y + 66), value, load_font("display", 44), INK)
 
 
 def draw_section_label(draw: ImageDraw.ImageDraw, y: int, label: str, detail: str = ""):
-    text = label.lower() if not detail else f"{label.lower()}   {detail.lower()}"
-    draw_spaced_centered(draw, y, text, load_font("mono", 15), SOFT, tracking=2)
+    draw_centered(draw, y, label.upper(), load_font("display", 31), INK)
+    if detail:
+        draw_centered(draw, y + 34, detail, load_font("body", 17), SOFT)
 
 
 def draw_footer(draw: ImageDraw.ImageDraw, note: str, y: int = 1168):
-    draw_spaced_centered(draw, y, note.lower(), load_font("mono", 13), MUTED, tracking=1)
+    draw_centered(draw, y, note.upper(), load_font("mono", 13), MUTED)
 
 
 def draw_game_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int, compact: bool = False):
     if compact:
-        draw.line((250, y, 830, y), fill=FAINT, width=1)
-        draw_team_logo(img, row.away_id, (292, y + 37), 30, opacity=0.75)
-        draw_team_logo(img, row.home_id, (788, y + 37), 30, opacity=0.75)
-        line = f"{idx:02d}  {row.pick_text}  {row.matchup}  {fmt_odds(row.odds)}  c{row.conf}"
-        draw_spaced_centered(draw, y + 22, line.lower(), load_font("mono", 18), INK, tracking=1)
-        edge = f"edge {fmt_pct(row.price_edge, signed=True)}"
-        draw_spaced_centered(draw, y + 54, edge.lower(), load_font("mono", 13), MUTED, tracking=1)
+        draw.rounded_rectangle((128, y, 952, y + 94), radius=8, fill=(180, 180, 177, 55), outline=FAINT, width=1)
+        draw_team_logo(img, row.away_id, (184, y + 47), 42, opacity=0.78)
+        draw_team_logo(img, row.home_id, (896, y + 47), 42, opacity=0.78)
+        draw.text((226, y + 18), f"{idx:02d}", font=load_font("mono", 16), fill=MUTED)
+        draw.text((276, y + 13), row.pick_text.upper(), font=load_font("display", 37), fill=INK)
+        draw.text((276, y + 50), f"{row.matchup}   {fmt_odds(row.odds)}   C{row.conf}", font=load_font("mono", 16), fill=SOFT)
+        right_text(draw, 846, y + 16, f"RUN SPREAD {row.run_edge:+.1f}", load_font("mono", 16), INK)
+        right_text(draw, 846, y + 51, "PRICE ALREADY JUICED", load_font("mono", 13), MUTED)
         return
 
-    draw.line((190, y, 890, y), fill=FAINT, width=1)
-    draw_team_logo(img, row.away_id, (312, y + 62), 60, opacity=0.88)
-    draw_team_logo(img, row.home_id, (768, y + 62), 60, opacity=0.88)
-    draw_spaced_centered(draw, y + 31, row.pick_text.lower(), load_font("mono", 54), INK, tracking=4)
-    meta = f"{row.matchup}   {fmt_odds(row.odds)}   c{row.conf}"
-    draw_spaced_centered(draw, y + 103, meta.lower(), load_font("mono", 21), SOFT, tracking=2)
-    draw_centered(draw, y + 137, row.projection.lower(), load_font("mono", 14), MUTED)
-    edge_line = f"edge {fmt_pct(row.price_edge, signed=True)} / model {fmt_pct(row.model_prob)}"
-    draw_centered(draw, y + 165, edge_line.lower(), load_font("mono", 14), MUTED)
+    draw.rounded_rectangle((96, y, 984, y + 272), radius=14, fill=(186, 186, 183, 85), outline=FAINT, width=1)
+    draw_centered(draw, y + 20, "OFFICIAL PICK", load_font("mono", 16), MUTED)
+    draw_team_logo(img, row.away_id, (218, y + 126), 112, opacity=0.94)
+    draw_team_logo(img, row.home_id, (862, y + 126), 112, opacity=0.94)
+    draw_centered(draw, y + 66, row.pick_text.upper(), load_font("display", 88), INK)
+    draw_centered(draw, y + 152, f"{row.matchup}   {fmt_odds(row.odds)}   C{row.conf}", load_font("mono", 24), SOFT)
+    draw_centered(draw, y + 187, row.projection.upper(), load_font("mono", 16), MUTED)
+    metrics = [
+        ("PRICE EDGE", fmt_pct(row.price_edge, signed=True)),
+        ("MODEL WIN", fmt_pct(row.model_prob)),
+        ("RUN SPREAD", f"{row.run_edge:+.1f}"),
+    ]
+    xs = [310, 540, 770]
+    for x, (label, value) in zip(xs, metrics):
+        center_text(draw, (x, y + 230), value, load_font("display", 31), INK)
+        center_text(draw, (x, y + 255), label, load_font("mono", 11), MUTED)
 
 
 def clean_hr_meta(meta: str) -> str:
@@ -664,21 +652,21 @@ def draw_hr_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: HrRow, y: int,
     pressure = row.metrics.get("pressure") or "-"
 
     if compact:
-        draw.line((250, y, 830, y), fill=FAINT, width=1)
-        draw_team_logo(img, row.team_id, (332, y + 28), 30, opacity=0.7)
-        line = f"{row.rank}  {row.name}  {row.hr_rate:.1f}%"
-        draw_spaced_centered(draw, y + 18, line.lower(), load_font("mono", 18), INK, tracking=1)
-        draw_spaced_centered(draw, y + 49, meta.lower(), load_font("mono", 12), MUTED, tracking=1)
+        draw.rounded_rectangle((170, y, 910, y + 58), radius=8, fill=(180, 180, 177, 45), outline=FAINT, width=1)
+        draw_team_logo(img, row.team_id, (222, y + 29), 30, opacity=0.72)
+        draw.text((268, y + 7), f"{row.rank}  {row.name}".upper(), font=load_font("display", 25), fill=INK)
+        right_text(draw, 858, y + 9, f"{row.hr_rate:.1f}%", load_font("display", 25), INK)
+        draw.text((268, y + 36), meta.upper(), font=load_font("mono", 10), fill=MUTED)
         return
 
-    draw.line((185, y, 895, y), fill=FAINT, width=1)
-    draw_team_logo(img, row.team_id, (178, y + 42), 42, opacity=0.85)
+    draw.rounded_rectangle((132, y, 948, y + 72), radius=9, fill=(182, 182, 179, 55), outline=FAINT, width=1)
+    draw_team_logo(img, row.team_id, (186, y + 36), 40, opacity=0.86)
     left = f"{row.rank}. {row.name}"
-    draw.text((228, y + 12), left.lower(), font=load_font("mono", 21), fill=INK)
-    right_text(draw, 870, y + 12, f"{row.hr_rate:.1f}%", load_font("mono", 21), INK)
-    draw.text((228, y + 43), meta.lower(), font=load_font("mono", 12), fill=SOFT)
-    detail = f"{lane.lower()}   blast {blast}   pressure {pressure}"
-    draw.text((228, y + 62), detail, font=load_font("mono", 11), fill=MUTED)
+    draw.text((238, y + 7), left.upper(), font=load_font("display", 27), fill=INK)
+    right_text(draw, 890, y + 9, f"{row.hr_rate:.1f}%", load_font("display", 28), INK)
+    draw.text((240, y + 35), meta.upper(), font=load_font("mono", 11), fill=SOFT)
+    detail = f"{lane.upper()}   BLAST {blast}   PRESSURE {pressure}"
+    draw.text((240, y + 53), detail, font=load_font("mono", 10), fill=MUTED)
 
 
 def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Path:
@@ -709,7 +697,7 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
         edges = [row.price_edge for row in official if row.price_edge is not None]
         avg_edge = sum(edges) / len(edges) if edges else None
 
-    img, draw = init_card("mlb card", "official moneyline", generated_label(doc))
+    img, draw = init_card("MLB MONEYLINE", "official pick board", generated_label(doc))
     tracking = parse_tracking_stats(doc)
     if tracking:
         strip_stats = [
@@ -725,27 +713,27 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
         ]
     draw_stat_strip(draw, 378, strip_stats)
 
-    y = 516
+    y = 508
     official_to_draw = official[:max_picks]
     draw_section_label(draw, y, "official picks", f"{len(official_to_draw)} posted")
-    y += 46
+    y += 64
     watch_to_draw = watch[:max_watch]
     if official_to_draw:
         for idx, row in enumerate(official_to_draw, 1):
             draw_game_row(img, draw, row, idx, y)
-            y += 190
+            y += 302
     else:
         draw.text((86, y), "No official MLB plays.", font=load_font("display", 44), fill=SOFT)
         y += 96
 
     y += 2
-    draw_section_label(draw, y, "watchlist", "model context")
-    y += 42
+    draw_section_label(draw, y, "watchlist", "large run spread, but ML price is already juiced")
+    y += 70
     for idx, row in enumerate(watch_to_draw, 1):
         draw_game_row(img, draw, row, idx, y, compact=True)
-        y += 72
+        y += 106
 
-    draw_footer(draw, "check live board for line movement", y=1168)
+    draw_footer(draw, "watchlist means run gap is there, but the price is too juiced", y=1168)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
@@ -757,11 +745,11 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
     lotto = [row for row in rows if row.status == "lotto"]
     watch = [row for row in rows if row.status == "watch"]
 
-    img, draw = init_card("go-yard", "lotto first / watchlist below", generated_label(doc))
+    img, draw = init_card("GO-YARD LOTTO", "lotto first / watchlist below", generated_label(doc))
     top = max([row.hr_rate for row in lotto], default=0)
     draw_stat_strip(
         draw,
-        378,
+        356,
         [
             ("lotto", str(len(lotto)), YELLOW),
             ("top hr", f"{top:.1f}%", WHITE),
@@ -769,28 +757,28 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
         ],
     )
 
-    y = 492
+    y = 470
     draw_section_label(draw, y, "lotto card", "board order")
-    y += 40
+    y += 58
     lotto_to_draw = lotto[:max_lotto]
     watch_to_draw = watch[:max_watch]
     if lotto_to_draw:
         for row in lotto_to_draw:
             draw_hr_row(img, draw, row, y)
-            y += 78
+            y += 76
     else:
         draw.text((86, y), "No HR Lotto qualifiers.", font=load_font("display", 44), fill=SOFT)
         y += 96
 
     if watch_to_draw:
-        y += 8
+        y += 6
         draw_section_label(draw, y, "watchlist", "secondary")
-        y += 38
+        y += 54
         for row in watch_to_draw:
             draw_hr_row(img, draw, row, y, compact=True)
             y += 64
 
-    draw_footer(draw, "HR props are volatile", y=1184)
+    draw_footer(draw, "HR props are volatile", y=1186)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
