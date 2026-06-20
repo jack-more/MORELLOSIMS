@@ -22,6 +22,9 @@ LOGO = ROOT / "logo-grok-transparent.png"
 TEAM_LOGO_DIR = POSTERS / "assets" / "mlb-team-logos"
 
 W, H = 1080, 1350
+BOARD_LEFT = 72
+BOARD_RIGHT = 1008
+BOARD_CENTER = W // 2
 
 BG = (164, 164, 162)
 CARD = (174, 174, 172)
@@ -594,14 +597,14 @@ def init_card(title: str, subtitle: str, date_label: str) -> tuple[Image.Image, 
 
 
 def draw_stat_strip(draw: ImageDraw.ImageDraw, y: int, stats: list[tuple[str, str, tuple[int, int, int]]]):
-    x1, x2 = 120, 960
+    x1, x2 = BOARD_LEFT, BOARD_RIGHT
     draw_panel(draw, (x1, y - 18, x2, y + 106), fill=(185, 185, 182, 80), radius=8)
-    xs = [260, 540, 820]
+    xs = [228, BOARD_CENTER, 852]
     for idx, (x, (label, value, _fill)) in enumerate(zip(xs, stats)):
         if idx:
-            draw.line((x - 138, y + 6, x - 138, y + 80), fill=FAINT, width=1)
-        center_text(draw, (x, y + 18), label.upper(), load_font("mono", 14), MUTED)
-        center_text(draw, (x, y + 66), value, load_font("display", 44), INK)
+            draw.line((x - 156, y + 4, x - 156, y + 84), fill=FAINT, width=1)
+        center_text(draw, (x, y + 18), label.upper(), load_font("mono", 15), MUTED)
+        center_text(draw, (x, y + 69), value, load_font("display", 49), INK)
 
 
 def draw_section_label(draw: ImageDraw.ImageDraw, y: int, label: str, detail: str = ""):
@@ -621,45 +624,45 @@ def draw_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], fill=P
 def draw_confidence_badge(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], conf: int, large: bool = False):
     x1, y1, x2, y2 = box
     draw.rounded_rectangle(box, radius=5, fill=INK)
-    label_font = load_font("mono", 10 if large else 9)
-    value_font = load_font("display", 28 if large else 20)
-    center_text(draw, ((x1 + x2) / 2, y1 + (13 if large else 10)), "CONFIDENCE", label_font, PALE)
-    center_text(draw, ((x1 + x2) / 2, y1 + (38 if large else 30)), f"{conf}/10", value_font, WHITE)
+    label_font = load_font("mono", 11 if large else 10)
+    value_font = load_font("display", 34 if large else 25)
+    center_text(draw, ((x1 + x2) / 2, y1 + (14 if large else 12)), "CONFIDENCE", label_font, PALE)
+    center_text(draw, ((x1 + x2) / 2, y1 + (46 if large else 39)), f"{conf}/10", value_font, WHITE)
 
 
 def draw_game_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int, compact: bool = False):
     if compact:
-        draw_panel(draw, (128, y, 952, y + 94), fill=PANEL_FILL_LIGHT)
-        draw_team_logo(img, row.away_id, (184, y + 47), 42, opacity=0.78)
-        draw_team_logo(img, row.home_id, (896, y + 47), 42, opacity=0.78)
-        draw.text((226, y + 18), f"{idx:02d}", font=load_font("mono", 16), fill=MUTED)
-        draw.text((276, y + 13), row.pick_text.upper(), font=load_font("display", 37), fill=INK)
-        draw.text((276, y + 50), f"{row.matchup}   {fmt_odds(row.odds)}", font=load_font("mono", 16), fill=SOFT)
-        draw_confidence_badge(draw, (476, y + 17, 568, y + 78), row.conf)
-        right_text(draw, 846, y + 16, f"RUN SPREAD {row.run_edge:+.1f}", load_font("mono", 16), INK)
-        right_text(draw, 846, y + 51, "PRICE ALREADY JUICED", load_font("mono", 13), MUTED)
+        draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + 112), fill=PANEL_FILL_LIGHT)
+        draw_team_logo(img, row.away_id, (146, y + 56), 52, opacity=0.82)
+        draw_team_logo(img, row.home_id, (936, y + 56), 52, opacity=0.82)
+        draw.text((214, y + 24), f"{idx:02d}", font=load_font("mono", 17), fill=MUTED)
+        draw.text((268, y + 17), row.pick_text.upper(), font=load_font("display", 45), fill=INK)
+        draw.text((268, y + 64), f"{row.matchup}   {fmt_odds(row.odds)}", font=load_font("mono", 18), fill=SOFT)
+        draw_confidence_badge(draw, (492, y + 20, 606, y + 92), row.conf)
+        right_text(draw, 862, y + 22, f"RUN SPREAD {row.run_edge:+.1f}", load_font("mono", 18), INK)
+        right_text(draw, 862, y + 62, "PRICE ALREADY JUICED", load_font("mono", 14), MUTED)
         return
 
-    draw_panel(draw, (96, y, 984, y + 272), fill=PANEL_FILL, radius=8)
-    draw_centered(draw, y + 20, "OFFICIAL PICK", load_font("mono", 16), MUTED)
-    draw_team_logo(img, row.away_id, (218, y + 126), 112, opacity=0.94)
-    draw_team_logo(img, row.home_id, (862, y + 126), 112, opacity=0.94)
-    draw_centered(draw, y + 66, row.pick_text.upper(), load_font("display", 88), INK)
-    draw_centered(draw, y + 152, f"{row.matchup}   {fmt_odds(row.odds)}", load_font("mono", 24), SOFT)
-    draw_centered(draw, y + 187, row.projection.upper(), load_font("mono", 16), MUTED)
+    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + 296), fill=PANEL_FILL, radius=8)
+    draw_centered(draw, y + 21, "OFFICIAL PICK", load_font("mono", 17), MUTED)
+    draw_team_logo(img, row.away_id, (188, y + 133), 132, opacity=0.96)
+    draw_team_logo(img, row.home_id, (892, y + 133), 132, opacity=0.96)
+    draw_centered(draw, y + 61, row.pick_text.upper(), load_font("display", 104), INK)
+    draw_centered(draw, y + 158, f"{row.matchup}   {fmt_odds(row.odds)}", load_font("mono", 27), SOFT)
+    draw_centered(draw, y + 197, row.projection.upper(), load_font("mono", 17), MUTED)
     metrics = [
         ("CONFIDENCE", f"{row.conf}/10"),
         ("PRICE EDGE", fmt_pct(row.price_edge, signed=True)),
         ("MODEL WIN", fmt_pct(row.model_prob)),
         ("RUN SPREAD", f"{row.run_edge:+.1f}"),
     ]
-    xs = [240, 430, 620, 810]
+    xs = [226, 430, 650, 854]
     for x, (label, value) in zip(xs, metrics):
         if label == "CONFIDENCE":
-            draw_confidence_badge(draw, (x - 64, y + 210, x + 64, y + 264), row.conf)
+            draw_confidence_badge(draw, (x - 76, y + 220, x + 76, y + 284), row.conf, large=True)
         else:
-            center_text(draw, (x, y + 230), value, load_font("display", 31), INK)
-            center_text(draw, (x, y + 255), label, load_font("mono", 11), MUTED)
+            center_text(draw, (x, y + 244), value, load_font("display", 36), INK)
+            center_text(draw, (x, y + 272), label, load_font("mono", 12), MUTED)
 
 
 def clean_hr_meta(meta: str) -> str:
@@ -673,21 +676,21 @@ def draw_hr_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: HrRow, y: int,
     pressure = row.metrics.get("pressure") or "-"
 
     if compact:
-        draw_panel(draw, (170, y, 910, y + 58), fill=PANEL_FILL_LIGHT)
-        draw_team_logo(img, row.team_id, (222, y + 29), 30, opacity=0.72)
-        draw.text((268, y + 7), f"{row.rank}  {row.name}".upper(), font=load_font("display", 25), fill=INK)
-        right_text(draw, 858, y + 9, f"{row.hr_rate:.1f}%", load_font("display", 25), INK)
-        draw.text((268, y + 36), meta.upper(), font=load_font("mono", 10), fill=MUTED)
+        draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + 62), fill=PANEL_FILL_LIGHT)
+        draw_team_logo(img, row.team_id, (138, y + 31), 34, opacity=0.76)
+        draw.text((210, y + 8), f"{row.rank}  {row.name}".upper(), font=load_font("display", 29), fill=INK)
+        right_text(draw, 936, y + 9, f"{row.hr_rate:.1f}%", load_font("display", 29), INK)
+        draw.text((212, y + 40), meta.upper(), font=load_font("mono", 11), fill=MUTED)
         return
 
-    draw_panel(draw, (132, y, 948, y + 72), fill=PANEL_FILL_LIGHT)
-    draw_team_logo(img, row.team_id, (186, y + 36), 40, opacity=0.86)
+    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + 80), fill=PANEL_FILL_LIGHT)
+    draw_team_logo(img, row.team_id, (138, y + 40), 48, opacity=0.88)
     left = f"{row.rank}. {row.name}"
-    draw.text((238, y + 7), left.upper(), font=load_font("display", 27), fill=INK)
-    right_text(draw, 890, y + 9, f"{row.hr_rate:.1f}%", load_font("display", 28), INK)
-    draw.text((240, y + 35), meta.upper(), font=load_font("mono", 11), fill=SOFT)
+    draw.text((210, y + 7), left.upper(), font=load_font("display", 32), fill=INK)
+    right_text(draw, 936, y + 10, f"{row.hr_rate:.1f}%", load_font("display", 32), INK)
+    draw.text((212, y + 41), meta.upper(), font=load_font("mono", 12), fill=SOFT)
     detail = f"{lane.upper()}   BLAST {blast}   PRESSURE {pressure}"
-    draw.text((240, y + 53), detail, font=load_font("mono", 10), fill=MUTED)
+    draw.text((212, y + 60), detail, font=load_font("mono", 11), fill=MUTED)
 
 
 def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Path:
@@ -752,9 +755,9 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
     y += 70
     for idx, row in enumerate(watch_to_draw, 1):
         draw_game_row(img, draw, row, idx, y, compact=True)
-        y += 106
+        y += 124
 
-    draw_footer(draw, "watchlist means run gap is there, but the price is too juiced", y=1168)
+    draw_footer(draw, "watchlist means run gap is there, but the price is too juiced", y=1194)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
@@ -770,7 +773,7 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
     top = max([row.hr_rate for row in lotto], default=0)
     draw_stat_strip(
         draw,
-        356,
+        340,
         [
             ("lotto", str(len(lotto)), YELLOW),
             ("top hr", f"{top:.1f}%", WHITE),
@@ -778,28 +781,28 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
         ],
     )
 
-    y = 470
+    y = 452
     draw_section_label(draw, y, "lotto card", "board order")
-    y += 58
+    y += 52
     lotto_to_draw = lotto[:max_lotto]
     watch_to_draw = watch[:max_watch]
     if lotto_to_draw:
         for row in lotto_to_draw:
             draw_hr_row(img, draw, row, y)
-            y += 76
+            y += 83
     else:
         draw.text((86, y), "No HR Lotto qualifiers.", font=load_font("display", 44), fill=SOFT)
         y += 96
 
     if watch_to_draw:
-        y += 6
-        draw_section_label(draw, y, "watchlist", "secondary")
-        y += 54
+        y += 2
+        draw_section_label(draw, y, "watchlist")
+        y += 42
         for row in watch_to_draw:
             draw_hr_row(img, draw, row, y, compact=True)
             y += 64
 
-    draw_footer(draw, "HR props are volatile", y=1186)
+    draw_footer(draw, "HR props are volatile", y=1194)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
