@@ -3768,11 +3768,41 @@ def pick_id_for_game(g):
     return f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}{game_suffix}-ml'
 
 
-# Once a same-day pick is published, keep it visible and in the ledger.
-# Lines move after posting; pulling the pick later makes the page, PNG card,
-# and public tracker disagree.
 if not odds_feed_has_lines:
     print("  WARN: odds feed returned zero real-book lines; preserving pending MLB picks")
+else:
+    unstarted_game_pks = {
+        str(g.get("game_pk"))
+        for g in games
+        if g.get("game_pk") and not g.get("has_started")
+    }
+    unstarted_matchups = {
+        (g.get("away_abbr"), g.get("home_abbr"))
+        for g in games
+        if not g.get("has_started")
+    }
+    qualified_ids = {pick_id_for_game(g) for g in writeable_picks}
+
+    def is_unstarted_today_pick(p):
+        game_pk = p.get("game_pk")
+        if game_pk:
+            return str(game_pk) in unstarted_game_pks
+        return (p.get("away"), p.get("home")) in unstarted_matchups
+
+    stale_pending_ids = [
+        pick_id
+        for pick_id, pick in by_id.items()
+        if pick.get("sport") == "mlb"
+        and pick.get("date") == TODAY
+        and pick.get("bet_type") == "ml"
+        and pick.get("status") == "pending"
+        and is_unstarted_today_pick(pick)
+        and pick_id not in qualified_ids
+    ]
+    for pick_id in stale_pending_ids:
+        del by_id[pick_id]
+    if stale_pending_ids:
+        print(f"  Pruned {len(stale_pending_ids)} stale pending MLB picks before first pitch")
 
 for g in writeable_picks:
     pick_team = g["pick_team"]
