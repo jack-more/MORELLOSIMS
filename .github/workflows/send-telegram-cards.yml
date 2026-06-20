@@ -1,0 +1,37 @@
+name: Send Telegram Cards
+
+on:
+  workflow_dispatch:
+    inputs:
+      caption:
+        description: "Telegram caption"
+        required: false
+        default: "Morello Sims MLB cards"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install sender dependency
+        run: python3 -m pip install requests
+
+      - name: Send cards to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: >
+          python3 scripts/send_telegram_cards.py
+          --require
+          --cards posters/mlb-social-card.png posters/mlb-hr-card.png
+          --caption "${{ inputs.caption }}"
