@@ -719,7 +719,7 @@ def draw_hr_stat_strip(draw: ImageDraw.ImageDraw, y: int, lotto_count: int, top_
     draw.line((center_x2, y, center_x2, y + h), fill=RULE, width=2)
 
     stats = [
-        ((BOARD_LEFT + center_x1) // 2, "LOTTO", str(lotto_count), INK, MUTED),
+        ((BOARD_LEFT + center_x1) // 2, "CARD", str(lotto_count), INK, MUTED),
         ((center_x1 + center_x2) // 2, "TOP HR", f"{top_rate:.1f}%", YELLOW, PALE),
         ((center_x2 + BOARD_RIGHT) // 2, "WATCH", str(watch_count), INK, MUTED),
     ]
@@ -853,12 +853,12 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
     lotto = [row for row in rows if row.status == "lotto"]
     watch = [row for row in rows if row.status == "watch"]
 
-    img, draw = init_card("GO-YARD LOTTO", "lotto first / watchlist below", generated_label(doc))
+    img, draw = init_card("GO YARD CARD", "top HR board / watchlist below", generated_label(doc))
     top = max([row.hr_rate for row in lotto], default=0)
     draw_hr_stat_strip(draw, 326, len(lotto), top, len(watch))
 
     y = 472
-    draw_hr_section_bar(draw, y, "lotto card", "board order")
+    draw_hr_section_bar(draw, y, "go yard card", "board order")
     y += 48
     lotto_to_draw = lotto[:max_lotto]
     watch_to_draw = watch[:max_watch]
@@ -867,7 +867,7 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
             draw_hr_row(img, draw, row, y)
             y += 80
     else:
-        draw.text((86, y), "No HR Lotto qualifiers.", font=load_font("display", 44), fill=SOFT)
+        draw.text((86, y), "No Go Yard qualifiers.", font=load_font("display", 44), fill=SOFT)
         y += 96
 
     if watch_to_draw:
