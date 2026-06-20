@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render minimalist MLB social cards from the generated MLB page."""
+"""Render MLB social cards from the generated MLB page."""
 from __future__ import annotations
 
 import argparse
@@ -21,16 +21,15 @@ LOGO = ROOT / "logo-grok-transparent.png"
 
 W, H = 1080, 1350
 
-BG = (189, 189, 180)
-PAPER = (226, 225, 216)
-PANEL = (210, 210, 201)
-INK = (22, 23, 21)
-SOFT = (91, 93, 88)
-LINE = (158, 158, 149)
-GREEN = (29, 94, 70)
-RUST = (137, 84, 51)
-RED = (139, 58, 54)
-CREAM = (238, 237, 229)
+BG = (158, 158, 158)
+CARD = (255, 255, 255)
+INK = (8, 8, 8)
+SOFT = (74, 74, 74)
+MUTED = (112, 112, 112)
+YELLOW = (255, 234, 0)
+GREEN = (0, 163, 52)
+ORANGE = (255, 107, 0)
+WHITE = (255, 255, 255)
 
 FONT_CANDIDATES = {
     "display": [
@@ -68,6 +67,7 @@ class GameRow:
 
 @dataclass(frozen=True)
 class HrRow:
+    rank: str
     name: str
     meta: str
     lane: str
@@ -75,6 +75,13 @@ class HrRow:
     hr_rate: float
     signal: str
     metrics: dict[str, str]
+
+
+@dataclass(frozen=True)
+class TrackingStats:
+    record: str
+    roi: str
+    streak: str
 
 
 def load_font(kind: str, size: int) -> ImageFont.ImageFont:
@@ -118,10 +125,6 @@ def right_text(draw: ImageDraw.ImageDraw, right_x: int, y: int, text: str, fnt: 
     draw.text((right_x - (box[2] - box[0]), y), text, font=fnt, fill=fill)
 
 
-def rounded(draw: ImageDraw.ImageDraw, xy, radius: int, fill, outline=None, width: int = 1):
-    draw.rounded_rectangle(xy, radius=radius, fill=fill, outline=outline, width=width)
-
-
 def parse_int_moneyline(value: str) -> int | None:
     try:
         return int(value.replace("+", "").strip())
@@ -162,6 +165,19 @@ def generated_label(doc: str) -> str:
 def generated_date(doc: str) -> str | None:
     match = re.search(r"Generated\s+(\d{4}-\d{2}-\d{2})\s+\d{1,2}:\d{2}\s+ET", doc)
     return match.group(1) if match else None
+
+
+def parse_tracking_stats(doc: str) -> TrackingStats | None:
+    block = re.search(r"TRACKED PICKS BOX.*?FILTER BAR", doc, re.S)
+    if not block:
+        return None
+    text = strip_tags(block.group(0))
+    record = re.search(r"TRACKED\s+([0-9]+-[0-9]+)", text)
+    roi = re.search(r"ROI\s+([+-]?[0-9.]+%)", text)
+    streak = re.search(r"STREAK\s+([WL][0-9]+)", text)
+    if not (record and roi and streak):
+        return None
+    return TrackingStats(record=record.group(1), roi=roi.group(1), streak=streak.group(1))
 
 
 def split_by_marker(doc: str, marker_re: re.Pattern[str], stop: str | None = None) -> list[tuple[re.Match[str], str]]:
@@ -227,6 +243,8 @@ def parse_games(doc: str) -> list[GameRow]:
         sim_pick = parse_sim_pick(block)
         official = "NO PLAY" not in sim_pick.upper() and "MODEL EDGE" not in sim_pick.upper()
         official_team = re.search(r"\b([A-Z]{2,3})\s+ML\b", sim_pick)
+        visible_conf = re.search(r"\bC:?\s*(\d+)", sim_pick)
+        row_conf = int(visible_conf.group(1)) if official and visible_conf else int(match.group("conf"))
         if official and official_team:
             pick_team = official_team.group(1)
 
@@ -238,12 +256,13 @@ def parse_games(doc: str) -> list[GameRow]:
             run_edge = float(match.group("edge"))
         except ValueError:
             run_edge = 0.0
+
         rows.append(
             GameRow(
                 matchup=f"{away} @ {home}",
                 pick_text=f"{pick_team} ML",
                 odds=odds,
-                conf=int(match.group("conf")),
+                conf=row_conf,
                 run_edge=run_edge,
                 model_prob=model_prob,
                 break_even=break_even,
@@ -338,6 +357,7 @@ def parse_hr_rows(doc: str) -> list[HrRow]:
     )
     rows: list[HrRow] = []
     for match, block in split_by_marker(doc, row_re, "</main>"):
+        rank = re.search(r'<div class="hr-rank">(.*?)</div>', block, re.S)
         name = re.search(r'<div class="hr-name">(.*?)</div>', block, re.S)
         meta = re.search(r'<div class="hr-meta">(.*?)</div>', block, re.S)
         signal = re.search(r'<div class="hr-signal">(.*?)</div>', block, re.S)
@@ -354,6 +374,7 @@ def parse_hr_rows(doc: str) -> list[HrRow]:
         }
         rows.append(
             HrRow(
+                rank=strip_tags(rank.group(1)) if rank else str(len(rows) + 1),
                 name=strip_tags(name.group(1)),
                 meta=strip_tags(meta.group(1)),
                 lane=match.group("lane"),
@@ -374,73 +395,116 @@ def draw_logo(img: Image.Image, x: int, y: int, size: int):
     img.alpha_composite(logo, (x, y))
 
 
+def dot_field(draw: ImageDraw.ImageDraw, xy, step: int = 20):
+    x1, y1, x2, y2 = xy
+    for y in range(y1, y2, step):
+        for x in range(x1, x2, step):
+            draw.ellipse((x, y, x + 2, y + 2), fill=(0, 0, 0, 18))
+
+
 def init_card(title: str, subtitle: str, date_label: str) -> tuple[Image.Image, ImageDraw.ImageDraw]:
     img = Image.new("RGBA", (W, H), BG)
     draw = ImageDraw.Draw(img, "RGBA")
-    rounded(draw, (54, 54, 1026, 1296), 14, PAPER, (138, 138, 130), 2)
+    draw.rectangle((70, 70, 1034, 1308), fill=YELLOW)
+    draw.rectangle((54, 54, 1018, 1292), fill=CARD, outline=INK, width=3)
+    dot_field(draw, (66, 66, 1006, 1280))
     draw_logo(img, 86, 86, 58)
-    draw.text((160, 87), "MORELLO SIMS", font=load_font("display", 47), fill=INK)
-    draw.text((162, 128), subtitle.upper(), font=load_font("mono", 15), fill=SOFT)
-    right_text(draw, 982, 100, date_label, load_font("mono", 18), SOFT)
-    draw.line((86, 174, 994, 174), fill=LINE, width=2)
-    draw.text((86, 218), title.upper(), font=load_font("display", 78), fill=INK)
+    draw.text((160, 86), "MORELLO SIMS", font=load_font("display", 48), fill=INK)
+    draw.text((162, 127), subtitle.upper(), font=load_font("mono", 15), fill=SOFT)
+    right_text(draw, 982, 100, date_label, load_font("mono", 17), SOFT)
+    draw.line((86, 174, 986, 174), fill=INK, width=3)
+    draw.text((86, 206), title.upper(), font=load_font("display", 96), fill=INK)
     return img, draw
 
 
-def pill(draw: ImageDraw.ImageDraw, xy, text: str, fill, text_fill=CREAM):
-    rounded(draw, xy, 11, fill)
+def pill(draw: ImageDraw.ImageDraw, xy, text: str, fill, text_fill=INK, outline=INK):
+    draw.rectangle(xy, fill=fill, outline=outline, width=2)
     center_text(draw, ((xy[0] + xy[2]) // 2, (xy[1] + xy[3]) // 2), text, load_font("mono", 17), text_fill)
 
 
-def stat_box(draw: ImageDraw.ImageDraw, x: int, y: int, value: str, label: str):
-    rounded(draw, (x, y, x + 280, y + 96), 10, PANEL, (174, 174, 164), 1)
-    center_text(draw, (x + 140, y + 39), value, load_font("display", 48), INK)
-    center_text(draw, (x + 140, y + 72), label.upper(), load_font("mono", 13), SOFT)
+def draw_stat_strip(draw: ImageDraw.ImageDraw, y: int, stats: list[tuple[str, str, tuple[int, int, int]]]):
+    draw.rectangle((92, y + 8, 1000, y + 102), fill=YELLOW)
+    draw.rectangle((86, y, 994, y + 94), fill=INK, outline=YELLOW, width=2)
+    col_w = 908 / len(stats)
+    for idx, (label, value, fill) in enumerate(stats):
+        x = 86 + int(idx * col_w)
+        if idx:
+            draw.line((x, y + 18, x, y + 76), fill=(255, 255, 255, 40), width=1)
+        center_x = 86 + int((idx + 0.5) * col_w)
+        center_text(draw, (center_x, y + 31), label.upper(), load_font("mono", 13), (145, 145, 145))
+        center_text(draw, (center_x, y + 64), value, load_font("display", 45), fill)
 
 
-def draw_footer(draw: ImageDraw.ImageDraw, note: str, y: int = 1236):
-    draw.line((86, y, 994, y), fill=LINE, width=1)
-    draw.text((86, y + 32), "morellosims.com/mlbsim", font=load_font("display", 31), fill=INK, anchor="lm")
-    right_text(draw, 994, y + 18, note, load_font("mono", 15), SOFT)
+def draw_section_label(draw: ImageDraw.ImageDraw, x: int, y: int, label: str, detail: str = ""):
+    draw.rectangle((x, y, x + 16, y + 26), fill=YELLOW, outline=INK, width=2)
+    draw.text((x + 26, y - 1), label.upper(), font=load_font("mono", 20), fill=INK)
+    if detail:
+        right_text(draw, 994, y + 1, detail.upper(), load_font("mono", 13), SOFT)
 
 
-def draw_game_row(draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int):
-    accent = GREEN if row.status == "official" else RUST
-    draw.line((86, y - 10, 994, y - 10), fill=LINE, width=1)
-    center_text(draw, (112, y + 38), f"{idx}", load_font("mono", 18), SOFT)
-    draw.text((152, y), row.pick_text, font=load_font("display", 43), fill=INK)
-    draw.text((154, y + 42), row.matchup, font=load_font("body", 23), fill=SOFT)
-    draw.text((154, y + 68), row.projection, font=load_font("mono", 15), fill=SOFT)
-    pill(draw, (396, y + 8, 492, y + 44), fmt_odds(row.odds), CREAM, INK)
-    pill(draw, (506, y + 8, 574, y + 44), f"C{row.conf}", accent)
-    right_text(draw, 800, y + 2, fmt_pct(row.model_prob), load_font("display", 39), INK)
-    draw.text((662, y + 46), "MODEL WIN", font=load_font("mono", 13), fill=SOFT)
-    edge_fill = GREEN if row.status == "official" else RUST
-    right_text(draw, 970, y + 2, fmt_pct(row.price_edge, signed=True), load_font("display", 39), edge_fill)
-    draw.text((858, y + 46), "PRICE EDGE", font=load_font("mono", 13), fill=SOFT)
-    if row.status != "official":
-        reason = "filtered by price gate"
-        if row.conf <= 8 and row.odds < -180:
-            reason = "too much juice for C8"
-        elif row.price_edge is not None and row.price_edge < 0.055:
-            reason = "below C8 price edge"
-        draw.text((662, y + 68), reason, font=load_font("mono", 14), fill=RUST)
+def draw_footer(draw: ImageDraw.ImageDraw, note: str, y: int = 1238):
+    draw.line((86, y, 994, y), fill=INK, width=3)
+    draw.text((86, y + 34), "morellosims.com/mlbsim", font=load_font("display", 32), fill=INK, anchor="lm")
+    right_text(draw, 994, y + 19, note.upper(), load_font("mono", 13), SOFT)
 
 
-def draw_hr_row(draw: ImageDraw.ImageDraw, row: HrRow, idx: int, y: int):
-    accent = GREEN if row.status == "lotto" else RUST
-    draw.line((86, y - 10, 994, y - 10), fill=LINE, width=1)
-    center_text(draw, (112, y + 38), f"{idx}", load_font("mono", 18), SOFT)
-    draw.text((152, y), truncate(draw, row.name, load_font("display", 43), 330), font=load_font("display", 43), fill=INK)
-    meta = row.meta.split(" · team")[0]
-    draw.text((154, y + 42), truncate(draw, meta, load_font("body", 23), 520), font=load_font("body", 23), fill=SOFT)
+def draw_game_row(draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int, compact: bool = False):
+    if compact:
+        draw.line((86, y, 994, y), fill=(0, 0, 0, 75), width=1)
+        center_text(draw, (107, y + 36), f"{idx}", load_font("mono", 16), MUTED)
+        draw.text((138, y + 11), row.pick_text, font=load_font("display", 38), fill=INK)
+        draw.text((140, y + 48), row.matchup, font=load_font("mono", 15), fill=SOFT)
+        pill(draw, (430, y + 18, 526, y + 51), fmt_odds(row.odds), WHITE, INK)
+        pill(draw, (538, y + 18, 604, y + 51), f"C{row.conf}", INK, YELLOW)
+        right_text(draw, 974, y + 13, fmt_pct(row.price_edge, signed=True), load_font("display", 35), ORANGE)
+        draw.text((826, y + 49), "EDGE WATCH", font=load_font("mono", 11), fill=SOFT)
+        return
+
+    draw.rectangle((86, y, 994, y + 126), fill=WHITE, outline=INK, width=2)
+    draw.rectangle((86, y, 144, y + 126), fill=YELLOW, outline=INK, width=2)
+    center_text(draw, (115, y + 63), f"{idx}", load_font("display", 35), INK)
+    draw.text((164, y + 13), row.pick_text, font=load_font("display", 58), fill=INK)
+    draw.text((166, y + 69), row.matchup, font=load_font("body", 24), fill=SOFT)
+    draw.text((166, y + 95), row.projection, font=load_font("mono", 15), fill=MUTED)
+    pill(draw, (506, y + 25, 612, y + 62), fmt_odds(row.odds), WHITE, INK)
+    pill(draw, (626, y + 25, 698, y + 62), f"C{row.conf}", INK, YELLOW)
+    right_text(draw, 966, y + 10, fmt_pct(row.price_edge, signed=True), load_font("display", 50), GREEN)
+    right_text(draw, 966, y + 63, fmt_pct(row.model_prob), load_font("display", 34), INK)
+    draw.text((802, y + 99), "EDGE / MODEL", font=load_font("mono", 12), fill=SOFT)
+
+
+def clean_hr_meta(meta: str) -> str:
+    return re.sub(r"\s+\W+\s+team.*", "", meta)
+
+
+def draw_hr_row(draw: ImageDraw.ImageDraw, row: HrRow, y: int, compact: bool = False):
     lane = "POWER" if row.lane == "DAMAGE" else row.lane
-    pill(draw, (152, y + 66, 252, y + 96), lane, accent)
+    meta = clean_hr_meta(row.meta)
     blast = row.metrics.get("blast") or row.metrics.get("power") or "-"
     pressure = row.metrics.get("pressure") or "-"
-    draw.text((278, y + 74), f"Blast {blast}  Pressure {pressure}", font=load_font("mono", 15), fill=SOFT)
-    right_text(draw, 970, y + 6, f"{row.hr_rate:.1f}%", load_font("display", 50), INK)
-    draw.text((846, y + 54), "PROJECTED HR", font=load_font("mono", 13), fill=SOFT)
+    rank_fill = YELLOW if row.status == "lotto" else INK
+    rank_text = INK if row.status == "lotto" else YELLOW
+
+    if compact:
+        draw.line((86, y, 994, y), fill=(0, 0, 0, 75), width=1)
+        draw.rectangle((86, y + 13, 130, y + 50), fill=rank_fill, outline=INK, width=2)
+        center_text(draw, (108, y + 32), row.rank, load_font("mono", 14), rank_text)
+        draw.text((148, y + 4), truncate(draw, row.name, load_font("display", 36), 450), font=load_font("display", 36), fill=INK)
+        draw.text((150, y + 40), truncate(draw, meta, load_font("body", 17), 520), font=load_font("body", 17), fill=SOFT)
+        right_text(draw, 970, y + 6, f"{row.hr_rate:.1f}%", load_font("display", 39), ORANGE)
+        draw.text((858, y + 46), "WATCH RATE", font=load_font("mono", 10), fill=SOFT)
+        return
+
+    draw.rectangle((86, y, 994, y + 88), fill=WHITE, outline=INK, width=2)
+    draw.rectangle((86, y, 142, y + 88), fill=rank_fill, outline=INK, width=2)
+    center_text(draw, (114, y + 44), row.rank, load_font("display", 29), rank_text)
+    name_font = load_font("display", 37)
+    draw.text((162, y + 4), truncate(draw, row.name, name_font, 430), font=name_font, fill=INK)
+    draw.text((164, y + 41), truncate(draw, meta, load_font("body", 17), 520), font=load_font("body", 17), fill=SOFT)
+    pill(draw, (164, y + 62, 252, y + 84), lane, INK, YELLOW)
+    draw.text((270, y + 67), f"BLAST {blast}  PRESSURE {pressure}", font=load_font("mono", 11), fill=SOFT)
+    right_text(draw, 970, y + 7, f"{row.hr_rate:.1f}%", load_font("display", 43), INK)
+    draw.text((866, y + 54), "HR RATE", font=load_font("mono", 11), fill=SOFT)
 
 
 def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Path:
@@ -466,37 +530,49 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
         key=lambda row: (-row.run_edge, -row.conf, -(row.price_edge or -9)),
     )
 
-    img, draw = init_card("Moneyline Board", "MLB SIM", generated_label(doc))
-    draw.text((88, 296), "Official risk only. Filtered model leans stay visible for context.", font=load_font("body", 28), fill=SOFT)
     avg_edge = None
     if official:
         edges = [row.price_edge for row in official if row.price_edge is not None]
         avg_edge = sum(edges) / len(edges) if edges else None
-    stat_box(draw, 86, 354, str(len(official)), "official")
-    stat_box(draw, 400, 354, f"C{max([r.conf for r in official], default=0)}", "top conf")
-    stat_box(draw, 714, 354, fmt_pct(avg_edge, signed=True), "avg edge")
 
-    y = 510
-    draw.text((86, y), "OFFICIAL BOARD", font=load_font("mono", 18), fill=INK)
-    y += 52
+    img, draw = init_card("MLB Card", "MLB SIM", generated_label(doc))
+    draw.text((88, 304), "OFFICIAL MONEYLINE CARD", font=load_font("mono", 18), fill=SOFT)
+    tracking = parse_tracking_stats(doc)
+    if tracking:
+        strip_stats = [
+            ("tracked", tracking.record, GREEN),
+            ("roi", tracking.roi, YELLOW),
+            ("streak", tracking.streak, WHITE),
+        ]
+    else:
+        strip_stats = [
+            ("posted", str(len(official)), YELLOW),
+            ("top conf", f"C{max([r.conf for r in official], default=0)}", WHITE),
+            ("avg edge", fmt_pct(avg_edge, signed=True), GREEN),
+        ]
+    draw_stat_strip(draw, 334, strip_stats)
+
+    y = 466
     official_to_draw = official[:max_picks]
-    watch_to_draw = watch[: max(0, min(max_watch, 5 - len(official_to_draw)))]
+    draw_section_label(draw, 86, y, "Official Picks", f"{len(official_to_draw)} posted")
+    y += 46
+    watch_to_draw = watch[:max_watch]
     if official_to_draw:
         for idx, row in enumerate(official_to_draw, 1):
             draw_game_row(draw, row, idx, y)
-            y += 126
+            y += 142
     else:
         draw.text((86, y), "No official MLB plays.", font=load_font("display", 44), fill=SOFT)
         y += 96
 
-    y += 12
-    draw.text((86, y), "PRICE WATCH", font=load_font("mono", 18), fill=INK)
-    y += 52
+    y += 2
+    draw_section_label(draw, 86, y, "Watchlist", "model context")
+    y += 42
     for idx, row in enumerate(watch_to_draw, 1):
-        draw_game_row(draw, row, idx, y)
-        y += 126
+        draw_game_row(draw, row, idx, y, compact=True)
+        y += 72
 
-    draw_footer(draw, "lines move, check board")
+    draw_footer(draw, "check live board for line movement", y=1238)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
@@ -505,38 +581,44 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
 def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
     doc = source.read_text(encoding="utf-8", errors="ignore")
     rows = parse_hr_rows(doc)
-    lotto = sorted([row for row in rows if row.status == "lotto"], key=lambda row: -row.hr_rate)
-    watch = sorted([row for row in rows if row.status == "watch"], key=lambda row: -row.hr_rate)
+    lotto = [row for row in rows if row.status == "lotto"]
+    watch = [row for row in rows if row.status == "watch"]
 
-    img, draw = init_card("Go-Yard Card", "HR LOTTO", generated_label(doc))
-    draw.text((88, 296), "Lotto first, Watch underneath. Same shortlist hierarchy as the board.", font=load_font("body", 28), fill=SOFT)
+    img, draw = init_card("Go-Yard", "MLB HR CARD", generated_label(doc))
+    draw.text((88, 304), "LOTTO CARD FIRST. WATCHLIST BELOW.", font=load_font("mono", 18), fill=SOFT)
     top = max([row.hr_rate for row in lotto], default=0)
-    stat_box(draw, 86, 354, str(len(lotto)), "lotto")
-    stat_box(draw, 400, 354, f"{top:.1f}%", "top HR")
-    stat_box(draw, 714, 354, str(len(watch)), "watch")
+    draw_stat_strip(
+        draw,
+        334,
+        [
+            ("lotto", str(len(lotto)), YELLOW),
+            ("top hr", f"{top:.1f}%", WHITE),
+            ("watch", str(len(watch)), ORANGE),
+        ],
+    )
 
-    y = 486
-    draw.text((86, y), "HR LOTTO", font=load_font("mono", 18), fill=INK)
-    y += 52
+    y = 456
+    draw_section_label(draw, 86, y, "Lotto Card", "board order")
+    y += 40
     lotto_to_draw = lotto[:max_lotto]
     watch_to_draw = watch[:max_watch]
     if lotto_to_draw:
-        for idx, row in enumerate(lotto_to_draw, 1):
-            draw_hr_row(draw, row, idx, y)
-            y += 108
+        for row in lotto_to_draw:
+            draw_hr_row(draw, row, y)
+            y += 92
     else:
         draw.text((86, y), "No HR Lotto qualifiers.", font=load_font("display", 44), fill=SOFT)
         y += 96
 
     if watch_to_draw:
-        y += 12
-        draw.text((86, y), "HR WATCH", font=load_font("mono", 18), fill=INK)
-        y += 48
-        for idx, row in enumerate(watch_to_draw, 1):
-            draw_hr_row(draw, row, idx, y)
-            y += 108
+        y += 8
+        draw_section_label(draw, 86, y, "Watchlist", "secondary")
+        y += 38
+        for row in watch_to_draw:
+            draw_hr_row(draw, row, y, compact=True)
+            y += 62
 
-    draw_footer(draw, "HR props are volatile", y=1252)
+    draw_footer(draw, "HR props are volatile", y=1240)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
@@ -549,9 +631,9 @@ def main():
     parser.add_argument("--out", default=str(POSTERS / "mlb-social-card.png"), help="Moneyline PNG output path.")
     parser.add_argument("--hr-out", default=str(POSTERS / "mlb-hr-card.png"), help="HR PNG output path.")
     parser.add_argument("--max-picks", type=int, default=3)
-    parser.add_argument("--max-watch", type=int, default=3)
-    parser.add_argument("--max-hr-lotto", type=int, default=3)
-    parser.add_argument("--max-hr-watch", type=int, default=3)
+    parser.add_argument("--max-watch", type=int, default=2)
+    parser.add_argument("--max-hr-lotto", type=int, default=6)
+    parser.add_argument("--max-hr-watch", type=int, default=2)
     args = parser.parse_args()
 
     source = Path(args.source)
