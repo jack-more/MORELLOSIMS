@@ -6,6 +6,7 @@ import argparse
 import html
 import json
 import re
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ SOURCE = ROOT / "mlbsim" / "index.html"
 PICKS_JSON = ROOT / "picks" / "mlb.json"
 POSTERS = ROOT / "posters"
 LOGO = ROOT / "logo-grok-transparent.png"
+TEAM_LOGO_DIR = POSTERS / "assets" / "mlb-team-logos"
 
 W, H = 1080, 1350
 
@@ -52,6 +54,75 @@ FONT_CANDIDATES = {
     ],
 }
 
+TEAM_IDS = {
+    "ARI": 109,
+    "AZ": 109,
+    "ATL": 144,
+    "BAL": 110,
+    "BOS": 111,
+    "CHC": 112,
+    "CIN": 113,
+    "CLE": 114,
+    "COL": 115,
+    "CWS": 145,
+    "CHW": 145,
+    "DET": 116,
+    "HOU": 117,
+    "KC": 118,
+    "LAA": 108,
+    "LAD": 119,
+    "MIA": 146,
+    "MIL": 158,
+    "MIN": 142,
+    "NYM": 121,
+    "NYY": 147,
+    "ATH": 133,
+    "OAK": 133,
+    "PHI": 143,
+    "PIT": 134,
+    "SD": 135,
+    "SEA": 136,
+    "SF": 137,
+    "STL": 138,
+    "TB": 139,
+    "TEX": 140,
+    "TOR": 141,
+    "WSH": 120,
+}
+
+TEAM_ID_TO_ESPN = {
+    108: "laa",
+    109: "ari",
+    110: "bal",
+    111: "bos",
+    112: "chc",
+    113: "cin",
+    114: "cle",
+    115: "col",
+    116: "det",
+    117: "hou",
+    118: "kc",
+    119: "lad",
+    120: "wsh",
+    121: "nym",
+    133: "oak",
+    134: "pit",
+    135: "sd",
+    136: "sea",
+    137: "sf",
+    138: "stl",
+    139: "tb",
+    140: "tex",
+    141: "tor",
+    142: "min",
+    143: "phi",
+    144: "atl",
+    145: "chw",
+    146: "mia",
+    147: "nyy",
+    158: "mil",
+}
+
 
 @dataclass(frozen=True)
 class GameRow:
@@ -65,6 +136,11 @@ class GameRow:
     price_edge: float | None
     projection: str
     status: str
+    away: str
+    home: str
+    pick_team: str
+    away_id: int | None
+    home_id: int | None
 
 
 @dataclass(frozen=True)
@@ -77,6 +153,8 @@ class HrRow:
     hr_rate: float
     signal: str
     metrics: dict[str, str]
+    team: str
+    team_id: int | None
 
 
 @dataclass(frozen=True)
@@ -125,6 +203,60 @@ def center_text(draw: ImageDraw.ImageDraw, center: tuple[int, int], text: str, f
 def right_text(draw: ImageDraw.ImageDraw, right_x: int, y: int, text: str, fnt: ImageFont.ImageFont, fill):
     box = draw.textbbox((0, 0), text, font=fnt)
     draw.text((right_x - (box[2] - box[0]), y), text, font=fnt, fill=fill)
+
+
+def paste_contained(
+    img: Image.Image,
+    source: Image.Image,
+    center: tuple[int, int],
+    size: int,
+    opacity: float = 1.0,
+):
+    logo = source.copy().convert("RGBA")
+    logo.thumbnail((size, size), Image.Resampling.LANCZOS)
+    if opacity < 1:
+        alpha = logo.getchannel("A").point(lambda value: int(value * opacity))
+        logo.putalpha(alpha)
+    x = int(center[0] - logo.width / 2)
+    y = int(center[1] - logo.height / 2)
+    img.alpha_composite(logo, (x, y))
+
+
+def load_morello_logo() -> Image.Image | None:
+    if not LOGO.exists():
+        return None
+    return Image.open(LOGO).convert("RGBA")
+
+
+def ensure_team_logo(team_id: int | None) -> Path | None:
+    if not team_id:
+        return None
+    code = TEAM_ID_TO_ESPN.get(team_id)
+    if not code:
+        return None
+    TEAM_LOGO_DIR.mkdir(parents=True, exist_ok=True)
+    png = TEAM_LOGO_DIR / f"espn-{code}.png"
+    if png.exists():
+        return png
+
+    try:
+        urllib.request.urlretrieve(f"https://a.espncdn.com/i/teamlogos/mlb/500/{code}.png", png)
+    except Exception:
+        return None
+    return png if png.exists() else None
+
+
+def load_team_logo(team_id: int | None) -> Image.Image | None:
+    path = ensure_team_logo(team_id)
+    if not path:
+        return None
+    return Image.open(path).convert("RGBA")
+
+
+def draw_team_logo(img: Image.Image, team_id: int | None, center: tuple[int, int], size: int, opacity: float = 0.92):
+    logo = load_team_logo(team_id)
+    if logo:
+        paste_contained(img, logo, center, size, opacity)
 
 
 def parse_int_moneyline(value: str) -> int | None:
@@ -214,6 +346,12 @@ def parse_sim_pick(block: str) -> str:
     return strip_tags(match.group(1)) if match else ""
 
 
+def team_id_for(team: str | None) -> int | None:
+    if not team:
+        return None
+    return TEAM_IDS.get(team.upper())
+
+
 def parse_games(doc: str) -> list[GameRow]:
     card_re = re.compile(
         r'<div class="game-card"\s+data-conf="(?P<conf>\d+)"\s+data-value="[^"]*"\s+data-edge="(?P<edge>[^"]*)">',
@@ -228,6 +366,9 @@ def parse_games(doc: str) -> list[GameRow]:
             continue
 
         away, home = teams[:2]
+        logo_ids = [int(value) for value in re.findall(r"team-logos/(\d+)\.svg", block)]
+        away_id = logo_ids[0] if len(logo_ids) >= 1 else team_id_for(away)
+        home_id = logo_ids[1] if len(logo_ids) >= 2 else team_id_for(home)
         away_ml = parse_int_moneyline(lines[0])
         home_ml = parse_int_moneyline(lines[1])
         probs = [float(x) / 100 for x in re.findall(r"([0-9]+(?:\.[0-9]+)?)%", spread.group(1))]
@@ -271,6 +412,11 @@ def parse_games(doc: str) -> list[GameRow]:
                 price_edge=price_edge,
                 projection=projection_text,
                 status="official" if official else "watch",
+                away=away,
+                home=home,
+                pick_team=pick_team,
+                away_id=away_id,
+                home_id=home_id,
             )
         )
     return rows
@@ -334,6 +480,11 @@ def load_official_pick_rows(doc: str, parsed_rows: list[GameRow]) -> list[GameRo
         except (TypeError, ValueError):
             run_edge = 0.0
         projection = str(pick.get("sim_projection") or (html_row.projection if html_row else matchup))
+        away = str(pick.get("away") or (html_row.away if html_row else "")).strip()
+        home = str(pick.get("home") or (html_row.home if html_row else "")).strip()
+        if (not away or not home) and " @ " in matchup:
+            away, home = matchup.split(" @ ", 1)
+        pick_team = str(pick.get("side") or pick_text.split()[0]).strip()
 
         rows.append(
             GameRow(
@@ -347,6 +498,11 @@ def load_official_pick_rows(doc: str, parsed_rows: list[GameRow]) -> list[GameRo
                 price_edge=price_edge,
                 projection=projection,
                 status="official",
+                away=away,
+                home=home,
+                pick_team=pick_team,
+                away_id=html_row.away_id if html_row else team_id_for(away),
+                home_id=html_row.home_id if html_row else team_id_for(home),
             )
         )
     return rows
@@ -366,6 +522,9 @@ def parse_hr_rows(doc: str) -> list[HrRow]:
         rate = re.search(r'<div class="hr-rate">([0-9.]+)%</div>', block)
         if not name or not meta or not rate:
             continue
+        meta_text = strip_tags(meta.group(1))
+        team_match = re.search(r"#\w+\s+([A-Z]{2,3})\s+vs\b", meta_text)
+        team = team_match.group(1) if team_match else ""
         metrics = {
             strip_tags(label).lower(): strip_tags(value)
             for label, value in re.findall(
@@ -378,12 +537,14 @@ def parse_hr_rows(doc: str) -> list[HrRow]:
             HrRow(
                 rank=strip_tags(rank.group(1)) if rank else str(len(rows) + 1),
                 name=strip_tags(name.group(1)),
-                meta=strip_tags(meta.group(1)),
+                meta=meta_text,
                 lane=match.group("lane"),
                 status=match.group("status"),
                 hr_rate=float(rate.group(1)),
                 signal=strip_tags(signal.group(1)) if signal else "",
                 metrics=metrics,
+                team=team,
+                team_id=team_id_for(team),
             )
         )
     return rows
@@ -426,16 +587,27 @@ def init_card(title: str, subtitle: str, date_label: str) -> tuple[Image.Image, 
     img = init_background()
     draw = ImageDraw.Draw(img, "RGBA")
     draw.line((0, 0, W, 0), fill=(18, 18, 18, 210), width=3)
+
+    brand_font = load_font("mono", 24)
+    brand_text = "morello sims"
+    brand_logo = load_morello_logo()
+    brand_w = text_w(draw, brand_text, brand_font)
+    brand_total = brand_w + (58 if brand_logo else 0)
+    brand_x = (W - brand_total) / 2
+    if brand_logo:
+        paste_contained(img, brand_logo, (int(brand_x + 22), 92), 44, opacity=0.9)
+        brand_x += 58
+    draw.text((brand_x, 80), brand_text, font=brand_font, fill=INK)
     draw_spaced_centered(
         draw,
-        110,
+        136,
         "sports simulation \u00d7 matchup intelligence",
-        load_font("mono", 23),
+        load_font("mono", 20),
         (18, 18, 18, 210),
         tracking=2,
     )
-    draw_centered(draw, 230, title.lower(), load_font("mono", 60), INK)
-    draw_spaced_centered(draw, 310, subtitle.lower(), load_font("mono", 16), SOFT, tracking=2)
+    draw_centered(draw, 238, title.lower(), load_font("mono", 60), INK)
+    draw_spaced_centered(draw, 318, subtitle.lower(), load_font("mono", 16), SOFT, tracking=2)
     draw_spaced_centered(draw, 1216, "morellosims.com/mlbsim", load_font("mono", 20), SOFT, tracking=1)
     draw_spaced_centered(draw, 1258, date_label.lower(), load_font("mono", 14), MUTED, tracking=1)
     return img, draw
@@ -459,9 +631,11 @@ def draw_footer(draw: ImageDraw.ImageDraw, note: str, y: int = 1168):
     draw_spaced_centered(draw, y, note.lower(), load_font("mono", 13), MUTED, tracking=1)
 
 
-def draw_game_row(draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int, compact: bool = False):
+def draw_game_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int, compact: bool = False):
     if compact:
         draw.line((250, y, 830, y), fill=FAINT, width=1)
+        draw_team_logo(img, row.away_id, (292, y + 37), 30, opacity=0.75)
+        draw_team_logo(img, row.home_id, (788, y + 37), 30, opacity=0.75)
         line = f"{idx:02d}  {row.pick_text}  {row.matchup}  {fmt_odds(row.odds)}  c{row.conf}"
         draw_spaced_centered(draw, y + 22, line.lower(), load_font("mono", 18), INK, tracking=1)
         edge = f"edge {fmt_pct(row.price_edge, signed=True)}"
@@ -469,6 +643,8 @@ def draw_game_row(draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int, com
         return
 
     draw.line((190, y, 890, y), fill=FAINT, width=1)
+    draw_team_logo(img, row.away_id, (312, y + 62), 60, opacity=0.88)
+    draw_team_logo(img, row.home_id, (768, y + 62), 60, opacity=0.88)
     draw_spaced_centered(draw, y + 31, row.pick_text.lower(), load_font("mono", 54), INK, tracking=4)
     meta = f"{row.matchup}   {fmt_odds(row.odds)}   c{row.conf}"
     draw_spaced_centered(draw, y + 103, meta.lower(), load_font("mono", 21), SOFT, tracking=2)
@@ -481,7 +657,7 @@ def clean_hr_meta(meta: str) -> str:
     return re.sub(r"\s+\W+\s+team.*", "", meta)
 
 
-def draw_hr_row(draw: ImageDraw.ImageDraw, row: HrRow, y: int, compact: bool = False):
+def draw_hr_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: HrRow, y: int, compact: bool = False):
     lane = "POWER" if row.lane == "DAMAGE" else row.lane
     meta = clean_hr_meta(row.meta)
     blast = row.metrics.get("blast") or row.metrics.get("power") or "-"
@@ -489,18 +665,20 @@ def draw_hr_row(draw: ImageDraw.ImageDraw, row: HrRow, y: int, compact: bool = F
 
     if compact:
         draw.line((250, y, 830, y), fill=FAINT, width=1)
+        draw_team_logo(img, row.team_id, (332, y + 28), 30, opacity=0.7)
         line = f"{row.rank}  {row.name}  {row.hr_rate:.1f}%"
         draw_spaced_centered(draw, y + 18, line.lower(), load_font("mono", 18), INK, tracking=1)
         draw_spaced_centered(draw, y + 49, meta.lower(), load_font("mono", 12), MUTED, tracking=1)
         return
 
     draw.line((185, y, 895, y), fill=FAINT, width=1)
+    draw_team_logo(img, row.team_id, (178, y + 42), 42, opacity=0.85)
     left = f"{row.rank}. {row.name}"
-    draw.text((210, y + 12), left.lower(), font=load_font("mono", 21), fill=INK)
+    draw.text((228, y + 12), left.lower(), font=load_font("mono", 21), fill=INK)
     right_text(draw, 870, y + 12, f"{row.hr_rate:.1f}%", load_font("mono", 21), INK)
-    draw.text((210, y + 43), meta.lower(), font=load_font("mono", 12), fill=SOFT)
+    draw.text((228, y + 43), meta.lower(), font=load_font("mono", 12), fill=SOFT)
     detail = f"{lane.lower()}   blast {blast}   pressure {pressure}"
-    draw.text((210, y + 62), detail, font=load_font("mono", 11), fill=MUTED)
+    draw.text((228, y + 62), detail, font=load_font("mono", 11), fill=MUTED)
 
 
 def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Path:
@@ -554,7 +732,7 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
     watch_to_draw = watch[:max_watch]
     if official_to_draw:
         for idx, row in enumerate(official_to_draw, 1):
-            draw_game_row(draw, row, idx, y)
+            draw_game_row(img, draw, row, idx, y)
             y += 190
     else:
         draw.text((86, y), "No official MLB plays.", font=load_font("display", 44), fill=SOFT)
@@ -564,7 +742,7 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
     draw_section_label(draw, y, "watchlist", "model context")
     y += 42
     for idx, row in enumerate(watch_to_draw, 1):
-        draw_game_row(draw, row, idx, y, compact=True)
+        draw_game_row(img, draw, row, idx, y, compact=True)
         y += 72
 
     draw_footer(draw, "check live board for line movement", y=1168)
@@ -598,7 +776,7 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
     watch_to_draw = watch[:max_watch]
     if lotto_to_draw:
         for row in lotto_to_draw:
-            draw_hr_row(draw, row, y)
+            draw_hr_row(img, draw, row, y)
             y += 78
     else:
         draw.text((86, y), "No HR Lotto qualifiers.", font=load_font("display", 44), fill=SOFT)
@@ -609,7 +787,7 @@ def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
         draw_section_label(draw, y, "watchlist", "secondary")
         y += 38
         for row in watch_to_draw:
-            draw_hr_row(draw, row, y, compact=True)
+            draw_hr_row(img, draw, row, y, compact=True)
             y += 64
 
     draw_footer(draw, "HR props are volatile", y=1184)
