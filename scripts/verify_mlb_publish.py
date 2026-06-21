@@ -100,8 +100,8 @@ def main():
                     f"max allowed {args.max_age_minutes}"
                 )
 
-    if args.require_hr_h2h_lane and not all(marker in html for marker in ("damage score", "surge power", "stack pressure")):
-        errors.append("MLB HR card missing current damage/surge/stack lane copy; generated page is from stale HR logic")
+    if args.require_hr_h2h_lane and not all(marker in html for marker in ("power baseline", "matchup lift", "context")):
+        errors.append("MLB HR card missing current Go-Yard proof copy; generated page is from stale HR logic")
 
     todays = [
         p for p in picks

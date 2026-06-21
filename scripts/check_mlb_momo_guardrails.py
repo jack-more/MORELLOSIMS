@@ -218,23 +218,23 @@ def check_hr_lotto_guardrails():
 
     required_source_markers = [
         ("HR_LONGSHOT_MAX_ROWS = 8", "HR Watchlist must stay wide enough for damage and surge lanes"),
-        ("def hr_damage_score", "HR Lotto must keep the dedicated damage score"),
-        ("def hr_damage_lane_ok", "HR Lotto must keep pure HR-damage overrides"),
-        ("def surge_power_score", "HR Lotto must keep surge-power scoring"),
-        ("def hr_surge_lane_ok", "HR Lotto must keep surge-power watchlist qualifiers"),
-        ("def pressure_power_score", "HR Lotto must keep pressure-power scoring"),
-        ("def hr_pressure_lane_ok", "HR Lotto must keep pressure-first HR card qualifiers"),
-        ("pressure_pool = sorted", "HR Lotto must pressure-rank the final card"),
-        ("def fetch_live_pitcher_h2h", "HR Lotto must fetch live direct H2H instead of relying on stale atlas H2H"),
+        ("def hr_damage_score", "Go Yard must keep the dedicated damage score"),
+        ("def hr_damage_lane_ok", "Go Yard must keep pure HR-damage overrides"),
+        ("def surge_power_score", "Go Yard must keep surge-power scoring"),
+        ("def hr_surge_lane_ok", "Go Yard must keep surge-power watchlist qualifiers"),
+        ("def pressure_power_score", "Go Yard must keep pressure-power scoring"),
+        ("def hr_pressure_lane_ok", "Go Yard must keep pressure-first HR card qualifiers"),
+        ("pressure_pool = sorted", "Go Yard must pressure-rank the final card"),
+        ("def fetch_live_pitcher_h2h", "Go Yard must fetch live direct H2H instead of relying on stale atlas H2H"),
         ("historical batter-vs-starter context", "Live direct H2H must stay populated after first pitch"),
-        ("def hr_h2h_lane_ok", "HR Lotto must keep direct H2H power overrides"),
-        ("HR_CORE_H2H_ROWS", "HR Lotto must reserve primary-card H2H override slots"),
-        ("HR_CORE_STACK_ROWS", "HR Lotto must reserve primary-card stack-pressure override slots"),
-        ("def hr_primary_stack_lane_ok", "HR Lotto must promote near-core stack-pressure bats into the primary card"),
-        ("def hr_selection_score", "HR Lotto must rank by damage, surge power, stack pressure, and HR rate together"),
+        ("def hr_h2h_lane_ok", "Go Yard must keep direct H2H power overrides"),
+        ("HR_CORE_H2H_ROWS", "Go Yard must reserve primary-card H2H override slots"),
+        ("HR_CORE_STACK_ROWS", "Go Yard must reserve primary-card stack-pressure override slots"),
+        ("def hr_primary_stack_lane_ok", "Go Yard must promote near-core stack-pressure bats into the primary card"),
+        ("def hr_selection_score", "Go Yard must rank by damage, surge power, stack pressure, and HR rate together"),
         ("HR_LONGSHOT_H2H_ROWS = 0", "HR Watchlist must not reserve stale H2H-only override slots"),
-        ("def team_stack_pressure", "HR Lotto must keep team stack-pressure scoring"),
-        ("def hr_stack_lane_ok", "HR Lotto must keep stack-pressure watchlist qualifiers"),
+        ("def team_stack_pressure", "Go Yard must keep team stack-pressure scoring"),
+        ("def hr_stack_lane_ok", "Go Yard must keep stack-pressure watchlist qualifiers"),
         ("HR_LONGSHOT_STANDARD_ROWS", "HR Watchlist must reserve standard-lane slots"),
         ("HR_LONGSHOT_DAMAGE_ROWS", "HR Watchlist must reserve damage-override slots"),
         ("HR_LONGSHOT_SURGE_ROWS", "HR Watchlist must reserve surge-power slots"),
@@ -246,9 +246,9 @@ def check_hr_lotto_guardrails():
         ("matching_splits", "Live direct H2H fetch must aggregate split rows when total rows are absent"),
         ("ThreadPoolExecutor(max_workers=max_workers)", "Live direct H2H pair fetch must stay bounded-concurrent"),
         ("max_workers = min(8", "Live direct H2H pair fetch must keep a safe concurrency cap"),
-        ("DMG {round(hr_damage_score(bm))}", "Rendered HR rows must show DMG score"),
-        ("stack pressure", "Rendered HR Watchlist copy must expose stack pressure"),
-        ("surge power", "Rendered HR Watchlist copy must expose surge-power criteria"),
+        ("render_hr_proof(\"Power\"", "Rendered HR rows must expose power proof"),
+        ("render_hr_proof(\"Lift\"", "Rendered HR rows must expose lift proof"),
+        ("render_hr_proof(\"H2H\" if h2h_display else \"Context\"", "Rendered HR rows must expose context or H2H proof"),
     ]
     for marker, message in required_source_markers:
         if marker not in source:
@@ -264,17 +264,17 @@ def check_hr_lotto_guardrails():
 
     html = HTML_PATH.read_text()
     required_html_markers = [
-        ("damage score", "HR Lotto page must show damage score criteria"),
-        ("surge power", "HR Lotto page must show surge-power criteria"),
-        ("stack pressure", "HR Watchlist page must show stack pressure criteria"),
+        ("power baseline", "HR Go-Yard page must show power baseline criteria"),
+        ("matchup lift", "HR Go-Yard page must show matchup lift criteria"),
+        ("context", "HR Watchlist page must show context criteria"),
     ]
     for marker, message in required_html_markers:
         if marker not in html:
             errors.append(f"{message}: missing `{marker}`")
 
     hr_rows = re.findall(r'<div class="hr-row [^"]+">.*?</div>\s*</div>', html, re.S)
-    if hr_rows and "DMG " not in html:
-        errors.append("Rendered HR rows exist but do not show DMG score")
+    if hr_rows and not all(marker in html for marker in ("POW ", "LIFT ", "RUN ")):
+        errors.append("Rendered HR rows exist but do not show power/lift/context proof")
 
     return errors
 
@@ -348,7 +348,7 @@ def check_publish_freshness_guardrails():
         (verify_source, "--max-age-minutes", "Publish verifier must support max-age checks"),
         (verify_source, "--require-hr-h2h-lane", "Publish verifier must keep the existing HR-card freshness flag"),
         (verify_source, "age_minutes > args.max_age_minutes", "Publish verifier must fail stale generated pages"),
-        (verify_source, "surge power", "Publish verifier must detect stale HR-card logic"),
+        (verify_source, "Go-Yard proof copy", "Publish verifier must detect stale HR-card logic"),
         (pipeline, "0 23 * * *", "MLB pipeline must keep 7 PM ET late-slate refresh"),
         (pipeline, "0 0 * * *", "MLB pipeline must keep 8 PM ET West Coast refresh"),
         (pipeline, "--max-age-minutes 90 --require-hr-h2h-lane", "MLB pipeline must enforce fresh H2H HR-card publish checks"),
@@ -380,7 +380,7 @@ def main():
             print(f"  - {error}")
         return 1
 
-    print("MLB MOMO and HR Lotto guardrails passed.")
+    print("MLB MOMO and Go Yard guardrails passed.")
     return 0
 
 
