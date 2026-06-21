@@ -454,6 +454,24 @@ import re as _re
 import csv as _csv
 from io import StringIO as _StringIO
 
+HR_REPEAT_BLOCKLIST = {
+    "brandon lowe",
+    "nathaniel lowe",
+    "spencer horwitz",
+    "spencer horowitz",
+}
+
+
+def normalize_hr_name(value):
+    value = str(value or "").replace(" (H)", "")
+    value = _re.sub(r"[^a-zA-Z\s]", " ", value)
+    return _re.sub(r"\s+", " ", value).strip().lower()
+
+
+def hr_name_blocked(value):
+    return normalize_hr_name(value) in HR_REPEAT_BLOCKLIST
+
+
 # Team abbreviation normalization
 TEAM_ALIAS = {"ATH": "OAK", "AZ": "ARI", "ARI": "AZ", "CWS": "CHW", "CHW": "CWS", "TB": "TBR", "TBR": "TB",
               "SD": "SDP", "SDP": "SD", "SF": "SFG", "SFG": "SF", "KC": "KCR", "KCR": "KC",
@@ -1646,6 +1664,10 @@ def load_locked_hr_lotto_column():
     snippet = html[start:end].rstrip()
     if "hr-name" not in snippet:
         return ""
+    snippet_lower = snippet.lower()
+    if any(name in snippet_lower for name in HR_REPEAT_BLOCKLIST):
+        print("  HR Go-Yard: locked card has blocked repeat names, reselecting")
+        return ""
     print("  HR Go-Yard: preserving posted card after first pitch")
     return snippet
 
@@ -1968,6 +1990,9 @@ def render_hr_watch_tab():
     HR_MIN_PLAYER_PA = 100
     HR_MIN_RUN_CONTRIB = 0.90
     HR_MIN_LIFT = 0.008
+
+    def hr_batter_allowed(bm):
+        return not hr_name_blocked(bm.get("name"))
 
     def has_power_profile(bm):
         baseline_pa = bm.get("baseline_pa", 0) or 0
@@ -2644,7 +2669,8 @@ def render_hr_watch_tab():
 
     core_pool = [
         bm for bm in all_batter_matchups
-        if hr_card_qualifies(bm, core=True) or hr_primary_stack_lane_ok(bm)
+        if hr_batter_allowed(bm)
+        and (hr_card_qualifies(bm, core=True) or hr_primary_stack_lane_ok(bm))
     ]
     core_h2h_overrides = sorted(
         [bm for bm in core_pool if hr_h2h_lane_ok(bm, core=True)],
@@ -2688,7 +2714,8 @@ def render_hr_watch_tab():
     core_ids = {bm.get("id") for bm in core_hr}
     longshot_pool = [
         bm for bm in all_batter_matchups
-        if bm.get("id") not in core_ids
+        if hr_batter_allowed(bm)
+        and bm.get("id") not in core_ids
         and (
             hr_card_qualifies(bm, core=False)
             or hr_card_qualifies(bm, core=True)
@@ -2814,7 +2841,7 @@ def render_hr_watch_tab():
         longshot_damage.extend(backfill[:HR_LONGSHOT_MAX_ROWS - len(longshot_damage)])
 
     pressure_pool = sorted(
-        [bm for bm in all_batter_matchups if hr_pressure_lane_ok(bm)],
+        [bm for bm in all_batter_matchups if hr_batter_allowed(bm) and hr_pressure_lane_ok(bm)],
         key=pressure_card_sort_key,
     )
     if pressure_pool:
@@ -2831,6 +2858,20 @@ def render_hr_watch_tab():
         core_hr = pressure_selected[:HR_CORE_MAX_ROWS]
         longshot_damage = pressure_selected[HR_CORE_MAX_ROWS:total_hr_rows]
         core_ids = {bm.get("id") for bm in core_hr}
+
+    display_pool = []
+    display_ids = set()
+    for bm in sorted(
+        core_hr + longshot_damage,
+        key=lambda x: (-(x.get("hr_rate", 0) or 0), normalize_hr_name(x.get("name"))),
+    ):
+        if bm.get("id") in display_ids:
+            continue
+        display_pool.append(bm)
+        display_ids.add(bm.get("id"))
+    core_hr = display_pool[:HR_CORE_MAX_ROWS]
+    longshot_damage = display_pool[HR_CORE_MAX_ROWS:HR_CORE_MAX_ROWS + HR_LONGSHOT_MAX_ROWS]
+    core_ids = {bm.get("id") for bm in core_hr}
 
     if os.getenv("MLB_HR_AUDIT"):
         def audit_row(bm):

@@ -8,7 +8,7 @@ import html
 import json
 import re
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -28,20 +28,27 @@ BOARD_LEFT = 72
 BOARD_RIGHT = 1008
 BOARD_CENTER = W // 2
 
-BG = (164, 164, 162)
-CARD = (174, 174, 172)
+BG = (226, 226, 222)
+CARD = (244, 243, 238)
 INK = (24, 24, 23)
 SOFT = (57, 57, 56)
 MUTED = (92, 92, 90)
 FAINT = (24, 24, 23, 72)
 RULE = (24, 24, 23, 115)
-PANEL_FILL = (186, 186, 183, 70)
-PANEL_FILL_LIGHT = (180, 180, 177, 45)
+PANEL_FILL = (244, 243, 238, 210)
+PANEL_FILL_LIGHT = (238, 237, 232, 205)
 PALE = (210, 210, 206)
-WHITE = (238, 238, 234)
-YELLOW = (255, 234, 0)
+WHITE = (248, 247, 242)
+YELLOW = (244, 219, 18)
 GREEN = INK
 ORANGE = SOFT
+
+HR_REPEAT_BLOCKLIST = {
+    "brandon lowe",
+    "nathaniel lowe",
+    "spencer horwitz",
+    "spencer horowitz",
+}
 
 FONT_CANDIDATES = {
     "display": [
@@ -200,6 +207,12 @@ def truncate(draw: ImageDraw.ImageDraw, text: str, fnt: ImageFont.ImageFont, max
     while text and text_w(draw, text + "...", fnt) > max_w:
         text = text[:-1].rstrip()
     return text + "..."
+
+
+def normalize_name(value: str) -> str:
+    value = value.replace("(H)", "")
+    value = re.sub(r"[^a-zA-Z\s]", " ", value)
+    return re.sub(r"\s+", " ", value).strip().lower()
 
 
 def fitted_font(draw: ImageDraw.ImageDraw, text: str, kind: str, size: int, max_w: int, min_size: int) -> ImageFont.ImageFont:
@@ -640,11 +653,11 @@ def init_background() -> Image.Image:
     img = Image.new("RGBA", (W, H), BG)
     draw = ImageDraw.Draw(img, "RGBA")
     for y in range(H):
-        shade = int(172 - 12 * (y / H))
-        draw.line((0, y, W, y), fill=(shade, shade, shade - 2, 255))
-    noise = Image.effect_noise((W, H), 18).convert("L").filter(ImageFilter.GaussianBlur(1.4))
-    grain = Image.new("RGBA", (W, H), (150, 150, 148, 18))
-    grain.putalpha(noise.point(lambda value: int(abs(value - 128) * 0.18)))
+        shade = int(235 - 12 * (y / H))
+        draw.line((0, y, W, y), fill=(shade, shade, shade - 4, 255))
+    noise = Image.effect_noise((W, H), 14).convert("L").filter(ImageFilter.GaussianBlur(1.2))
+    grain = Image.new("RGBA", (W, H), (170, 170, 166, 12))
+    grain.putalpha(noise.point(lambda value: int(abs(value - 128) * 0.12)))
     return Image.alpha_composite(img, grain)
 
 
@@ -697,7 +710,7 @@ def draw_footer(draw: ImageDraw.ImageDraw, note: str, y: int = 1168):
 
 
 def draw_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], fill=PANEL_FILL, rule=RULE, radius: int = 6):
-    draw.rectangle(box, fill=fill, outline=rule, width=2)
+    draw.rounded_rectangle(box, radius=min(radius, 8), fill=fill, outline=rule, width=2)
 
 
 def draw_confidence_badge(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], conf: int, large: bool = False):
@@ -740,7 +753,7 @@ def draw_game_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: GameRow, idx
         draw.text((214, y + 15), f"{idx:02d}", font=load_font("mono", 15), fill=MUTED)
         draw.text((268, y + 6), row.pick_text.upper(), font=load_font("display", 36), fill=INK)
         draw.text((268, y + 47), f"{row.matchup}   {fmt_odds(row.odds)}", font=load_font("mono", 15), fill=SOFT)
-        draw_metric_tile(draw, (510, y + 11, 668, y + 65), "confidence", f"{row.conf}/10", dark=True, value_size=23)
+        draw_metric_tile(draw, (510, y + 11, 668, y + 65), "watch", "NO PLAY", dark=True, value_size=22)
         right_text(draw, 862, y + 13, f"RUN SPREAD {row.run_edge:+.1f}", load_font("mono", 15), INK)
         watch_reason = "WAITING ON ML" if row.odds is None else "PRICE ALREADY JUICED"
         right_text(draw, 862, y + 47, watch_reason, load_font("mono", 12), MUTED)
@@ -957,6 +970,17 @@ def draw_hr_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: HrRow, y: int,
     draw_hr_rate_badge(draw, (BOARD_RIGHT - 178, y + 8, BOARD_RIGHT - 30, y + row_h - 8), rate, highlight=is_top)
 
 
+def is_allowed_hr_row(row: HrRow) -> bool:
+    return normalize_name(row.name) not in HR_REPEAT_BLOCKLIST
+
+
+def rerank_hr_rows(rows: list[HrRow], prefix: str = "") -> list[HrRow]:
+    return [
+        replace(row, rank=f"{prefix}{idx}" if prefix else str(idx))
+        for idx, row in enumerate(rows, 1)
+    ]
+
+
 def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Path:
     doc = source.read_text(encoding="utf-8", errors="ignore")
     rows = parse_games(doc)
@@ -1021,13 +1045,13 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
         y += 96
 
     y += 8
-    draw_section_label(draw, y, "to watch", "large run spread, but ML price is juiced or not posted")
+    draw_section_label(draw, y, "to watch", "run gap only, ML price missing or too juiced")
     y += 66
     for idx, row in enumerate(watch_to_draw, 1):
         draw_game_row(img, draw, row, idx, y, compact=True)
         y += 84
 
-    draw_footer(draw, "watchlist means run gap is there, but the price is too juiced", y=1186)
+    draw_footer(draw, "watchlist is context only, official picks stay above", y=1186)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").filter(ImageFilter.UnsharpMask(radius=0.7, percent=105, threshold=3)).save(out, quality=95)
     return out
@@ -1035,18 +1059,22 @@ def render_picks(source: Path, out: Path, max_picks: int, max_watch: int) -> Pat
 
 def render_hr(source: Path, out: Path, max_lotto: int, max_watch: int) -> Path:
     doc = source.read_text(encoding="utf-8", errors="ignore")
-    rows = parse_hr_rows(doc)
-    lotto = [row for row in rows if row.status == "lotto"]
-    watch = [row for row in rows if row.status == "watch"]
+    rows = [row for row in parse_hr_rows(doc) if is_allowed_hr_row(row)]
+    ranked_rows = sorted(rows, key=lambda row: (-row.hr_rate, normalize_name(row.name)))
+    primary = [replace(row, status="lotto") for row in ranked_rows[:max_lotto]]
+    primary_keys = {normalize_name(row.name) for row in primary}
+    watch = [row for row in ranked_rows if normalize_name(row.name) not in primary_keys]
+    primary = rerank_hr_rows(primary)
+    watch = rerank_hr_rows(watch, "L")
 
     img, draw = init_card("GO YARD CARD", "top HR board / watchlist below", generated_label(doc))
-    top = max([row.hr_rate for row in lotto], default=0)
-    draw_hr_stat_strip(draw, 326, len(lotto), top, len(watch))
+    top = max([row.hr_rate for row in primary], default=0)
+    draw_hr_stat_strip(draw, 326, len(primary), top, min(len(watch), max_watch))
 
     y = 472
-    draw_hr_section_bar(draw, y, "go yard card", "board order")
+    draw_hr_section_bar(draw, y, "go yard card", "hr rate order")
     y += 48
-    lotto_to_draw = lotto[:max_lotto]
+    lotto_to_draw = primary[:max_lotto]
     watch_to_draw = watch[:max_watch]
     if lotto_to_draw:
         draw_hr_feature_row(img, draw, lotto_to_draw[0], y)
