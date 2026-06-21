@@ -28,18 +28,18 @@ BOARD_LEFT = 72
 BOARD_RIGHT = 1008
 BOARD_CENTER = W // 2
 
-BG = (226, 226, 222)
-CARD = (244, 243, 238)
+BG = (162, 162, 158)
+CARD = (178, 178, 173)
 INK = (24, 24, 23)
 SOFT = (57, 57, 56)
-MUTED = (92, 92, 90)
+MUTED = (76, 76, 73)
 FAINT = (24, 24, 23, 72)
-RULE = (24, 24, 23, 115)
-PANEL_FILL = (244, 243, 238, 210)
-PANEL_FILL_LIGHT = (238, 237, 232, 205)
-PALE = (210, 210, 206)
+RULE = (24, 24, 23, 155)
+PANEL_FILL = (184, 184, 179, 145)
+PANEL_FILL_LIGHT = (178, 178, 173, 130)
+PALE = (205, 205, 199)
 WHITE = (248, 247, 242)
-YELLOW = (244, 219, 18)
+YELLOW = (224, 203, 54)
 GREEN = INK
 ORANGE = SOFT
 
@@ -653,11 +653,11 @@ def init_background() -> Image.Image:
     img = Image.new("RGBA", (W, H), BG)
     draw = ImageDraw.Draw(img, "RGBA")
     for y in range(H):
-        shade = int(235 - 12 * (y / H))
+        shade = int(174 - 13 * (y / H))
         draw.line((0, y, W, y), fill=(shade, shade, shade - 4, 255))
-    noise = Image.effect_noise((W, H), 14).convert("L").filter(ImageFilter.GaussianBlur(1.2))
-    grain = Image.new("RGBA", (W, H), (170, 170, 166, 12))
-    grain.putalpha(noise.point(lambda value: int(abs(value - 128) * 0.12)))
+    noise = Image.effect_noise((W, H), 18).convert("L").filter(ImageFilter.GaussianBlur(1.3))
+    grain = Image.new("RGBA", (W, H), (122, 122, 118, 18))
+    grain.putalpha(noise.point(lambda value: int(abs(value - 128) * 0.16)))
     return Image.alpha_composite(img, grain)
 
 
@@ -686,7 +686,7 @@ def init_card(title: str, subtitle: str, date_label: str) -> tuple[Image.Image, 
 
 def draw_stat_strip(draw: ImageDraw.ImageDraw, y: int, stats: list[tuple[str, str, tuple[int, int, int]]]):
     x1, x2 = BOARD_LEFT, BOARD_RIGHT
-    draw_panel(draw, (x1, y - 18, x2, y + 106), fill=(185, 185, 182, 80), radius=8)
+    draw_panel(draw, (x1, y - 18, x2, y + 106), fill=(181, 181, 176, 108), radius=6)
     xs = [228, BOARD_CENTER, 852]
     for idx, (x, (label, value, _fill)) in enumerate(zip(xs, stats)):
         if idx:
@@ -731,7 +731,7 @@ def draw_metric_tile(
     value_size: int = 32,
 ):
     x1, y1, x2, y2 = box
-    fill = INK if dark else (178, 178, 175, 90)
+    fill = INK if dark else (165, 165, 160, 96)
     label_fill = PALE if dark else MUTED
     value_fill = WHITE if dark else INK
     draw.rectangle(box, fill=fill)
@@ -784,7 +784,7 @@ def draw_game_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: GameRow, idx
 
 def draw_game_official_compact(img: Image.Image, draw: ImageDraw.ImageDraw, row: GameRow, idx: int, y: int):
     row_h = 76
-    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + row_h), fill=(188, 188, 184, 78))
+    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + row_h), fill=(184, 184, 179, 132))
     draw.rectangle((BOARD_LEFT, y, BOARD_LEFT + 70, y + row_h), fill=INK)
     center_text(draw, (BOARD_LEFT + 35, y + 39), f"{idx:02d}", load_font("display", 27), WHITE)
     draw_team_logo(img, row.away_id, (146, y + 38), 40, opacity=0.86)
@@ -814,7 +814,7 @@ def draw_hr_rate_badge(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int]
 def draw_hr_stat_strip(draw: ImageDraw.ImageDraw, y: int, lotto_count: int, top_rate: float, watch_count: int):
     h = 124
     third = (BOARD_RIGHT - BOARD_LEFT) // 3
-    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + h), fill=(185, 185, 182, 86), rule=RULE)
+    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + h), fill=(181, 181, 176, 108), rule=RULE)
     center_x1 = BOARD_LEFT + third
     center_x2 = BOARD_RIGHT - third
     draw.rectangle((center_x1, y, center_x2, y + h), fill=INK)
@@ -896,7 +896,7 @@ def draw_hr_proof_line(draw: ImageDraw.ImageDraw, x: int, y: int, row: HrRow, ma
 def draw_hr_feature_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: HrRow, y: int):
     meta = clean_hr_meta(row.meta)
     row_h = 132
-    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + row_h), fill=(194, 194, 190, 112))
+    draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + row_h), fill=(184, 184, 178, 146))
     draw.rectangle((BOARD_LEFT, y, BOARD_RIGHT, y + 6), fill=YELLOW)
     draw.rectangle((BOARD_LEFT, y, BOARD_LEFT + 98, y + row_h), fill=INK)
     center_text(draw, (BOARD_LEFT + 49, y + 38), "TOP", load_font("mono", 12), PALE)
@@ -935,7 +935,7 @@ def draw_hr_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: HrRow, y: int,
 
     if compact:
         row_h = 56
-        draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + row_h), fill=(184, 184, 181, 64))
+        draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + row_h), fill=(177, 177, 172, 118))
         draw.rectangle((BOARD_LEFT, y, BOARD_LEFT + 70, y + row_h), fill=INK)
         center_text(draw, (BOARD_LEFT + 35, y + 29), rank_text, load_font("display", 26), WHITE)
         draw_team_logo(img, row.team_id, (BOARD_LEFT + 104, y + 28), 34, opacity=0.82)
@@ -949,7 +949,7 @@ def draw_hr_row(img: Image.Image, draw: ImageDraw.ImageDraw, row: HrRow, y: int,
         return
 
     row_h = 62
-    fill = (191, 191, 187, 96) if is_top else PANEL_FILL_LIGHT
+    fill = (186, 186, 181, 138) if is_top else PANEL_FILL_LIGHT
     draw_panel(draw, (BOARD_LEFT, y, BOARD_RIGHT, y + row_h), fill=fill)
     if is_top:
         draw.rectangle((BOARD_LEFT, y, BOARD_RIGHT, y + 5), fill=YELLOW)
