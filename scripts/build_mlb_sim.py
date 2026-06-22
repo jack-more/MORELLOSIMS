@@ -2447,13 +2447,13 @@ def render_hr_watch_tab():
         return "MODEL"
 
     HR_LANE_META = {
-        "DAMAGE": ("power", "Power Edge", "HR rate, baseline pop, lift, and run context all line up."),
-        "SURGE": ("boost", "Context Boost", "Team total, park, form, or lineup heat is adding lift."),
-        "FORM": ("heater", "Hot Bat", "Recent hit density is carrying the power signal."),
-        "PRESSURE": ("order", "Order Pressure", "Lineup spot and run pressure are stressing the matchup."),
+        "DAMAGE": ("power", "HR Profile", "Projected HR%, batter HR baseline, pitcher-type lift, and run setup all point up."),
+        "SURGE": ("boost", "Run Setup", "Team total, park, lineup slot, or recent form is adding HR probability."),
+        "FORM": ("heater", "Hot Bat", "Recent hit density is adding support to the HR projection."),
+        "PRESSURE": ("order", "Lineup Edge", "Batting order and run contribution are adding chances."),
         "H2H": ("history", "Pitcher History", "Direct track record vs today's pitcher adds support."),
-        "STACK": ("lineup", "Lineup Pressure", "Multiple bats in this lineup are pushing the same pitcher."),
-        "MODEL": ("model", "Balanced Fit", "Balanced profile across power, matchup, and context."),
+        "STACK": ("lineup", "Lineup Stack", "Multiple bats in this lineup are pressuring the same pitcher."),
+        "MODEL": ("model", "Balanced Fit", "Projected HR%, pitcher type, and lineup setup all grade well."),
     }
     HR_LANE_ORDER = ["DAMAGE", "SURGE", "STACK", "FORM", "PRESSURE", "H2H", "MODEL"]
 
@@ -2475,6 +2475,9 @@ def render_hr_watch_tab():
     def fmt_pp(value):
         return f"+{round(max(0, value or 0) * 100, 1):.1f}pp"
 
+    def fmt_signed_pp(value):
+        return f"{float(value or 0) * 100:+.1f}pp"
+
     def hr_lane_reason(bm):
         return hr_lane_short(hr_lane_label(bm))
 
@@ -2490,10 +2493,19 @@ def render_hr_watch_tab():
         <strong>{h(value)}</strong>
       </div>'''
 
+    def render_hr_explain(label, value, sub=""):
+        sub_html = f"<em>{h(sub)}</em>" if sub else ""
+        return f'''<div class="hr-explain">
+        <span>{h(label)}</span>
+        <strong>{h(value)}</strong>
+        {sub_html}
+      </div>'''
+
     def render_hr_row(rank, bm, status="lotto"):
         hr_pct = round(bm["hr_rate"] * 100, 1)
-        pow_pct = round((bm.get("base_hr_rate", 0) or 0) * 100, 1)
-        lift_pct = round(max(0, bm.get("hr_lift", 0) or 0) * 100, 1)
+        base_pct = round((bm.get("base_hr_rate", 0) or 0) * 100, 1)
+        lift_pct = round((bm.get("hr_lift", 0) or 0) * 100, 1)
+        positive_lift_pct = max(0, lift_pct)
         clean_name = str(bm.get("name", "")).replace(" (H)", "").strip()
         lane = hr_lane_label(bm)
         lane_name = hr_lane_display(lane)
@@ -2518,18 +2530,20 @@ def render_hr_watch_tab():
         run = fmt_num(bm.get("run_contrib", 0), 2)
         surge = round(surge_power_score(bm))
         h2h_display = h2h_value if h2h_value != "0" else None
-        proof_items = [
-            render_hr_proof("Power", f"{pow_pct}%"),
-            render_hr_proof("Lift", f"+{lift_pct}pp"),
-            render_hr_proof("H2H" if h2h_display else "Context", h2h_display or run, "tone-red"),
+        bar_scale = 15.0
+        base_w = max(0.0, min(100.0, (base_pct / bar_scale) * 100.0))
+        boost_w = max(0.0, min(100.0 - base_w, (positive_lift_pct / bar_scale) * 100.0))
+        total_w = max(0.0, min(100.0, (hr_pct / bar_scale) * 100.0))
+        matchup_sub = f"today vs pitcher type"
+        lineup_value = f"#{order} / +{run} R"
+        park_value = f"{park}x / {team_total}"
+        h2h_text = f"H2H {h2h_display}" if h2h_display else f"Park {park}x"
+        explain_items = [
+            render_hr_explain("Batter HR%", f"{base_pct}%", "own HR rate"),
+            render_hr_explain("Vs Pitcher Type", fmt_signed_pp(bm.get("hr_lift", 0)), matchup_sub),
+            render_hr_explain("Lineup/Runs", lineup_value, "slot and run value"),
+            render_hr_explain("Park/Total", park_value, h2h_text),
         ]
-        tag_items = [
-            f"<span>POW {pow_pct}%</span>",
-            f"<span>LIFT +{lift_pct}pp</span>",
-            f"<span>RUN {run}</span>",
-        ]
-        if h2h_tag:
-            tag_items.append(h2h_tag)
 
         return f'''<div class="hr-row {heat}" data-hr-card="1" data-hr-lane="{h(lane)}" data-hr-status="{h(status)}">
 		  <div class="hr-rank">{rank}</div>
@@ -2540,12 +2554,20 @@ def render_hr_watch_tab():
       </div>
 		    <div class="hr-meta">#{order} {h(bm["team"])} vs {h(bm["opp_pitcher"])} ({h(bm["opp_team"])}) &middot; team {team_total} &middot; park {park}x</div>
 	      <div class="hr-signal">{h(hr_lane_reason(bm))}</div>
-		    <div class="hr-tags">{''.join(tag_items)}</div>
-	      <div class="hr-proof-row">{''.join(proof_items)}</div>
+        <div class="hr-odds" style="--base-w:{base_w:.1f}%;--boost-w:{boost_w:.1f}%;--total-w:{total_w:.1f}%">
+          <div class="hr-odds-head"><span>Projected HR%</span><strong>{hr_pct}%</strong></div>
+          <div class="hr-odds-bar" aria-label="Projected HR {hr_pct} percent, batter baseline {base_pct} percent, pitcher type lift {fmt_signed_pp(bm.get("hr_lift", 0))}">
+            <span class="hr-bar-base"></span>
+            <span class="hr-bar-boost"></span>
+            <span class="hr-bar-end"></span>
+          </div>
+          <div class="hr-odds-scale"><span>0%</span><span>15% elite scale</span></div>
+        </div>
+	      <div class="hr-explain-row">{''.join(explain_items)}</div>
 		  </div>
 	  <div class="hr-rate-col">
 	    <div class="hr-rate">{hr_pct}%</div>
-    <div class="hr-rate-label">HR Rate</div>
+    <div class="hr-rate-label">Projected HR</div>
   </div>
 </div>'''
 
@@ -2608,7 +2630,7 @@ def render_hr_watch_tab():
         </div>
         <div class="hr-intel-grid">
           {hitter_cell("Highest HR%", top_rate, lambda bm: f'{bm.get("team")} vs {bm.get("opp_pitcher")}')}
-          {cell("Best Power Fit", f'{top_damage.get("name")}' if top_damage else "No qualifier", f'Power {fmt_pct(top_damage.get("base_hr_rate"))} / Lift {fmt_pp(top_damage.get("hr_lift"))}' if top_damage else "Awaiting Go-Yard card")}
+          {cell("Best Batter HR%", f'{top_damage.get("name")}' if top_damage else "No qualifier", f'Batter {fmt_pct(top_damage.get("base_hr_rate"))} / Type {fmt_pp(top_damage.get("hr_lift"))}' if top_damage else "Awaiting Go-Yard card")}
           {hitter_cell("Best Watch", top_watch, lambda bm: f'{bm.get("team")} vs {bm.get("opp_pitcher")}')}
           {cell("Card Mix", lane_mix, f'{len(core)} top / {len(watch)} watch')}
         </div>
@@ -3102,13 +3124,13 @@ def render_hr_watch_tab():
 
     hr_deep_board_html = render_hr_deep_board(hr_card_table_rows, core_ids, watch_ids)
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
-                    {bucket_header("secondary", "WATCH", "GO-YARD WATCH", "Secondary fits where the HR signal is live, but the top-card case is thinner.", "6.5%+ HR", "power baseline", "matchup lift", "context")}
+                    {bucket_header("secondary", "WATCH", "GO-YARD WATCH", "Secondary fits where the HR signal is live, with the same projected HR%, pitcher-type lift, and lineup/run readout.", "6.5%+ HR", "batter HR%", "vs pitcher type", "lineup/runs")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
     hr_column = locked_hr_column or f'''<div class="daily-col daily-center daily-hr-lotto">
                 <div class="daily-bucket primary hr-lotto">
-                    {bucket_header("primary", "TOP BOARD", "GO-YARD CARD", "Highest-probability HR shortlist, separated by the main reason the model likes the bat.", "8.5%+ HR", "power baseline", "matchup lift", "context")}
+                    {bucket_header("primary", "TOP BOARD", "GO-YARD CARD", "Highest-probability HR shortlist with projected HR%, batter HR baseline, pitcher-type lift, and lineup/run setup shown on every bat.", "projected HR%", "batter HR%", "vs pitcher type", "lineup/runs")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}
@@ -3155,7 +3177,7 @@ css_start = CSS.find("<style>")
 css_end = CSS.find("</style>") + len("</style>")
 css_block = CSS[css_start:css_end] if css_start >= 0 else ""
 css_block = re.sub(
-    r"\n/\* DAILY_HR_GOYARD_HIERARCHY_V\d+ \*/.*?(?=\n/\* [A-Z0-9_]+|\n</style>)",
+    r"\n/\* (DAILY_HR_GOYARD_HIERARCHY|GO_YARD_PUBLIC_COPY_FIX|GO_YARD_HR_EXPLAINER)_V\d+ \*/.*?(?=\n/\* [A-Z0-9_]+|\n</style>)",
     "",
     css_block,
     flags=re.S,
@@ -3376,7 +3398,7 @@ if "DAILY_HR_RESULTS_TRAY_V1" not in css_block:
     css_block = css_block.replace("</style>", DAILY_HR_RESULTS_TRAY_CSS + "\n</style>")
 
 DAILY_HR_GOYARD_CSS = """
-/* DAILY_HR_GOYARD_HIERARCHY_V5 */
+/* DAILY_HR_GOYARD_HIERARCHY_V6 */
 #tab-daily{max-width:1360px}
 #tab-daily.active{display:flex;flex-direction:column}
 #tab-daily>.daily-hero-line{order:1}
@@ -3419,7 +3441,22 @@ DAILY_HR_GOYARD_CSS = """
 .daily-bucket.hr-lotto .hr-rate-col{min-width:0;text-align:left;border-left:2px solid #111;padding:2px 0 0 10px}
 .daily-bucket.hr-lotto .hr-rate{font-size:24px;line-height:1;color:#FF3333}
 .daily-bucket.hr-lotto .hr-rate-label{font-size:8px;font-weight:900;color:#555}
-.daily-bucket.hr-lotto .hr-proof-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.hr-odds{margin-top:9px;min-width:0}
+.hr-odds-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px;font-family:var(--font-mono);font-weight:900;text-transform:uppercase}
+.hr-odds-head span{font-size:8px;color:#555;letter-spacing:.4px}
+.hr-odds-head strong{font-size:11px;line-height:1;color:#FF3333;white-space:nowrap}
+.hr-odds-bar{position:relative;height:14px;border:2px solid #111;background:#f1f1ea;box-shadow:2px 2px 0 rgba(0,0,0,.18);overflow:hidden}
+.hr-bar-base,.hr-bar-boost{position:absolute;top:0;bottom:0;display:block;transform:scaleX(0);transform-origin:left;animation:hrBarReveal .72s cubic-bezier(.2,.8,.2,1) forwards}
+.hr-bar-base{left:0;width:var(--base-w);background:#111}
+.hr-bar-boost{left:var(--base-w);width:var(--boost-w);background:#FF3333;animation-delay:.08s}
+.hr-bar-end{position:absolute;top:-2px;bottom:-2px;left:var(--total-w);width:3px;background:#FFEA00;border-left:1px solid #111;border-right:1px solid #111;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+.hr-odds-scale{display:flex;justify-content:space-between;margin-top:4px;font-family:var(--font-mono);font-size:7px;font-weight:900;line-height:1;text-transform:uppercase;color:#777}
+.hr-explain-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
+.hr-explain{min-width:0;border:1px solid #cfcfc8;background:#fff;padding:6px 7px}
+.hr-explain span{display:block;font-family:var(--font-mono);font-size:7px;font-weight:900;line-height:1;text-transform:uppercase;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-explain strong{display:block;margin-top:4px;font-family:var(--font-display);font-size:17px;line-height:.95;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr-explain em{display:block;margin-top:4px;font-family:var(--font-mono);font-size:7px;font-style:normal;font-weight:800;line-height:1.05;color:#777;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@keyframes hrBarReveal{to{transform:scaleX(1)}}
 .daily-bucket.hr-lotto-secondary{border-top:7px solid #111;box-shadow:4px 4px 0 #111}
 .daily-bucket.hr-lotto-secondary .bucket-title{font-size:23px}
 .daily-bucket.hr-lotto-secondary .hr-row{display:grid;grid-template-columns:34px minmax(0,1fr) 68px;align-items:start;gap:10px;min-height:0;padding:12px 14px}
@@ -3441,8 +3478,8 @@ DAILY_HR_GOYARD_CSS = """
 .hr-deep-board{margin-top:20px;border-top:8px solid #111}
 .hr-board-table th{font-size:9px}
 .hr-board-table td{font-size:11px}
-@media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:minmax(0,1fr) minmax(250px,.42fr)}#tab-daily .daily-hr-lotto{order:1}.daily-side-stack{order:2}.daily-bucket.hr-lotto .hr-row{grid-template-columns:36px minmax(0,1fr) 78px}}
-@media(max-width:760px){#tab-daily{padding:0 10px}.daily-hero-line{padding-top:6px;margin-bottom:10px;display:block}#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-side-stack{order:2}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row,.daily-bucket.hr-lotto-secondary .hr-row{grid-template-columns:34px minmax(0,1fr);gap:10px}.daily-bucket.hr-lotto .hr-rate-col,.daily-bucket.hr-lotto-secondary .hr-rate-col{grid-column:2;border-left:0;padding:0;display:flex;align-items:baseline;gap:8px;justify-content:flex-start}.daily-bucket.hr-lotto .hr-rate{font-size:22px}.daily-bucket.hr-lotto .hr-proof-row,.daily-bucket.hr-lotto-secondary .hr-proof-row{grid-template-columns:repeat(3,minmax(0,1fr))}.hr-control-head{align-items:flex-start;flex-direction:column}.hr-jump-rail{justify-content:flex-start}.hr-results-grid{grid-template-columns:1fr}.hr-board-table{min-width:620px}}
+@media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:minmax(0,1fr) minmax(250px,.42fr)}#tab-daily .daily-hr-lotto{order:1}.daily-side-stack{order:2}.daily-bucket.hr-lotto .hr-row{grid-template-columns:36px minmax(0,1fr) 78px}.hr-explain-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){#tab-daily{padding:0 10px}.daily-hero-line{padding-top:6px;margin-bottom:10px;display:block}#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-side-stack{order:2}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row,.daily-bucket.hr-lotto-secondary .hr-row{grid-template-columns:34px minmax(0,1fr);gap:10px}.daily-bucket.hr-lotto .hr-rate-col,.daily-bucket.hr-lotto-secondary .hr-rate-col{grid-column:2;border-left:0;padding:0;display:flex;align-items:baseline;gap:8px;justify-content:flex-start}.daily-bucket.hr-lotto .hr-rate{font-size:22px}.hr-explain-row{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-explain strong{font-size:16px}.hr-control-head{align-items:flex-start;flex-direction:column}.hr-jump-rail{justify-content:flex-start}.hr-results-grid{grid-template-columns:1fr}.hr-board-table{min-width:620px}}
 @media(max-width:760px) and (min-width:431px){.daily-bucket.hr-lotto .hr-row,.daily-bucket.hr-lotto-secondary .hr-row{grid-template-columns:34px minmax(0,1fr) 72px}.daily-bucket.hr-lotto .hr-rate-col,.daily-bucket.hr-lotto-secondary .hr-rate-col{grid-column:3;grid-row:1;display:block;text-align:right}.daily-bucket.hr-lotto .hr-rate-label,.daily-bucket.hr-lotto-secondary .hr-rate-label{font-size:7px}}
 """
 css_block = css_block.replace("</style>", DAILY_HR_GOYARD_CSS + "\n</style>")
