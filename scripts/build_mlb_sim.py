@@ -8,7 +8,7 @@ runs the matchup model against atlas data, and renders the full page.
 Usage: python3 scripts/build_mlb_sim.py
 """
 
-import csv, json, os, sys, math, requests, time as _time
+import csv, json, os, sys, math, re, requests, time as _time
 import urllib.request  # used by _fetch_action_network_odds + _fetch_espn_scoreboard_odds
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
@@ -2862,8 +2862,15 @@ def render_hr_watch_tab():
     display_pool = []
     display_ids = set()
     for bm in sorted(
-        core_hr + longshot_damage,
-        key=lambda x: (-(x.get("hr_rate", 0) or 0), normalize_hr_name(x.get("name"))),
+        [
+            bm for bm in all_batter_matchups
+            if hr_batter_allowed(bm) and hr_board_candidate_ok(bm)
+        ],
+        key=lambda x: (
+            -(x.get("hr_rate", 0) or 0),
+            -hr_selection_score(x),
+            normalize_hr_name(x.get("name")),
+        ),
     ):
         if bm.get("id") in display_ids:
             continue
@@ -3108,24 +3115,25 @@ def render_hr_watch_tab():
             </div>'''
 
     return f'''<div class="tab-content" id="tab-daily">
-        <div style="padding-top:12px">
-            <div class="section-title">DAILY DASHBOARD</div>
+        <div class="daily-hero-line">
+            <div class="section-title">GO-YARD BOARD</div>
             <div class="section-sub">{DATE_SHORT} \u00b7 {games_with_lu} games with lineups</div>
         </div>
         {no_data}
-        {hr_intel_html}
         <div class="daily-grid daily-grid-lotto">
             {hr_column}
-            <div class="daily-col daily-side daily-hot-side">
-                <div class="daily-bucket momentum">
-                    {bucket_header("momentum", "MOMENTUM", "HOT BATS", "Recent timing plus matchup support.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
-                    <div class="picks-container">{heat_html or heat_empty}</div>
+            <div class="daily-side-stack">
+                <div class="daily-col daily-side daily-board-side">
+                    <div class="daily-bucket board">
+                        {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "ROI price gates", "posted picks persist")}
+                        <div class="picks-container ma-premium">{edges_html}</div>
+                    </div>
                 </div>
-            </div>
-            <div class="daily-col daily-side daily-board-side">
-                <div class="daily-bucket board">
-                    {bucket_header("picks", "BOARD", "TODAY'S PICKS", "Official moneyline board, separate from HR edges.", "C:8+ board", "ROI price gates", "posted picks persist")}
-                    <div class="picks-container ma-premium">{edges_html}</div>
+                <div class="daily-col daily-side daily-hot-side">
+                    <div class="daily-bucket momentum">
+                        {bucket_header("momentum", "MOMENTUM", "HOT BATS", "Recent timing plus matchup support.", "5G+ streak or 4/5 hits", "MOMI 85+", "MOMO 60+")}
+                        <div class="picks-container">{heat_html or heat_empty}</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3146,6 +3154,12 @@ CSS = open(os.path.join(REPO_ROOT, "mlbsim", "index.html")).read()
 css_start = CSS.find("<style>")
 css_end = CSS.find("</style>") + len("</style>")
 css_block = CSS[css_start:css_end] if css_start >= 0 else ""
+css_block = re.sub(
+    r"\n/\* DAILY_HR_GOYARD_HIERARCHY_V\d+ \*/.*?(?=\n/\* [A-Z0-9_]+|\n</style>)",
+    "",
+    css_block,
+    flags=re.S,
+)
 
 DAILY_CSS = """
 /* ═══ DAILY 3-COL GRID ═══ */
@@ -3362,16 +3376,17 @@ if "DAILY_HR_RESULTS_TRAY_V1" not in css_block:
     css_block = css_block.replace("</style>", DAILY_HR_RESULTS_TRAY_CSS + "\n</style>")
 
 DAILY_HR_GOYARD_CSS = """
-/* DAILY_HR_GOYARD_HIERARCHY_V4 */
-#tab-daily{max-width:1380px}
+/* DAILY_HR_GOYARD_HIERARCHY_V5 */
+#tab-daily{max-width:1360px}
 #tab-daily.active{display:flex;flex-direction:column}
-#tab-daily>div:first-child{order:1}
+#tab-daily>.daily-hero-line{order:1}
 #tab-daily>.empty-state{order:2}
-#tab-daily>.hr-intel-strip{order:3}
-#tab-daily>.daily-grid-lotto{order:4}
+#tab-daily>.hr-intel-strip{display:none}
+#tab-daily>.daily-grid-lotto{order:3}
 #tab-daily>.hr-control-deck{order:5}
 #tab-daily>.hr-results-panel{order:6}
 #tab-daily>.hr-deep-board{order:7}
+.daily-hero-line{padding-top:10px;margin-bottom:12px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
 .hr-intel-strip{margin:14px 0 18px;border:3px solid #111;box-shadow:6px 6px 0 #111}
 .hr-intel-head{grid-template-columns:minmax(260px,.48fr) minmax(320px,1fr);align-items:center;background:#111;color:#fff;padding:16px 18px}
 .hr-intel-head .edge-kicker{background:#FFEA00;color:#111;border-color:#FFEA00;box-shadow:none}
@@ -3385,17 +3400,19 @@ DAILY_HR_GOYARD_CSS = """
 .hr-intel-cell:nth-child(4){background:#fff}
 .hr-intel-cell strong{font-size:22px;line-height:1.05;white-space:normal;overflow:visible;text-overflow:clip}
 .hr-intel-cell em{white-space:normal;line-height:1.25}
-#tab-daily .daily-grid-lotto{grid-template-columns:minmax(500px,1.48fr) minmax(250px,.74fr) minmax(250px,.74fr);gap:18px;margin-top:18px}
-#tab-daily .daily-hr-lotto{order:1}
-#tab-daily .daily-board-side{order:2}
-#tab-daily .daily-hot-side{order:3}
+#tab-daily .daily-grid-lotto{grid-template-columns:minmax(650px,1fr) minmax(290px,340px);gap:18px;margin-top:8px;align-items:start}
+#tab-daily .daily-hr-lotto{order:1;min-width:0}
+.daily-side-stack{order:2;display:grid;gap:14px;align-content:start;min-width:0}
+.daily-side-stack .daily-col{min-width:0}
+.daily-side-stack .daily-bucket{margin:0}
+#tab-daily .daily-board-side,#tab-daily .daily-hot-side{order:initial;grid-column:auto}
 .daily-bucket.hr-lotto{transform:none;border:3px solid #111;border-top:12px solid #FF3333;box-shadow:6px 6px 0 #111}
 .daily-bucket.hr-lotto .bucket-head{background:#fff;padding:17px 18px 15px;border-bottom:3px solid #111}
 .daily-bucket.hr-lotto .edge-kicker{background:#111;color:#FFEA00;border-color:#111;font-size:10px;box-shadow:none}
 .daily-bucket.hr-lotto .bucket-title{font-size:32px;color:#111;text-shadow:none;letter-spacing:1.6px}
 .daily-bucket.hr-lotto .bucket-copy{font-size:12px;font-weight:800;color:#242424;max-width:64ch}
 .daily-bucket.hr-lotto .criteria-row span{background:#FF3333;color:#fff;box-shadow:none}
-.daily-bucket.hr-lotto .hr-row{display:grid;grid-template-columns:38px minmax(0,1fr) 84px;align-items:start;gap:12px;min-height:0;padding:15px 16px;border-bottom:2px solid #ecece4}
+.daily-bucket.hr-lotto .hr-row{display:grid;grid-template-columns:38px minmax(0,1fr) 84px;align-items:start;gap:12px;min-height:0;padding:13px 16px;border-bottom:2px solid #ecece4}
 .daily-bucket.hr-lotto .hr-row:first-child{background:#fff7d6}
 .daily-bucket.hr-lotto .hr-rank{min-width:38px;width:38px;height:34px;background:#111;color:#FFEA00;font-size:15px}
 .daily-bucket.hr-lotto .hr-name{font-size:18px}
@@ -3424,12 +3441,11 @@ DAILY_HR_GOYARD_CSS = """
 .hr-deep-board{margin-top:20px;border-top:8px solid #111}
 .hr-board-table th{font-size:9px}
 .hr-board-table td{font-size:11px}
-@media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:minmax(0,1fr) minmax(250px,.78fr)}#tab-daily .daily-hr-lotto{order:1}#tab-daily .daily-board-side{order:2;grid-column:auto}#tab-daily .daily-hot-side{order:3;grid-column:1/-1}.daily-bucket.hr-lotto .hr-row{grid-template-columns:36px minmax(0,1fr) 78px}}
-@media(max-width:760px){#tab-daily{padding:0 10px}.hr-intel-strip{box-shadow:4px 4px 0 #111}.hr-intel-head{grid-template-columns:1fr;padding:14px}.hr-intel-head .bucket-title{font-size:26px}.hr-intel-grid{grid-template-columns:1fr}.hr-intel-cell{border-right:0;border-top:2px solid #111}.hr-intel-cell:first-child{border-top:0}.hr-intel-cell strong{font-size:20px}#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row,.daily-bucket.hr-lotto-secondary .hr-row{grid-template-columns:34px minmax(0,1fr);gap:10px}.daily-bucket.hr-lotto .hr-rate-col,.daily-bucket.hr-lotto-secondary .hr-rate-col{grid-column:2;border-left:0;padding:0;display:flex;align-items:baseline;gap:8px;justify-content:flex-start}.daily-bucket.hr-lotto .hr-rate{font-size:22px}.daily-bucket.hr-lotto .hr-proof-row,.daily-bucket.hr-lotto-secondary .hr-proof-row{grid-template-columns:repeat(3,minmax(0,1fr))}.hr-control-head{align-items:flex-start;flex-direction:column}.hr-jump-rail{justify-content:flex-start}.hr-results-grid{grid-template-columns:1fr}.hr-board-table{min-width:620px}}
+@media(max-width:1100px){#tab-daily .daily-grid-lotto{grid-template-columns:minmax(0,1fr) minmax(250px,.42fr)}#tab-daily .daily-hr-lotto{order:1}.daily-side-stack{order:2}.daily-bucket.hr-lotto .hr-row{grid-template-columns:36px minmax(0,1fr) 78px}}
+@media(max-width:760px){#tab-daily{padding:0 10px}.daily-hero-line{padding-top:6px;margin-bottom:10px;display:block}#tab-daily .daily-grid-lotto{grid-template-columns:1fr}.daily-side-stack{order:2}.daily-bucket.hr-lotto .bucket-title{font-size:28px}.daily-bucket.hr-lotto .hr-row,.daily-bucket.hr-lotto-secondary .hr-row{grid-template-columns:34px minmax(0,1fr);gap:10px}.daily-bucket.hr-lotto .hr-rate-col,.daily-bucket.hr-lotto-secondary .hr-rate-col{grid-column:2;border-left:0;padding:0;display:flex;align-items:baseline;gap:8px;justify-content:flex-start}.daily-bucket.hr-lotto .hr-rate{font-size:22px}.daily-bucket.hr-lotto .hr-proof-row,.daily-bucket.hr-lotto-secondary .hr-proof-row{grid-template-columns:repeat(3,minmax(0,1fr))}.hr-control-head{align-items:flex-start;flex-direction:column}.hr-jump-rail{justify-content:flex-start}.hr-results-grid{grid-template-columns:1fr}.hr-board-table{min-width:620px}}
 @media(max-width:760px) and (min-width:431px){.daily-bucket.hr-lotto .hr-row,.daily-bucket.hr-lotto-secondary .hr-row{grid-template-columns:34px minmax(0,1fr) 72px}.daily-bucket.hr-lotto .hr-rate-col,.daily-bucket.hr-lotto-secondary .hr-rate-col{grid-column:3;grid-row:1;display:block;text-align:right}.daily-bucket.hr-lotto .hr-rate-label,.daily-bucket.hr-lotto-secondary .hr-rate-label{font-size:7px}}
 """
-if "DAILY_HR_GOYARD_HIERARCHY_V4" not in css_block:
-    css_block = css_block.replace("</style>", DAILY_HR_GOYARD_CSS + "\n</style>")
+css_block = css_block.replace("</style>", DAILY_HR_GOYARD_CSS + "\n</style>")
 
 PLAYER_METRIC_CSS = """
 /* ── Player MOMO/MOMI chips ── */
