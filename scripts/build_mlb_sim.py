@@ -2538,6 +2538,11 @@ def render_hr_watch_tab():
         lineup_value = f"#{order} / +{run} R"
         park_value = f"{park}x / {team_total}"
         h2h_text = f"H2H {h2h_display}" if h2h_display else f"Park {park}x"
+        proof_items = [
+            render_hr_proof("Power", f"POW {base_pct}%", "tone-red" if base_pct >= 5.0 else ""),
+            render_hr_proof("Lift", f"LIFT {fmt_signed_pp(bm.get('hr_lift', 0))}", "tone-red" if positive_lift_pct >= 3.0 else ""),
+            render_hr_proof("H2H" if h2h_display else "Context", f"H2H {h2h_display}" if h2h_display else f"RUN +{run}", "tone-red" if h2h_display else ""),
+        ]
         explain_items = [
             render_hr_explain("Batter HR%", f"{base_pct}%", "own HR rate"),
             render_hr_explain("Vs Pitcher Type", fmt_signed_pp(bm.get("hr_lift", 0)), matchup_sub),
@@ -2563,6 +2568,7 @@ def render_hr_watch_tab():
           </div>
           <div class="hr-odds-scale"><span>0%</span><span>15% elite scale</span></div>
         </div>
+        <div class="hr-proof-row">{''.join(proof_items)}</div>
 	      <div class="hr-explain-row">{''.join(explain_items)}</div>
 		  </div>
 	  <div class="hr-rate-col">
@@ -3124,13 +3130,13 @@ def render_hr_watch_tab():
 
     hr_deep_board_html = render_hr_deep_board(hr_card_table_rows, core_ids, watch_ids)
     longshot_block = f'''<div class="daily-bucket daily-subsection secondary hr-lotto-secondary">
-                    {bucket_header("secondary", "WATCH", "GO-YARD WATCH", "Secondary fits where the HR signal is live, with the same projected HR%, pitcher-type lift, and lineup/run readout.", "6.5%+ HR", "batter HR%", "vs pitcher type", "lineup/runs")}
+                    {bucket_header("secondary", "WATCH", "GO-YARD WATCH", "Secondary fits where the HR signal is live, with the same projected HR%, pitcher-type lift, and lineup/run readout.", "6.5%+ HR", "power baseline", "matchup lift", "context")}
                     <div class="picks-container">{longshot_html or '<div class="empty-state">NO QUALIFIERS</div>'}</div>
                 </div>'''
     heat_empty = '<div class="empty-state">NO HEAT QUALIFIERS</div>' if not heat_html else ''
     hr_column = locked_hr_column or f'''<div class="daily-col daily-center daily-hr-lotto">
                 <div class="daily-bucket primary hr-lotto">
-                    {bucket_header("primary", "TOP BOARD", "GO-YARD CARD", "Highest-probability HR shortlist with projected HR%, batter HR baseline, pitcher-type lift, and lineup/run setup shown on every bat.", "projected HR%", "batter HR%", "vs pitcher type", "lineup/runs")}
+                    {bucket_header("primary", "TOP BOARD", "GO-YARD CARD", "Highest-probability HR shortlist with projected HR%, batter HR baseline, pitcher-type lift, and lineup/run setup shown on every bat.", "projected HR%", "power baseline", "matchup lift", "context")}
                     <div class="picks-container">{hr_html or hr_empty}</div>
                 </div>
                 {longshot_block}
