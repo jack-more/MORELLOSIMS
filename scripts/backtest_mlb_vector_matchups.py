@@ -43,6 +43,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 ATLAS_DIR = REPO_ROOT / "atlas"
 PICKS_PATH = REPO_ROOT / "picks" / "mlb.json"
 PICKS_LOG_PATH = REPO_ROOT / "mlbsim" / "picks_log.csv"
+TEAM_ALIAS = {"ATH": "OAK", "AZ": "ARI", "CWS": "CHW", "TB": "TBR", "WSH": "WSN", "SF": "SFG", "KC": "KCR", "SD": "SDP"}
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from mlb_vector_features import (  # noqa: E402
@@ -231,6 +232,43 @@ def fetch_json(url: str) -> dict[str, Any]:
         return json.loads(response.read())
 
 
+def normalize_team(abbr: str) -> str:
+    return TEAM_ALIAS.get(str(abbr or ""), str(abbr or ""))
+
+
+def schedule_for_date(date: str, cache: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    if date in cache:
+        return cache[date]
+    url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}&hydrate=team"
+    try:
+        data = fetch_json(url)
+        games = []
+        for day in data.get("dates", []):
+            games.extend(day.get("games", []))
+        cache[date] = games
+        time.sleep(0.05)
+    except Exception as exc:
+        print(f"  WARN schedule {date}: {exc}")
+        cache[date] = []
+    return cache[date]
+
+
+def resolve_game_pk(pick: PickRow, schedule_cache: dict[str, list[dict[str, Any]]]) -> int | None:
+    if pick.game_pk:
+        return pick.game_pk
+    away = normalize_team(pick.away)
+    home = normalize_team(pick.home)
+    for game in schedule_for_date(pick.date, schedule_cache):
+        game_away = normalize_team(game.get("teams", {}).get("away", {}).get("team", {}).get("abbreviation", ""))
+        game_home = normalize_team(game.get("teams", {}).get("home", {}).get("team", {}).get("abbreviation", ""))
+        if game_away == away and game_home == home:
+            game_pk = game.get("gamePk")
+            if game_pk:
+                pick.game_pk = int(game_pk)
+                return pick.game_pk
+    return None
+
+
 def boxscore_for_game(game_pk: int, cache: dict[int, dict[str, Any]]) -> dict[str, Any] | None:
     if game_pk in cache:
         return cache[game_pk]
@@ -275,16 +313,19 @@ def parse_boxscore_lineups(box: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def target_players_for_date(
-    picks: list[PickRow], box_cache: dict[int, dict[str, Any]]
+    picks: list[PickRow],
+    box_cache: dict[int, dict[str, Any]],
+    schedule_cache: dict[str, list[dict[str, Any]]],
 ) -> tuple[set[int], set[int], list[dict[str, Any]]]:
     pitcher_ids: set[int] = set()
     hitter_ids: set[int] = set()
     skipped = []
     for pick in picks:
-        if not pick.game_pk:
+        game_pk = resolve_game_pk(pick, schedule_cache)
+        if not game_pk:
             skipped.append({"id": pick.id, "date": pick.date, "reason": "missing_game_pk"})
             continue
-        box = boxscore_for_game(pick.game_pk, box_cache)
+        box = boxscore_for_game(game_pk, box_cache)
         if not box:
             skipped.append({"id": pick.id, "date": pick.date, "reason": "boxscore_failed"})
             continue
@@ -395,12 +436,14 @@ def build_vectors_for_date(
 def score_pick(
     pick: PickRow,
     box_cache: dict[int, dict[str, Any]],
+    schedule_cache: dict[str, list[dict[str, Any]]],
     pitcher_vectors: dict[str, Any],
     hitter_vectors: dict[str, Any],
 ) -> dict[str, Any] | None:
-    if not pick.game_pk:
+    game_pk = resolve_game_pk(pick, schedule_cache)
+    if not game_pk:
         return None
-    box = boxscore_for_game(pick.game_pk, box_cache)
+    box = boxscore_for_game(game_pk, box_cache)
     if not box:
         return None
     parsed = parse_boxscore_lineups(box)
@@ -572,13 +615,16 @@ def main() -> None:
     rows = []
     skipped = []
     box_cache: dict[int, dict[str, Any]] = {}
+    schedule_cache: dict[str, list[dict[str, Any]]] = {}
     for date in sorted({p.date for p in picks}):
         print(f"\nDate {date}")
         picks_for_date = [p for p in picks if p.date == date]
         target_pitchers = None
         target_hitters = None
         if not args.full_vectors:
-            target_pitchers, target_hitters, target_skips = target_players_for_date(picks_for_date, box_cache)
+            target_pitchers, target_hitters, target_skips = target_players_for_date(
+                picks_for_date, box_cache, schedule_cache
+            )
             skipped.extend(target_skips)
             print(f"  targets: {len(target_pitchers)} pitchers, {len(target_hitters)} hitters")
         snapshot_path = vector_snapshot_path(args, date, target_pitchers, target_hitters)
@@ -601,7 +647,7 @@ def main() -> None:
             f"from {meta['history_pitches']:,} pitches"
         )
         for pick in picks_for_date:
-            row = score_pick(pick, box_cache, pitcher_vectors, hitter_vectors)
+            row = score_pick(pick, box_cache, schedule_cache, pitcher_vectors, hitter_vectors)
             if row is None:
                 skipped.append({"id": pick.id, "date": pick.date, "reason": "score_failed"})
                 continue

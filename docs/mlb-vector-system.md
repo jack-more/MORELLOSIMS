@@ -128,6 +128,27 @@ the lineup-level projected xwOBA gap is the stronger separator.
 The script writes `atlas/vector_backtest_preview.json` by default. Statcast CSV
 caches and per-date vector snapshots live under ignored `atlas/` paths.
 
+For larger research passes, prefer a 45-day lookback once enough season data is
+available:
+
+```bash
+python3 scripts/backtest_mlb_vector_matchups.py \
+  --start 2026-05-24 \
+  --end 2026-06-26 \
+  --lookback-days 45
+```
+
+The first larger read showed that 21-day history was too noisy over the full
+May/June sample. A 45-day lookback improved the candidate gate:
+
+- `vector_edge >= 0` and `projected_xwoba_edge >= 0.000`: 36 picks, +9.93% ROI
+- `vector_edge >= 0` and `projected_xwoba_edge >= 0.010`: 24 picks, +23.04% ROI
+- `projected_xwoba_edge >= 0.030`: 16 picks, +33.68% ROI
+
+Treat those as research thresholds, not live rules. They need a larger holdout
+and should become a veto or boost layer only after the simulator converts the
+same features into no-vig win probability.
+
 ## Next Implementation Step
 
 The next branch should convert this matchup signal into a bet decision:
