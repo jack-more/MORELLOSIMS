@@ -275,7 +275,7 @@ def prepare_statcast_frame(df: pd.DataFrame) -> pd.DataFrame:
     that output. Missing columns are tolerated and filled with nulls so the
     builder can run on small test fixtures.
     """
-    df = df.copy()
+    df = df.copy().reset_index(drop=True)
     needed = [
         "game_date",
         "game_pk",

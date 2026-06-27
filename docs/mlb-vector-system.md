@@ -97,17 +97,46 @@ pitch_family matchup
 
 This is an inspection score, not a bet decision.
 
+## Rolling Backtest
+
+Use:
+
+```bash
+python3 scripts/backtest_mlb_vector_matchups.py \
+  --start 2026-06-21 \
+  --end 2026-06-25 \
+  --lookback-days 21
+```
+
+The backtest:
+
+- loads settled C8+ MLB picks
+- builds rolling vectors using only pitch rows before each pick date
+- fetches actual MLB boxscores for starters and lineups
+- scores the published side's lineup matchup against the opponent's
+- compares vector, projected xwOBA, and combined agreement buckets against ROI
+
+By default it builds focused vectors for only the starters and hitters needed
+on each test date. That produces the same scores for those games while keeping
+the run fast enough for iteration. Use `--full-vectors` when validating the
+whole generated vector database.
+
+The first preview read should focus on `projected_xwoba_edge` and combined
+thresholds. Raw `vector_edge` is useful for inspection, but early samples show
+the lineup-level projected xwOBA gap is the stronger separator.
+
+The script writes `atlas/vector_backtest_preview.json` by default. Statcast CSV
+caches and per-date vector snapshots live under ignored `atlas/` paths.
+
 ## Next Implementation Step
 
-The next branch should wire this into a backtest:
+The next branch should convert this matchup signal into a bet decision:
 
-1. Build vectors from historical Statcast up to each game date.
-2. Score both projected lineups against probable starters.
-3. Convert hitter projected xwOBA into team run means.
-4. Add bullpen availability and starter leash.
-5. Simulate game scores.
-6. Compare simulated win probability to no-vig market probability.
-7. Publish only buckets that clear the ROI target on holdout data.
+1. Convert hitter projected xwOBA into team run means.
+2. Add bullpen availability and starter leash.
+3. Simulate game scores.
+4. Compare simulated win probability to no-vig market probability.
+5. Publish only buckets that clear the ROI target on holdout data.
 
 ## Important Guardrail
 
