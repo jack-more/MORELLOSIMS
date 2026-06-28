@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
 from mlb_momo import matchup_swing_to_momo, momentum_to_momi, ms_class, woba_class
+from mlb_vector_live_gate import apply_live_vector_gate
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -1560,6 +1561,7 @@ for g in games_raw:
         "away_color": TEAMS.get(away_abbr, {}).get("color", "#999"),
         "home_color": TEAMS.get(home_abbr, {}).get("color", "#999"),
         "away_sp": away_sp_name, "home_sp": home_sp_name,
+        "away_sp_id": away_sp_id, "home_sp_id": home_sp_id,
         "away_arch": away_arch, "home_arch": home_arch,
         "away_hand": away_hand, "home_hand": home_hand,
         "away_tier": away_tier_name, "home_tier": home_tier_name,
@@ -1594,6 +1596,29 @@ if bm_used > 0:
     print(f"  BaseballMonster fill-ins: {bm_used}")
 if rw_used > 0:
     print(f"  RotoWire fill-ins: {rw_used}")
+
+print("\nApplying 45-day pitcher vector gate...")
+VECTOR_GATE_SUMMARY = apply_live_vector_gate(
+    games,
+    today=TODAY,
+    atlas_dir=ATLAS_DIR,
+    min_conf=MIN_CONF_PICK,
+)
+vector_blocked = [
+    g for g in games
+    if int(g.get("vector_gate_pre_conf") or 0) >= MIN_CONF_PICK
+    and g.get("vector_gate_status") in {"FAIL", "UNAVAILABLE"}
+]
+if vector_blocked:
+    print(
+        "  Vector-gated "
+        + ", ".join(
+            f'{g["pick_team"]} {g["away_abbr"]}@{g["home_abbr"]} '
+            f'({g.get("vector_gate_reason", "no reason")})'
+            for g in vector_blocked[:8]
+        )
+        + ("..." if len(vector_blocked) > 8 else "")
+    )
 
 # ─── HTML Generation ──────────────────────────────────────────────────────────
 print("\nGenerating HTML...")
@@ -1748,6 +1773,14 @@ def render_game(g, idx):
             f'needs +{need_pct:.1f}% edge'
         )
         pick_html = f'<div class="sim-pick" style="background:#FF3333;color:#fff;border-color:#000" title="{h(price_title)}">{price_label} ({g["pick_odds"]:+d})</div>'
+    elif (
+        g["has_lineups"]
+        and int(g.get("vector_gate_pre_conf") or 0) >= MIN_CONF_PICK
+        and g.get("vector_gate_status") in {"FAIL", "UNAVAILABLE"}
+    ):
+        gate_title = g.get("vector_gate_reason") or "Vector agreement gate blocked this play"
+        gate_style = "background:#111;color:#FFEA00;border-color:#FFEA00"
+        pick_html = f'<div class="sim-pick" style="{gate_style}" title="{h(gate_title)}">VECTOR BLOCK</div>'
     elif g["has_lineups"] and g["conf"] > 0:
         pick_html = '<div class="sim-pick" style="background:#333;color:#888;border-color:#555">NO PLAY</div>'
 
@@ -3797,7 +3830,7 @@ if skipped_heavy:
 PICKS_LOG_FIELDS = [
     "date", "time", "pick", "conf", "value", "away", "home",
     "away_runs", "home_runs", "away_wp", "home_wp", "away_ml", "home_ml",
-    "away_sp", "home_sp", "result",
+    "away_sp", "home_sp", "vector_edge", "vector_xwoba_edge", "vector_gate", "result",
 ]
 
 
@@ -3838,6 +3871,9 @@ for g in writeable_picks:
         "home_ml": g["home_ml"],
         "away_sp": g["away_sp"],
         "home_sp": g["home_sp"],
+        "vector_edge": g.get("vector_edge", ""),
+        "vector_xwoba_edge": g.get("vector_xwoba_edge", ""),
+        "vector_gate": g.get("vector_gate_status", ""),
         "result": "",
     }
     pick_log_rows[_pick_log_key(row)] = row
@@ -3942,6 +3978,9 @@ for g in writeable_picks:
         "units": stake_for_conf(g["conf"]),
         "sim_projection": f'{g["away_abbr"]} {g["away_runs"]} - {g["home_abbr"]} {g["home_runs"]}',
         "sim_edge": g.get("edge"),
+        "vector_edge": g.get("vector_edge"),
+        "vector_xwoba_edge": g.get("vector_xwoba_edge"),
+        "vector_gate": g.get("vector_gate_status"),
         "game_pk": g.get("game_pk"),
         "game_time": g.get("time_str"),
         "status": "pending",
