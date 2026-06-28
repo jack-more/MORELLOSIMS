@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
 from mlb_momo import matchup_swing_to_momo, momentum_to_momi, ms_class, woba_class
-from mlb_vector_live_gate import apply_live_vector_gate
+from mlb_vector_live_gate import apply_live_vector_projection, apply_vector_gate_to_candidates
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -394,6 +394,39 @@ MIN_MODEL_EDGE_BY_CONF = {
 }
 
 
+def env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+VECTOR_RUN_SCALE = env_float("MLB_VECTOR_RUN_SCALE", 12.0)
+VECTOR_RUN_CAP = env_float("MLB_VECTOR_RUN_CAP", 1.2)
+VECTOR_MIN_HITTERS_SCORED = env_int("MLB_VECTOR_MIN_HITTERS_SCORED", 7)
+
+
+def confidence_from_run_diff(run_diff):
+    if run_diff >= 2.5: return 10
+    if run_diff >= 1.8: return 9
+    if run_diff >= 1.4: return 8
+    if run_diff >= 1.1: return 7
+    if run_diff >= 0.8: return 6
+    if run_diff >= 0.5: return 5
+    if run_diff >= 0.3: return 4
+    if run_diff >= 0.15: return 3
+    if run_diff >= 0.05: return 2
+    if run_diff > 0: return 1
+    return 0
+
+
 def moneyline_break_even(odds):
     """Return implied break-even probability for American odds."""
     try:
@@ -419,6 +452,140 @@ def confidence_cap_from_market_edge(price_edge):
     if price_edge >= 0.035:
         return 7
     return 6
+
+
+def apply_projection_fields(g):
+    """Recompute pick/probability fields from the current team run means."""
+    away_runs = g.get("away_runs", 0) or 0
+    home_runs = g.get("home_runs", 0) or 0
+    has_lineups = bool(g.get("has_lineups"))
+    run_diff = abs(away_runs - home_runs)
+    conf = confidence_from_run_diff(run_diff)
+
+    away_wp_raw = pythagorean_wp(away_runs, home_runs)
+    home_wp_raw = 100 - away_wp_raw
+    HFA_BUMP = 1.5
+    if has_lineups:
+        home_wp = min(95, round(home_wp_raw + HFA_BUMP, 1))
+        away_wp = round(100 - home_wp, 1)
+    else:
+        away_wp = away_wp_raw
+        home_wp = home_wp_raw
+
+    edge = round(run_diff, 1)
+    if not has_lineups:
+        conf = 0
+        edge = 0
+
+    away_abbr = g.get("away_abbr")
+    home_abbr = g.get("home_abbr")
+    if away_runs > home_runs:
+        pick_team = away_abbr
+    elif home_runs > away_runs:
+        pick_team = home_abbr
+    else:
+        pick_team = home_abbr
+
+    pick_ml_str = g.get("home_ml") if pick_team == home_abbr else g.get("away_ml")
+    try:
+        pick_odds_raw = int(pick_ml_str)
+    except (ValueError, TypeError):
+        pick_odds_raw = 0
+
+    pick_model_prob = (home_wp if pick_team == home_abbr else away_wp) / 100
+    pick_break_even = moneyline_break_even(pick_odds_raw)
+    pick_price_edge = None
+    odds_too_heavy = False
+    if pick_break_even is not None:
+        pick_price_edge = pick_model_prob - pick_break_even
+        market_conf_cap = confidence_cap_from_market_edge(pick_price_edge)
+        if pick_odds_raw < -180 and pick_price_edge < 0.130:
+            market_conf_cap = min(market_conf_cap, 8)
+        conf = min(conf, market_conf_cap)
+        if not ATLAS_CURRENT_FOR_PICKS:
+            conf = 0
+        min_price_edge = MIN_MODEL_EDGE_BY_CONF.get(conf, 0.030)
+        hard_favorite_cap = MAX_FAV_BY_CONF.get(conf, -200)
+        odds_too_heavy = (
+            pick_odds_raw < hard_favorite_cap
+            or pick_price_edge < min_price_edge
+        )
+    else:
+        min_price_edge = MIN_MODEL_EDGE_BY_CONF.get(conf, 0.030)
+
+    g.update({
+        "away_wp": away_wp,
+        "home_wp": home_wp,
+        "conf": conf,
+        "value": conf,
+        "edge": round(edge, 1),
+        "pick_team": pick_team,
+        "odds_too_heavy": odds_too_heavy,
+        "pick_model_prob": round(pick_model_prob, 4),
+        "pick_break_even": round(pick_break_even, 4) if pick_break_even is not None else None,
+        "pick_price_edge": round(pick_price_edge, 4) if pick_price_edge is not None else None,
+        "min_price_edge": min_price_edge,
+        "pick_odds": pick_odds_raw,
+        "total": round(away_runs + home_runs, 1),
+    })
+
+
+def clipped_vector_run_delta(base_woba, vector_xwoba):
+    try:
+        base = float(base_woba)
+        vector = float(vector_xwoba)
+    except (TypeError, ValueError):
+        return 0.0
+    if base <= 0 or vector <= 0:
+        return 0.0
+    delta = (vector - base) * VECTOR_RUN_SCALE
+    delta = max(-VECTOR_RUN_CAP, min(VECTOR_RUN_CAP, delta))
+    return round(delta, 2)
+
+
+def apply_vector_native_runs(games):
+    summary = {"adjusted": 0, "skipped": 0}
+    for g in games:
+        if not g.get("has_lineups") or g.get("vector_projection_status") != "SCORED":
+            summary["skipped"] += 1
+            continue
+        away_scored = int(g.get("away_vector_hitters_scored") or 0)
+        home_scored = int(g.get("home_vector_hitters_scored") or 0)
+        if away_scored < VECTOR_MIN_HITTERS_SCORED or home_scored < VECTOR_MIN_HITTERS_SCORED:
+            g["model_mode"] = "ARCHETYPE_BASE"
+            g["vector_native_reason"] = f"thin_vector_lineup:{away_scored}/{home_scored}"
+            summary["skipped"] += 1
+            continue
+
+        away_delta = clipped_vector_run_delta(g.get("away_woba"), g.get("away_vector_xwoba"))
+        home_delta = clipped_vector_run_delta(g.get("home_woba"), g.get("home_vector_xwoba"))
+        away_runs_raw = max(0.1, (g.get("away_runs_raw_base") or 0) + away_delta)
+        home_runs_raw = max(0.1, (g.get("home_runs_raw_base") or 0) + home_delta)
+        away_runs_tiered = away_runs_raw * (g.get("home_tier_mult") or 1.0)
+        home_runs_tiered = home_runs_raw * (g.get("away_tier_mult") or 1.0)
+        park_factor = g.get("park_factor") or 1.0
+
+        g["away_woba_base"] = g.get("away_woba")
+        g["home_woba_base"] = g.get("home_woba")
+        g["away_vector_run_delta"] = away_delta
+        g["home_vector_run_delta"] = home_delta
+        g["away_runs_raw_vector"] = round(away_runs_raw, 3)
+        g["home_runs_raw_vector"] = round(home_runs_raw, 3)
+        g["away_woba"] = round(float(g.get("away_vector_xwoba") or g.get("away_woba") or 0), 3)
+        g["home_woba"] = round(float(g.get("home_vector_xwoba") or g.get("home_woba") or 0), 3)
+        g["away_runs"] = round((away_runs_tiered + (g.get("away_bp_delta") or 0)) * park_factor, 1)
+        g["home_runs"] = round((home_runs_tiered + (g.get("home_bp_delta") or 0)) * park_factor, 1)
+        g["model_mode"] = "VECTOR_NATIVE"
+        g["vector_native_reason"] = "xwoba_run_translation"
+        apply_projection_fields(g)
+        summary["adjusted"] += 1
+
+    print(
+        "  Vector-native runs: "
+        f"{summary['adjusted']} adjusted, {summary['skipped']} left on archetype/base model "
+        f"(scale={VECTOR_RUN_SCALE:.1f}, cap={VECTOR_RUN_CAP:.1f})"
+    )
+    return summary
 
 def stake_for_conf(conf):
     """Return $PP risk by confidence grade."""
@@ -1429,6 +1596,12 @@ for g in games_raw:
     else:
         away_batters = []
         home_batters = []
+        away_runs_raw = 0
+        home_runs_raw = 0
+        away_runs_tiered = 0
+        home_runs_tiered = 0
+        away_bp_delta = 0
+        home_bp_delta = 0
         away_runs = 0
         home_runs = 0
         away_woba = 0
@@ -1567,6 +1740,10 @@ for g in games_raw:
         "away_tier": away_tier_name, "home_tier": home_tier_name,
         "away_tier_mult": away_tier_mult, "home_tier_mult": home_tier_mult,
         "away_runs": away_runs, "home_runs": home_runs,
+        "away_runs_raw_base": away_runs_raw, "home_runs_raw_base": home_runs_raw,
+        "away_runs_tiered_base": away_runs_tiered, "home_runs_tiered_base": home_runs_tiered,
+        "away_bp_delta": away_bp_delta, "home_bp_delta": home_bp_delta,
+        "model_mode": "ARCHETYPE_BASE",
         "away_wp": away_wp, "home_wp": home_wp,
         "away_ml": away_ml, "home_ml": home_ml, "odds_source": odds_source,
         "away_woba": away_woba, "home_woba": home_woba,
@@ -1597,11 +1774,18 @@ if bm_used > 0:
 if rw_used > 0:
     print(f"  RotoWire fill-ins: {rw_used}")
 
-print("\nApplying 45-day pitcher vector gate...")
-VECTOR_GATE_SUMMARY = apply_live_vector_gate(
+print("\nApplying 45-day pitcher vector projection...")
+VECTOR_PROJECTION_SUMMARY = apply_live_vector_projection(
     games,
     today=TODAY,
     atlas_dir=ATLAS_DIR,
+)
+
+VECTOR_RUN_SUMMARY = apply_vector_native_runs(games)
+
+print("\nApplying 45-day pitcher vector gate...")
+VECTOR_GATE_SUMMARY = apply_vector_gate_to_candidates(
+    games,
     min_conf=MIN_CONF_PICK,
 )
 vector_blocked = [
@@ -1659,10 +1843,36 @@ def published_today_by_game():
     return _PUBLISHED_TODAY_BY_GAME
 
 def published_pick_for_game(g):
-    return published_today_by_game().get((g.get("away_abbr"), g.get("home_abbr")))
+    pick = published_today_by_game().get((g.get("away_abbr"), g.get("home_abbr")))
+    if pick and published_pick_is_model_stale(pick, g):
+        return None
+    return pick
 
 def is_published_pick(g):
-    return (g.get("away_abbr"), g.get("home_abbr"), g.get("pick_team")) in published_today_pick_keys()
+    pick = published_pick_for_game(g)
+    return bool(
+        pick
+        and pick.get("away") == g.get("away_abbr")
+        and pick.get("home") == g.get("home_abbr")
+        and pick.get("side") == g.get("pick_team")
+    )
+
+def published_pick_is_model_stale(pick, g):
+    if not pick or not g:
+        return False
+    if g.get("has_started"):
+        return False
+    if not g.get("has_lineups"):
+        return False
+    if pick.get("side") != g.get("pick_team"):
+        return True
+    if int(g.get("conf") or 0) < MIN_CONF_PICK:
+        return True
+    if not g.get("pick_coverage_ok"):
+        return True
+    if g.get("vector_gate_status") in {"FAIL", "UNAVAILABLE"}:
+        return True
+    return False
 
 def load_locked_hr_lotto_column():
     """Keep today's posted HR board stable after any game has started."""
@@ -1787,6 +1997,9 @@ def render_game(g, idx):
     # (Edge bar removed — picks are driven by model WP confidence only.)
     edge_html = ""
 
+    is_vector_native = g.get("model_mode") == "VECTOR_NATIVE"
+    woba_label = "xwOBA" if is_vector_native else "wOBA"
+
     # wOBA comparison
     woba_diff = g["away_woba"] - g["home_woba"]
     if abs(woba_diff) < 0.005:
@@ -1806,6 +2019,26 @@ def render_game(g, idx):
 
     # Model formula
     formula = f'{aa} {ar} \u2014 {ha} {hr_}'
+    if is_vector_native:
+        model_formula_label = (
+            f'BaseRuns+Vector xwOBA\u00d7Tier\u00d7BP\u00d7Park({g["park_factor"]:.2f}) '
+            f'\u2192 <strong>{formula}</strong> | Pyth WP'
+        )
+        vector_delta_label = (
+            f'{aa} {float(g.get("away_vector_run_delta") or 0):+.1f} / '
+            f'{ha} {float(g.get("home_vector_run_delta") or 0):+.1f}'
+        )
+        vector_tags = (
+            '<span class="model-tag tag-arch" style="background:#FFEA00;color:#080808;border-color:#080808">'
+            'VECTOR 45D</span>'
+            f'<span class="model-tag tag-arch" title="Vector run adjustment">{h(vector_delta_label)}</span>'
+        )
+    else:
+        model_formula_label = (
+            f'BaseRuns\u00d7Tier\u00d7Park({g["park_factor"]:.2f}) '
+            f'\u2192 <strong>{formula}</strong> | Pyth WP'
+        )
+        vector_tags = ''
 
     # Lineup section
     if g["has_lineups"]:
@@ -1877,7 +2110,7 @@ def render_game(g, idx):
 </div>
   <div class="model-breakdown">
     <div class="model-row">
-      <span class="model-label">wOBA</span>
+      <span class="model-label">{woba_label}</span>
       <span class="model-val">{aa} .{str(g["away_woba"])[2:] if g["away_woba"] else "000"}</span>
       <div class="model-bar-mini">
         <div class="model-bar-away" style="width:{woba_aw}%;background:{ac}"></div>
@@ -1895,10 +2128,10 @@ def render_game(g, idx):
     </div>
     <div class="model-row model-formula-row ma-premium">
       <span class="model-label">MODEL</span>
-      <span class="model-formula">BaseRuns\u00d7Tier\u00d7Park({g["park_factor"]:.2f}) \u2192 <strong>{formula}</strong> | Pyth WP</span>
+      <span class="model-formula">{model_formula_label}</span>
     </div>
     <div class="model-row model-tags">
-      <span class="model-tag tag-arch">vs {g["away_tier"]}</span><span class="model-tag tag-arch">vs {g["home_tier"]}</span>
+      {vector_tags}<span class="model-tag tag-arch">vs {g["away_tier"]}</span><span class="model-tag tag-arch">vs {g["home_tier"]}</span>
     </div>
   </div>
   <div class="game-meta">{h(g["time_str"])} \u00b7 {h(g["venue"])}</div>
@@ -3111,6 +3344,8 @@ def render_hr_watch_tab():
     for p in published_today:
         key = (p.get("away"), p.get("home"), p.get("side"))
         g = games_by_matchup.get((p.get("away"), p.get("home")))
+        if g and published_pick_is_model_stale(p, g):
+            continue
         seen.add(key)
         rows.append({
             "pick_text": p.get("pick_text") or f'{p.get("side", "")} ML',
@@ -3830,7 +4065,9 @@ if skipped_heavy:
 PICKS_LOG_FIELDS = [
     "date", "time", "pick", "conf", "value", "away", "home",
     "away_runs", "home_runs", "away_wp", "home_wp", "away_ml", "home_ml",
-    "away_sp", "home_sp", "vector_edge", "vector_xwoba_edge", "vector_gate", "result",
+    "away_sp", "home_sp", "model_mode", "away_vector_run_delta", "home_vector_run_delta",
+    "away_vector_xwoba", "home_vector_xwoba", "vector_edge", "vector_xwoba_edge",
+    "vector_gate", "result",
 ]
 
 
@@ -3871,6 +4108,11 @@ for g in writeable_picks:
         "home_ml": g["home_ml"],
         "away_sp": g["away_sp"],
         "home_sp": g["home_sp"],
+        "model_mode": g.get("model_mode", ""),
+        "away_vector_run_delta": g.get("away_vector_run_delta", ""),
+        "home_vector_run_delta": g.get("home_vector_run_delta", ""),
+        "away_vector_xwoba": g.get("away_vector_xwoba", ""),
+        "home_vector_xwoba": g.get("home_vector_xwoba", ""),
         "vector_edge": g.get("vector_edge", ""),
         "vector_xwoba_edge": g.get("vector_xwoba_edge", ""),
         "vector_gate": g.get("vector_gate_status", ""),
@@ -3879,7 +4121,7 @@ for g in writeable_picks:
     pick_log_rows[_pick_log_key(row)] = row
 
 with open(PICKS_LOG, "w", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=PICKS_LOG_FIELDS)
+    writer = csv.DictWriter(f, fieldnames=PICKS_LOG_FIELDS, lineterminator="\n")
     writer.writeheader()
     writer.writerows(
         sorted(
@@ -3920,27 +4162,60 @@ def pick_id_for_game(g):
     return f'{TODAY}-mlb-{g["away_abbr"]}-{g["home_abbr"]}{game_suffix}-ml'
 
 
+unstarted_game_pks = {
+    str(g.get("game_pk"))
+    for g in games
+    if g.get("game_pk") and not g.get("has_started")
+}
+unstarted_matchups = {
+    (g.get("away_abbr"), g.get("home_abbr"))
+    for g in games
+    if not g.get("has_started")
+}
+qualified_ids = {pick_id_for_game(g) for g in writeable_picks}
+games_by_pk = {
+    str(g.get("game_pk")): g
+    for g in games
+    if g.get("game_pk")
+}
+games_by_matchup = {
+    (g.get("away_abbr"), g.get("home_abbr")): g
+    for g in games
+}
+
+
+def is_unstarted_today_pick(p):
+    game_pk = p.get("game_pk")
+    if game_pk:
+        return str(game_pk) in unstarted_game_pks
+    return (p.get("away"), p.get("home")) in unstarted_matchups
+
+
+def current_game_for_pick(p):
+    game_pk = p.get("game_pk")
+    if game_pk and str(game_pk) in games_by_pk:
+        return games_by_pk[str(game_pk)]
+    return games_by_matchup.get((p.get("away"), p.get("home")))
+
+
+model_stale_pending_ids = [
+    pick_id
+    for pick_id, pick in by_id.items()
+    if pick.get("sport") == "mlb"
+    and pick.get("date") == TODAY
+    and pick.get("bet_type") == "ml"
+    and pick.get("status") == "pending"
+    and is_unstarted_today_pick(pick)
+    and published_pick_is_model_stale(pick, current_game_for_pick(pick))
+]
+for pick_id in model_stale_pending_ids:
+    del by_id[pick_id]
+if model_stale_pending_ids:
+    print(f"  Pruned {len(model_stale_pending_ids)} model-stale pending MLB picks before first pitch")
+
 if not odds_feed_has_lines:
     print("  WARN: odds feed returned zero real-book lines; preserving pending MLB picks")
 else:
-    unstarted_game_pks = {
-        str(g.get("game_pk"))
-        for g in games
-        if g.get("game_pk") and not g.get("has_started")
-    }
-    unstarted_matchups = {
-        (g.get("away_abbr"), g.get("home_abbr"))
-        for g in games
-        if not g.get("has_started")
-    }
-    qualified_ids = {pick_id_for_game(g) for g in writeable_picks}
-
-    def is_unstarted_today_pick(p):
-        game_pk = p.get("game_pk")
-        if game_pk:
-            return str(game_pk) in unstarted_game_pks
-        return (p.get("away"), p.get("home")) in unstarted_matchups
-
     stale_pending_ids = [
         pick_id
         for pick_id, pick in by_id.items()
@@ -3978,6 +4253,11 @@ for g in writeable_picks:
         "units": stake_for_conf(g["conf"]),
         "sim_projection": f'{g["away_abbr"]} {g["away_runs"]} - {g["home_abbr"]} {g["home_runs"]}',
         "sim_edge": g.get("edge"),
+        "model_mode": g.get("model_mode"),
+        "away_vector_run_delta": g.get("away_vector_run_delta"),
+        "home_vector_run_delta": g.get("home_vector_run_delta"),
+        "away_vector_xwoba": g.get("away_vector_xwoba"),
+        "home_vector_xwoba": g.get("home_vector_xwoba"),
         "vector_edge": g.get("vector_edge"),
         "vector_xwoba_edge": g.get("vector_xwoba_edge"),
         "vector_gate": g.get("vector_gate_status"),

@@ -1,8 +1,9 @@
 # MLB Pitcher Vector System
 
-This branch adds the first version of a vector-based matchup layer for MLB SIM.
-It does not replace the live pick model yet. It builds the data foundation we
-need before changing picks.
+This is the active vector-based matchup layer for MLB SIM. Atlas now scores
+pitcher and hitter vectors from recent Statcast data, converts lineup projected
+xwOBA into a capped team run adjustment, recomputes win probability and market
+filters, then applies the vector agreement gate to the final C8+ board.
 
 ## Goal
 
@@ -11,15 +12,15 @@ Move from hard pitcher archetype matching toward calibrated matchup features:
 1. Build pitcher vectors from pitch-level Statcast data.
 2. Build hitter inverse vectors from how hitters perform against those shapes.
 3. Score lineup compatibility with shrinkage.
-4. Feed the resulting run means into a simulation engine.
-5. Pick only when simulated win probability clears no-vig market probability.
+4. Translate projected lineup xwOBA into team run means.
+5. Pick only when the adjusted model clears the market and vector gate.
 
 ## Why This Exists
 
 The current model can turn noisy matchup splits into oversized run projections.
 That makes confidence look stronger than the market edge really is. The vector
 layer keeps the useful pitcher-shape idea, but uses continuous features first.
-Archetype should become a secondary derived feature.
+Archetype is now a secondary context/fallback feature.
 
 ## Generated Data
 
@@ -95,7 +96,7 @@ pitch_family matchup
 + recent form
 ```
 
-This is an inspection score, not a bet decision.
+The live builder uses this same score as an input to team run projection.
 
 ## Rolling Backtest
 
@@ -145,19 +146,52 @@ May/June sample. A 45-day lookback improved the candidate gate:
 - `vector_edge >= 0` and `projected_xwoba_edge >= 0.010`: 24 picks, +23.04% ROI
 - `projected_xwoba_edge >= 0.030`: 16 picks, +33.68% ROI
 
-Treat those as research thresholds, not live rules. They need a larger holdout
-and should become a veto or boost layer only after the simulator converts the
-same features into no-vig win probability.
+The live rule currently uses the broad agreement bucket:
 
-## Next Implementation Step
+- `vector_edge >= 0`
+- `projected_xwoba_edge >= 0.000`
 
-The next branch should convert this matchup signal into a bet decision:
+That bucket hit the 9% ROI standard in the first 45-day rolling read. Keep
+expanding holdout tests before tightening or loosening thresholds.
 
-1. Convert hitter projected xwOBA into team run means.
-2. Add bullpen availability and starter leash.
-3. Simulate game scores.
-4. Compare simulated win probability to no-vig market probability.
-5. Publish only buckets that clear the ROI target on holdout data.
+## Live Run Translation
+
+The live builder starts with the existing Atlas BaseRuns estimate, then applies
+a vector xwOBA adjustment before tier, bullpen, park, win probability, and
+market filters:
+
+```text
+team_vector_delta = projected_lineup_xwOBA - atlas_lineup_wOBA
+team_run_delta = clamp(team_vector_delta * 12.0, -1.2, +1.2)
+vector_raw_runs = atlas_raw_runs + team_run_delta
+final_runs = (vector_raw_runs * opposing_pitcher_tier + bullpen_delta) * park
+```
+
+This is deliberately conservative. It lets the new vectors move real run means
+without throwing away the existing context stack for lineup components, starter
+quality, bullpen exposure, and park.
+
+The card renderer labels vector-scored games as `xwOBA` and `VECTOR 45D`.
+Published pick artifacts include:
+
+- `model_mode`
+- `away_vector_run_delta`
+- `home_vector_run_delta`
+- `away_vector_xwoba`
+- `home_vector_xwoba`
+- `vector_edge`
+- `vector_xwoba_edge`
+- `vector_gate`
+
+## Remaining Research
+
+The next research pass should improve the projection stack around:
+
+1. Bullpen availability and leverage-rest penalties.
+2. Starter leash using pitch count, rest, opener probability, and recent workload.
+3. Location/approach-angle hitter splits with stronger shrinkage.
+4. No-vig market probability and full score simulation.
+5. Larger holdout tests before changing the active 0/0 vector gate.
 
 ## Important Guardrail
 

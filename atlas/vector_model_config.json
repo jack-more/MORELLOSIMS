@@ -1,6 +1,8 @@
 {
-  "_doc": "Initial configuration for the MLB pitcher-vector and hitter inverse-vector layer. These values are inspection defaults, not final betting thresholds.",
-  "version": 1,
+  "_doc": "Live configuration for the MLB pitcher-vector and hitter inverse-vector layer. Atlas now uses vector projected xwOBA to adjust team run means before official moneyline selection.",
+  "version": 2,
+  "live_mode": "vector_native_blend",
+  "lookback_days": 45,
   "shrinkage_priors": {
     "pitch_family_prior": 90,
     "velocity_prior": 110,
@@ -22,8 +24,16 @@
     "pitcher_vectors": "atlas/pitcher_vectors.json",
     "hitter_inverse_vectors": "atlas/hitter_inverse_vectors.json"
   },
-  "next_gate": {
-    "description": "Future pick gate should compare simulated win probability against no-vig market probability.",
+  "run_translation": {
+    "description": "Projected lineup xwOBA delta versus the existing Atlas baseline is converted to a capped team run adjustment before tier, bullpen, park, win probability, and market filters.",
+    "runs_per_xwoba_point": 12.0,
+    "run_delta_cap": 1.2,
+    "minimum_hitters_scored_per_lineup": 7
+  },
+  "active_gate": {
+    "description": "Official C8+ moneyline candidates must have both vector matchup delta and projected xwOBA edge on the selected side.",
+    "minimum_vector_edge": 0.0,
+    "minimum_projected_xwoba_edge": 0.0,
     "minimum_edge_probability": 0.055,
     "target_roi": 0.09
   }
