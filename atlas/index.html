@@ -1954,19 +1954,19 @@
             canvas.height = 1024;
 
             const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-            grad.addColorStop(0, '#788c76');
-            grad.addColorStop(0.45, '#8e9276');
-            grad.addColorStop(1, '#647266');
+            grad.addColorStop(0, '#85877c');
+            grad.addColorStop(0.45, '#9a927f');
+            grad.addColorStop(1, '#737b73');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.globalAlpha = 0.18;
+            ctx.globalAlpha = 0.11;
             for (let i = 0; i < 120; i++) {
                 const x = (i * 137) % canvas.width;
                 const y = (i * 251) % canvas.height;
                 const r = 28 + (i % 9) * 14;
                 const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-                g.addColorStop(0, i % 3 === 0 ? '#b6a178' : '#3f6750');
+                g.addColorStop(0, i % 3 === 0 ? '#b8a98b' : '#59655d');
                 g.addColorStop(1, 'rgba(255,255,255,0)');
                 ctx.fillStyle = g;
                 ctx.beginPath();
@@ -1974,8 +1974,8 @@
                 ctx.fill();
             }
 
-            ctx.globalAlpha = 0.16;
-            ctx.strokeStyle = '#f0e4bd';
+            ctx.globalAlpha = 0.09;
+            ctx.strokeStyle = '#e4dcc8';
             ctx.lineWidth = 1.2;
             for (let i = 0; i < 15; i++) {
                 const y = 90 + i * 58;
@@ -2017,7 +2017,7 @@
             geo.computeVertexNormals();
 
             const mat = new THREE.MeshStandardMaterial({
-                color: 0xa1a084,
+                color: 0x9b9687,
                 map: makeTerrainTexture(),
                 roughness: 0.92,
                 metalness: 0.0,
@@ -2060,12 +2060,12 @@
         }
 
         // Road Network (Voronoi edges + central boulevard)
-        const ROAD_WIDTH = 0.16;
-        const ROAD_DEFAULT = 0x6f7880;
-        const ROAD_ASPHALT = 0x25292c;
-        const ROAD_SIDEWALK = 0xbab4a5;
-        const ROAD_CURB = 0xe3decf;
-        const ROAD_DASH = 0xf2c66d;
+        const ROAD_WIDTH = 0.145;
+        const ROAD_DEFAULT = 0x5b6266;
+        const ROAD_ASPHALT = 0x2b2f31;
+        const ROAD_SIDEWALK = 0xb4aea0;
+        const ROAD_CURB = 0xd4cdbc;
+        const ROAD_DASH = 0xd7c9a6;
         const ROAD_SEGS = 14;
         const DETAIL_WATER = 0x2c84aa;
         const DETAIL_PARK = 0x3f7d52;
@@ -2169,35 +2169,61 @@
         function makeFacadeTexture(baseColor, height, seed) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = 96;
-            canvas.height = 192;
+            canvas.width = 128;
+            canvas.height = 256;
 
             const base = new THREE.Color(baseColor);
-            const dark = base.clone().multiplyScalar(0.42);
-            const mid = base.clone().multiplyScalar(0.72);
-            const light = base.clone().lerp(new THREE.Color(0xffffff), 0.25);
+            const dark = base.clone().multiplyScalar(0.50);
+            const mid = base.clone().multiplyScalar(0.82);
+            const light = base.clone().lerp(new THREE.Color(0xffffff), 0.18);
             ctx.fillStyle = '#' + dark.getHexString();
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = '#' + mid.getHexString();
-            for (let x = 0; x < canvas.width; x += 24) {
-                ctx.fillRect(x + 2, 0, 3, canvas.height);
+            const shade = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            shade.addColorStop(0, 'rgba(0,0,0,0.28)');
+            shade.addColorStop(0.32, '#' + mid.getHexString());
+            shade.addColorStop(0.72, '#' + base.getHexString());
+            shade.addColorStop(1, 'rgba(255,255,255,0.10)');
+            ctx.fillStyle = shade;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            for (let x = 0; x < canvas.width; x += 32) {
+                ctx.fillRect(x + 2, 0, 2, canvas.height);
             }
 
-            const rows = Math.max(4, Math.min(16, Math.round(height * 5)));
+            const rows = Math.max(5, Math.min(20, Math.round(height * 6)));
             for (let row = 0; row < rows; row++) {
-                const y = 14 + row * 12;
-                for (let col = 0; col < 5; col++) {
-                    const lit = ((row * 7 + col * 11 + seed) % 5) !== 0;
-                    ctx.fillStyle = lit ? 'rgba(255, 232, 158, 0.82)' : 'rgba(18, 24, 31, 0.85)';
-                    ctx.fillRect(10 + col * 16, y, 7, 5);
+                const y = 16 + row * 11;
+                ctx.fillStyle = 'rgba(0,0,0,0.20)';
+                ctx.fillRect(0, y + 7, canvas.width, 2);
+                for (let col = 0; col < 6; col++) {
+                    const lit = ((row * 7 + col * 11 + seed) % 6) === 0;
+                    const glass = ((row + col + seed) % 3) !== 0;
+                    ctx.fillStyle = lit
+                        ? 'rgba(255, 226, 148, 0.55)'
+                        : (glass ? 'rgba(42, 61, 72, 0.72)' : 'rgba(22, 27, 31, 0.76)');
+                    ctx.fillRect(13 + col * 17, y, 9, 6);
+                    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+                    ctx.fillRect(14 + col * 17, y + 1, 2, 1);
                 }
             }
 
-            ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillRect(0, 0, canvas.width, 2);
+            if (seed % 4 === 0) {
+                ctx.strokeStyle = 'rgba(20,22,24,0.46)';
+                ctx.lineWidth = 2;
+                for (let y = 30; y < canvas.height; y += 34) {
+                    ctx.beginPath();
+                    ctx.moveTo(92, y);
+                    ctx.lineTo(118, y + 18);
+                    ctx.stroke();
+                }
+            }
+
+            ctx.fillStyle = 'rgba(255,255,255,0.10)';
+            ctx.fillRect(0, 0, canvas.width, 3);
             ctx.strokeStyle = '#' + light.getHexString();
-            ctx.globalAlpha = 0.16;
+            ctx.globalAlpha = 0.12;
             ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
             ctx.globalAlpha = 1;
 
@@ -2209,16 +2235,23 @@
             return tex;
         }
 
+        const CITY_MATERIALS = [
+            0xb9b1a1, 0x9b8d7a, 0x8a6557, 0x7b8588, 0xa8a28d,
+            0x6f7f87, 0xc0b79c, 0x8f968c, 0x755f54, 0xa6b3ad
+        ];
+
         function makeBuildingMaterial(baseColor, height, seed) {
-            const color = new THREE.Color(baseColor).lerp(new THREE.Color(0xd2bf94), 0.58);
+            const materialTone = new THREE.Color(CITY_MATERIALS[Math.abs(seed) % CITY_MATERIALS.length]);
+            const glassy = seed % 7 === 0 || height > 1.8;
+            const color = materialTone.clone().lerp(new THREE.Color(baseColor), glassy ? 0.07 : 0.10);
             const tex = makeFacadeTexture(color, height, seed);
             return new THREE.MeshStandardMaterial({
                 color,
                 map: tex,
                 emissive: new THREE.Color(baseColor),
-                emissiveIntensity: 0.022,
-                metalness: 0.08,
-                roughness: 0.72,
+                emissiveIntensity: glassy ? 0.010 : 0.004,
+                metalness: glassy ? 0.22 : 0.07,
+                roughness: glassy ? 0.44 : 0.76,
             });
         }
 
@@ -2311,14 +2344,35 @@
                 new THREE.MeshStandardMaterial({
                     color: ROAD_DASH,
                     emissive: ROAD_DASH,
-                    emissiveIntensity: 0.18,
-                    roughness: 0.45,
+                    emissiveIntensity: 0.045,
+                    roughness: 0.58,
                 })
             );
             dash.position.set(x, y, z);
             dash.rotation.y = angle;
             dash.userData = { type: 'lane-dash' };
             roadGroup.add(dash);
+        }
+
+        function addCrosswalk(x, z, angle, width = 0.62) {
+            const y = getTerrainHeight(x, z) + 0.082;
+            const group = new THREE.Group();
+            group.position.set(x, y, z);
+            group.rotation.y = angle;
+            const stripeMat = new THREE.MeshStandardMaterial({
+                color: 0xe8e0ca,
+                roughness: 0.72,
+                metalness: 0.02,
+            });
+            for (let i = -2; i <= 2; i++) {
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(width, 0.014, 0.035), stripeMat.clone());
+                stripe.position.z = i * 0.095;
+                stripe.receiveShadow = true;
+                stripe.userData = { type: 'crosswalk-stripe' };
+                group.add(stripe);
+            }
+            group.userData = { type: 'crosswalk' };
+            roadGroup.add(group);
         }
 
         function makeSoftDiscTexture(color = '#ffffff', innerAlpha = 0.8, outerAlpha = 0) {
@@ -2516,6 +2570,7 @@
             addHarborPier(-10.8, 16.1, Math.PI / 2.35, 4.1, 0.42);
             addHarborPier(-3.2, 16.7, Math.PI / 2.05, 3.4, 0.36);
             addHarborPier(7.8, 15.9, Math.PI / 1.82, 4.6, 0.44);
+            addPropertyTileEdge();
 
             const innerGlow = new THREE.Mesh(
                 new THREE.RingGeometry(13.5, 14.7, 96),
@@ -2652,11 +2707,11 @@
                 const makeLaneMat = () => new THREE.MeshStandardMaterial({
                     color: ROAD_DEFAULT,
                     emissive: new THREE.Color(ROAD_DEFAULT),
-                    emissiveIntensity: 0.05,
+                    emissiveIntensity: 0.025,
                     roughness: 0.6,
                     side: THREE.DoubleSide,
                     transparent: true,
-                    opacity: 0.86,
+                    opacity: 0.72,
                 });
 
                 const ptsA = pts.map(p => new THREE.Vector3(p.x + perpX*offset, p.y, p.z + perpZ*offset));
@@ -2682,6 +2737,12 @@
                     const midZ = (v1.z + v2.z) / 2;
                     addRoadDash(midX, midZ, angle, 0.28, 0.022);
                 }
+
+                if (edgeIndex % 5 === 0 && len > 1.4) {
+                    const midX = (v1.x + v2.x) / 2;
+                    const midZ = (v1.z + v2.z) / 2;
+                    addCrosswalk(midX, midZ, angle + Math.PI / 2, Math.min(0.76, len * 0.18));
+                }
             });
 
             // Central boulevard at X≈0
@@ -2689,7 +2750,7 @@
         }
 
         function buildCentralBoulevard() {
-            const BLVD_WIDTH = 0.48;
+            const BLVD_WIDTH = 0.40;
             const pts = [];
             for (let z = -15; z <= 15; z += 0.4) {
                 pts.push(new THREE.Vector3(0, getTerrainHeight(0, z) + 0.025, z));
@@ -2711,7 +2772,7 @@
                 new THREE.MeshStandardMaterial({
                     color: ROAD_ASPHALT,
                     emissive: new THREE.Color(ROAD_ASPHALT),
-                    emissiveIntensity: 0.04,
+                    emissiveIntensity: 0.018,
                     roughness: 0.72,
                     metalness: 0.02,
                     side: THREE.DoubleSide,
@@ -2723,7 +2784,7 @@
             const median = new THREE.Mesh(
                 buildRibbonGeometry(clonePointsWithYOffset(pts, 0.04), 0.08),
                 new THREE.MeshStandardMaterial({
-                    color: 0x365c3d,
+                    color: 0x56634f,
                     roughness: 0.9,
                     side: THREE.DoubleSide,
                 })
@@ -2864,6 +2925,63 @@
             worldGroup.add(pier);
         }
 
+        function addPropertyTileEdge() {
+            const colors = [
+                0x6b4a8b, 0x4d86a2, 0xa6b35f, 0xd2a64d,
+                0xb45c4d, 0x447b5b, 0x9a7c42, 0x5f6f84
+            ];
+            const baseMat = new THREE.MeshStandardMaterial({
+                color: 0xd6cfbb,
+                roughness: 0.84,
+                metalness: 0.02,
+            });
+            const tileCount = 22;
+            for (let i = 0; i < tileCount; i++) {
+                const x = -14.8 + i * (29.6 / (tileCount - 1));
+                const z = 17.05 + Math.sin(i * 0.7) * 0.08;
+                const tile = new THREE.Group();
+                tile.position.set(x, -0.005, z);
+                tile.rotation.y = Math.sin(i * 0.33) * 0.06;
+
+                const base = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.045, 0.46), baseMat.clone());
+                base.receiveShadow = true;
+                base.userData = { type: 'property-tile-base' };
+                tile.add(base);
+
+                const stripColor = new THREE.Color(colors[i % colors.length]);
+                const strip = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.84, 0.052, 0.095),
+                    new THREE.MeshStandardMaterial({
+                        color: stripColor,
+                        emissive: stripColor,
+                        emissiveIntensity: 0.035,
+                        roughness: 0.58,
+                    })
+                );
+                strip.position.z = -0.16;
+                strip.position.y = 0.035;
+                strip.userData = { type: 'property-tile-strip' };
+                tile.add(strip);
+
+                if (i % 6 === 0) {
+                    const marker = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.06, 0.06, 0.05, 16),
+                        new THREE.MeshStandardMaterial({
+                            color: 0xf0dfb8,
+                            roughness: 0.5,
+                            metalness: 0.12,
+                        })
+                    );
+                    marker.position.set(0.28, 0.065, 0.11);
+                    marker.userData = { type: 'board-scale-token' };
+                    tile.add(marker);
+                }
+
+                tile.userData = { type: 'property-tile-edge' };
+                worldGroup.add(tile);
+            }
+        }
+
         function getPolygonCentroid(poly) {
             return {
                 x: poly.reduce((s, p) => s + p.x, 0) / poly.length,
@@ -2884,13 +3002,13 @@
             const landmarkH = 0.62 + amp * 1.05 + (major ? 0.28 : 0);
 
             const plazaMat = new THREE.MeshStandardMaterial({
-                color: color.clone().lerp(new THREE.Color(0xd4c89d), 0.58),
+                color: color.clone().lerp(new THREE.Color(0xc7bfaa), 0.78),
                 emissive: color,
-                emissiveIntensity: 0.08,
+                emissiveIntensity: 0.018,
                 roughness: 0.82,
                 metalness: 0.06,
                 transparent: true,
-                opacity: 0.9,
+                opacity: 0.76,
             });
             const plaza = new THREE.Mesh(new THREE.CylinderGeometry(radius * 1.85, radius * 1.85, 0.04, 32), plazaMat);
             plaza.position.set(center.x, y, center.z);
@@ -2903,7 +3021,7 @@
                     map: makeSoftDiscTexture('#ffffff', 0.9, 0),
                     color,
                     transparent: true,
-                    opacity: major ? 0.16 : 0.08,
+                    opacity: major ? 0.05 : 0.025,
                     depthWrite: false,
                     side: THREE.DoubleSide,
                 })
@@ -2918,7 +3036,7 @@
                 new THREE.MeshBasicMaterial({
                     color: color.clone().lerp(new THREE.Color(WORLD_GOLD), major ? 0.28 : 0.12),
                     transparent: true,
-                    opacity: major ? 0.34 : 0.16,
+                    opacity: major ? 0.16 : 0.08,
                     depthWrite: false,
                     side: THREE.DoubleSide,
                 })
@@ -2933,11 +3051,11 @@
             landmarkGroup.userData = { type: 'district-landmark', clusterId };
 
             const towerMat = new THREE.MeshStandardMaterial({
-                color: color.clone().lerp(new THREE.Color(0xfff1d0), 0.16),
+                color: color.clone().lerp(new THREE.Color(0xbdb6a4), 0.72),
                 emissive: color,
-                emissiveIntensity: 0.24,
-                roughness: 0.48,
-                metalness: 0.28,
+                emissiveIntensity: 0.045,
+                roughness: 0.62,
+                metalness: 0.16,
             });
 
             let core;
@@ -2955,11 +3073,11 @@
 
             if (major) {
                 const ribMat = new THREE.MeshStandardMaterial({
-                    color: color.clone().lerp(new THREE.Color(0xf5ddb0), 0.32),
+                    color: color.clone().lerp(new THREE.Color(0xe1d6bd), 0.66),
                     emissive: color,
-                    emissiveIntensity: 0.28,
-                    roughness: 0.42,
-                    metalness: 0.32,
+                    emissiveIntensity: 0.055,
+                    roughness: 0.56,
+                    metalness: 0.14,
                 });
                 for (let i = 0; i < 4; i++) {
                     const a = i * Math.PI / 2 + rank * 0.17;
@@ -2978,11 +3096,11 @@
             const beacon = new THREE.Mesh(
                 new THREE.SphereGeometry(radius * 0.28, 16, 10),
                 new THREE.MeshStandardMaterial({
-                    color,
+                    color: color.clone().lerp(new THREE.Color(0xf2d98e), 0.44),
                     emissive: color,
-                    emissiveIntensity: 0.75,
-                    roughness: 0.35,
-                    metalness: 0.05,
+                    emissiveIntensity: 0.22,
+                    roughness: 0.42,
+                    metalness: 0.12,
                 })
             );
             beacon.position.y = landmarkH + radius * 0.32;
@@ -2991,11 +3109,11 @@
             const crown = new THREE.Mesh(
                 new THREE.SphereGeometry(radius * (major ? 0.44 : 0.30), 18, 10),
                 new THREE.MeshStandardMaterial({
-                    color: color.clone().lerp(new THREE.Color(WORLD_GOLD), major ? 0.46 : 0.24),
+                    color: color.clone().lerp(new THREE.Color(0xe5d5ac), major ? 0.62 : 0.44),
                     emissive: color,
-                    emissiveIntensity: major ? 0.95 : 0.48,
-                    roughness: 0.28,
-                    metalness: 0.24,
+                    emissiveIntensity: major ? 0.24 : 0.12,
+                    roughness: 0.42,
+                    metalness: 0.16,
                 })
             );
             crown.scale.y = major ? 0.72 : 0.64;
@@ -3010,7 +3128,7 @@
                     new THREE.MeshBasicMaterial({
                         color,
                         transparent: true,
-                        opacity: 0.055,
+                        opacity: 0.018,
                         depthWrite: false,
                         side: THREE.DoubleSide,
                     })
@@ -3024,7 +3142,7 @@
                     new THREE.MeshBasicMaterial({
                         color: color.clone().lerp(new THREE.Color(0xffffff), 0.36),
                         transparent: true,
-                        opacity: 0.42,
+                        opacity: 0.16,
                         depthWrite: false,
                         blending: THREE.AdditiveBlending,
                     })
@@ -3118,42 +3236,32 @@
                 if (mesh.userData.type !== 'road-lane') return;
                 const woba = wobaByCluster[mesh.userData.forCell];
                 if (woba === undefined) {
-                    mesh.material.color.set(0x333333);
-                    mesh.material.emissive.set(0x222222);
-                    mesh.material.emissiveIntensity = 0.02;
-                    mesh.material.opacity = 0.3;
+                    mesh.material.color.set(0x303234);
+                    mesh.material.emissive.set(0x151617);
+                    mesh.material.emissiveIntensity = 0.01;
+                    mesh.material.opacity = 0.24;
                     mesh.material.transparent = true;
                     return;
                 }
-                // Bold, static road colors — matching the buildings and ground
-                if (woba >= 0.370) {
-                    mesh.material.color.set(0x1db954);
-                    mesh.material.emissive.set(0x1db954);
-                    mesh.material.emissiveIntensity = 0.8;
-                } else if (woba >= 0.320) {
-                    mesh.material.color.set(0x4ecb71);
-                    mesh.material.emissive.set(0x4ecb71);
-                    mesh.material.emissiveIntensity = 0.6;
-                } else if (woba >= 0.290) {
-                    mesh.material.color.set(0xf0c040);
-                    mesh.material.emissive.set(0xf0c040);
-                    mesh.material.emissiveIntensity = 0.5;
-                } else if (woba >= 0.250) {
-                    mesh.material.color.set(0xe07830);
-                    mesh.material.emissive.set(0xe07830);
-                    mesh.material.emissiveIntensity = 0.6;
-                } else {
-                    mesh.material.color.set(0xd92020);
-                    mesh.material.emissive.set(0xd92020);
-                    mesh.material.emissiveIntensity = 0.8;
-                }
-                mesh.material.opacity = 1.0;
-                mesh.material.transparent = false;
+                const signal = getSignalColorForWoba(woba);
+                const roadColor = new THREE.Color(ROAD_DEFAULT).lerp(signal, 0.62);
+                mesh.material.color.copy(roadColor);
+                mesh.material.emissive.copy(signal);
+                mesh.material.emissiveIntensity = 0.12;
+                mesh.material.opacity = 0.9;
+                mesh.material.transparent = true;
             });
         }
 
+        function getSignalColorForWoba(woba) {
+            if (woba >= 0.370) return new THREE.Color(0x1db954);
+            if (woba >= 0.320) return new THREE.Color(0x4ecb71);
+            if (woba >= 0.290) return new THREE.Color(0xf0c040);
+            if (woba >= 0.250) return new THREE.Color(0xe07830);
+            return new THREE.Color(0xd92020);
+        }
+
         // ── Color buildings based on batter performance ──
-        // Changes the ACTUAL building color — bold, obvious, no subtlety
         function colorBuildingsForBatter(matchups) {
             const wobaByCluster = {};
             matchups.forEach(m => {
@@ -3164,28 +3272,13 @@
                 const cid = mesh.userData.clusterId;
                 const woba = wobaByCluster[cid];
                 if (woba === undefined) {
-                    // No data — ghost the building (very dark, barely visible)
-                    setBuildingVisual(mesh, 0x1a1a1a, 0x000000, 0, 0.3, true);
+                    setBuildingVisual(mesh, 0x333432, 0x000000, 0, 0.32, true);
                     return;
                 }
 
-                // FULL color change — the building itself becomes the performance indicator
-                if (woba >= 0.370) {
-                    // ELITE — bright green building
-                    setBuildingVisual(mesh, 0x1db954, 0x1db954, 0.5, 1.0, false);
-                } else if (woba >= 0.320) {
-                    // PLUS — lighter green
-                    setBuildingVisual(mesh, 0x4ecb71, 0x4ecb71, 0.35, 1.0, false);
-                } else if (woba >= 0.290) {
-                    // AVG — amber
-                    setBuildingVisual(mesh, 0xf0c040, 0xf0c040, 0.25, 1.0, false);
-                } else if (woba >= 0.250) {
-                    // BELOW AVG — orange
-                    setBuildingVisual(mesh, 0xe07830, 0xe07830, 0.35, 1.0, false);
-                } else {
-                    // BAD — bright red building
-                    setBuildingVisual(mesh, 0xd92020, 0xd92020, 0.5, 1.0, false);
-                }
+                const signal = getSignalColorForWoba(woba);
+                const facadeTint = new THREE.Color(0xa8a190).lerp(signal, 0.22);
+                setBuildingVisual(mesh, facadeTint, signal, 0.055, 1.0, false);
             });
         }
 
@@ -3198,8 +3291,8 @@
                 if (mesh.userData.type !== 'road-lane') return;
                 mesh.material.color.copy(ROAD_NEUTRAL);
                 mesh.material.emissive.copy(ROAD_NEUTRAL);
-                mesh.material.emissiveIntensity = 0.05;
-                mesh.material.opacity = 0.8;
+                mesh.material.emissiveIntensity = 0.025;
+                mesh.material.opacity = 0.72;
                 mesh.material.transparent = true;
                 mesh.userData._baseEmissive = null;
             });
@@ -3221,12 +3314,12 @@
             // Scene
             scene = new THREE.Scene();
             scene.background = makeSkyTexture();
-            scene.fog = new THREE.FogExp2(0x9fb8b4, 0.014);
+            scene.fog = new THREE.FogExp2(0xb7c5bf, 0.010);
 
             // Camera — cinematic aerial vantage point
-            camera = new THREE.PerspectiveCamera(52, w / h, 0.1, 200);
-            camera.position.set(-8.4, 8.4, 12.2);
-            camera.lookAt(-1.2, 0.45, -0.4);
+            camera = new THREE.PerspectiveCamera(48, w / h, 0.1, 200);
+            camera.position.set(-9.4, 7.1, 11.8);
+            camera.lookAt(-1.0, 0.55, -0.7);
 
             // WebGL Renderer
             renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -3235,7 +3328,7 @@
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.22;
+            renderer.toneMappingExposure = 1.06;
 
             // CSS2D Renderer (for labels)
             css2DRenderer = new CSS2DRenderer();
@@ -3256,14 +3349,14 @@
             controls.target.set(-1.2, 0.45, -0.4); // Center on the sculpted city core
 
             // Lights
-            const ambient = new THREE.AmbientLight(0xffffff, 0.34);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.42);
             scene.add(ambient);
 
             // Hemisphere light for sky/ground color bleed
-            const hemiLight = new THREE.HemisphereLight(0xf7e5bf, 0x2f5d63, 0.74);
+            const hemiLight = new THREE.HemisphereLight(0xf7e5bf, 0x465b53, 0.66);
             scene.add(hemiLight);
 
-            const dirLight = new THREE.DirectionalLight(0xffe0a3, 1.58);
+            const dirLight = new THREE.DirectionalLight(0xffdfad, 1.28);
             dirLight.position.set(-14, 18, 8);
             dirLight.castShadow = true;
             dirLight.shadow.mapSize.width = 2048;
@@ -3278,7 +3371,7 @@
             scene.add(dirLight);
 
             // Subtle orange accent light from below for warm city glow
-            const warmLight = new THREE.PointLight(0xff8b42, 0.45, 38);
+            const warmLight = new THREE.PointLight(0xff8b42, 0.22, 38);
             warmLight.position.set(-5, 2.2, 4);
             scene.add(warmLight);
 
@@ -3445,18 +3538,18 @@
 
                 const color = new THREE.Color(cl.color);
                 const mat = new THREE.MeshStandardMaterial({
-                    color: color,
-                emissive: color,
-                emissiveIntensity: 0.055,
-                transparent: true,
-                opacity: 0.18,
-                roughness: 0.9,
-                side: THREE.DoubleSide,
+                    color: color.clone().lerp(new THREE.Color(0xaaa38f), 0.72),
+                    emissive: color,
+                    emissiveIntensity: 0.008,
+                    transparent: true,
+                    opacity: 0.075,
+                    roughness: 0.92,
+                    side: THREE.DoubleSide,
                 });
                 const mesh = new THREE.Mesh(geo, mat);
                 // No rotation needed — vertices are already in world XYZ
                 mesh.receiveShadow = true;
-                mesh.userData = { clusterId: id, type: 'neighborhood' };
+                mesh.userData = { clusterId: id, type: 'neighborhood', baseColor: mat.color.getHex() };
                 neighborhoodGroup.add(mesh);
                 neighborhoodMeshes.set(id, mesh);
             });
@@ -3489,8 +3582,140 @@
             }
         }
 
+        function addParcelBase(root, width, coreHeight, depth, baseColor, seed) {
+            const groundY = -coreHeight / 2;
+            const sidewalkMat = new THREE.MeshStandardMaterial({
+                color: 0xc8c1ad,
+                roughness: 0.92,
+                metalness: 0.02,
+            });
+            const parcel = makeDetailBox(
+                width * 1.46,
+                0.038,
+                depth * 1.44,
+                sidewalkMat,
+                groundY + 0.019,
+                'parcel-sidewalk'
+            );
+            parcel.userData.lockColor = true;
+            root.add(parcel);
+
+            const stripColor = new THREE.Color(baseColor).lerp(new THREE.Color(0xc8bea6), 0.68);
+            const propertyMat = new THREE.MeshStandardMaterial({
+                color: stripColor,
+                emissive: stripColor,
+                emissiveIntensity: 0.018,
+                roughness: 0.66,
+                metalness: 0.08,
+            });
+            const strip = makeDetailBox(
+                width * 0.92,
+                0.052,
+                0.045,
+                propertyMat,
+                groundY + 0.073,
+                'property-color-strip'
+            );
+            strip.position.z = depth * 0.79;
+            strip.userData.lockColor = true;
+            root.add(strip);
+
+            const stoopMat = new THREE.MeshStandardMaterial({
+                color: 0x9a9384,
+                roughness: 0.86,
+                metalness: 0.02,
+            });
+            const stoop = makeDetailBox(
+                width * 0.34,
+                0.038,
+                depth * 0.14,
+                stoopMat,
+                groundY + 0.066,
+                'front-stoop'
+            );
+            stoop.position.z = depth * 0.62;
+            stoop.userData.lockColor = true;
+            root.add(stoop);
+
+            if (seed % 5 === 0) {
+                const studMat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(baseColor).lerp(new THREE.Color(0xded2b2), 0.55),
+                    roughness: 0.55,
+                    metalness: 0.12,
+                });
+                [-0.28, 0.28].forEach(offset => {
+                    const stud = new THREE.Mesh(new THREE.CylinderGeometry(width * 0.045, width * 0.045, 0.026, 14), studMat.clone());
+                    stud.position.set(offset * width, groundY + 0.092, -depth * 0.63);
+                    stud.userData = { type: 'lego-scale-pin', lockColor: true };
+                    root.add(stud);
+                });
+            }
+        }
+
+        function addFacadeTrim(root, width, coreHeight, depth, baseColor, seed) {
+            const trimMat = makeArchitecturalMaterial(baseColor, 0.72, {
+                target: 0xd0c7b2,
+                roughness: 0.7,
+                metalness: 0.08,
+            });
+            const groundY = -coreHeight / 2;
+            const cornice = makeDetailBox(width * 1.04, 0.045, depth * 1.04, trimMat.clone(), coreHeight / 2 + 0.025, 'cornice');
+            cornice.userData.lockColor = true;
+            root.add(cornice);
+
+            const awningMat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(baseColor).lerp(new THREE.Color(0x181b1e), 0.35),
+                emissive: baseColor,
+                emissiveIntensity: 0.012,
+                roughness: 0.62,
+                metalness: 0.06,
+            });
+            const awning = makeDetailBox(width * 0.62, 0.036, depth * 0.10, awningMat, groundY + Math.min(0.42, coreHeight * 0.34), 'storefront-awning');
+            awning.position.z = depth * 0.56;
+            awning.userData.lockColor = true;
+            root.add(awning);
+
+            if (coreHeight > 0.72) {
+                const sideMat = makeArchitecturalMaterial(baseColor, 0.76, {
+                    target: 0x5e625c,
+                    roughness: 0.74,
+                    metalness: 0.16,
+                });
+                [-1, 1].forEach(side => {
+                    const fin = makeDetailBox(0.028, coreHeight * 0.86, depth * 1.02, sideMat.clone(), 0.0, 'corner-fin');
+                    fin.position.x = side * width * 0.515;
+                    fin.userData.lockColor = true;
+                    root.add(fin);
+                });
+            }
+        }
+
+        function addRoofParapet(root, roofWidth, roofDepth, roofLocalY, baseColor) {
+            const parapetMat = makeArchitecturalMaterial(baseColor, 0.72, {
+                target: 0xbeb49f,
+                roughness: 0.78,
+                metalness: 0.08,
+            });
+            const h = 0.07;
+            [
+                { w: roofWidth * 1.12, d: 0.035, x: 0, z: roofDepth * 0.57 },
+                { w: roofWidth * 1.12, d: 0.035, x: 0, z: -roofDepth * 0.57 },
+                { w: 0.035, d: roofDepth * 1.12, x: roofWidth * 0.57, z: 0 },
+                { w: 0.035, d: roofDepth * 1.12, x: -roofWidth * 0.57, z: 0 },
+            ].forEach(part => {
+                const wall = makeDetailBox(part.w, h, part.d, parapetMat.clone(), roofLocalY + h / 2 + 0.04, 'roof-parapet');
+                wall.position.x = part.x;
+                wall.position.z = part.z;
+                wall.userData.lockColor = true;
+                root.add(wall);
+            });
+        }
+
         function addArchitecturalDetails(root, width, coreHeight, depth, baseColor, totalHeight, seed, count, detailLevel) {
             let topFromBase = coreHeight;
+
+            addParcelBase(root, width, coreHeight, depth, baseColor, seed);
+            addFacadeTrim(root, width, coreHeight, depth, baseColor, seed);
 
             if (detailLevel <= 0) return topFromBase;
 
@@ -3557,6 +3782,8 @@
             const roof = makeDetailBox(roofWidth * 1.08, 0.045, roofDepth * 1.08, roofMat, roofLocalY + 0.025, 'roof-cap');
             root.add(roof);
             topFromBase = Math.max(topFromBase, coreHeight / 2 + roof.position.y + 0.025);
+            addRoofParapet(root, roofWidth, roofDepth, roofLocalY + 0.045, baseColor);
+            topFromBase = Math.max(topFromBase, coreHeight / 2 + roofLocalY + 0.14);
 
             if (detailLevel >= 2) {
                 addRoofEquipment(root, roofWidth, roofDepth, roofLocalY + 0.045, baseColor, seed);
@@ -3702,19 +3929,19 @@
         function makeTextSprite(text, color) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const fontSize = 42;
+            const fontSize = 36;
             ctx.font = 'bold ' + fontSize + 'px sans-serif';
             const metrics = ctx.measureText(text);
-            const w = Math.ceil(metrics.width) + 28;
-            const h = fontSize + 18;
+            const w = Math.ceil(metrics.width) + 24;
+            const h = fontSize + 16;
             canvas.width = w; canvas.height = h;
-            ctx.fillStyle = 'rgba(8,12,14,0.70)';
+            ctx.fillStyle = 'rgba(8,12,14,0.58)';
             ctx.beginPath();
             ctx.roundRect(0, 0, w, h, 8);
             ctx.fill();
             ctx.strokeStyle = color;
-            ctx.globalAlpha = 0.72;
-            ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.52;
+            ctx.lineWidth = 2;
             ctx.strokeRect(1.5, 1.5, w - 3, h - 3);
             ctx.globalAlpha = 1;
             ctx.font = 'bold ' + fontSize + 'px sans-serif';
@@ -3726,7 +3953,7 @@
             tex.minFilter = THREE.LinearFilter;
             const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
             const sprite = new THREE.Sprite(mat);
-            const sc = 0.0046;
+            const sc = 0.0037;
             sprite.scale.set(w * sc, h * sc, 1);
             return sprite;
         }
@@ -3867,9 +4094,10 @@
             if (STATE.activeBatters.length === 0) {
                 neighborhoodMeshes.forEach((mesh, id) => {
                     const cl = DATA.clusters[id];
+                    if (mesh.userData.baseColor != null) mesh.material.color.setHex(mesh.userData.baseColor);
                     if (cl) mesh.material.emissive.set(new THREE.Color(cl.color));
-                    mesh.material.emissiveIntensity = 0.08;
-                    mesh.material.opacity = 0.25;
+                    mesh.material.emissiveIntensity = 0.008;
+                    mesh.material.opacity = 0.075;
                 });
                 resetRoadColors();
                 resetBuildingColors();
@@ -3880,49 +4108,23 @@
             const batter = STATE.activeBatters[STATE.activeBatters.length - 1];
             const matchups = getMatchupData(batter);
 
-            // Neighborhood color — BOLD, obvious, full color change (no subtle glow)
-            // Green = hitter crushes this archetype, Yellow = neutral, Red = hitter struggles
             neighborhoodMeshes.forEach((mesh, id) => {
                 const m = matchups.find(x => String(x.cluster) === id);
                 if (m && (m.PA || 0) >= STATE.minPA) {
                     const woba = m.wOBA || 0;
-                    if (woba >= 0.370) {
-                        // ELITE — bright green ground
-                        mesh.material.color.set(0x1db954);       // Spotify green
-                        mesh.material.emissive.set(0x1db954);
-                        mesh.material.emissiveIntensity = 0.6;
-                    } else if (woba >= 0.320) {
-                        // PLUS — lighter green
-                        mesh.material.color.set(0x4ecb71);
-                        mesh.material.emissive.set(0x4ecb71);
-                        mesh.material.emissiveIntensity = 0.4;
-                    } else if (woba >= 0.290) {
-                        // AVG — amber/yellow
-                        mesh.material.color.set(0xf0c040);
-                        mesh.material.emissive.set(0xf0c040);
-                        mesh.material.emissiveIntensity = 0.35;
-                    } else if (woba >= 0.250) {
-                        // BELOW AVG — orange
-                        mesh.material.color.set(0xe07830);
-                        mesh.material.emissive.set(0xe07830);
-                        mesh.material.emissiveIntensity = 0.4;
-                    } else {
-                        // BAD — bright red
-                        mesh.material.color.set(0xd92020);
-                        mesh.material.emissive.set(0xd92020);
-                        mesh.material.emissiveIntensity = 0.6;
-                    }
-                    mesh.material.opacity = 0.65;
+                    const signal = getSignalColorForWoba(woba);
+                    mesh.material.color.copy(new THREE.Color(0xaaa38f).lerp(signal, 0.34));
+                    mesh.material.emissive.copy(signal);
+                    mesh.material.emissiveIntensity = 0.11;
+                    mesh.material.opacity = 0.28;
                 } else {
-                    // No data — very dim, almost invisible
-                    mesh.material.color.set(0x333333);
-                    mesh.material.emissive.set(0x222222);
-                    mesh.material.emissiveIntensity = 0.02;
-                    mesh.material.opacity = 0.10;
+                    mesh.material.color.set(0x333432);
+                    mesh.material.emissive.set(0x1d1f20);
+                    mesh.material.emissiveIntensity = 0.01;
+                    mesh.material.opacity = 0.085;
                 }
             });
 
-            // Color roads AND buildings based on hitter performance
             colorRoadsForBatter(matchups);
             colorBuildingsForBatter(matchups);
 
