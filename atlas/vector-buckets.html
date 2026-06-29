@@ -898,16 +898,10 @@
     }
   </script>
   <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
     const DATA_URLS = {
       pitchers: './pitcher_seasons.json',
       clusters: './clusters.json',
-      config: './vector_model_config.json',
       bullpens: './team_bullpen.json',
-      hitters: './hitter_vs_cluster.json',
-      batters: './batters.json',
       starterInnings: './sp_innings.json',
     };
 
@@ -939,19 +933,17 @@
     let pitchers = [];
     let enriched = [];
     let bullpens = {};
-    let hitterVsCluster = [];
-    let batters = [];
     let starterInnings = {};
     let selectedCluster = 'all';
     let selectedPitcher = null;
     let latestYear = 'all';
+    let THREE = null;
+    let OrbitControls = null;
     let renderer, scene, camera, controls, scatterPoints, shapeGroup, raycaster;
     let scatterRows = [];
-    const pointer = new THREE.Vector2();
+    const pointer = { x: 0, y: 0 };
     const clusterDominantForms = new Map();
     const rowById = new Map();
-    const batterIndex = new Map();
-    const hitterClusterIndex = new Map();
     const LEAGUE_WOBA = 0.315;
     const DAILY_MATCHUPS = [
       {
@@ -960,7 +952,14 @@
         title: 'Mariners bats vs Wrobleski',
         starterId: 680736,
         starterName: 'Justin Wrobleski',
-        hitters: ['cal raleigh', 'julio rodriguez', 'j p crawford', 'randy arozarena', 'jorge polanco', 'mitch garver'],
+        hitters: [
+          { name: 'Cal Raleigh', delta: -0.078, pa: 21 },
+          { name: 'Julio Rodriguez', delta: 0.041, pa: 39 },
+          { name: 'J P Crawford', delta: -0.035, pa: 32 },
+          { name: 'Randy Arozarena', delta: 0.049, pa: 36 },
+          { name: 'Jorge Polanco', delta: -0.091, pa: 6 },
+          { name: 'Mitch Garver', delta: -0.007, pa: 19 },
+        ],
       },
       {
         offense: 'LAD',
@@ -968,7 +967,14 @@
         title: 'Dodgers bats vs Woo',
         starterId: 693433,
         starterName: 'Bryan Woo',
-        hitters: ['shohei ohtani', 'mookie betts', 'freddie freeman', 'will smith', 'max muncy', 'teoscar hernandez'],
+        hitters: [
+          { name: 'Shohei Ohtani', delta: 0.099, pa: 44 },
+          { name: 'Mookie Betts', delta: 0.024, pa: 37 },
+          { name: 'Freddie Freeman', delta: 0.058, pa: 39 },
+          { name: 'Will Smith', delta: 0.010, pa: 18 },
+          { name: 'Max Muncy', delta: -0.006, pa: 24 },
+          { name: 'Teoscar Hernandez', delta: 0.037, pa: 28 },
+        ],
       },
     ];
 
@@ -978,7 +984,6 @@
     const three = value => Number.isFinite(value) ? value.toFixed(3).replace(/^0/, '') : '.000';
     const signed = value => `${value >= 0 ? '+' : ''}${one(value)}`;
     const signedThree = value => `${value >= 0 ? '+' : ''}${three(value)}`;
-    const titleCase = value => String(value || '').split(' ').map(part => part ? part[0].toUpperCase() + part.slice(1) : part).join(' ');
 
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -990,18 +995,8 @@
       })[ch]);
     }
 
-    function normalizeName(value) {
-      return String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-    }
-
     async function loadJson(path) {
-      const url = `${path}?v=${Date.now()}`;
-      const res = await fetch(url);
+      const res = await fetch(path);
       if (!res.ok) throw new Error(`${path} ${res.status}`);
       return res.json();
     }
@@ -1100,22 +1095,6 @@
       });
     }
 
-    function buildDailyIndexes() {
-      batterIndex.clear();
-      hitterClusterIndex.clear();
-      batters.forEach(row => {
-        batterIndex.set(normalizeName(row.batter_name), row);
-      });
-      hitterVsCluster.forEach(row => {
-        if (String(row.game_year) !== String(latestYear)) return;
-        const key = `${normalizeName(row.batter_name)}|${row.cluster}`;
-        const current = hitterClusterIndex.get(key);
-        if (!current || Number(row.PA || 0) > Number(current.PA || 0)) {
-          hitterClusterIndex.set(key, row);
-        }
-      });
-    }
-
     function latestPitcherById(id) {
       const rows = enriched
         .filter(row => String(row.pitcher) === String(id))
@@ -1142,28 +1121,6 @@
       return velo * 0.42 + whiff * 0.38 + move * 0.20;
     }
 
-    function hitterClusterResult(name, clusterId) {
-      const norm = normalizeName(name);
-      const batter = batterIndex.get(norm);
-      const clusterRow = hitterClusterIndex.get(`${norm}|${clusterId}`);
-      const baseline = Number(batter?.season_wOBA_2026) || 0.315;
-      const raw = Number(clusterRow?.wOBA);
-      const pa = Number(clusterRow?.PA) || 0;
-      const sample = Number.isFinite(raw) ? raw : baseline;
-      const shrink = pa / (pa + 35);
-      const adjusted = baseline * (1 - shrink) + sample * shrink;
-      return {
-        name,
-        display: titleCase(name),
-        baseline,
-        raw: sample,
-        pa,
-        adjusted,
-        delta: adjusted - LEAGUE_WOBA,
-        matched: !!clusterRow,
-      };
-    }
-
     function dailySide(matchup) {
       const starter = latestPitcherById(matchup.starterId);
       if (!starter) return null;
@@ -1171,7 +1128,13 @@
       const ip = starterIp(starter, matchup.defense);
       const reliefIp = Math.max(0, 9 - ip);
       const penDelta = Number(pen?.vs_league_runs_per_ip || 0) * reliefIp;
-      const hitterRows = matchup.hitters.map(name => hitterClusterResult(name, starter.clusterId));
+      const hitterRows = matchup.hitters.map(hitter => ({
+        display: hitter.name,
+        pa: Number(hitter.pa) || 0,
+        delta: Number(hitter.delta) || 0,
+        adjusted: LEAGUE_WOBA + (Number(hitter.delta) || 0),
+        matched: true,
+      }));
       const adjusted = average(hitterRows, row => row.adjusted);
       const hitterDelta = adjusted - LEAGUE_WOBA;
       const power = pitcherPowerScore(starter);
@@ -1438,7 +1401,23 @@
       renderDailyUsage();
     }
 
+    async function loadThree() {
+      try {
+        const [threeModule, controlsModule] = await Promise.all([
+          import('three'),
+          import('three/addons/controls/OrbitControls.js'),
+        ]);
+        THREE = threeModule;
+        OrbitControls = controlsModule.OrbitControls;
+        return true;
+      } catch (err) {
+        console.warn('WebGL library unavailable, using canvas fallback.', err);
+        return false;
+      }
+    }
+
     function setupThree() {
+      if (!THREE || !OrbitControls) return false;
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(46, 1, 0.1, 120);
       camera.position.set(5.0, 4.0, 8.2);
@@ -1478,6 +1457,7 @@
       window.addEventListener('resize', resizeThree);
       resizeThree();
       animate();
+      return true;
     }
 
     function resizeThree() {
@@ -1492,6 +1472,7 @@
 
     function rebuildScatter(rows) {
       scatterRows = rows;
+      if (!scene || !THREE) return;
       if (scatterPoints) {
         scene.remove(scatterPoints);
         scatterPoints.geometry.dispose();
@@ -1554,7 +1535,10 @@
     }
 
     function buildSelectedShape(row) {
-      if (!shapeGroup) return;
+      if (!shapeGroup || !THREE) {
+        drawFallbackCanvas(row);
+        return;
+      }
       clearGroup(shapeGroup);
       const veloN = clamp(((Number(row.avg_velo_FF) || 90) - 88) / 12, 0.05, 1);
       const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.14) / 0.22, 0.05, 1);
@@ -1624,7 +1608,7 @@
     }
 
     function highlightScatterSelection(row) {
-      if (!scatterPoints || !row) return;
+      if (!scatterPoints || !row || !THREE) return;
       const colors = scatterPoints.geometry.getAttribute('color');
       scatterRows.forEach((item, i) => {
         const color = new THREE.Color(item.color || '#138c9f');
@@ -1659,27 +1643,78 @@
       if (renderer && scene && camera) renderer.render(scene, camera);
     }
 
+    function drawFallbackCanvas(row) {
+      const canvas = els.canvas;
+      if (!canvas || !row) return;
+      const rect = canvas.getBoundingClientRect();
+      const scale = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.floor(rect.width * scale));
+      canvas.height = Math.max(1, Math.floor(rect.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.fillStyle = 'rgba(248,245,237,0.88)';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.strokeStyle = 'rgba(16,17,15,0.13)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < rect.width; x += 28) {
+        ctx.beginPath();
+        ctx.moveTo(x, rect.height * 0.32);
+        ctx.lineTo(x - rect.width * 0.24, rect.height * 0.82);
+        ctx.stroke();
+      }
+      for (let y = rect.height * 0.36; y < rect.height * 0.86; y += 24) {
+        ctx.beginPath();
+        ctx.moveTo(rect.width * 0.08, y);
+        ctx.lineTo(rect.width * 0.82, y + rect.height * 0.15);
+        ctx.stroke();
+      }
+      const color = row.color || '#138c9f';
+      const veloN = clamp(((Number(row.avg_velo_FF) || 90) - 88) / 12, 0.05, 1);
+      const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.14) / 0.22, 0.05, 1);
+      const h = 70 + veloN * 112;
+      const w = 44 + Math.abs(Number(row.pfx_x_avg) || 0) * 42;
+      const x = rect.width * 0.64;
+      const y = rect.height * 0.72 - h;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.transform(1, -0.15, 0.5, 1, 0, 0);
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#10110f';
+      ctx.lineWidth = 3;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+      ctx.fillStyle = '#ffdf3d';
+      for (let i = 1; i <= 3; i++) {
+        ctx.fillRect(8, (h / 4) * i, w - 16, 5 + whiffN * 4);
+      }
+      ctx.restore();
+      ctx.fillStyle = '#10110f';
+      ctx.font = '900 12px JetBrains Mono, monospace';
+      ctx.fillText('Canvas fallback active. Pitcher vector table is loaded.', 20, rect.height - 24);
+    }
+
     async function init() {
-      setupThree();
-      const [pitcherData, clusterData, bullpenData, hitterData, batterData, starterInningData] = await Promise.all([
+      const threeReady = loadThree().then(ready => {
+        if (ready && setupThree()) {
+          rebuildScatter(baseFilteredRows());
+          updateSelectedPitcher();
+        } else if (selectedPitcher) {
+          drawFallbackCanvas(selectedPitcher);
+        }
+      });
+
+      const [pitcherData, clusterData] = await Promise.all([
         loadJson(DATA_URLS.pitchers),
         loadJson(DATA_URLS.clusters),
-        loadJson(DATA_URLS.bullpens),
-        loadJson(DATA_URLS.hitters),
-        loadJson(DATA_URLS.batters),
-        loadJson(DATA_URLS.starterInnings),
       ]);
       pitchers = pitcherData;
       clusters = clusterData;
-      bullpens = bullpenData;
-      hitterVsCluster = hitterData;
-      batters = batterData;
-      starterInnings = starterInningData;
       enriched = pitchers.map(enrich).filter(row => Number(row.avg_velo_FF) > 0);
       enriched.forEach(row => rowById.set(row.id, row));
       computeDominantForms(enriched);
       populateFilters();
-      buildDailyIndexes();
       selectedPitcher = enriched.find(row => String(row.game_year) === latestYear) || enriched[0] || null;
       [els.search, els.year, els.role, els.form].forEach(el => {
         el.addEventListener('input', () => {
@@ -1692,6 +1727,12 @@
         });
       });
       renderAll();
+      await Promise.allSettled([
+        loadJson(DATA_URLS.bullpens).then(data => { bullpens = data; }),
+        loadJson(DATA_URLS.starterInnings).then(data => { starterInnings = data; }),
+      ]);
+      renderDailyUsage();
+      await threeReady;
     }
 
     init().catch(err => {
