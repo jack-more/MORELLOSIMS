@@ -465,13 +465,44 @@
     }
 
     .mini-building {
+      position: relative;
       width: var(--w, 28px);
       height: var(--h, 58px);
-      background: linear-gradient(135deg, var(--starter, #138c9f), #fff6c4);
+      background:
+        radial-gradient(circle at 64% 24%, #fff 0 8%, transparent 9%),
+        radial-gradient(circle at 67% 25%, #10110f 0 4%, transparent 5%),
+        linear-gradient(135deg, var(--starter, #138c9f), #fff6c4);
       border: 2px solid var(--rule);
-      box-shadow: 8px 5px 0 rgba(16,17,15,0.24);
+      border-radius: 54% 42% 48% 45%;
+      box-shadow: 8px 5px 0 rgba(16,17,15,0.22);
       transform: rotateX(56deg) rotateZ(-24deg);
       transform-origin: bottom center;
+    }
+
+    .mini-building::before,
+    .mini-building::after {
+      content: "";
+      position: absolute;
+      border: 2px solid var(--rule);
+      background: var(--starter, #138c9f);
+    }
+
+    .mini-building::before {
+      width: 34%;
+      height: 22%;
+      right: -20%;
+      top: 18%;
+      border-radius: 60% 70% 40% 55%;
+      transform: rotate(24deg);
+    }
+
+    .mini-building::after {
+      width: 28%;
+      height: 42%;
+      left: -20%;
+      top: 34%;
+      border-radius: 70% 25% 70% 25%;
+      transform: rotate(-32deg);
     }
 
     .node-copy {
@@ -825,9 +856,9 @@
           <canvas id="vector-canvas"></canvas>
           <div class="stage-overlay">
             <div class="readout">
-              <div class="eyebrow">Shape rotator</div>
+              <div class="eyebrow">Vector creature</div>
               <div id="readout-name" class="readout-name">Loading...</div>
-              <div id="readout-line" class="readout-line">Vector geometry maps velo, whiff, movement, arm slot, and PCA position.</div>
+              <div id="readout-line" class="readout-line">Generated anatomy maps velo, whiff, movement, arm slot, pitch mix, and PCA position.</div>
             </div>
           </div>
           <div class="stat-grid">
@@ -1495,10 +1526,10 @@
       geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       const mat = new THREE.PointsMaterial({
-        size: 0.06,
+        size: 0.095,
         vertexColors: true,
         transparent: true,
-        opacity: 0.72,
+        opacity: 0.9,
         depthWrite: false,
       });
       scatterPoints = new THREE.Points(geo, mat);
@@ -1518,20 +1549,214 @@
       }
     }
 
-    function makeBox(w, h, d, color, options = {}) {
-      const mat = new THREE.MeshStandardMaterial({
-        color,
-        emissive: options.emissive || 0x000000,
-        emissiveIntensity: options.emissiveIntensity || 0,
-        roughness: options.roughness ?? 0.62,
-        metalness: options.metalness ?? 0.08,
+    function hashString(value) {
+      let hash = 2166136261;
+      const text = String(value || '');
+      for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return hash >>> 0;
+    }
+
+    function seededUnit(seed, salt) {
+      const x = Math.sin(seed * 12.9898 + salt * 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    function makeMaterial(color, options = {}) {
+      const base = color instanceof THREE.Color ? color : new THREE.Color(color);
+      return new THREE.MeshStandardMaterial({
+        color: base,
+        emissive: options.emissive || base,
+        emissiveIntensity: options.emissiveIntensity ?? 0.025,
+        roughness: options.roughness ?? 0.58,
+        metalness: options.metalness ?? 0.05,
         transparent: !!options.transparent,
         opacity: options.opacity ?? 1,
       });
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    }
+
+    function addCreatureMesh(geometry, material, position, scale, rotation = [0, 0, 0]) {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(position[0], position[1], position[2]);
+      mesh.scale.set(scale[0], scale[1], scale[2]);
+      mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      shapeGroup.add(mesh);
       return mesh;
+    }
+
+    function pitchMixEntries(row, seed) {
+      const mix = row.pitch_mix || {};
+      const entries = Object.entries(mix)
+        .map(([pitch, share]) => [pitch, Number(share) || 0])
+        .filter(([, share]) => share > 0)
+        .sort((a, b) => b[1] - a[1]);
+      if (entries.length) return entries.slice(0, 6);
+      const fallback = ['FF', 'SL', 'CH', 'CU', 'SI', 'FC'];
+      return fallback.slice(0, 4).map((pitch, i) => {
+        const share = 0.12 + seededUnit(seed, i + 2) * 0.18;
+        return [pitch, share];
+      });
+    }
+
+    function pitchColor(pitch, baseColor) {
+      const colors = {
+        FF: 0xff5a45,
+        SI: 0x2aa876,
+        SL: 0x6554c0,
+        ST: 0x9b5de5,
+        CU: 0x3157a3,
+        KC: 0x264653,
+        CH: 0x0fb9b1,
+        FS: 0xf9c74f,
+        FC: 0xf9844a,
+        SW: 0x43aa8b,
+      };
+      return new THREE.Color(colors[pitch] || 0xffffff).lerp(baseColor, 0.22);
+    }
+
+    function creaturePlan(row, seed, veloN, whiffN, horizN, vertN) {
+      if (whiffN > 0.62 && veloN > 0.62) return 'striker';
+      if (horizN > 0.62 && vertN > 0.38) return 'serpent';
+      if (vertN > 0.68) return 'winged';
+      if (whiffN < 0.22 && veloN < 0.44) return 'soft';
+      if ((Number(row.groundball_rate) || 0.38) > 0.47 || vertN < 0.28) return 'tank';
+      const plans = ['striker', 'serpent', 'winged', 'tank', 'soft'];
+      return plans[Math.floor(seededUnit(seed, 9) * plans.length) % plans.length];
+    }
+
+    function addPlanFeatures(plan, row, metrics) {
+      const {
+        seed,
+        bodyW,
+        bodyH,
+        bodyD,
+        bodyY,
+        baseColor,
+        accentColor,
+        darkColor,
+        whiffN,
+        veloN,
+        horizN,
+        vertN,
+        side,
+      } = metrics;
+
+      if (plan === 'serpent') {
+        const count = 5 + Math.round(horizN * 4);
+        for (let i = 0; i < count; i++) {
+          const t = i / Math.max(1, count - 1);
+          const bend = Math.sin(t * Math.PI * 1.35 + seededUnit(seed, 120) * 0.8);
+          addCreatureMesh(
+            new THREE.SphereGeometry(1, 24, 14),
+            makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.06 + t * 0.08), {
+              emissive: baseColor,
+              emissiveIntensity: 0.035,
+              roughness: 0.5,
+            }),
+            [
+              side * (bodyW * 0.25 + t * (0.75 + horizN * 0.7)),
+              bodyY - bodyH * 0.18 + Math.sin(t * Math.PI) * bodyH * 0.24,
+              -bodyD * (0.75 + t * 1.15) + bend * 0.18,
+            ],
+            [
+              (0.28 - t * 0.11) * (1 + horizN * 0.36),
+              0.2 - t * 0.06,
+              0.24 - t * 0.08,
+            ],
+            [0, side * t * 0.5, 0]
+          );
+        }
+        return;
+      }
+
+      if (plan === 'winged') {
+        [-1, 1].forEach(wingSide => {
+          addCreatureMesh(
+            new THREE.ConeGeometry(0.34 + vertN * 0.18, 1.1 + vertN * 0.9, 4),
+            makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.2), {
+              emissive: baseColor,
+              emissiveIntensity: 0.055,
+              transparent: true,
+              opacity: 0.86,
+              roughness: 0.44,
+            }),
+            [wingSide * (bodyW + 0.52), bodyY + bodyH * 0.08, -bodyD * 0.1],
+            [1, 1, 0.18 + whiffN * 0.08],
+            [0.1, 0, wingSide * (Math.PI / 2.8)]
+          );
+        });
+        return;
+      }
+
+      if (plan === 'tank') {
+        for (let i = 0; i < 4; i++) {
+          const t = (i - 1.5) / 1.5;
+          addCreatureMesh(
+            new THREE.BoxGeometry(0.28 + vertN * 0.08, 0.08 + veloN * 0.04, 0.38 + horizN * 0.12),
+            makeMaterial(darkColor.clone().lerp(accentColor, 0.22), {
+              emissive: baseColor,
+              emissiveIntensity: 0.025,
+              roughness: 0.66,
+              metalness: 0.08,
+            }),
+            [t * bodyW * 0.44, bodyY + bodyH * 0.58 - Math.abs(t) * 0.04, -bodyD * 0.18],
+            [1, 1, 1],
+            [0.15, t * 0.22, t * 0.08]
+          );
+        }
+        [-1, 1].forEach(footSide => {
+          addCreatureMesh(
+            new THREE.SphereGeometry(1, 16, 10),
+            makeMaterial(darkColor, { roughness: 0.7 }),
+            [footSide * bodyW * 0.7, 0.19, -bodyD * 0.12],
+            [0.18 + horizN * 0.08, 0.08, 0.22 + vertN * 0.08],
+            [0, 0, 0]
+          );
+        });
+        return;
+      }
+
+      if (plan === 'striker') {
+        [-1, 1].forEach(clawSide => {
+          for (let i = 0; i < 3; i++) {
+            addCreatureMesh(
+              new THREE.ConeGeometry(0.045 + whiffN * 0.03, 0.36 + veloN * 0.22, 14),
+              makeMaterial(accentColor, {
+                emissive: accentColor,
+                emissiveIntensity: 0.09,
+                roughness: 0.34,
+                metalness: 0.18,
+              }),
+              [
+                clawSide * (bodyW * 0.88 + i * 0.08),
+                bodyY - bodyH * (0.02 + i * 0.03),
+                bodyD * (0.62 + i * 0.05),
+              ],
+              [1, 1, 1],
+              [Math.PI / 2.15, 0, clawSide * (0.15 + i * 0.1)]
+            );
+          }
+        });
+        return;
+      }
+
+      [-1, 1].forEach(earSide => {
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 18, 10),
+          makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.28), {
+            emissive: baseColor,
+            emissiveIntensity: 0.035,
+            roughness: 0.52,
+          }),
+          [earSide * bodyW * 0.5, bodyY + bodyH * 0.76, -bodyD * 0.06],
+          [0.18, 0.36 + whiffN * 0.12, 0.12],
+          [0, 0, earSide * 0.32]
+        );
+      });
     }
 
     function buildSelectedShape(row) {
@@ -1540,71 +1765,208 @@
         return;
       }
       clearGroup(shapeGroup);
+      const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
       const veloN = clamp(((Number(row.avg_velo_FF) || 90) - 88) / 12, 0.05, 1);
       const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.14) / 0.22, 0.05, 1);
-      const horizN = clamp(Math.abs(Number(row.pfx_x_avg) || 0) / 1.2, 0.05, 1);
-      const vertN = clamp(((Number(row.pfx_z_avg) || 0.5) - 0.1) / 1.1, 0.05, 1);
-      const pcaYN = clamp(((Number(row.pca_y) || 0) + 2.2) / 4.6, 0, 1);
+      const horiz = Number(row.pfx_x_avg) || 0;
+      const vert = Number(row.pfx_z_avg) || 0.5;
+      const horizN = clamp(Math.abs(horiz) / 1.2, 0.05, 1);
+      const vertN = clamp((vert - 0.1) / 1.1, 0.05, 1);
+      const gbN = clamp(Number(row.groundball_rate) || 0.38, 0.2, 0.62);
+      const pcaX = Number(row.pca_x) || 0;
+      const pcaY = Number(row.pca_y) || 0;
+      const pcaZ = Number(row.pca_z) || 0;
       const arm = Number(row.arm_angle) || -60;
-      const color = new THREE.Color(row.color || '#138c9f');
-      const bodyColor = color.clone().lerp(new THREE.Color(0xd3c8ad), 0.46);
+      const armRad = THREE.MathUtils.degToRad(clamp(arm, -110, 70) * 0.5);
+      const side = horiz >= 0 ? 1 : -1;
+      const baseColor = new THREE.Color(row.color || '#138c9f');
+      const bodyColor = baseColor.clone().lerp(new THREE.Color(0xf5e8b8), 0.34 + seededUnit(seed, 1) * 0.18);
+      const accentColor = baseColor.clone().lerp(new THREE.Color(0xffdf3d), 0.45);
+      const darkColor = baseColor.clone().lerp(new THREE.Color(0x10110f), 0.64);
+      const glowColor = baseColor.clone().lerp(new THREE.Color(0xffffff), 0.18);
+      const plan = creaturePlan(row, seed, veloN, whiffN, horizN, vertN);
 
-      const coreH = 0.9 + veloN * 2.45;
-      const coreW = 0.34 + horizN * 0.88;
-      const coreD = 0.34 + vertN * 0.88;
-      const core = makeBox(coreW, coreH, coreD, bodyColor, {
-        emissive: color,
-        emissiveIntensity: 0.035 + whiffN * 0.035,
-        roughness: 0.54,
-        metalness: 0.12,
+      let bodyW = 0.58 + horizN * 0.55 + seededUnit(seed, 3) * 0.12;
+      let bodyH = 0.9 + veloN * 1.4 + whiffN * 0.36;
+      let bodyD = 0.48 + vertN * 0.48 + seededUnit(seed, 4) * 0.1;
+      if (plan === 'serpent') {
+        bodyW *= 0.72;
+        bodyH *= 0.84;
+        bodyD *= 0.94;
+      } else if (plan === 'winged') {
+        bodyW *= 0.84;
+        bodyH *= 1.04;
+        bodyD *= 0.86;
+      } else if (plan === 'tank') {
+        bodyW *= 1.28;
+        bodyH *= 0.72;
+        bodyD *= 1.16;
+      } else if (plan === 'striker') {
+        bodyW *= 0.88;
+        bodyH *= 1.16;
+        bodyD *= 0.82;
+      } else if (plan === 'soft') {
+        bodyW *= 1.14;
+        bodyH *= 0.92;
+        bodyD *= 1.08;
+      }
+      const bodyY = 0.72 + bodyH * 0.42;
+      addCreatureMesh(
+        new THREE.SphereGeometry(1, 44, 28),
+        makeMaterial(bodyColor, { emissive: baseColor, emissiveIntensity: 0.045 + whiffN * 0.04, roughness: 0.5 }),
+        [0, bodyY, 0],
+        [bodyW, bodyH, bodyD],
+        [0.04 * (seededUnit(seed, 5) - 0.5), armRad * 0.15, (seededUnit(seed, 6) - 0.5) * 0.18]
+      );
+
+      const headScale = 0.34 + whiffN * 0.18;
+      const headX = side * (0.12 + horizN * 0.16);
+      const headY = bodyY + bodyH * 0.78;
+      const headZ = 0.2 + vertN * 0.2;
+      addCreatureMesh(
+        new THREE.SphereGeometry(1, 36, 22),
+        makeMaterial(bodyColor.clone().lerp(new THREE.Color(0xffffff), 0.08), { emissive: baseColor, emissiveIntensity: 0.035 }),
+        [headX, headY, headZ],
+        [headScale * 1.08, headScale * 0.92, headScale],
+        [0, side * 0.18, -side * armRad * 0.1]
+      );
+
+      addCreatureMesh(
+        new THREE.ConeGeometry(0.18 + horizN * 0.07, 0.38 + veloN * 0.18, 28),
+        makeMaterial(glowColor, { emissive: accentColor, emissiveIntensity: 0.06, roughness: 0.42 }),
+        [headX + side * 0.03, headY - 0.02, headZ + headScale * 0.88],
+        [1, 1, 0.82],
+        [Math.PI / 2, 0, side * 0.08]
+      );
+
+      [-1, 1].forEach(eyeSide => {
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 18, 12),
+          makeMaterial(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.02, roughness: 0.28 }),
+          [headX + eyeSide * headScale * 0.34, headY + headScale * 0.1, headZ + headScale * 0.78],
+          [0.08, 0.08, 0.045],
+          [0, 0, 0]
+        );
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 12, 8),
+          makeMaterial(0x10110f, { emissive: 0x10110f, emissiveIntensity: 0, roughness: 0.2 }),
+          [headX + eyeSide * headScale * 0.36, headY + headScale * 0.09, headZ + headScale * 0.82],
+          [0.035, 0.035, 0.022],
+          [0, 0, 0]
+        );
       });
-      core.position.y = coreH / 2;
-      shapeGroup.add(core);
 
-      const base = makeBox(coreW * 1.32, 0.12, coreD * 1.32, 0x171816, {
-        roughness: 0.72,
-        metalness: 0.08,
-      });
-      base.position.y = 0.06;
-      shapeGroup.add(base);
-
-      const armRad = THREE.MathUtils.degToRad(clamp(arm, -110, 70) * 0.55);
-      const bladeColor = color.clone().lerp(new THREE.Color(0xffdf3d), 0.22);
-      [-1, 1].forEach(side => {
-        const blade = makeBox(0.06 + whiffN * 0.05, coreH * (0.48 + whiffN * 0.20), 0.08, bladeColor, {
-          emissive: color,
-          emissiveIntensity: 0.06,
-          roughness: 0.48,
-          metalness: 0.18,
-        });
-        blade.position.set(side * (coreW * 0.62 + 0.10), coreH * 0.54, 0);
-        blade.rotation.z = side * (0.22 + armRad * 0.22);
-        shapeGroup.add(blade);
-      });
-
-      const sweep = makeBox(0.08, 0.12 + pcaYN * 0.44, coreD * (1.25 + horizN), color.clone().lerp(new THREE.Color(0xffffff), 0.22), {
-        emissive: color,
-        emissiveIntensity: 0.07,
-        metalness: 0.18,
-        roughness: 0.42,
-      });
-      sweep.position.set((Number(row.pfx_x_avg) || 0) >= 0 ? coreW * 0.86 : -coreW * 0.86, coreH + 0.12, 0);
-      sweep.rotation.y = ((Number(row.pfx_x_avg) || 0) >= 0 ? 1 : -1) * 0.28;
-      shapeGroup.add(sweep);
-
-      for (let i = 0; i < 3; i++) {
-        const rib = makeBox(coreW * (0.36 + i * 0.12), 0.055, coreD * 1.08, 0xffdf3d, {
-          emissive: 0xffdf3d,
-          emissiveIntensity: 0.05,
-          roughness: 0.44,
-          metalness: 0.16,
-        });
-        rib.position.y = 0.35 + i * coreH * 0.25;
-        rib.position.z = coreD * 0.56;
-        shapeGroup.add(rib);
+      const hornCount = 2 + Math.floor(seededUnit(seed, 8) * 3);
+      for (let i = 0; i < hornCount; i++) {
+        const offset = (i - (hornCount - 1) / 2) * 0.18;
+        const hornH = 0.24 + whiffN * 0.38 + seededUnit(seed, 20 + i) * 0.14;
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.055 + vertN * 0.035, hornH, 18),
+          makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.075 + whiffN * 0.05, metalness: 0.16, roughness: 0.38 }),
+          [headX + offset, headY + headScale * 0.8, headZ + 0.02],
+          [1, 1, 1],
+          [side * 0.18, 0, offset * 1.1]
+        );
       }
 
-      shapeGroup.rotation.y = THREE.MathUtils.degToRad((Number(row.pca_x) || 0) * 4);
+      const finLen = 0.55 + horizN * 0.85;
+      [-1, 1].forEach(finSide => {
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.2 + whiffN * 0.08, finLen, 32),
+          makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.12), { emissive: baseColor, emissiveIntensity: 0.05, transparent: true, opacity: 0.92 }),
+          [finSide * (bodyW + 0.18), bodyY + bodyH * 0.04, -0.02],
+          [1, 1, 0.32 + vertN * 0.18],
+          [0, 0, finSide * (Math.PI / 2.35 + armRad * 0.22)]
+        );
+      });
+
+      const mixEntries = pitchMixEntries(row, seed);
+      mixEntries.forEach(([pitch, share], i) => {
+        const angle = (i / mixEntries.length) * Math.PI * 2 + seededUnit(seed, 40) * Math.PI;
+        const radiusX = bodyW + 0.34 + share * 0.55;
+        const radiusZ = bodyD + 0.24 + share * 0.36;
+        const size = 0.1 + Math.sqrt(share) * 0.44;
+        const y = bodyY - bodyH * 0.1 + seededUnit(seed, 50 + i) * bodyH * 0.68;
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 20, 14),
+          makeMaterial(pitchColor(pitch, baseColor), { emissive: pitchColor(pitch, baseColor), emissiveIntensity: 0.045, roughness: 0.46 }),
+          [Math.cos(angle) * radiusX, y, Math.sin(angle) * radiusZ],
+          [size * (1 + share), size * 0.62, size * (0.75 + vertN * 0.35)],
+          [seededUnit(seed, 60 + i) * 0.5, angle, seededUnit(seed, 70 + i) * 0.5]
+        );
+      });
+
+      addPlanFeatures(plan, row, {
+        seed,
+        bodyW,
+        bodyH,
+        bodyD,
+        bodyY,
+        baseColor,
+        accentColor,
+        darkColor,
+        whiffN,
+        veloN,
+        horizN,
+        vertN,
+        side,
+      });
+
+      const spineCount = 3 + Math.round((horizN + vertN + whiffN) * 3);
+      for (let i = 0; i < spineCount; i++) {
+        const t = spineCount === 1 ? 0 : i / (spineCount - 1);
+        const spineH = 0.12 + whiffN * 0.26 + t * vertN * 0.16;
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.055 + t * 0.025, spineH, 16),
+          makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.055, metalness: 0.12 }),
+          [side * Math.sin(t * Math.PI) * 0.08, bodyY - bodyH * 0.42 + t * bodyH * 0.92, -bodyD * 0.86],
+          [1, 1, 1],
+          [Math.PI * 0.34, 0, side * 0.08]
+        );
+      }
+
+      const tailCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, bodyY - bodyH * 0.12, -bodyD * 0.82),
+        new THREE.Vector3(side * (0.2 + horizN * 0.34), bodyY + vertN * 0.18, -bodyD - 0.52),
+        new THREE.Vector3(side * (0.45 + horizN * 0.72), bodyY - 0.12 + pcaY * 0.04, -bodyD - 1.0 - veloN * 0.24),
+      ]);
+      addCreatureMesh(
+        new THREE.TubeGeometry(tailCurve, 36, 0.045 + whiffN * 0.045, 14, false),
+        makeMaterial(darkColor, { emissive: baseColor, emissiveIntensity: 0.035, roughness: 0.46 }),
+        [0, 0, 0],
+        [1, 1, 1],
+        [0, 0, 0]
+      );
+      addCreatureMesh(
+        new THREE.SphereGeometry(1, 20, 12),
+        makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.07, roughness: 0.4 }),
+        [side * (0.45 + horizN * 0.72), bodyY - 0.12 + pcaY * 0.04, -bodyD - 1.0 - veloN * 0.24],
+        [0.13 + whiffN * 0.12, 0.13 + whiffN * 0.08, 0.13 + whiffN * 0.12],
+        [0, 0, 0]
+      );
+
+      const footColor = darkColor.clone().lerp(new THREE.Color(0xffdf3d), 0.12);
+      [-1, 1].forEach(footSide => {
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 18, 10),
+          makeMaterial(footColor, { roughness: 0.62 }),
+          [footSide * bodyW * 0.38, 0.16, 0.16 + gbN * 0.12],
+          [0.22 + gbN * 0.18, 0.08, 0.18 + veloN * 0.08],
+          [0, footSide * 0.18, 0]
+        );
+      });
+
+      const shadow = addCreatureMesh(
+        new THREE.CylinderGeometry(1, 1, 0.03, 48),
+        makeMaterial(0x10110f, { transparent: true, opacity: 0.18, emissiveIntensity: 0 }),
+        [0, 0.02, 0],
+        [bodyW * 1.45, 1, bodyD * 1.25],
+        [0, 0, 0]
+      );
+      shadow.castShadow = false;
+
+      shapeGroup.rotation.y = THREE.MathUtils.degToRad(pcaX * 4 + seededUnit(seed, 100) * 28);
+      shapeGroup.rotation.z = THREE.MathUtils.degToRad(clamp(pcaZ, -2, 2) * 1.8);
     }
 
     function highlightScatterSelection(row) {
@@ -1673,26 +2035,72 @@
       const color = row.color || '#138c9f';
       const veloN = clamp(((Number(row.avg_velo_FF) || 90) - 88) / 12, 0.05, 1);
       const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.14) / 0.22, 0.05, 1);
-      const h = 70 + veloN * 112;
-      const w = 44 + Math.abs(Number(row.pfx_x_avg) || 0) * 42;
-      const x = rect.width * 0.64;
-      const y = rect.height * 0.72 - h;
+      const horiz = Number(row.pfx_x_avg) || 0;
+      const vert = Number(row.pfx_z_avg) || 0.5;
+      const side = horiz >= 0 ? 1 : -1;
+      const bodyW = 52 + Math.abs(horiz) * 34;
+      const bodyH = 84 + veloN * 92;
+      const bodyD = 36 + clamp(vert, 0.1, 1.3) * 28;
+      const x = rect.width * 0.62;
+      const y = rect.height * 0.62;
       ctx.save();
       ctx.translate(x, y);
-      ctx.transform(1, -0.15, 0.5, 1, 0, 0);
-      ctx.fillStyle = color;
+      ctx.rotate(side * 0.08);
       ctx.strokeStyle = '#10110f';
+      ctx.lineWidth = 4;
+      ctx.fillStyle = 'rgba(16,17,15,0.14)';
+      ctx.beginPath();
+      ctx.ellipse(0, bodyH * 0.55, bodyW * 1.2, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 10 + whiffN * 6;
+      ctx.beginPath();
+      ctx.moveTo(-bodyW * 0.22, -bodyH * 0.05);
+      ctx.bezierCurveTo(-side * bodyW * 0.85, -bodyH * 0.2, -side * bodyW * 1.0, bodyH * 0.28, -side * bodyW * 1.35, bodyH * 0.08);
+      ctx.stroke();
       ctx.lineWidth = 3;
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeRect(0, 0, w, h);
+      ctx.strokeStyle = '#10110f';
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, bodyW, bodyH * 0.52, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff6c4';
+      ctx.beginPath();
+      ctx.ellipse(side * bodyW * 0.34, -bodyH * 0.36, bodyW * 0.44, bodyD * 0.58, 0.18 * side, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = '#ffdf3d';
-      for (let i = 1; i <= 3; i++) {
-        ctx.fillRect(8, (h / 4) * i, w - 16, 5 + whiffN * 4);
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * bodyW * 0.2, -bodyH * 0.78);
+        ctx.lineTo(i * bodyW * 0.2 + side * (10 + whiffN * 14), -bodyH * (0.98 + whiffN * 0.18));
+        ctx.lineTo(i * bodyW * 0.2 + side * (22 + whiffN * 20), -bodyH * 0.72);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(side * bodyW * 0.46, -bodyH * 0.42, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#10110f';
+      ctx.beginPath();
+      ctx.arc(side * bodyW * 0.49, -bodyH * 0.42, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffdf3d';
+      for (let i = 0; i < 4; i++) {
+        const t = i / 3;
+        ctx.beginPath();
+        ctx.ellipse(-side * bodyW * (0.28 + t * 0.28), -bodyH * 0.16 + t * bodyH * 0.48, 8 + whiffN * 8, 18 + veloN * 12, side * 0.75, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
       }
       ctx.restore();
       ctx.fillStyle = '#10110f';
       ctx.font = '900 12px JetBrains Mono, monospace';
-      ctx.fillText('Canvas fallback active. Pitcher vector table is loaded.', 20, rect.height - 24);
+      ctx.fillText('Canvas fallback active. Vector creature and table are loaded.', 20, rect.height - 24);
     }
 
     async function init() {
