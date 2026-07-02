@@ -1211,6 +1211,30 @@
       return colors[primary] || '#138c9f';
     }
 
+    function typePitcherDescriptor(type, row) {
+      const m = vectorMetrics(row);
+      const descriptors = {
+        Normal: `baseline blend: ${one(m.velo)} mph, ${pct(m.whiff)} whiff, no extreme vector spike`,
+        Fighting: `attack power: firm velo plus whiff pressure, ${one(m.velo)} mph and ${pct(m.whiff)} whiff`,
+        Flying: `ride plane: vertical carry and four-seam lift, V ${signed(m.vz)}, FF ${pct(m.fourSeam)}`,
+        Poison: `deception mix: off-speed/change/split usage at ${pct(m.offspeed)} with shape fade`,
+        Ground: `sink contact: ${pct(m.gb)} ground-ball lean with ${pct(m.sinker)} sinker`,
+        Rock: `heavy horizontal contact: H ${signed(m.rawHx)}, ${pct(m.gb)} ground balls, low whiff drag`,
+        Bug: `breaking-ball anatomy: ${pct(m.breaking)} breaking share, slider/curve-driven shape`,
+        Ghost: `odd slot: ${one(m.arm)} deg arm slot and ${one(m.pcaX)} PCA-x separation`,
+        Steel: `fastball/cutter chassis: ${pct(m.fastball)} hard/cut usage at ${one(m.velo)} mph`,
+        Fire: `velocity heat: ${one(m.velo)} mph fastball band with ${pct(m.whiff)} whiff`,
+        Water: `flow mix: sink/change/off-speed path at ${pct(m.offspeed + m.sinker)}`,
+        Grass: `contact growth: low whiff profile, ${pct(m.whiff)} whiff at ${one(m.velo)} mph`,
+        Electric: `charged miss: ${pct(m.whiff)} whiff with ${Math.round(m.spin || 0)} rpm spin signal`,
+        Psychic: `sequencing brain: ${m.mixCount || 0} usable shapes and centered PCA control`,
+        Ice: `spin freeze: curve/spin pocket, ${pct(m.curve)} curve and ${Math.round(m.spin || 0)} rpm`,
+        Dragon: `elite pressure: upper-end velocity plus bat-missing force, ${one(m.velo)} mph and ${pct(m.whiff)} whiff`,
+        Dark: `uncomfortable tunnel: horizontal/PCA weirdness, H ${signed(m.rawHx)}, PCA-y ${one(m.pcaY)}`,
+      };
+      return descriptors[type] || descriptors.Normal;
+    }
+
     function creaturePlanForRow(row) {
       const m = vectorMetrics(row);
       const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
@@ -1363,6 +1387,9 @@
       const typeParts = creatureTypeParts(row);
       const shapeForm = creatureFormForRow({ ...row, clusterId });
       const generatedType = typeParts.label;
+      const typeDescriptors = [typeParts.primary, typeParts.secondary]
+        .filter(Boolean)
+        .map(type => `${type}: ${typePitcherDescriptor(type, row)}`);
       const out = {
         ...row,
         id: `${row.pitcher}-${row.game_year}-${clusterId}`,
@@ -1375,6 +1402,7 @@
         primaryType: typeParts.primary,
         secondaryType: typeParts.secondary,
         typeReasons: typeParts.reasons,
+        typeDescriptors,
         shapePlan: shapeForm.plan,
         shapeReason: shapeForm.reason,
         bodyPlan: shapeForm.label,
@@ -1412,7 +1440,7 @@
         if (role === 'sp' && !row.is_sp) return false;
         if (role === 'rp' && row.is_sp) return false;
         if (form !== 'all' && row.primaryType !== form) return false;
-        if (query && !`${row.player_name} ${row.displayName} ${row.bucketName} ${row.form} ${row.family} ${row.creatureType} ${row.bodyPlan} ${row.shapeReason} ${(row.typeReasons || []).join(' ')}`.toLowerCase().includes(query)) return false;
+        if (query && !`${row.player_name} ${row.displayName} ${row.bucketName} ${row.form} ${row.family} ${row.creatureType} ${row.bodyPlan} ${row.shapeReason} ${(row.typeReasons || []).join(' ')} ${(row.typeDescriptors || []).join(' ')}`.toLowerCase().includes(query)) return false;
         return true;
       });
     }
@@ -1421,6 +1449,35 @@
       const rows = baseFilteredRows();
       if (selectedType === 'all') return rows;
       return rows.filter(row => row.primaryType === selectedType);
+    }
+
+    function aggregatePitcherRow(rows) {
+      const base = rows[0] || {};
+      const numericFields = [
+        'avg_velo_FF',
+        'whiff_rate',
+        'pfx_x_avg',
+        'pfx_z_avg',
+        'groundball_rate',
+        'spin_overall',
+        'pca_x',
+        'pca_y',
+        'pca_z',
+        'arm_angle',
+      ];
+      const out = { ...base };
+      numericFields.forEach(field => {
+        out[field] = average(rows, row => Number(row[field]) || 0);
+      });
+      const pitchKeys = new Set();
+      rows.forEach(row => {
+        Object.keys(row.pitch_mix || {}).forEach(pitch => pitchKeys.add(pitch));
+      });
+      out.pitch_mix = {};
+      pitchKeys.forEach(pitch => {
+        out.pitch_mix[pitch] = average(rows, row => Number(row.pitch_mix?.[pitch]) || 0);
+      });
+      return out;
     }
 
     function renderBuckets(rows) {
@@ -1433,7 +1490,8 @@
         const avgVelo = average(items, row => Number(row.avg_velo_FF) || 0);
         const dom = dominant(items.map(row => row.bodyPlan));
         const combos = new Set(items.map(row => row.creatureType)).size;
-        return { type, items, avgVelo, dom, combos, color: creatureTypeColor(type) };
+        const descriptor = typePitcherDescriptor(type, aggregatePitcherRow(items));
+        return { type, items, avgVelo, dom, combos, descriptor, color: creatureTypeColor(type) };
       }).sort((a, b) => b.items.length - a.items.length);
 
       const allActive = selectedType === 'all';
@@ -1449,11 +1507,11 @@
 
       els.bucketList.innerHTML = allButton + buckets.map(bucket => {
         return `
-          <button class="bucket ${selectedType === bucket.type ? 'active' : ''}" data-type="${escapeHtml(bucket.type)}">
+          <button class="bucket ${selectedType === bucket.type ? 'active' : ''}" data-type="${escapeHtml(bucket.type)}" title="${escapeHtml(bucket.descriptor)}">
             <span class="dot" style="background:${escapeHtml(bucket.color)}"></span>
             <span>
               <span class="bucket-title">${escapeHtml(bucket.type)}</span>
-              <span class="bucket-meta">${bucket.combos} combos | ${escapeHtml(bucket.dom)} body | ${one(bucket.avgVelo)} mph</span>
+              <span class="bucket-meta">${bucket.combos} combos | ${escapeHtml(bucket.descriptor)}</span>
             </span>
             <span class="bucket-count">${bucket.items.length}</span>
           </button>`;
@@ -1526,7 +1584,7 @@
       els.tableTitle.textContent = bucketLabel;
       els.tableCopy.textContent = selectedType === 'all'
         ? 'All visible pitcher seasons grouped by generated Atlas creature type.'
-        : 'This primary type groups pitchers with similar vector anatomy, movement, power, and pitch-shape traits. Exact dual types stay in the table.';
+        : `${typePitcherDescriptor(selectedType, aggregatePitcherRow(rows))}. Exact dual types stay in the table.`;
       els.sumRows.textContent = rows.length.toLocaleString();
       els.sumForm.textContent = rows.length ? dominant(rows.map(row => row.creatureType)) : 'None';
       els.sumVelo.textContent = rows.length ? `${one(average(rows, row => Number(row.avg_velo_FF) || 0))} mph` : '0.0 mph';
@@ -1557,6 +1615,9 @@
       const reasonChips = (row.typeReasons || []).map(reason => `
         <div class="hitter-chip"><strong>Type trace</strong><span>${escapeHtml(reason)}</span></div>
       `).join('');
+      const descriptorChips = (row.typeDescriptors || []).map(descriptor => `
+        <div class="hitter-chip"><strong>Type descriptor</strong><span>${escapeHtml(descriptor)}</span></div>
+      `).join('');
       const shapeChip = row.shapeReason
         ? `<div class="hitter-chip"><strong>Shape trace</strong><span>${escapeHtml(row.shapeReason)}</span></div>`
         : '';
@@ -1578,6 +1639,7 @@
           </div>
           <div class="hitter-strip">
             ${shapeChip}
+            ${descriptorChips}
             ${reasonChips}
             <div class="hitter-chip"><strong>Power</strong><span>${one(Number(row.avg_velo_FF) || 0)} mph | ${pct(Number(row.whiff_rate) || 0)} whiff</span></div>
             <div class="hitter-chip"><strong>Movement</strong><span>H ${signed(Number(row.pfx_x_avg) || 0)} | V ${signed(Number(row.pfx_z_avg) || 0)}</span></div>
@@ -1796,6 +1858,320 @@
       if ((Number(row.groundball_rate) || 0.38) > 0.47 || vertN < 0.28) return 'tank';
       const plans = ['striker', 'serpent', 'winged', 'tank', 'soft'];
       return plans[Math.floor(seededUnit(seed, 9) * plans.length) % plans.length];
+    }
+
+    function addCoreBody(row, plan, metrics) {
+      const {
+        seed,
+        bodyW,
+        bodyH,
+        bodyD,
+        bodyY,
+        baseColor,
+        bodyColor,
+        accentColor,
+        darkColor,
+        glowColor,
+        whiffN,
+        veloN,
+        horizN,
+        vertN,
+        armRad,
+        side,
+      } = metrics;
+      const primary = row.primaryType || String(row.creatureType || 'Normal').split('/')[0].trim();
+      const bodyPlan = row.bodyPlan || '';
+      const coreMat = makeMaterial(bodyColor, {
+        emissive: baseColor,
+        emissiveIntensity: 0.045 + whiffN * 0.04,
+        roughness: ['Rock', 'Ground'].includes(primary) ? 0.72 : primary === 'Steel' ? 0.38 : 0.5,
+        metalness: primary === 'Steel' ? 0.24 : 0.05,
+      });
+      const armorMat = makeMaterial(darkColor.clone().lerp(accentColor, 0.2), {
+        emissive: baseColor,
+        emissiveIntensity: 0.03,
+        roughness: 0.62,
+        metalness: primary === 'Steel' ? 0.26 : 0.08,
+      });
+      const glowMat = makeMaterial(glowColor, {
+        emissive: accentColor,
+        emissiveIntensity: 0.075,
+        roughness: 0.34,
+        metalness: 0.12,
+      });
+
+      if (bodyPlan === 'Boulder Serpent') {
+        addCreatureMesh(
+          new THREE.DodecahedronGeometry(1, 0),
+          coreMat,
+          [0, bodyY, 0],
+          [bodyW * 1.18, bodyH * 0.72, bodyD * 0.98],
+          [0.18, side * (0.28 + horizN * 0.18), side * 0.16]
+        );
+        [-1, 0, 1].forEach((rockIndex, i) => {
+          addCreatureMesh(
+            new THREE.DodecahedronGeometry(1, 0),
+            makeMaterial(bodyColor.clone().lerp(darkColor, 0.12 + i * 0.07), {
+              emissive: baseColor,
+              emissiveIntensity: 0.018,
+              roughness: 0.78,
+              metalness: 0.04,
+            }),
+            [rockIndex * bodyW * 0.34, bodyY + bodyH * (0.18 - Math.abs(rockIndex) * 0.03), -bodyD * 0.18],
+            [bodyW * (0.28 + seededUnit(seed, 230 + i) * 0.08), bodyH * 0.2, bodyD * 0.26],
+            [seededUnit(seed, 240 + i) * 0.7, side * rockIndex * 0.32, rockIndex * 0.28]
+          );
+        });
+        addCreatureMesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          armorMat,
+          [0, bodyY - bodyH * 0.45, bodyD * 0.06],
+          [bodyW * 0.94, bodyH * 0.12, bodyD * 0.7],
+          [0.06, side * 0.12, 0]
+        );
+        return;
+      }
+
+      if (bodyPlan === 'Blade Mantis') {
+        addCreatureMesh(
+          new THREE.CylinderGeometry(0.72, 0.46, 1.12, 6),
+          coreMat,
+          [0, bodyY + bodyH * 0.04, bodyD * 0.08],
+          [bodyW * 0.78, bodyH * 0.72, bodyD * 0.72],
+          [0.08, side * 0.22, side * 0.22]
+        );
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.5, 1.18, 6),
+          makeMaterial(bodyColor.clone().lerp(darkColor, 0.08), {
+            emissive: baseColor,
+            emissiveIntensity: 0.042,
+            roughness: 0.48,
+            metalness: 0.08,
+          }),
+          [0, bodyY - bodyH * 0.1, -bodyD * 0.76],
+          [bodyW * 0.7, bodyD * 0.9, bodyH * 0.54],
+          [Math.PI / 2.05, side * 0.1, side * 0.1]
+        );
+        [-1, 1].forEach(plateSide => {
+          addCreatureMesh(
+            new THREE.BoxGeometry(0.12, 0.72, 0.5),
+            glowMat,
+            [plateSide * bodyW * 0.48, bodyY + bodyH * 0.12, bodyD * 0.16],
+            [1, 1, 0.26],
+            [0.12, 0, plateSide * 0.36]
+          );
+        });
+        return;
+      }
+
+      if (bodyPlan === 'Sky Raptor' || plan === 'winged') {
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.62, 1.38, 4),
+          coreMat,
+          [0, bodyY, bodyD * 0.03],
+          [bodyW * 0.92, bodyD * 0.88, bodyH * 0.82],
+          [Math.PI / 2.05, side * 0.08, Math.PI / 4 + side * armRad * 0.12]
+        );
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.2 + vertN * 0.08, 0.9 + veloN * 0.24, 4),
+          glowMat,
+          [0, bodyY - bodyH * 0.28, bodyD * 0.14],
+          [1, 1, 0.18],
+          [0.18, 0, Math.PI / 4]
+        );
+        addCreatureMesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          armorMat,
+          [0, bodyY + bodyH * 0.28, -bodyD * 0.18],
+          [bodyW * 0.58, bodyH * 0.11, bodyD * 0.52],
+          [0.08, side * 0.1, 0]
+        );
+        return;
+      }
+
+      if (bodyPlan === 'River Drake') {
+        const coreCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(side * -bodyW * 0.48, bodyY - bodyH * 0.16, bodyD * 0.08),
+          new THREE.Vector3(0, bodyY + bodyH * 0.1, bodyD * 0.04),
+          new THREE.Vector3(side * bodyW * 0.44, bodyY + bodyH * 0.02, -bodyD * 0.26),
+        ]);
+        addCreatureMesh(
+          new THREE.TubeGeometry(coreCurve, 32, 0.17 + bodyD * 0.13, 12, false),
+          coreMat,
+          [0, 0, 0],
+          [1, 1, 1],
+          [0, 0, side * 0.05]
+        );
+        addCreatureMesh(
+          new THREE.CapsuleGeometry(0.36, 0.62, 8, 18),
+          makeMaterial(bodyColor.clone().lerp(glowColor, 0.12), {
+            emissive: baseColor,
+            emissiveIntensity: 0.048,
+            roughness: 0.44,
+          }),
+          [0, bodyY + bodyH * 0.08, bodyD * 0.14],
+          [bodyW * 0.68, bodyH * 0.44, bodyD * 0.86],
+          [0.08, side * 0.34, side * 0.12]
+        );
+        return;
+      }
+
+      if (plan === 'tank') {
+        const shellGeometry = bodyPlan === 'Burrow Tank'
+          ? new THREE.DodecahedronGeometry(1, 0)
+          : new THREE.BoxGeometry(1, 1, 1);
+        addCreatureMesh(
+          shellGeometry,
+          coreMat,
+          [0, bodyY - bodyH * 0.02, 0],
+          [bodyW * 1.12, bodyH * 0.56, bodyD * 1.04],
+          [0.08, side * 0.1, side * 0.04]
+        );
+        addCreatureMesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          armorMat,
+          [0, bodyY + bodyH * 0.3, -bodyD * 0.08],
+          [bodyW * 0.92, bodyH * 0.16, bodyD * 0.82],
+          [0.04, side * 0.08, 0]
+        );
+        if (bodyPlan === 'Burrow Tank') {
+          addCreatureMesh(
+            new THREE.ConeGeometry(0.18 + horizN * 0.08, 0.7 + veloN * 0.18, 12),
+            glowMat,
+            [side * bodyW * 0.62, bodyY - bodyH * 0.02, bodyD * 0.24],
+            [1, 1, 0.84],
+            [Math.PI / 2, 0, side * 0.12]
+          );
+        } else {
+          [-1, 1].forEach(plateSide => {
+            addCreatureMesh(
+              new THREE.BoxGeometry(0.34, 0.14, 0.54),
+              glowMat,
+              [plateSide * bodyW * 0.38, bodyY + bodyH * 0.48, -bodyD * 0.1],
+              [1, 1, 1],
+              [0.1, 0, plateSide * 0.16]
+            );
+          });
+        }
+        return;
+      }
+
+      if (bodyPlan === 'Puzzle Sprite' || (plan === 'soft' && primary === 'Psychic')) {
+        addCreatureMesh(
+          new THREE.OctahedronGeometry(1, 0),
+          coreMat,
+          [0, bodyY, 0],
+          [bodyW * 0.86, bodyH * 0.78, bodyD * 0.86],
+          [0.22, side * 0.32, Math.PI / 4 + side * 0.08]
+        );
+        addCreatureMesh(
+          new THREE.TorusGeometry(0.48 + horizN * 0.14, 0.035 + whiffN * 0.018, 8, 36),
+          glowMat,
+          [0, bodyY + bodyH * 0.03, 0],
+          [bodyW * 1.0, bodyH * 0.66, bodyD * 0.66],
+          [Math.PI / 2.35, side * 0.18, side * 0.38]
+        );
+        return;
+      }
+
+      if (bodyPlan === 'Contact Sprout') {
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.68, 1.08, 7),
+          coreMat,
+          [0, bodyY - bodyH * 0.08, 0],
+          [bodyW * 0.88, bodyH * 0.78, bodyD * 0.86],
+          [0.02, side * 0.18, side * 0.04]
+        );
+        [-1, 1].forEach(leafSide => {
+          addCreatureMesh(
+            new THREE.ConeGeometry(0.26 + vertN * 0.08, 0.86 + horizN * 0.22, 4),
+            makeMaterial(accentColor, {
+              emissive: baseColor,
+              emissiveIntensity: 0.04,
+              transparent: true,
+              opacity: 0.9,
+              roughness: 0.54,
+            }),
+            [leafSide * bodyW * 0.46, bodyY + bodyH * 0.18, -bodyD * 0.02],
+            [1, 1, 0.18],
+            [0.16, 0, leafSide * (Math.PI / 2.55)]
+          );
+        });
+        return;
+      }
+
+      if (bodyPlan === 'Flame Striker' || plan === 'striker') {
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.52, 1.34, primary === 'Electric' ? 4 : 5),
+          coreMat,
+          [0, bodyY + bodyH * 0.02, bodyD * 0.05],
+          [bodyW * 0.78, bodyH * 0.92, bodyD * 0.82],
+          [0.04, side * 0.24, side * 0.12]
+        );
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.18 + whiffN * 0.08, 0.8 + veloN * 0.38, primary === 'Electric' ? 4 : 18),
+          glowMat,
+          [0, bodyY + bodyH * 0.42, -bodyD * 0.1],
+          [1, 1, 0.26],
+          [0.28, 0, side * 0.1]
+        );
+        addCreatureMesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          armorMat,
+          [0, bodyY - bodyH * 0.28, bodyD * 0.12],
+          [bodyW * 0.64, bodyH * 0.1, bodyD * 0.62],
+          [0.04, side * 0.08, 0]
+        );
+        return;
+      }
+
+      if (plan === 'serpent') {
+        const coreCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(side * -bodyW * 0.56, bodyY - bodyH * 0.08, bodyD * 0.02),
+          new THREE.Vector3(0, bodyY + bodyH * 0.11, -bodyD * 0.02),
+          new THREE.Vector3(side * bodyW * 0.52, bodyY - bodyH * 0.02, -bodyD * 0.34),
+        ]);
+        addCreatureMesh(
+          new THREE.TubeGeometry(coreCurve, 34, 0.15 + bodyD * 0.12, 14, false),
+          coreMat,
+          [0, 0, 0],
+          [1, 1, 1],
+          [0, 0, 0]
+        );
+        return;
+      }
+
+      if (plan === 'soft') {
+        addCreatureMesh(
+          new THREE.DodecahedronGeometry(1, 0),
+          coreMat,
+          [0, bodyY, 0],
+          [bodyW * 0.9, bodyH * 0.72, bodyD * 0.9],
+          [0.18, side * 0.24, side * 0.08]
+        );
+        addCreatureMesh(
+          new THREE.TorusGeometry(0.42 + horizN * 0.12, 0.03 + vertN * 0.012, 8, 28),
+          makeMaterial(accentColor, {
+            emissive: accentColor,
+            emissiveIntensity: 0.05,
+            transparent: true,
+            opacity: 0.82,
+            roughness: 0.45,
+          }),
+          [0, bodyY + bodyH * 0.02, 0],
+          [bodyW, bodyH * 0.62, bodyD * 0.68],
+          [Math.PI / 2.2, side * 0.2, side * 0.28]
+        );
+        return;
+      }
+
+      addCreatureMesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        coreMat,
+        [0, bodyY, 0],
+        [bodyW, bodyH * 0.72, bodyD],
+        [0.04 * (seededUnit(seed, 5) - 0.5), armRad * 0.15, (seededUnit(seed, 6) - 0.5) * 0.18]
+      );
     }
 
     function addCreatureHead(row, plan, metrics) {
@@ -2253,13 +2629,25 @@
       const fitScale = clamp(2.65 / Math.max(bodyH, bodyW * 1.2), 0.74, 1.04);
       shapeGroup.scale.setScalar(fitScale);
       const bodyY = 0.72 + bodyH * 0.42;
-      addCreatureMesh(
-        new THREE.SphereGeometry(1, 44, 28),
-        makeMaterial(bodyColor, { emissive: baseColor, emissiveIntensity: 0.045 + whiffN * 0.04, roughness: 0.5 }),
-        [0, bodyY, 0],
-        [bodyW, bodyH, bodyD],
-        [0.04 * (seededUnit(seed, 5) - 0.5), armRad * 0.15, (seededUnit(seed, 6) - 0.5) * 0.18]
-      );
+
+      addCoreBody(row, plan, {
+        seed,
+        bodyW,
+        bodyH,
+        bodyD,
+        bodyY,
+        baseColor,
+        bodyColor,
+        accentColor,
+        darkColor,
+        glowColor,
+        whiffN,
+        veloN,
+        horizN,
+        vertN,
+        armRad,
+        side,
+      });
 
       addCreatureHead(row, plan, {
         seed,
