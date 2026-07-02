@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Atlas Vector Buckets</title>
+  <title>Atlas Vector Types</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@500;700;900&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
@@ -373,6 +373,10 @@
       background: #fffdf6;
       box-shadow: 6px 6px 0 var(--shadow);
       border-radius: 8px;
+    }
+
+    .daily-panel[hidden] {
+      display: none;
     }
 
     .matchup-grid {
@@ -822,7 +826,7 @@
     <header class="topbar">
       <div class="brand">
         <div class="logo">Atlas</div>
-        <div class="subbrand">archetype bucket vs vector shape</div>
+        <div class="subbrand">pitcher type vs vector creature</div>
       </div>
       <div class="controls">
         <input id="search" class="control" type="search" placeholder="Search pitcher...">
@@ -832,8 +836,8 @@
           <option value="sp">SP only</option>
           <option value="rp">RP only</option>
         </select>
-        <select id="form-filter" class="control" aria-label="Vector form filter">
-          <option value="all">All vector forms</option>
+        <select id="form-filter" class="control" aria-label="Creature type filter">
+          <option value="all">All creature types</option>
         </select>
       </div>
       <a class="link-button" href="./">Open Atlas</a>
@@ -842,12 +846,12 @@
     <main class="layout">
       <aside class="bucket-panel">
         <div class="panel-head">
-          <div class="eyebrow">Old words</div>
-          <h2>Archetype Buckets</h2>
-          <p class="microcopy">Click a bucket to table its pitcher seasons against their computed vector shape.</p>
+          <div class="eyebrow">Generated taxonomy</div>
+          <h2>Creature Types</h2>
+          <p class="microcopy">Click a type to table pitcher seasons by generated Atlas creature category.</p>
         </div>
         <div id="bucket-list" class="bucket-list">
-          <div class="status">Loading buckets...</div>
+          <div class="status">Loading types...</div>
         </div>
       </aside>
 
@@ -862,7 +866,7 @@
             </div>
           </div>
           <div class="stat-grid">
-            <div class="stat"><span>Old bucket</span><strong id="stat-bucket">...</strong></div>
+            <div class="stat"><span>Creature type</span><strong id="stat-bucket">...</strong></div>
             <div class="stat"><span>Vector form</span><strong id="stat-form">...</strong></div>
             <div class="stat"><span>Velo / whiff</span><strong id="stat-power">...</strong></div>
             <div class="stat"><span>Movement</span><strong id="stat-move">...</strong></div>
@@ -870,37 +874,37 @@
           </div>
         </section>
 
-        <section class="daily-panel">
+        <section id="search-panel" class="daily-panel" hidden>
           <div class="panel-head">
-            <div class="eyebrow">Daily model anatomy</div>
-            <h2>Starter vector into hitters, then bullpen handoff</h2>
-            <p class="microcopy">Example flow: Mariners bats against Justin Wrobleski plus the Dodgers pen, and Dodgers bats against Bryan Woo plus the Mariners pen.</p>
+            <div class="eyebrow">Search anatomy</div>
+            <h2>Selected pitcher card</h2>
+            <p class="microcopy">Search a pitcher to inspect their generated type, body plan, legacy cluster, and vector traits.</p>
           </div>
           <div id="daily-flow" class="matchup-grid">
-            <div class="status">Loading daily matchup model...</div>
+            <div class="status">Search a pitcher to inspect their vector creature.</div>
           </div>
         </section>
 
         <section class="table-panel">
           <div class="panel-head">
-            <div class="eyebrow">Wordcel table mode</div>
+            <div class="eyebrow">Type table</div>
             <h1 id="table-title">Pitcher vector table</h1>
             <p id="table-copy" class="microcopy">Rows are pitcher seasons. Vector forms are derived from the published Atlas numeric fields.</p>
           </div>
           <div class="summary-strip">
             <div class="summary-cell"><span>Rows</span><strong id="sum-rows">0</strong></div>
-            <div class="summary-cell"><span>Dominant vector</span><strong id="sum-form">...</strong></div>
+            <div class="summary-cell"><span>Dominant type</span><strong id="sum-form">...</strong></div>
             <div class="summary-cell"><span>Avg velo</span><strong id="sum-velo">...</strong></div>
-            <div class="summary-cell"><span>Bucket drift</span><strong id="sum-drift">...</strong></div>
+            <div class="summary-cell"><span>Legacy clusters</span><strong id="sum-drift">...</strong></div>
           </div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Pitcher season</th>
-                  <th>Old archetype</th>
+                  <th>Creature type</th>
                   <th>Vector form</th>
-                  <th>Fit</th>
+                  <th>Legacy cluster</th>
                   <th>Velo</th>
                   <th>Whiff</th>
                   <th>Arm</th>
@@ -932,8 +936,6 @@
     const DATA_URLS = {
       pitchers: './pitcher_seasons.json',
       clusters: './clusters.json',
-      bullpens: './team_bullpen.json',
-      starterInnings: './sp_innings.json',
     };
 
     const els = {
@@ -957,64 +959,26 @@
       statMove: document.getElementById('stat-move'),
       statPca: document.getElementById('stat-pca'),
       dailyFlow: document.getElementById('daily-flow'),
+      searchPanel: document.getElementById('search-panel'),
       canvas: document.getElementById('vector-canvas'),
     };
 
     let clusters = {};
     let pitchers = [];
     let enriched = [];
-    let bullpens = {};
-    let starterInnings = {};
-    let selectedCluster = 'all';
+    let selectedType = 'all';
     let selectedPitcher = null;
     let latestYear = 'all';
     let THREE = null;
     let OrbitControls = null;
-    let renderer, scene, camera, controls, scatterPoints, shapeGroup, raycaster;
-    let scatterRows = [];
-    const pointer = { x: 0, y: 0 };
-    const clusterDominantForms = new Map();
+    let renderer, scene, camera, controls, shapeGroup;
     const rowById = new Map();
-    const LEAGUE_WOBA = 0.315;
-    const DAILY_MATCHUPS = [
-      {
-        offense: 'SEA',
-        defense: 'LAD',
-        title: 'Mariners bats vs Wrobleski',
-        starterId: 680736,
-        starterName: 'Justin Wrobleski',
-        hitters: [
-          { name: 'Cal Raleigh', delta: -0.078, pa: 21 },
-          { name: 'Julio Rodriguez', delta: 0.041, pa: 39 },
-          { name: 'J P Crawford', delta: -0.035, pa: 32 },
-          { name: 'Randy Arozarena', delta: 0.049, pa: 36 },
-          { name: 'Jorge Polanco', delta: -0.091, pa: 6 },
-          { name: 'Mitch Garver', delta: -0.007, pa: 19 },
-        ],
-      },
-      {
-        offense: 'LAD',
-        defense: 'SEA',
-        title: 'Dodgers bats vs Woo',
-        starterId: 693433,
-        starterName: 'Bryan Woo',
-        hitters: [
-          { name: 'Shohei Ohtani', delta: 0.099, pa: 44 },
-          { name: 'Mookie Betts', delta: 0.024, pa: 37 },
-          { name: 'Freddie Freeman', delta: 0.058, pa: 39 },
-          { name: 'Will Smith', delta: 0.010, pa: 18 },
-          { name: 'Max Muncy', delta: -0.006, pa: 24 },
-          { name: 'Teoscar Hernandez', delta: 0.037, pa: 28 },
-        ],
-      },
-    ];
 
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const pct = value => `${Math.round((value || 0) * 100)}%`;
     const one = value => Number.isFinite(value) ? value.toFixed(1) : '0.0';
     const three = value => Number.isFinite(value) ? value.toFixed(3).replace(/^0/, '') : '.000';
     const signed = value => `${value >= 0 ? '+' : ''}${one(value)}`;
-    const signedThree = value => `${value >= 0 ? '+' : ''}${three(value)}`;
 
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -1038,6 +1002,215 @@
         .replace(/[^\x20-\x7E]/g, '')
         .replace(/\s+/g, ' ')
         .trim();
+    }
+
+    function normalizeText(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    }
+
+    function displayPitcherName(row) {
+      const raw = String(row.player_name || '');
+      const parts = raw.split(',').map(part => part.trim()).filter(Boolean);
+      return parts.length === 2 ? `${parts[1]} ${parts[0]}` : raw;
+    }
+
+    function vectorMetrics(row) {
+      const velo = Number(row.avg_velo_FF) || 0;
+      const whiff = Number(row.whiff_rate) || 0;
+      const rawHx = Number(row.pfx_x_avg) || 0;
+      const hx = Math.abs(rawHx);
+      const vz = Number(row.pfx_z_avg) || 0;
+      const gb = Number(row.groundball_rate) || 0.38;
+      const spin = Number(row.spin_overall) || 0;
+      const pcaX = Number(row.pca_x) || 0;
+      const pcaY = Number(row.pca_y) || 0;
+      const pcaZ = Number(row.pca_z) || 0;
+      const arm = Number(row.arm_angle) || 0;
+      const mix = row.pitch_mix || {};
+      const fastball = Number(mix.FF || 0) + Number(mix.SI || 0) + Number(mix.FC || 0);
+      const fourSeam = Number(mix.FF || 0);
+      const sinker = Number(mix.SI || 0);
+      const cutter = Number(mix.FC || 0);
+      const slider = Number(mix.SL || 0) + Number(mix.ST || 0) + Number(mix.SW || 0);
+      const curve = Number(mix.CU || 0) + Number(mix.KC || 0);
+      const breaking = Number(mix.SL || 0) + Number(mix.ST || 0) + Number(mix.CU || 0) + Number(mix.KC || 0) + Number(mix.SW || 0);
+      const offspeed = Number(mix.CH || 0) + Number(mix.FS || 0) + Number(mix.FO || 0);
+      const mixCount = Object.values(mix).map(Number).filter(value => value >= 0.05).length;
+      const pcaRange = Math.abs(pcaX) + Math.abs(pcaY) + Math.abs(pcaZ);
+      return {
+        velo,
+        whiff,
+        rawHx,
+        hx,
+        vz,
+        gb,
+        spin,
+        pcaX,
+        pcaY,
+        pcaZ,
+        pcaRange,
+        arm,
+        fastball,
+        fourSeam,
+        sinker,
+        cutter,
+        slider,
+        curve,
+        breaking,
+        offspeed,
+        mixCount,
+      };
+    }
+
+    function typeScoreRows(row) {
+      const m = vectorMetrics(row);
+      const absArm = Math.abs(m.arm);
+      const scores = [
+        {
+          type: 'Dragon',
+          score: clamp((m.velo - 96.4) / 2.8, 0, 1) * 0.52 + clamp((m.whiff - 0.255) / 0.095, 0, 1) * 0.48,
+          reason: `${one(m.velo)} mph with ${pct(m.whiff)} whiff`,
+        },
+        {
+          type: 'Fire',
+          score: clamp((m.velo - 94.2) / 3.7, 0, 1) * 0.72 + clamp((m.whiff - 0.22) / 0.09, 0, 1) * 0.28,
+          reason: `${one(m.velo)} mph fastball band`,
+        },
+        {
+          type: 'Electric',
+          score: clamp((m.whiff - 0.215) / 0.105, 0, 1) * 0.78 + clamp((m.spin - 2320) / 360, 0, 1) * 0.22,
+          reason: `${pct(m.whiff)} whiff with ${Math.round(m.spin || 0)} rpm`,
+        },
+        {
+          type: 'Flying',
+          score: clamp((m.vz - 0.62) / 0.55, 0, 1) * 0.78 + clamp((m.fourSeam - 0.34) / 0.26, 0, 1) * 0.22,
+          reason: `${signed(m.vz)} vertical ride`,
+        },
+        {
+          type: 'Ground',
+          score: clamp((m.gb - 0.42) / 0.18, 0, 1) * 0.55 + clamp((m.sinker - 0.12) / 0.28, 0, 1) * 0.27 + clamp((0.52 - m.vz) / 0.38, 0, 1) * 0.18,
+          reason: `${pct(m.gb)} GB and ${pct(m.sinker)} sinker`,
+        },
+        {
+          type: 'Rock',
+          score: clamp((m.gb - 0.46) / 0.16, 0, 1) * 0.45 + clamp((m.hx - 0.48) / 0.46, 0, 1) * 0.33 + clamp((0.22 - m.whiff) / 0.1, 0, 1) * 0.22,
+          reason: `${pct(m.gb)} GB with ${signed(m.rawHx)} horizontal run`,
+        },
+        {
+          type: 'Steel',
+          score: clamp((m.fastball + m.cutter - 0.52) / 0.32, 0, 1) * 0.52 + clamp((m.velo - 92.5) / 4.5, 0, 1) * 0.34 + clamp((0.5 - Math.abs(m.pcaY)) / 1.6, 0, 1) * 0.14,
+          reason: `${pct(m.fastball + m.cutter)} fastball/cutter structure`,
+        },
+        {
+          type: 'Poison',
+          score: clamp((m.offspeed - 0.11) / 0.24, 0, 1) * 0.66 + clamp((m.hx - 0.5) / 0.55, 0, 1) * 0.18 + clamp((0.235 - m.whiff) / 0.12, 0, 1) * 0.16,
+          reason: `${pct(m.offspeed)} change/split/off-speed`,
+        },
+        {
+          type: 'Bug',
+          score: clamp((m.breaking - 0.24) / 0.34, 0, 1) * 0.72 + clamp((m.slider + m.curve - 0.26) / 0.36, 0, 1) * 0.28,
+          reason: `${pct(m.breaking)} breaking-ball share`,
+        },
+        {
+          type: 'Psychic',
+          score: clamp((m.mixCount - 3) / 3, 0, 1) * 0.58 + clamp((0.25 - Math.abs(m.pcaZ)) / 1.1, 0, 1) * 0.22 + clamp((m.spin - 2260) / 360, 0, 1) * 0.2,
+          reason: `${m.mixCount || 0} pitch shapes with centered PCA`,
+        },
+        {
+          type: 'Ghost',
+          score: clamp((absArm - 68) / 32, 0, 1) * 0.52 + clamp((Math.abs(m.pcaX) - 4.2) / 2.2, 0, 1) * 0.48,
+          reason: `${one(m.arm)} deg slot and ${one(m.pcaX)} PCA-x`,
+        },
+        {
+          type: 'Dark',
+          score: clamp((Math.abs(m.pcaY) - 1.1) / 2.4, 0, 1) * 0.45 + clamp((m.hx - 0.62) / 0.42, 0, 1) * 0.35 + clamp((0.2 - m.whiff) / 0.08, 0, 1) * 0.2,
+          reason: `${signed(m.rawHx)} horizontal shape with ${one(m.pcaY)} PCA-y`,
+        },
+        {
+          type: 'Water',
+          score: clamp((m.offspeed + m.sinker - 0.18) / 0.36, 0, 1) * 0.62 + clamp((0.35 - Math.abs(m.pcaZ)) / 1.1, 0, 1) * 0.2 + clamp((m.vz - 0.45) / 0.5, 0, 1) * 0.18,
+          reason: `${pct(m.offspeed + m.sinker)} sink/change flow`,
+        },
+        {
+          type: 'Ice',
+          score: clamp((m.curve - 0.08) / 0.2, 0, 1) * 0.45 + clamp((m.spin - 2420) / 280, 0, 1) * 0.34 + clamp((m.whiff - 0.23) / 0.09, 0, 1) * 0.21,
+          reason: `${pct(m.curve)} curve with ${Math.round(m.spin || 0)} rpm`,
+        },
+        {
+          type: 'Fighting',
+          score: clamp((m.velo - 93.2) / 3.6, 0, 1) * 0.42 + clamp((m.whiff - 0.235) / 0.08, 0, 1) * 0.42 + clamp((m.fastball - 0.48) / 0.26, 0, 1) * 0.16,
+          reason: `${one(m.velo)} mph attack with ${pct(m.whiff)} whiff`,
+        },
+        {
+          type: 'Grass',
+          score: clamp((0.21 - m.whiff) / 0.09, 0, 1) * 0.54 + clamp((93.2 - m.velo) / 4.8, 0, 1) * 0.26 + clamp((m.mixCount - 3) / 3, 0, 1) * 0.2,
+          reason: `${pct(m.whiff)} whiff and ${one(m.velo)} mph contact profile`,
+        },
+        {
+          type: 'Normal',
+          score: 0.34 + clamp((0.58 - Math.abs(m.pcaRange - 4.2)) / 1.8, 0, 0.18),
+          reason: `balanced ${one(m.pcaRange)} PCA range`,
+        },
+      ];
+      return scores.sort((a, b) => b.score - a.score);
+    }
+
+    function creatureTypeParts(row) {
+      const ranked = typeScoreRows(row);
+      const primary = ranked[0]?.type || 'Normal';
+      const secondary = ranked.find(item => item.type !== primary && item.score >= 0.46)?.type || '';
+      const reasons = ranked
+        .filter(item => item.type === primary || item.type === secondary)
+        .map(item => `${item.type}: ${item.reason}`);
+      return {
+        primary,
+        secondary,
+        label: secondary ? `${primary} / ${secondary}` : primary,
+        reasons,
+      };
+    }
+
+    function creatureType(row) {
+      return creatureTypeParts(row).label;
+    }
+
+    function creatureTypeColor(type) {
+      const primary = String(type || '').split('/')[0].trim();
+      const colors = {
+        Normal: '#c2b7a3',
+        Fighting: '#d25a42',
+        Flying: '#72a7f5',
+        Poison: '#9f5bd1',
+        Ground: '#c79b5c',
+        Rock: '#9a8567',
+        Bug: '#91b83f',
+        Ghost: '#5a5486',
+        Steel: '#8fa4aa',
+        Fire: '#ff5a45',
+        Water: '#3498db',
+        Grass: '#68bf5a',
+        Electric: '#f7c948',
+        Psychic: '#f0609d',
+        Ice: '#72d6d2',
+        Dragon: '#7a55e6',
+        Dark: '#5d514b',
+      };
+      return colors[primary] || '#138c9f';
+    }
+
+    function creaturePlanForRow(row) {
+      const m = vectorMetrics(row);
+      const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
+      const veloN = clamp((m.velo - 88) / 12, 0.05, 1);
+      const whiffN = clamp((m.whiff - 0.14) / 0.22, 0.05, 1);
+      const horizN = clamp(m.hx / 1.2, 0.05, 1);
+      const vertN = clamp((m.vz - 0.1) / 1.1, 0.05, 1);
+      return creaturePlan(row, seed, veloN, whiffN, horizN, vertN);
     }
 
     function vectorFamily(p) {
@@ -1095,12 +1268,22 @@
       const info = clusters[clusterId] || {};
       const form = vectorForm(row);
       const family = vectorFamily(row);
+      const typeParts = creatureTypeParts(row);
+      const generatedType = typeParts.label;
       const out = {
         ...row,
         id: `${row.pitcher}-${row.game_year}-${clusterId}`,
         clusterId,
         bucketName: cleanBucketName(clusterId, row.archetype),
-        color: info.color || '#138c9f',
+        legacyColor: info.color || '#138c9f',
+        color: creatureTypeColor(generatedType),
+        typeColor: creatureTypeColor(generatedType),
+        creatureType: generatedType,
+        primaryType: typeParts.primary,
+        secondaryType: typeParts.secondary,
+        typeReasons: typeParts.reasons,
+        bodyPlan: creaturePlanForRow({ ...row, clusterId }),
+        displayName: displayPitcherName(row),
         hand: row.is_rhp ? 'RHP' : 'LHP',
         role: row.is_sp ? 'SP' : 'RP',
         form,
@@ -1111,152 +1294,15 @@
       return out;
     }
 
-    function computeDominantForms(rows) {
-      clusterDominantForms.clear();
-      const byCluster = new Map();
-      rows.forEach(row => {
-        if (!byCluster.has(row.clusterId)) byCluster.set(row.clusterId, []);
-        byCluster.get(row.clusterId).push(row);
-      });
-      byCluster.forEach((items, clusterId) => {
-        const counts = new Map();
-        items.forEach(row => counts.set(row.family, (counts.get(row.family) || 0) + 1));
-        const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-        clusterDominantForms.set(clusterId, top ? top[0] : 'Balanced Shape');
-      });
-    }
-
-    function latestPitcherById(id) {
-      const rows = enriched
-        .filter(row => String(row.pitcher) === String(id))
-        .sort((a, b) => b.game_year - a.game_year);
-      return rows[0] || null;
-    }
-
-    function teamBullpen(abbr) {
-      const teams = Object.values(bullpens.teams || {});
-      return teams.find(team => team.abbr === abbr) || null;
-    }
-
-    function starterIp(row, defenseAbbr) {
-      const leash = starterInnings[String(row.pitcher)];
-      const teamPen = teamBullpen(defenseAbbr);
-      const ip = Number(leash?.avg_ip_per_start) || Number(teamPen?.sp_avg_ip_per_start) || 5.6;
-      return clamp(ip, 3.2, 7.2);
-    }
-
-    function pitcherPowerScore(row) {
-      const velo = clamp(((Number(row.avg_velo_FF) || 92) - 88) / 12, 0, 1);
-      const whiff = clamp(((Number(row.whiff_rate) || 0.2) - 0.14) / 0.22, 0, 1);
-      const move = clamp((Math.abs(Number(row.pfx_x_avg) || 0) + Math.abs(Number(row.pfx_z_avg) || 0)) / 1.8, 0, 1);
-      return velo * 0.42 + whiff * 0.38 + move * 0.20;
-    }
-
-    function dailySide(matchup) {
-      const starter = latestPitcherById(matchup.starterId);
-      if (!starter) return null;
-      const pen = teamBullpen(matchup.defense);
-      const ip = starterIp(starter, matchup.defense);
-      const reliefIp = Math.max(0, 9 - ip);
-      const penDelta = Number(pen?.vs_league_runs_per_ip || 0) * reliefIp;
-      const hitterRows = matchup.hitters.map(hitter => ({
-        display: hitter.name,
-        pa: Number(hitter.pa) || 0,
-        delta: Number(hitter.delta) || 0,
-        adjusted: LEAGUE_WOBA + (Number(hitter.delta) || 0),
-        matched: true,
-      }));
-      const adjusted = average(hitterRows, row => row.adjusted);
-      const hitterDelta = adjusted - LEAGUE_WOBA;
-      const power = pitcherPowerScore(starter);
-      const pressureLabel = hitterDelta >= 0.018 ? 'Hitters boost' : hitterDelta <= -0.018 ? 'Pitcher block' : 'Neutral pull';
-      const height = Math.round(42 + power * 38);
-      const width = Math.round(22 + clamp(Math.abs(Number(starter.pfx_x_avg) || 0) / 1.05, 0, 1) * 26);
-      return {
-        ...matchup,
-        starter,
-        pen,
-        ip,
-        reliefIp,
-        penDelta,
-        hitterRows,
-        adjusted,
-        hitterDelta,
-        power,
-        pressureLabel,
-        height,
-        width,
-      };
-    }
-
-    function renderDailyUsage() {
-      if (!els.dailyFlow) return;
-      const sides = DAILY_MATCHUPS.map(dailySide).filter(Boolean);
-      if (!sides.length) {
-        els.dailyFlow.innerHTML = '<div class="status">Daily matchup inputs are unavailable.</div>';
-        return;
-      }
-      els.dailyFlow.innerHTML = sides.map(side => {
-        const starter = side.starter;
-        const pen = side.pen;
-        const color = starter.color || '#138c9f';
-        const cluster = cleanBucketName(starter.clusterId, starter.archetype);
-        const hitRows = side.hitterRows.slice(0, 6).map(row => `
-          <div class="hitter-chip">
-            <strong>${escapeHtml(row.display)}</strong>
-            <span>${row.matched ? `${signedThree(row.delta)} adj wOBA` : 'baseline only'} | ${Math.round(row.pa)} PA</span>
-          </div>`).join('');
-        return `
-          <article class="match-card">
-            <div class="match-card-head">
-              <div class="match-title">
-                <div class="eyebrow">${escapeHtml(side.offense)} offense into ${escapeHtml(side.defense)} run prevention</div>
-                <h3>${escapeHtml(side.title)}</h3>
-              </div>
-              <div class="match-tag">${escapeHtml(side.pressureLabel)}</div>
-            </div>
-            <div class="model-lane">
-              <div class="model-node">
-                <div class="mini-land">
-                  <div class="mini-building" style="--starter:${escapeHtml(color)};--h:${side.height}px;--w:${side.width}px"></div>
-                </div>
-                <div class="node-copy">
-                  <strong>${escapeHtml(starter.player_name)} ${starter.game_year}</strong>
-                  <span>${escapeHtml(starter.hand)} ${escapeHtml(starter.form)} | ${escapeHtml(cluster)} | ${one(Number(starter.avg_velo_FF) || 0)} mph | ${pct(Number(starter.whiff_rate) || 0)} whiff</span>
-                </div>
-              </div>
-              <div class="lane-arrow">-&gt;</div>
-              <div class="model-node">
-                <div class="mini-land">
-                  <div class="mini-building" style="--starter:#111;--h:${Math.round(46 + clamp(Math.abs(side.penDelta) / 0.5, 0, 1) * 30)}px;--w:34px"></div>
-                </div>
-                <div class="node-copy">
-                  <strong>${escapeHtml(side.defense)} bullpen handoff</strong>
-                  <span>${one(side.reliefIp)} IP expected | ${three(Number(pen?.rp_runs_per_ip) || 0)} R/IP | ${signedThree(Number(pen?.vs_league_runs_per_ip) || 0)} vs lg R/IP</span>
-                </div>
-              </div>
-            </div>
-            <div class="match-metrics">
-              <div class="match-metric"><span>Starter leash</span><strong>${one(side.ip)} IP</strong></div>
-              <div class="match-metric"><span>Lineup pressure</span><strong>${signedThree(side.hitterDelta)} wOBA</strong></div>
-              <div class="match-metric"><span>Pen delta</span><strong>${signedThree(side.penDelta)} runs</strong></div>
-              <div class="match-metric"><span>Pick gate</span><strong>Needs market</strong></div>
-            </div>
-            <div class="hitter-strip">${hitRows}</div>
-            <p class="model-warning">This illustrates the daily model layers. It becomes a pick only after simulated win probability is compared with no-vig market probability.</p>
-          </article>`;
-      }).join('');
-    }
-
     function populateFilters() {
       const years = [...new Set(enriched.map(row => row.game_year))].sort((a, b) => b - a);
       latestYear = String(years[0] || 'all');
       els.year.innerHTML = `<option value="latest">Latest season (${latestYear})</option><option value="all">All seasons</option>` +
         years.map(year => `<option value="${year}">${year}</option>`).join('');
 
-      const forms = [...new Set(enriched.map(row => row.family))].sort();
-      els.form.innerHTML = '<option value="all">All vector forms</option>' +
-        forms.map(form => `<option value="${escapeHtml(form)}">${escapeHtml(form)}</option>`).join('');
+      const forms = [...new Set(enriched.map(row => row.primaryType))].sort();
+      els.form.innerHTML = '<option value="all">All creature types</option>' +
+        forms.map(form => `<option value="${escapeHtml(form)}">${escapeHtml(form)} type</option>`).join('');
     }
 
     function baseFilteredRows() {
@@ -1270,50 +1316,49 @@
         if (year !== 'all' && String(row.game_year) !== String(year)) return false;
         if (role === 'sp' && !row.is_sp) return false;
         if (role === 'rp' && row.is_sp) return false;
-        if (form !== 'all' && row.family !== form) return false;
-        if (query && !`${row.player_name} ${row.bucketName} ${row.form} ${row.family}`.toLowerCase().includes(query)) return false;
+        if (form !== 'all' && row.primaryType !== form) return false;
+        if (query && !`${row.player_name} ${row.displayName} ${row.bucketName} ${row.form} ${row.family} ${row.creatureType} ${row.bodyPlan} ${(row.typeReasons || []).join(' ')}`.toLowerCase().includes(query)) return false;
         return true;
       });
     }
 
     function activeRows() {
       const rows = baseFilteredRows();
-      if (selectedCluster === 'all') return rows;
-      return rows.filter(row => row.clusterId === selectedCluster);
+      if (selectedType === 'all') return rows;
+      return rows.filter(row => row.primaryType === selectedType);
     }
 
     function renderBuckets(rows) {
       const groups = new Map();
       rows.forEach(row => {
-        if (!groups.has(row.clusterId)) groups.set(row.clusterId, []);
-        groups.get(row.clusterId).push(row);
+        if (!groups.has(row.primaryType)) groups.set(row.primaryType, []);
+        groups.get(row.primaryType).push(row);
       });
-      const buckets = [...groups.entries()].map(([clusterId, items]) => {
-        const info = clusters[clusterId] || {};
+      const buckets = [...groups.entries()].map(([type, items]) => {
         const avgVelo = average(items, row => Number(row.avg_velo_FF) || 0);
-        const dom = dominant(items.map(row => row.family));
-        return { clusterId, items, info, avgVelo, dom };
+        const dom = dominant(items.map(row => row.bodyPlan));
+        const combos = new Set(items.map(row => row.creatureType)).size;
+        return { type, items, avgVelo, dom, combos, color: creatureTypeColor(type) };
       }).sort((a, b) => b.items.length - a.items.length);
 
-      const allActive = selectedCluster === 'all';
+      const allActive = selectedType === 'all';
       const allButton = `
-        <button class="bucket ${allActive ? 'active' : ''}" data-cluster="all">
+        <button class="bucket ${allActive ? 'active' : ''}" data-type="all">
           <span class="dot" style="background:#111"></span>
           <span>
-            <span class="bucket-title">All archetype buckets</span>
-            <span class="bucket-meta">${buckets.length} buckets visible</span>
+            <span class="bucket-title">All creature types</span>
+            <span class="bucket-meta">${buckets.length} primary types visible</span>
           </span>
           <span class="bucket-count">${rows.length}</span>
         </button>`;
 
       els.bucketList.innerHTML = allButton + buckets.map(bucket => {
-        const title = cleanBucketName(bucket.clusterId, bucket.clusterId);
         return `
-          <button class="bucket ${selectedCluster === bucket.clusterId ? 'active' : ''}" data-cluster="${escapeHtml(bucket.clusterId)}">
-            <span class="dot" style="background:${escapeHtml(bucket.info.color || '#138c9f')}"></span>
+          <button class="bucket ${selectedType === bucket.type ? 'active' : ''}" data-type="${escapeHtml(bucket.type)}">
+            <span class="dot" style="background:${escapeHtml(bucket.color)}"></span>
             <span>
-              <span class="bucket-title">${escapeHtml(title)}</span>
-              <span class="bucket-meta">${escapeHtml(bucket.dom)} | ${one(bucket.avgVelo)} mph</span>
+              <span class="bucket-title">${escapeHtml(bucket.type)}</span>
+              <span class="bucket-meta">${bucket.combos} combos | ${escapeHtml(bucket.dom)} body | ${one(bucket.avgVelo)} mph</span>
             </span>
             <span class="bucket-count">${bucket.items.length}</span>
           </button>`;
@@ -1321,7 +1366,7 @@
 
       els.bucketList.querySelectorAll('.bucket').forEach(button => {
         button.addEventListener('click', () => {
-          selectedCluster = button.dataset.cluster || 'all';
+          selectedType = button.dataset.type || 'all';
           const rowsNow = activeRows();
           selectedPitcher = rowsNow[0] || null;
           renderAll();
@@ -1341,10 +1386,6 @@
       return top ? top[0] : 'None';
     }
 
-    function fitLabel(row) {
-      return row.family === clusterDominantForms.get(row.clusterId) ? 'Bucket fit' : 'Vector drift';
-    }
-
     function renderTable(rows) {
       if (!rows.length) {
         els.pitcherBody.innerHTML = '<tr><td colspan="11" class="status">No pitchers match these filters.</td></tr>';
@@ -1358,13 +1399,12 @@
 
       els.pitcherBody.innerHTML = sorted.map(row => {
         const selected = selectedPitcher && selectedPitcher.id === row.id;
-        const fit = fitLabel(row);
         return `
           <tr data-id="${escapeHtml(row.id)}" class="${selected ? 'selected' : ''}">
             <td class="name-cell">${escapeHtml(row.player_name)} <span class="mono">${row.game_year}</span></td>
-            <td>${escapeHtml(row.bucketName)}</td>
+            <td><span class="pill" title="${escapeHtml((row.typeReasons || []).join(' | '))}" style="background:${escapeHtml(row.typeColor)};color:#10110f">${escapeHtml(row.creatureType)}</span></td>
             <td><span class="pill">${escapeHtml(row.form)}</span></td>
-            <td><span class="pill ${fit === 'Bucket fit' ? 'fit' : 'drift'}">${escapeHtml(fit)}</span></td>
+            <td>${escapeHtml(row.bucketName)}</td>
             <td class="mono">${one(Number(row.avg_velo_FF) || 0)}</td>
             <td class="mono">${pct(Number(row.whiff_rate) || 0)}</td>
             <td class="mono">${escapeHtml(row.slot)}</td>
@@ -1385,51 +1425,121 @@
     }
 
     function renderSummary(rows) {
-      const bucketLabel = selectedCluster === 'all'
-        ? 'All archetype buckets'
-        : cleanBucketName(selectedCluster, selectedCluster);
+      const bucketLabel = selectedType === 'all'
+        ? 'All creature types'
+        : `${selectedType} type`;
       els.tableTitle.textContent = bucketLabel;
-      els.tableCopy.textContent = selectedCluster === 'all'
-        ? 'All visible pitcher seasons, grouped by old archetype bucket and translated into numeric vector forms.'
-        : 'This bucket shows where the old archetype word matches the numeric vector shape, and where it drifts.';
+      els.tableCopy.textContent = selectedType === 'all'
+        ? 'All visible pitcher seasons grouped by generated Atlas creature type.'
+        : 'This primary type groups pitchers with similar vector anatomy, movement, power, and pitch-shape traits. Exact dual types stay in the table.';
       els.sumRows.textContent = rows.length.toLocaleString();
-      els.sumForm.textContent = rows.length ? dominant(rows.map(row => row.family)) : 'None';
+      els.sumForm.textContent = rows.length ? dominant(rows.map(row => row.creatureType)) : 'None';
       els.sumVelo.textContent = rows.length ? `${one(average(rows, row => Number(row.avg_velo_FF) || 0))} mph` : '0.0 mph';
-      const drift = rows.length
-        ? rows.filter(row => fitLabel(row) !== 'Bucket fit').length / rows.length
-        : 0;
-      els.sumDrift.textContent = pct(drift);
+      els.sumDrift.textContent = rows.length ? new Set(rows.map(row => row.bucketName)).size.toLocaleString() : '0';
     }
 
     function updateSelectedPitcher() {
       if (!selectedPitcher) return;
       const row = selectedPitcher;
       els.readoutName.textContent = `${row.player_name} ${row.game_year}`;
-      els.readoutLine.textContent = `${row.hand} ${row.role} | old bucket: ${row.bucketName} | vector form: ${row.form}`;
-      els.statBucket.textContent = row.bucketName;
-      els.statForm.textContent = row.form;
+      els.readoutLine.textContent = `${row.hand} ${row.role} | ${row.creatureType} type | ${row.bodyPlan} body | legacy cluster: ${row.bucketName}`;
+      els.statBucket.textContent = row.creatureType;
+      els.statForm.textContent = `${row.bodyPlan} | ${row.form}`;
       els.statPower.textContent = `${one(Number(row.avg_velo_FF) || 0)} mph / ${pct(Number(row.whiff_rate) || 0)}`;
       els.statMove.textContent = `H ${signed(Number(row.pfx_x_avg) || 0)} / V ${signed(Number(row.pfx_z_avg) || 0)} / ${row.slot}`;
       els.statPca.textContent = `${one(Number(row.pca_x) || 0)}, ${one(Number(row.pca_y) || 0)}, ${one(Number(row.pca_z) || 0)}`;
       buildSelectedShape(row);
-      highlightScatterSelection(row);
+      renderSearchPanel();
+    }
+
+    function renderSearchPanel() {
+      const query = els.search.value.trim();
+      if (!query || !selectedPitcher) {
+        els.searchPanel.hidden = true;
+        return;
+      }
+      const row = selectedPitcher;
+      const reasonChips = (row.typeReasons || []).map(reason => `
+        <div class="hitter-chip"><strong>Type trace</strong><span>${escapeHtml(reason)}</span></div>
+      `).join('');
+      els.searchPanel.hidden = false;
+      els.dailyFlow.innerHTML = `
+        <article class="match-card">
+          <div class="match-card-head">
+            <div class="match-title">
+              <div class="eyebrow">Generated creature classification</div>
+              <h3>${escapeHtml(row.displayName || row.player_name)}</h3>
+            </div>
+            <div class="match-tag">${escapeHtml(row.creatureType)}</div>
+          </div>
+          <div class="match-metrics">
+            <div class="match-metric"><span>Body plan</span><strong>${escapeHtml(row.bodyPlan)}</strong></div>
+            <div class="match-metric"><span>Vector form</span><strong>${escapeHtml(row.form)}</strong></div>
+            <div class="match-metric"><span>Legacy cluster</span><strong>${escapeHtml(row.bucketName)}</strong></div>
+            <div class="match-metric"><span>Role</span><strong>${escapeHtml(row.hand)} ${escapeHtml(row.role)}</strong></div>
+          </div>
+          <div class="hitter-strip">
+            ${reasonChips}
+            <div class="hitter-chip"><strong>Power</strong><span>${one(Number(row.avg_velo_FF) || 0)} mph | ${pct(Number(row.whiff_rate) || 0)} whiff</span></div>
+            <div class="hitter-chip"><strong>Movement</strong><span>H ${signed(Number(row.pfx_x_avg) || 0)} | V ${signed(Number(row.pfx_z_avg) || 0)}</span></div>
+            <div class="hitter-chip"><strong>Slot</strong><span>${escapeHtml(row.slot)} | ${one(Number(row.arm_angle) || 0)} deg</span></div>
+          </div>
+          <p class="model-warning">Search view only. Game matchup, hitter exposure, and bullpen handoff should appear only after selecting a real game context.</p>
+        </article>`;
+    }
+
+    function bestSearchMatch(rows) {
+      const query = normalizeText(els.search.value);
+      if (!query || !rows.length) return rows[0] || null;
+      const scored = rows.map(row => {
+        const raw = normalizeText(row.player_name);
+        const display = normalizeText(row.displayName);
+        const tokens = new Set(`${raw} ${display}`.split(' ').filter(Boolean));
+        let score = 0;
+        if (raw === query || display === query) score += 1000;
+        if (tokens.has(query)) score += 800;
+        if (raw.startsWith(query) || display.startsWith(query)) score += 500;
+        if (raw.includes(query) || display.includes(query)) score += 100;
+        score += Number(row.game_year) || 0;
+        return { row, score };
+      });
+      return scored.sort((a, b) => b.score - a.score)[0]?.row || rows[0] || null;
+    }
+
+    function displayScore(row) {
+      const topType = typeScoreRows(row)[0]?.score || 0;
+      const veloN = clamp(((Number(row.avg_velo_FF) || 90) - 90) / 9, 0, 1);
+      const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.18) / 0.18, 0, 1);
+      const moveN = clamp((Math.abs(Number(row.pfx_x_avg) || 0) + Math.abs(Number(row.pfx_z_avg) || 0)) / 1.8, 0, 1);
+      return topType * 1.4 + veloN * 0.7 + whiffN * 0.8 + moveN * 0.35 + (row.is_sp ? 0.12 : 0) + row.prob * 0.12;
+    }
+
+    function defaultPitcher(rows) {
+      return [...rows].sort((a, b) => {
+        const scoreDiff = displayScore(b) - displayScore(a);
+        if (Math.abs(scoreDiff) > 0.001) return scoreDiff;
+        if (b.game_year !== a.game_year) return b.game_year - a.game_year;
+        return String(a.player_name).localeCompare(String(b.player_name));
+      })[0] || null;
     }
 
     function renderAll() {
       const baseRows = baseFilteredRows();
-      if (selectedCluster !== 'all' && !baseRows.some(row => row.clusterId === selectedCluster)) {
-        selectedCluster = 'all';
+      if (selectedType !== 'all' && !baseRows.some(row => row.primaryType === selectedType)) {
+        selectedType = 'all';
       }
       const rows = activeRows();
+      const hasSearch = !!els.search.value.trim();
+      if (hasSearch) {
+        selectedPitcher = bestSearchMatch(rows);
+      }
       if (!selectedPitcher || !rows.some(row => row.id === selectedPitcher.id)) {
-        selectedPitcher = rows[0] || baseRows[0] || enriched[0] || null;
+        selectedPitcher = defaultPitcher(rows) || defaultPitcher(baseRows) || defaultPitcher(enriched);
       }
       renderBuckets(baseRows);
       renderSummary(rows);
       renderTable(rows);
-      rebuildScatter(baseRows);
       updateSelectedPitcher();
-      renderDailyUsage();
     }
 
     async function loadThree() {
@@ -1482,9 +1592,6 @@
       shapeGroup.position.set(2.15, 0.05, 0);
       scene.add(shapeGroup);
 
-      raycaster = new THREE.Raycaster();
-      raycaster.params.Points.threshold = 0.16;
-      els.canvas.addEventListener('pointerdown', onCanvasPointer);
       window.addEventListener('resize', resizeThree);
       resizeThree();
       animate();
@@ -1499,42 +1606,6 @@
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-    }
-
-    function rebuildScatter(rows) {
-      scatterRows = rows;
-      if (!scene || !THREE) return;
-      if (scatterPoints) {
-        scene.remove(scatterPoints);
-        scatterPoints.geometry.dispose();
-        scatterPoints.material.dispose();
-      }
-      const positions = new Float32Array(rows.length * 3);
-      const colors = new Float32Array(rows.length * 3);
-      rows.forEach((row, i) => {
-        positions[i * 3] = (Number(row.pca_x) || 0) * 0.22 - 2.25;
-        positions[i * 3 + 1] = (Number(row.pca_z) || 0) * 0.26 + 1.05;
-        positions[i * 3 + 2] = -(Number(row.pca_y) || 0) * 0.38;
-        const color = new THREE.Color(row.color || '#138c9f');
-        const active = selectedCluster === 'all' || row.clusterId === selectedCluster;
-        color.lerp(new THREE.Color(active ? 0xffffff : 0x111111), active ? 0.05 : 0.72);
-        colors[i * 3] = color.r;
-        colors[i * 3 + 1] = color.g;
-        colors[i * 3 + 2] = color.b;
-      });
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      const mat = new THREE.PointsMaterial({
-        size: 0.095,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.9,
-        depthWrite: false,
-      });
-      scatterPoints = new THREE.Points(geo, mat);
-      scatterPoints.userData.type = 'pitcher-scatter';
-      scene.add(scatterPoints);
     }
 
     function clearGroup(group) {
@@ -1765,6 +1836,7 @@
         return;
       }
       clearGroup(shapeGroup);
+      shapeGroup.scale.setScalar(1);
       const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
       const veloN = clamp(((Number(row.avg_velo_FF) || 90) - 88) / 12, 0.05, 1);
       const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.14) / 0.22, 0.05, 1);
@@ -1787,7 +1859,7 @@
       const plan = creaturePlan(row, seed, veloN, whiffN, horizN, vertN);
 
       let bodyW = 0.58 + horizN * 0.55 + seededUnit(seed, 3) * 0.12;
-      let bodyH = 0.9 + veloN * 1.4 + whiffN * 0.36;
+      let bodyH = 0.82 + veloN * 0.95 + whiffN * 0.3;
       let bodyD = 0.48 + vertN * 0.48 + seededUnit(seed, 4) * 0.1;
       if (plan === 'serpent') {
         bodyW *= 0.72;
@@ -1795,7 +1867,7 @@
         bodyD *= 0.94;
       } else if (plan === 'winged') {
         bodyW *= 0.84;
-        bodyH *= 1.04;
+        bodyH *= 1.02;
         bodyD *= 0.86;
       } else if (plan === 'tank') {
         bodyW *= 1.28;
@@ -1803,13 +1875,15 @@
         bodyD *= 1.16;
       } else if (plan === 'striker') {
         bodyW *= 0.88;
-        bodyH *= 1.16;
+        bodyH *= 1.08;
         bodyD *= 0.82;
       } else if (plan === 'soft') {
         bodyW *= 1.14;
         bodyH *= 0.92;
         bodyD *= 1.08;
       }
+      const fitScale = clamp(2.65 / Math.max(bodyH, bodyW * 1.2), 0.74, 1.04);
+      shapeGroup.scale.setScalar(fitScale);
       const bodyY = 0.72 + bodyH * 0.42;
       addCreatureMesh(
         new THREE.SphereGeometry(1, 44, 28),
@@ -1882,17 +1956,19 @@
 
       const mixEntries = pitchMixEntries(row, seed);
       mixEntries.forEach(([pitch, share], i) => {
-        const angle = (i / mixEntries.length) * Math.PI * 2 + seededUnit(seed, 40) * Math.PI;
-        const radiusX = bodyW + 0.34 + share * 0.55;
-        const radiusZ = bodyD + 0.24 + share * 0.36;
-        const size = 0.1 + Math.sqrt(share) * 0.44;
-        const y = bodyY - bodyH * 0.1 + seededUnit(seed, 50 + i) * bodyH * 0.68;
+        const t = mixEntries.length === 1 ? 0.5 : i / (mixEntries.length - 1);
+        const plateColor = pitchColor(pitch, baseColor);
+        const plateH = 0.12 + Math.sqrt(share) * 0.38;
+        const plateW = 0.08 + share * 0.42;
+        const y = bodyY - bodyH * 0.36 + t * bodyH * 0.78;
+        const x = (seededUnit(seed, 50 + i) - 0.5) * bodyW * 0.5;
+        const z = -bodyD * (0.86 + seededUnit(seed, 60 + i) * 0.12);
         addCreatureMesh(
-          new THREE.SphereGeometry(1, 20, 14),
-          makeMaterial(pitchColor(pitch, baseColor), { emissive: pitchColor(pitch, baseColor), emissiveIntensity: 0.045, roughness: 0.46 }),
-          [Math.cos(angle) * radiusX, y, Math.sin(angle) * radiusZ],
-          [size * (1 + share), size * 0.62, size * (0.75 + vertN * 0.35)],
-          [seededUnit(seed, 60 + i) * 0.5, angle, seededUnit(seed, 70 + i) * 0.5]
+          new THREE.ConeGeometry(plateW, plateH, 4),
+          makeMaterial(plateColor, { emissive: plateColor, emissiveIntensity: 0.045, roughness: 0.42, metalness: 0.08 }),
+          [x, y, z],
+          [1, 1, 0.34 + vertN * 0.22],
+          [Math.PI * 0.38, seededUnit(seed, 70 + i) * 0.4, (seededUnit(seed, 80 + i) - 0.5) * 0.42]
         );
       });
 
@@ -1965,37 +2041,8 @@
       );
       shadow.castShadow = false;
 
-      shapeGroup.rotation.y = THREE.MathUtils.degToRad(pcaX * 4 + seededUnit(seed, 100) * 28);
+      shapeGroup.rotation.y = THREE.MathUtils.degToRad(clamp(pcaX, -5, 5) * 1.4 + (seededUnit(seed, 100) - 0.5) * 10);
       shapeGroup.rotation.z = THREE.MathUtils.degToRad(clamp(pcaZ, -2, 2) * 1.8);
-    }
-
-    function highlightScatterSelection(row) {
-      if (!scatterPoints || !row || !THREE) return;
-      const colors = scatterPoints.geometry.getAttribute('color');
-      scatterRows.forEach((item, i) => {
-        const color = new THREE.Color(item.color || '#138c9f');
-        const active = item.id === row.id;
-        const sameBucket = selectedCluster === 'all' || item.clusterId === selectedCluster;
-        if (active) color.set(0xff3b2f);
-        else color.lerp(new THREE.Color(sameBucket ? 0xffffff : 0x111111), sameBucket ? 0.08 : 0.72);
-        colors.setXYZ(i, color.r, color.g, color.b);
-      });
-      colors.needsUpdate = true;
-    }
-
-    function onCanvasPointer(event) {
-      if (!scatterPoints || !scatterRows.length) return;
-      const rect = els.canvas.getBoundingClientRect();
-      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObject(scatterPoints);
-      if (!hits.length) return;
-      const idx = hits[0].index;
-      if (idx == null || !scatterRows[idx]) return;
-      selectedPitcher = scatterRows[idx];
-      selectedCluster = selectedPitcher.clusterId;
-      renderAll();
     }
 
     function animate() {
@@ -2105,12 +2152,18 @@
 
     async function init() {
       const threeReady = loadThree().then(ready => {
-        if (ready && setupThree()) {
-          rebuildScatter(baseFilteredRows());
-          updateSelectedPitcher();
-        } else if (selectedPitcher) {
+        try {
+          if (ready && setupThree()) {
+            updateSelectedPitcher();
+            return true;
+          }
+        } catch (err) {
+          console.warn('WebGL setup failed, using canvas fallback.', err);
+        }
+        if (selectedPitcher) {
           drawFallbackCanvas(selectedPitcher);
         }
+        return false;
       });
 
       const [pitcherData, clusterData] = await Promise.all([
@@ -2121,31 +2174,27 @@
       clusters = clusterData;
       enriched = pitchers.map(enrich).filter(row => Number(row.avg_velo_FF) > 0);
       enriched.forEach(row => rowById.set(row.id, row));
-      computeDominantForms(enriched);
       populateFilters();
-      selectedPitcher = enriched.find(row => String(row.game_year) === latestYear) || enriched[0] || null;
+      selectedPitcher = defaultPitcher(enriched.filter(row => String(row.game_year) === latestYear)) || defaultPitcher(enriched);
       [els.search, els.year, els.role, els.form].forEach(el => {
         el.addEventListener('input', () => {
-          selectedCluster = selectedCluster || 'all';
+          if (el === els.search) selectedPitcher = null;
+          selectedType = selectedType || 'all';
           renderAll();
         });
         el.addEventListener('change', () => {
-          selectedCluster = selectedCluster || 'all';
+          if (el !== els.search) selectedPitcher = null;
+          selectedType = selectedType || 'all';
           renderAll();
         });
       });
       renderAll();
-      await Promise.allSettled([
-        loadJson(DATA_URLS.bullpens).then(data => { bullpens = data; }),
-        loadJson(DATA_URLS.starterInnings).then(data => { starterInnings = data; }),
-      ]);
-      renderDailyUsage();
       await threeReady;
     }
 
     init().catch(err => {
       console.error(err);
-      els.bucketList.innerHTML = `<div class="status">Could not load vector buckets: ${escapeHtml(err.message)}</div>`;
+      els.bucketList.innerHTML = `<div class="status">Could not load vector types: ${escapeHtml(err.message)}</div>`;
       els.pitcherBody.innerHTML = `<tr><td colspan="11" class="status">Could not load pitcher table.</td></tr>`;
       els.readoutName.textContent = 'Load failed';
       els.readoutLine.textContent = err.message;
