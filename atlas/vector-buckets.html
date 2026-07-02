@@ -198,7 +198,7 @@
     .bucket {
       width: 100%;
       display: grid;
-      grid-template-columns: 12px 1fr auto;
+      grid-template-columns: 12px minmax(0, 1fr) auto;
       gap: 9px;
       align-items: center;
       border: 2px solid rgba(16, 17, 15, 0.18);
@@ -208,6 +208,10 @@
       margin-bottom: 8px;
       cursor: pointer;
       text-align: left;
+    }
+
+    .bucket > span:nth-child(2) {
+      min-width: 0;
     }
 
     .bucket.active {
@@ -238,11 +242,16 @@
       margin-top: 4px;
       font-family: "JetBrains Mono", monospace;
       font-size: 9px;
+      line-height: 1.25;
       color: var(--muted);
       text-transform: uppercase;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
     }
 
     .bucket-count {
@@ -1235,6 +1244,30 @@
       return descriptors[type] || descriptors.Normal;
     }
 
+    function typePitcherSummary(type, row) {
+      const m = vectorMetrics(row);
+      const summaries = {
+        Normal: `blend: ${one(m.velo)} mph, ${pct(m.whiff)} whiff`,
+        Fighting: `attack: ${one(m.velo)} mph, ${pct(m.whiff)} whiff`,
+        Flying: `ride: V ${signed(m.vz)}, FF ${pct(m.fourSeam)}`,
+        Poison: `deception: off-speed ${pct(m.offspeed)}`,
+        Ground: `sink: ${pct(m.gb)} GB, SI ${pct(m.sinker)}`,
+        Rock: `heavy run: H ${signed(m.rawHx)}, ${pct(m.gb)} GB`,
+        Bug: `breakers: ${pct(m.breaking)} BRK`,
+        Ghost: `slot: ${one(m.arm)} deg, PCA-x ${one(m.pcaX)}`,
+        Steel: `hard/cut: ${pct(m.fastball)} at ${one(m.velo)} mph`,
+        Fire: `heat: ${one(m.velo)} mph, ${pct(m.whiff)} whiff`,
+        Water: `flow: sink/off ${pct(m.offspeed + m.sinker)}`,
+        Grass: `contact: ${pct(m.whiff)} whiff, ${one(m.velo)} mph`,
+        Electric: `miss: ${pct(m.whiff)} whiff, ${Math.round(m.spin || 0)} rpm`,
+        Psychic: `sequence: ${m.mixCount || 0} shapes`,
+        Ice: `spin: CU ${pct(m.curve)}, ${Math.round(m.spin || 0)} rpm`,
+        Dragon: `elite: ${one(m.velo)} mph, ${pct(m.whiff)} whiff`,
+        Dark: `weird: H ${signed(m.rawHx)}, PCA-y ${one(m.pcaY)}`,
+      };
+      return summaries[type] || summaries.Normal;
+    }
+
     function creaturePlanForRow(row) {
       const m = vectorMetrics(row);
       const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
@@ -1490,8 +1523,10 @@
         const avgVelo = average(items, row => Number(row.avg_velo_FF) || 0);
         const dom = dominant(items.map(row => row.bodyPlan));
         const combos = new Set(items.map(row => row.creatureType)).size;
-        const descriptor = typePitcherDescriptor(type, aggregatePitcherRow(items));
-        return { type, items, avgVelo, dom, combos, descriptor, color: creatureTypeColor(type) };
+        const aggregateRow = aggregatePitcherRow(items);
+        const descriptor = typePitcherDescriptor(type, aggregateRow);
+        const summary = typePitcherSummary(type, aggregateRow);
+        return { type, items, avgVelo, dom, combos, descriptor, summary, color: creatureTypeColor(type) };
       }).sort((a, b) => b.items.length - a.items.length);
 
       const allActive = selectedType === 'all';
@@ -1511,7 +1546,7 @@
             <span class="dot" style="background:${escapeHtml(bucket.color)}"></span>
             <span>
               <span class="bucket-title">${escapeHtml(bucket.type)}</span>
-              <span class="bucket-meta">${bucket.combos} combos | ${escapeHtml(bucket.descriptor)}</span>
+              <span class="bucket-meta">${bucket.combos} combos | ${escapeHtml(bucket.summary)}</span>
             </span>
             <span class="bucket-count">${bucket.items.length}</span>
           </button>`;
@@ -1818,6 +1853,95 @@
       mesh.receiveShadow = true;
       shapeGroup.add(mesh);
       return mesh;
+    }
+
+    function publishCohesionReport(report) {
+      window.__atlasCohesionReport = report;
+      if (els.canvas) {
+        els.canvas.dataset.cohesionMode = report.mode || '';
+        els.canvas.dataset.cohesionAdjusted = String(report.adjusted ?? 0);
+        els.canvas.dataset.cohesionReport = JSON.stringify(report);
+      }
+      return report;
+    }
+
+    function setFallbackCohesionReport(row, reason) {
+      const report = {
+        pitcher: row?.displayName || row?.player_name || '',
+        bodyPlan: row?.bodyPlan || '',
+        plan: row?.shapePlan || '',
+        mode: 'canvas-fallback',
+        reason,
+        checked: 0,
+        adjusted: 0,
+        maxOffset: 0,
+      };
+      return publishCohesionReport(report);
+    }
+
+    function keepShapeComponentsTogether(row, plan, metrics) {
+      if (!shapeGroup || !THREE) return null;
+      const { bodyW, bodyH, bodyD, bodyY } = metrics;
+      const planSpread = {
+        serpent: { x: 3.45, back: 4.4, front: 2.2 },
+        winged: { x: 3.2, back: 2.5, front: 2.2 },
+        tank: { x: 2.25, back: 2.25, front: 2.1 },
+        striker: { x: 2.35, back: 2.35, front: 2.25 },
+        soft: { x: 2.15, back: 2.15, front: 2.05 },
+      };
+      const spread = planSpread[plan] || planSpread.soft;
+      const limits = {
+        x: bodyW * spread.x + 0.85,
+        yMin: 0.035,
+        yMax: bodyY + bodyH * 1.45 + 0.75,
+        zBack: bodyD * spread.back + 1.05,
+        zFront: bodyD * spread.front + 0.75,
+      };
+      const box = new THREE.Box3();
+      const center = new THREE.Vector3();
+      let checked = 0;
+      let adjusted = 0;
+      let maxOffset = 0;
+
+      shapeGroup.children.forEach(mesh => {
+        if (!mesh.isMesh || mesh.userData.skipCohesion || !mesh.geometry) return;
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        if (!mesh.geometry.boundingBox) return;
+        mesh.updateMatrix();
+        box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrix);
+        box.getCenter(center);
+        checked += 1;
+        const next = {
+          x: clamp(center.x, -limits.x, limits.x),
+          y: clamp(center.y, limits.yMin, limits.yMax),
+          z: clamp(center.z, -limits.zBack, limits.zFront),
+        };
+        const delta = new THREE.Vector3(next.x - center.x, next.y - center.y, next.z - center.z);
+        const offset = delta.length();
+        maxOffset = Math.max(maxOffset, offset);
+        if (offset > 0.001) {
+          mesh.position.add(delta);
+          mesh.userData.cohesionAdjusted = true;
+          adjusted += 1;
+        }
+      });
+
+      const report = {
+        pitcher: row.displayName || row.player_name || '',
+        bodyPlan: row.bodyPlan || '',
+        plan,
+        mode: 'webgl',
+        checked,
+        adjusted,
+        maxOffset: Math.round(maxOffset * 1000) / 1000,
+        limits: {
+          x: Math.round(limits.x * 100) / 100,
+          yMax: Math.round(limits.yMax * 100) / 100,
+          zBack: Math.round(limits.zBack * 100) / 100,
+          zFront: Math.round(limits.zFront * 100) / 100,
+        },
+      };
+      return publishCohesionReport(report);
     }
 
     function pitchMixEntries(row, seed) {
@@ -2575,6 +2699,7 @@
 
     function buildSelectedShape(row) {
       if (!shapeGroup || !THREE) {
+        setFallbackCohesionReport(row, !THREE ? 'three-unavailable' : 'shape-group-unavailable');
         drawFallbackCanvas(row);
         return;
       }
@@ -2757,6 +2882,13 @@
         );
       });
 
+      keepShapeComponentsTogether(row, plan, {
+        bodyW,
+        bodyH,
+        bodyD,
+        bodyY,
+      });
+
       const shadow = addCreatureMesh(
         new THREE.CylinderGeometry(1, 1, 0.03, 48),
         makeMaterial(0x10110f, { transparent: true, opacity: 0.18, emissiveIntensity: 0 }),
@@ -2765,6 +2897,7 @@
         [0, 0, 0]
       );
       shadow.castShadow = false;
+      shadow.userData.skipCohesion = true;
 
       shapeGroup.rotation.y = THREE.MathUtils.degToRad(clamp(pcaX, -5, 5) * 1.4 + (seededUnit(seed, 100) - 0.5) * 10);
       shapeGroup.rotation.z = THREE.MathUtils.degToRad(clamp(pcaZ, -2, 2) * 1.8);
@@ -2780,6 +2913,9 @@
     function drawFallbackCanvas(row) {
       const canvas = els.canvas;
       if (!canvas || !row) return;
+      if (!window.__atlasCohesionReport || window.__atlasCohesionReport.pitcher !== (row.displayName || row.player_name || '')) {
+        setFallbackCohesionReport(row, 'webgl-fallback');
+      }
       const rect = canvas.getBoundingClientRect();
       const scale = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.floor(rect.width * scale));
