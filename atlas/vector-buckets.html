@@ -1656,6 +1656,7 @@
       const shapeChip = row.shapeReason
         ? `<div class="hitter-chip"><strong>Shape trace</strong><span>${escapeHtml(row.shapeReason)}</span></div>`
         : '';
+      const morphChip = `<div class="hitter-chip"><strong>Morph DNA</strong><span>${escapeHtml(pitcherMorphSummary(row))}</span></div>`;
       els.searchPanel.hidden = false;
       els.dailyFlow.innerHTML = `
         <article class="match-card">
@@ -1674,6 +1675,7 @@
           </div>
           <div class="hitter-strip">
             ${shapeChip}
+            ${morphChip}
             ${descriptorChips}
             ${reasonChips}
             <div class="hitter-chip"><strong>Power</strong><span>${one(Number(row.avg_velo_FF) || 0)} mph | ${pct(Number(row.whiff_rate) || 0)} whiff</span></div>
@@ -1881,7 +1883,8 @@
 
     function keepShapeComponentsTogether(row, plan, metrics) {
       if (!shapeGroup || !THREE) return null;
-      const { bodyW, bodyH, bodyD, bodyY } = metrics;
+      const { bodyW, bodyH, bodyD, bodyY, morph } = metrics;
+      const dna = morph || pitcherMorphDNA(row);
       const planSpread = {
         serpent: { x: 3.45, back: 4.4, front: 2.2 },
         winged: { x: 3.2, back: 2.5, front: 2.2 },
@@ -1931,6 +1934,8 @@
         bodyPlan: row.bodyPlan || '',
         plan,
         mode: 'webgl',
+        signature: `${dna.primaryPitch}/${dna.secondaryPitch} ${dna.variantName}`,
+        tailStyle: dna.tailStyle,
         checked,
         adjusted,
         maxOffset: Math.round(maxOffset * 1000) / 1000,
@@ -1974,6 +1979,72 @@
       return new THREE.Color(colors[pitch] || 0xffffff).lerp(baseColor, 0.22);
     }
 
+    function pitchShapeSides(pitch, fallback = 6) {
+      const sides = {
+        FF: 5,
+        SI: 8,
+        SL: 3,
+        ST: 3,
+        CU: 12,
+        KC: 10,
+        CH: 16,
+        FS: 4,
+        FC: 4,
+        SW: 5,
+        FO: 9,
+      };
+      return sides[pitch] || fallback;
+    }
+
+    function pitcherMorphDNA(row) {
+      const m = vectorMetrics(row);
+      const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}-morph`);
+      const entries = pitchMixEntries(row, seed);
+      const primaryPitch = entries[0]?.[0] || m.dominantPitch || 'FF';
+      const secondaryPitch = entries[1]?.[0] || primaryPitch;
+      const tertiaryPitch = entries[2]?.[0] || secondaryPitch;
+      const breakingLoad = m.breaking;
+      const offspeedLoad = m.offspeed;
+      const fastballLoad = m.fastball;
+      const rideLoad = clamp((m.vz - 0.45) / 0.7, 0, 1);
+      const runLoad = clamp(m.hx / 1.05, 0, 1);
+      const whiffLoad = clamp((m.whiff - 0.17) / 0.17, 0, 1);
+      const veloLoad = clamp((m.velo - 91) / 7.5, 0, 1);
+      const mixLoad = clamp((m.mixCount - 2) / 5, 0, 1);
+      const slotLoad = clamp(Math.abs(m.arm) / 88, 0, 1);
+      const variants = ['crest', 'mantle', 'fork', 'mask', 'keel'];
+      const tailStyles = ['club', 'fork', 'ribbon', 'ring', 'stinger'];
+      return {
+        seed,
+        entries,
+        primaryPitch,
+        secondaryPitch,
+        tertiaryPitch,
+        bodySides: pitchShapeSides(primaryPitch, 6),
+        accentSides: pitchShapeSides(secondaryPitch, 5),
+        variant: Math.floor(seededUnit(seed, 10) * variants.length) % variants.length,
+        variantName: variants[Math.floor(seededUnit(seed, 10) * variants.length) % variants.length],
+        tailStyle: tailStyles[Math.floor(seededUnit(seed, 11) * tailStyles.length) % tailStyles.length],
+        ridgeCount: 2 + Math.round(whiffLoad * 3) + Math.round(runLoad * 2) + Math.min(3, m.mixCount),
+        plateCount: 2 + Math.round(fastballLoad * 4) + Math.round(m.gb * 3),
+        bladeCount: 2 + Math.round(breakingLoad * 7),
+        beadCount: 2 + Math.round(offspeedLoad * 8),
+        ringCount: 1 + Math.round((m.curve + mixLoad) * 4),
+        wingSplit: 1 + Math.round(rideLoad * 3),
+        antennaSpread: 0.42 + runLoad * 0.42 + seededUnit(seed, 12) * 0.16,
+        asymmetry: (seededUnit(seed, 13) - 0.5) * (0.24 + slotLoad * 0.28),
+        spineLean: (seededUnit(seed, 14) - 0.5) * 0.5 + Math.sign(m.rawHx || 1) * runLoad * 0.25,
+        crestHeight: 0.18 + whiffLoad * 0.38 + veloLoad * 0.2,
+        armorOffset: seededUnit(seed, 15),
+        markerTwist: (seededUnit(seed, 16) - 0.5) * 0.9,
+      };
+    }
+
+    function pitcherMorphSummary(row) {
+      const dna = pitcherMorphDNA(row);
+      return `${dna.primaryPitch}/${dna.secondaryPitch} silhouette, ${dna.variantName} variant, ${dna.ridgeCount} ridges, ${dna.tailStyle} tail`;
+    }
+
     function creaturePlan(row, seed, veloN, whiffN, horizN, vertN) {
       if (whiffN > 0.62 && veloN > 0.62) return 'striker';
       if (horizN > 0.62 && vertN > 0.38) return 'serpent';
@@ -2002,7 +2073,9 @@
         vertN,
         armRad,
         side,
+        morph,
       } = metrics;
+      const dna = morph || pitcherMorphDNA(row);
       const primary = row.primaryType || String(row.creatureType || 'Normal').split('/')[0].trim();
       const bodyPlan = row.bodyPlan || '';
       const coreMat = makeMaterial(bodyColor, {
@@ -2029,10 +2102,11 @@
           new THREE.DodecahedronGeometry(1, 0),
           coreMat,
           [0, bodyY, 0],
-          [bodyW * 1.18, bodyH * 0.72, bodyD * 0.98],
-          [0.18, side * (0.28 + horizN * 0.18), side * 0.16]
+          [bodyW * (1.08 + dna.armorOffset * 0.22), bodyH * (0.66 + dna.armorOffset * 0.14), bodyD * 0.98],
+          [0.18 + dna.markerTwist * 0.08, side * (0.28 + horizN * 0.18), side * (0.12 + dna.asymmetry)]
         );
-        [-1, 0, 1].forEach((rockIndex, i) => {
+        const rockOffsets = [-1, 0, 1, ...(dna.plateCount > 6 ? [-1.65, 1.65] : [])];
+        rockOffsets.forEach((rockIndex, i) => {
           addCreatureMesh(
             new THREE.DodecahedronGeometry(1, 0),
             makeMaterial(bodyColor.clone().lerp(darkColor, 0.12 + i * 0.07), {
@@ -2058,23 +2132,23 @@
 
       if (bodyPlan === 'Blade Mantis') {
         addCreatureMesh(
-          new THREE.CylinderGeometry(0.72, 0.46, 1.12, 6),
+          new THREE.CylinderGeometry(0.72, 0.38 + dna.armorOffset * 0.2, 1.0 + dna.crestHeight * 0.34, dna.bodySides),
           coreMat,
-          [0, bodyY + bodyH * 0.04, bodyD * 0.08],
-          [bodyW * 0.78, bodyH * 0.72, bodyD * 0.72],
-          [0.08, side * 0.22, side * 0.22]
+          [dna.asymmetry * 0.18, bodyY + bodyH * 0.04, bodyD * 0.08],
+          [bodyW * (0.68 + dna.armorOffset * 0.18), bodyH * 0.72, bodyD * (0.62 + dna.armorOffset * 0.2)],
+          [0.08 + dna.markerTwist * 0.05, side * (0.18 + dna.armorOffset * 0.16), side * (0.16 + dna.asymmetry)]
         );
         addCreatureMesh(
-          new THREE.ConeGeometry(0.5, 1.18, 6),
+          new THREE.ConeGeometry(0.42 + dna.armorOffset * 0.18, 1.0 + dna.bladeCount * 0.045, dna.accentSides),
           makeMaterial(bodyColor.clone().lerp(darkColor, 0.08), {
             emissive: baseColor,
             emissiveIntensity: 0.042,
             roughness: 0.48,
             metalness: 0.08,
           }),
-          [0, bodyY - bodyH * 0.1, -bodyD * 0.76],
-          [bodyW * 0.7, bodyD * 0.9, bodyH * 0.54],
-          [Math.PI / 2.05, side * 0.1, side * 0.1]
+          [-dna.asymmetry * 0.12, bodyY - bodyH * 0.1, -bodyD * (0.66 + dna.armorOffset * 0.22)],
+          [bodyW * (0.58 + dna.armorOffset * 0.24), bodyD * (0.76 + dna.armorOffset * 0.26), bodyH * 0.54],
+          [Math.PI / 2.05, side * (0.08 + dna.asymmetry), side * 0.1]
         );
         [-1, 1].forEach(plateSide => {
           addCreatureMesh(
@@ -2090,11 +2164,11 @@
 
       if (bodyPlan === 'Sky Raptor' || plan === 'winged') {
         addCreatureMesh(
-          new THREE.ConeGeometry(0.62, 1.38, 4),
+          new THREE.ConeGeometry(0.54 + dna.armorOffset * 0.18, 1.18 + dna.wingSplit * 0.11, dna.bodySides),
           coreMat,
-          [0, bodyY, bodyD * 0.03],
-          [bodyW * 0.92, bodyD * 0.88, bodyH * 0.82],
-          [Math.PI / 2.05, side * 0.08, Math.PI / 4 + side * armRad * 0.12]
+          [dna.asymmetry * 0.16, bodyY, bodyD * 0.03],
+          [bodyW * (0.82 + dna.armorOffset * 0.18), bodyD * 0.88, bodyH * (0.72 + dna.wingSplit * 0.04)],
+          [Math.PI / 2.05, side * (0.08 + dna.asymmetry * 0.3), Math.PI / 4 + side * armRad * 0.12]
         );
         addCreatureMesh(
           new THREE.ConeGeometry(0.2 + vertN * 0.08, 0.9 + veloN * 0.24, 4),
@@ -2143,7 +2217,11 @@
       if (plan === 'tank') {
         const shellGeometry = bodyPlan === 'Burrow Tank'
           ? new THREE.DodecahedronGeometry(1, 0)
-          : new THREE.BoxGeometry(1, 1, 1);
+          : dna.variant % 3 === 0
+            ? new THREE.BoxGeometry(1, 1, 1)
+            : dna.variant % 3 === 1
+              ? new THREE.DodecahedronGeometry(1, 0)
+              : new THREE.CylinderGeometry(0.72, 0.86, 0.9, dna.bodySides);
         addCreatureMesh(
           shellGeometry,
           coreMat,
@@ -2200,7 +2278,7 @@
 
       if (bodyPlan === 'Contact Sprout') {
         addCreatureMesh(
-          new THREE.ConeGeometry(0.68, 1.08, 7),
+          new THREE.ConeGeometry(0.58 + dna.armorOffset * 0.2, 0.96 + dna.beadCount * 0.04, dna.bodySides),
           coreMat,
           [0, bodyY - bodyH * 0.08, 0],
           [bodyW * 0.88, bodyH * 0.78, bodyD * 0.86],
@@ -2226,7 +2304,7 @@
 
       if (bodyPlan === 'Flame Striker' || plan === 'striker') {
         addCreatureMesh(
-          new THREE.ConeGeometry(0.52, 1.34, primary === 'Electric' ? 4 : 5),
+          new THREE.ConeGeometry(0.44 + dna.armorOffset * 0.18, 1.18 + dna.crestHeight * 0.34, dna.bodySides),
           coreMat,
           [0, bodyY + bodyH * 0.02, bodyD * 0.05],
           [bodyW * 0.78, bodyH * 0.92, bodyD * 0.82],
@@ -2267,7 +2345,7 @@
 
       if (plan === 'soft') {
         addCreatureMesh(
-          new THREE.DodecahedronGeometry(1, 0),
+          dna.variant % 2 === 0 ? new THREE.DodecahedronGeometry(1, 0) : new THREE.IcosahedronGeometry(1, 0),
           coreMat,
           [0, bodyY, 0],
           [bodyW * 0.9, bodyH * 0.72, bodyD * 0.9],
@@ -2316,7 +2394,9 @@
         vertN,
         armRad,
         side,
+        morph,
       } = metrics;
+      const dna = morph || pitcherMorphDNA(row);
       const primary = row.primaryType || String(row.creatureType || 'Normal').split('/')[0].trim();
       const boulderSerpent = row.bodyPlan === 'Boulder Serpent';
       const bladeMantis = row.bodyPlan === 'Blade Mantis';
@@ -2344,7 +2424,8 @@
         headSize = [headScale * 0.9, headScale * 1.08, headScale * 0.86];
         headRotation = [0.18, side * 0.42, side * 0.12];
       } else if (bladeMantis || ['Bug', 'Grass'].includes(primary)) {
-        headSize = [headScale * 1.2, headScale * 0.84, headScale * 0.86];
+        headGeometry = new THREE.SphereGeometry(1, dna.bodySides * 4, 14);
+        headSize = [headScale * (1.08 + dna.armorOffset * 0.24), headScale * 0.84, headScale * (0.78 + dna.armorOffset * 0.18)];
       } else if (['Fire', 'Fighting', 'Dragon', 'Electric'].includes(primary)) {
         headGeometry = new THREE.CapsuleGeometry(0.58, 0.52, 8, 18);
         headSize = [headScale * 0.82, headScale * 1.22, headScale * 0.92];
@@ -2380,8 +2461,8 @@
         [-1, 1].forEach(antennaSide => {
           const antennaCurve = new THREE.CatmullRomCurve3([
             new THREE.Vector3(headX + antennaSide * headScale * 0.34, headY + headScale * 0.54, headZ),
-            new THREE.Vector3(headX + antennaSide * headScale * 0.74, headY + headScale * 1.0, headZ + 0.08),
-            new THREE.Vector3(headX + antennaSide * (headScale * 1.0 + horizN * 0.18), headY + headScale * 1.24, headZ + 0.2),
+            new THREE.Vector3(headX + antennaSide * headScale * dna.antennaSpread, headY + headScale * (0.96 + dna.armorOffset * 0.12), headZ + 0.08),
+            new THREE.Vector3(headX + antennaSide * (headScale * (0.9 + dna.antennaSpread * 0.35) + horizN * 0.18), headY + headScale * (1.18 + dna.armorOffset * 0.18), headZ + 0.2),
           ]);
           addCreatureMesh(
             new THREE.TubeGeometry(antennaCurve, 18, 0.018 + whiffN * 0.012, 8, false),
@@ -2407,12 +2488,57 @@
         });
         if (bladeMantis) {
           addCreatureMesh(
-            new THREE.ConeGeometry(0.08 + whiffN * 0.03, 0.48 + veloN * 0.18, 4),
+            new THREE.ConeGeometry(0.08 + whiffN * 0.03, 0.48 + veloN * 0.18, dna.accentSides),
             makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.07, roughness: 0.34 }),
             [headX, headY + headScale * 0.62, headZ + headScale * 0.18],
             [1, 1, 0.18],
             [0.1, 0, Math.PI / 4]
           );
+        }
+        if (dna.variantName === 'mask') {
+          addCreatureMesh(
+            new THREE.TorusGeometry(0.18 + whiffN * 0.05, 0.018 + veloN * 0.01, 8, 24),
+            makeMaterial(darkColor.clone().lerp(accentColor, 0.3), { emissive: accentColor, emissiveIntensity: 0.05, roughness: 0.38 }),
+            [headX, headY + headScale * 0.06, frontZ + 0.032],
+            [1.45, 0.72, 0.12],
+            [0, 0, side * 0.08]
+          );
+        } else if (dna.variantName === 'crest') {
+          addCreatureMesh(
+            new THREE.ConeGeometry(0.07 + whiffN * 0.05, 0.58 + dna.crestHeight * 0.5, dna.accentSides),
+            makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.08, roughness: 0.34 }),
+            [headX + dna.asymmetry * 0.08, headY + headScale * 0.88, headZ + headScale * 0.08],
+            [1, 1, 0.18],
+            [0.18, side * 0.08, Math.PI / 4 + dna.markerTwist * 0.16]
+          );
+        } else if (dna.variantName === 'keel') {
+          addCreatureMesh(
+            new THREE.BoxGeometry(0.12, 0.56 + dna.crestHeight * 0.45, 0.08),
+            makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.065, roughness: 0.4 }),
+            [headX, headY + headScale * 0.72, headZ + headScale * 0.2],
+            [1, 1, 1],
+            [0.15, side * 0.12, dna.markerTwist * 0.14]
+          );
+        } else if (dna.variantName === 'fork') {
+          [-1, 1].forEach(forkSide => {
+            addCreatureMesh(
+              new THREE.ConeGeometry(0.055 + whiffN * 0.025, 0.38 + horizN * 0.22, 4),
+              makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.065, roughness: 0.38 }),
+              [headX + forkSide * headScale * 0.36, headY + headScale * 0.7, headZ + headScale * 0.1],
+              [1, 1, 0.2],
+              [forkSide * 0.28, 0, forkSide * 0.46]
+            );
+          });
+        } else if (dna.variantName === 'mantle') {
+          [-1, 1].forEach(mantleSide => {
+            addCreatureMesh(
+              new THREE.BoxGeometry(0.12, 0.34 + vertN * 0.16, 0.08),
+              makeMaterial(darkColor.clone().lerp(accentColor, 0.32), { emissive: accentColor, emissiveIntensity: 0.04, roughness: 0.46 }),
+              [headX + mantleSide * headScale * 0.56, headY + headScale * 0.2, headZ + headScale * 0.02],
+              [1, 1, 1],
+              [0.1, mantleSide * 0.18, mantleSide * 0.34]
+            );
+          });
         }
         return;
       }
@@ -2458,7 +2584,7 @@
       }
 
       if (['Fire', 'Fighting', 'Dragon', 'Electric'].includes(primary)) {
-        const hornCount = primary === 'Dragon' ? 4 : primary === 'Electric' ? 2 : 3;
+        const hornCount = primary === 'Dragon' ? 3 + Math.min(3, Math.round(dna.ridgeCount / 3)) : primary === 'Electric' ? 2 + (dna.variant % 2) : 2 + Math.min(3, Math.round(dna.crestHeight * 2));
         for (let i = 0; i < hornCount; i++) {
           const offset = (i - (hornCount - 1) / 2) * 0.17;
           const hornH = 0.24 + whiffN * 0.34 + seededUnit(seed, 20 + i) * 0.12;
@@ -2544,11 +2670,13 @@
         horizN,
         vertN,
         side,
+        morph,
       } = metrics;
+      const dna = morph || pitcherMorphDNA(row);
 
       if (plan === 'serpent') {
         const boulderSerpent = row.bodyPlan === 'Boulder Serpent';
-        const count = (boulderSerpent ? 7 : 5) + Math.round(horizN * 4);
+        const count = (boulderSerpent ? 7 : 5) + Math.round(horizN * 4) + Math.min(3, Math.round(dna.ridgeCount / 4));
         for (let i = 0; i < count; i++) {
           const t = i / Math.max(1, count - 1);
           const bend = Math.sin(t * Math.PI * 1.35 + seededUnit(seed, 120) * 0.8);
@@ -2582,7 +2710,7 @@
       if (plan === 'winged') {
         [-1, 1].forEach(wingSide => {
           addCreatureMesh(
-            new THREE.ConeGeometry(0.34 + vertN * 0.18, 1.1 + vertN * 0.9, 4),
+            new THREE.ConeGeometry(0.3 + vertN * 0.18, 0.95 + vertN * 0.7 + dna.wingSplit * 0.13, dna.accentSides),
             makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.2), {
               emissive: baseColor,
               emissiveIntensity: 0.055,
@@ -2594,6 +2722,16 @@
             [1, 1, 0.18 + whiffN * 0.08],
             [0.1, 0, wingSide * (Math.PI / 2.8)]
           );
+          for (let i = 0; i < dna.wingSplit; i++) {
+            const k = dna.wingSplit === 1 ? 0.5 : i / (dna.wingSplit - 1);
+            addCreatureMesh(
+              new THREE.ConeGeometry(0.08 + vertN * 0.04, 0.46 + k * 0.18, 4),
+              makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.055, transparent: true, opacity: 0.82, roughness: 0.42 }),
+              [wingSide * (bodyW + 0.34 + k * 0.28), bodyY + bodyH * (0.08 - k * 0.14), -bodyD * (0.06 + k * 0.24)],
+              [1, 1, 0.14],
+              [0.12, 0, wingSide * (Math.PI / 2.4 + k * 0.16)]
+            );
+          }
         });
         return;
       }
@@ -2630,8 +2768,11 @@
         const bladeMantis = row.bodyPlan === 'Blade Mantis';
         if (bladeMantis) {
           [-1, 1].forEach(clawSide => {
+            const clawPitch = dna.primaryPitch;
+            const clawLength = 0.76 + veloN * 0.28 + dna.bladeCount * 0.035;
+            const clawWidth = ['SL', 'ST', 'SW'].includes(clawPitch) ? 0.12 + whiffN * 0.05 : 0.16 + horizN * 0.05;
             addCreatureMesh(
-              new THREE.ConeGeometry(0.12 + whiffN * 0.05, 0.96 + veloN * 0.34, 4),
+              new THREE.ConeGeometry(clawWidth, clawLength, pitchShapeSides(clawPitch, 4)),
               makeMaterial(accentColor, {
                 emissive: accentColor,
                 emissiveIntensity: 0.09,
@@ -2644,8 +2785,21 @@
                 bodyD * 0.54,
               ],
               [1, 1, 0.16 + whiffN * 0.08],
-              [Math.PI / 2.2, 0, clawSide * (Math.PI / 2.7)]
+              [Math.PI / 2.2, 0, clawSide * (Math.PI / 2.7 + dna.markerTwist * 0.14)]
             );
+            if (['CU', 'KC', 'CH', 'FS'].includes(dna.secondaryPitch)) {
+              addCreatureMesh(
+                new THREE.TorusGeometry(0.12 + whiffN * 0.04, 0.018, 8, 22),
+                makeMaterial(baseColor.clone().lerp(accentColor, 0.32), { emissive: accentColor, emissiveIntensity: 0.045, roughness: 0.4 }),
+                [
+                  clawSide * (bodyW * 0.98 + 0.24),
+                  bodyY + bodyH * 0.2,
+                  bodyD * 0.5,
+                ],
+                [1, 0.78, 0.18],
+                [Math.PI / 2.4, clawSide * 0.18, clawSide * 0.4]
+              );
+            }
             addCreatureMesh(
               new THREE.SphereGeometry(1, 14, 10),
               makeMaterial(darkColor.clone().lerp(accentColor, 0.16), { roughness: 0.5 }),
@@ -2697,6 +2851,175 @@
       });
     }
 
+    function addMorphSignatureFeatures(row, plan, metrics) {
+      const {
+        seed,
+        bodyW,
+        bodyH,
+        bodyD,
+        bodyY,
+        baseColor,
+        accentColor,
+        darkColor,
+        glowColor,
+        whiffN,
+        veloN,
+        horizN,
+        vertN,
+        side,
+        morph,
+      } = metrics;
+      const dna = morph || pitcherMorphDNA(row);
+      const entries = dna.entries.slice(0, 4);
+      const pitchSet = new Set(entries.map(([pitch]) => pitch));
+      const topY = bodyY + bodyH * 0.42;
+
+      entries.forEach(([pitch, share], idx) => {
+        const pitchMatColor = pitchColor(pitch, baseColor);
+        const pitchMat = makeMaterial(pitchMatColor, {
+          emissive: pitchMatColor,
+          emissiveIntensity: 0.045 + share * 0.06,
+          roughness: 0.36,
+          metalness: pitch === 'FC' || pitch === 'FF' ? 0.16 : 0.06,
+          transparent: ['CH', 'FS', 'FO'].includes(pitch),
+          opacity: ['CH', 'FS', 'FO'].includes(pitch) ? 0.82 : 1,
+        });
+        const t = entries.length === 1 ? 0.5 : idx / Math.max(1, entries.length - 1);
+        const y = bodyY - bodyH * 0.32 + t * bodyH * 0.78;
+        const stagger = (seededUnit(seed, 310 + idx) - 0.5) * bodyW * 0.32;
+
+        if (pitch === 'FF') {
+          const count = 2 + Math.round(share * 6);
+          for (let i = 0; i < count; i++) {
+            const k = count === 1 ? 0.5 : i / (count - 1);
+            addCreatureMesh(
+              new THREE.ConeGeometry(0.05 + share * 0.08, 0.28 + veloN * 0.26, dna.bodySides),
+              pitchMat,
+              [side * dna.spineLean * 0.12, bodyY - bodyH * 0.34 + k * bodyH * 0.86, -bodyD * (0.98 + k * 0.06)],
+              [1, 1, 0.42],
+              [Math.PI * 0.34, side * dna.asymmetry, side * (0.1 + k * 0.18)]
+            );
+          }
+          return;
+        }
+
+        if (pitch === 'SI') {
+          [-1, 1].forEach(trackSide => {
+            addCreatureMesh(
+              new THREE.BoxGeometry(0.46 + share * 0.36, 0.08, 0.16 + horizN * 0.08),
+              pitchMat,
+              [trackSide * bodyW * (0.48 + share * 0.16), 0.22 + idx * 0.018, bodyD * (0.14 + t * 0.22)],
+              [1, 1, 1],
+              [0.04, trackSide * 0.14, trackSide * 0.04]
+            );
+          });
+          return;
+        }
+
+        if (['SL', 'ST', 'SW'].includes(pitch)) {
+          const bladeCount = 1 + Math.round(share * 5);
+          [-1, 1].forEach(bladeSide => {
+            for (let i = 0; i < bladeCount; i++) {
+              const k = bladeCount === 1 ? 0.5 : i / (bladeCount - 1);
+              addCreatureMesh(
+                new THREE.ConeGeometry(0.08 + share * 0.08, 0.48 + whiffN * 0.42, pitch === 'SL' ? 3 : 4),
+                pitchMat,
+                [
+                  bladeSide * (bodyW * (0.78 + k * 0.12) + share * 0.16),
+                  bodyY - bodyH * 0.22 + k * bodyH * 0.62,
+                  bodyD * (0.26 + idx * 0.08),
+                ],
+                [1, 1, 0.14 + share * 0.16],
+                [Math.PI / 2.2, 0, bladeSide * (Math.PI / 2.65 + dna.markerTwist * 0.2)]
+              );
+            }
+          });
+          return;
+        }
+
+        if (['CU', 'KC'].includes(pitch)) {
+          const ringCount = 1 + Math.round(share * 4);
+          for (let i = 0; i < ringCount; i++) {
+            const k = ringCount === 1 ? 0.5 : i / (ringCount - 1);
+            addCreatureMesh(
+              new THREE.TorusGeometry(0.16 + share * 0.16 + k * 0.04, 0.018 + share * 0.018, 8, 30),
+              pitchMat,
+              [stagger + side * (k - 0.5) * bodyW * 0.44, y + k * bodyH * 0.12, -bodyD * (0.92 + idx * 0.1)],
+              [1, 0.82 + vertN * 0.3, 0.42],
+              [Math.PI / 2.2, side * (0.35 + k * 0.22), dna.markerTwist]
+            );
+          }
+          return;
+        }
+
+        if (['CH', 'FS', 'FO'].includes(pitch)) {
+          const beadCount = 2 + Math.round(share * 7);
+          for (let i = 0; i < beadCount; i++) {
+            const k = beadCount === 1 ? 0.5 : i / (beadCount - 1);
+            const orbit = Math.sin(k * Math.PI * 1.35 + dna.markerTwist);
+            addCreatureMesh(
+              new THREE.SphereGeometry(1, 14, 10),
+              pitchMat,
+              [
+                side * (bodyW * 0.62 + orbit * 0.18 + idx * 0.05),
+                bodyY - bodyH * 0.24 + k * bodyH * 0.74,
+                bodyD * (0.18 - k * 0.24),
+              ],
+              [0.055 + share * 0.18, 0.055 + share * 0.14, 0.055 + share * 0.18],
+              [0, 0, 0]
+            );
+          }
+          return;
+        }
+
+        if (pitch === 'FC') {
+          const slashCount = 2 + Math.round(share * 5);
+          for (let i = 0; i < slashCount; i++) {
+            const k = slashCount === 1 ? 0.5 : i / (slashCount - 1);
+            addCreatureMesh(
+              new THREE.BoxGeometry(0.08 + share * 0.08, 0.38 + veloN * 0.18, 0.18 + share * 0.16),
+              pitchMat,
+              [side * (bodyW * 0.42 + k * 0.18), bodyY - bodyH * 0.3 + k * bodyH * 0.78, bodyD * 0.36],
+              [1, 1, 1],
+              [0.16, side * 0.24, side * (0.62 + dna.markerTwist * 0.2)]
+            );
+          }
+        }
+      });
+
+      if (dna.variantName === 'crest' || pitchSet.has('FF')) {
+        addCreatureMesh(
+          new THREE.ConeGeometry(0.16 + whiffN * 0.08, 0.58 + dna.crestHeight, dna.accentSides),
+          makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.08, roughness: 0.34 }),
+          [dna.asymmetry * 0.25, topY + bodyH * 0.08, -bodyD * 0.18],
+          [1, 1, 0.26],
+          [0.25, side * 0.1, Math.PI / 4 + dna.markerTwist * 0.15]
+        );
+      }
+
+      if (dna.variantName === 'fork' || dna.tailStyle === 'fork') {
+        [-1, 1].forEach(forkSide => {
+          addCreatureMesh(
+            new THREE.ConeGeometry(0.07 + horizN * 0.04, 0.48 + whiffN * 0.18, 4),
+            makeMaterial(glowColor, { emissive: accentColor, emissiveIntensity: 0.065, roughness: 0.38 }),
+            [forkSide * (bodyW * 0.18 + horizN * 0.12), bodyY - bodyH * 0.16, -bodyD * 1.1],
+            [1, 1, 0.22],
+            [Math.PI / 2.25, forkSide * 0.36, forkSide * 0.24]
+          );
+        });
+      }
+
+      if (dna.variantName === 'mask') {
+        addCreatureMesh(
+          new THREE.TorusGeometry(0.24 + horizN * 0.08, 0.025, 8, 28),
+          makeMaterial(darkColor.clone().lerp(accentColor, 0.35), { emissive: accentColor, emissiveIntensity: 0.045, roughness: 0.42 }),
+          [dna.asymmetry * 0.18, bodyY + bodyH * 0.18, bodyD * 0.58],
+          [1.2, 0.7, 0.2],
+          [0.08, side * 0.16, dna.markerTwist * 0.2]
+        );
+      }
+    }
+
     function buildSelectedShape(row) {
       if (!shapeGroup || !THREE) {
         setFallbackCohesionReport(row, !THREE ? 'three-unavailable' : 'shape-group-unavailable');
@@ -2725,6 +3048,7 @@
       const darkColor = baseColor.clone().lerp(new THREE.Color(0x10110f), 0.64);
       const glowColor = baseColor.clone().lerp(new THREE.Color(0xffffff), 0.18);
       const plan = row.shapePlan || creatureFormForRow(row).plan;
+      const morph = pitcherMorphDNA(row);
 
       let bodyW = 0.58 + horizN * 0.55 + seededUnit(seed, 3) * 0.12;
       let bodyH = 0.82 + veloN * 0.95 + whiffN * 0.3;
@@ -2772,6 +3096,7 @@
         vertN,
         armRad,
         side,
+        morph,
       });
 
       addCreatureHead(row, plan, {
@@ -2791,6 +3116,7 @@
         vertN,
         armRad,
         side,
+        morph,
       });
 
       const finLen = 0.55 + horizN * 0.85;
@@ -2836,6 +3162,25 @@
         horizN,
         vertN,
         side,
+        morph,
+      });
+
+      addMorphSignatureFeatures(row, plan, {
+        seed,
+        bodyW,
+        bodyH,
+        bodyD,
+        bodyY,
+        baseColor,
+        accentColor,
+        darkColor,
+        glowColor,
+        whiffN,
+        veloN,
+        horizN,
+        vertN,
+        side,
+        morph,
       });
 
       const spineCount = 3 + Math.round((horizN + vertN + whiffN) * 3);
@@ -2887,6 +3232,7 @@
         bodyH,
         bodyD,
         bodyY,
+        morph,
       });
 
       const shadow = addCreatureMesh(
