@@ -1154,7 +1154,8 @@
     {
       "imports": {
         "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "three-subdivide": "https://unpkg.com/three-subdivide@1.1.5/build/index.module.js"
       }
     }
   </script>
@@ -1197,6 +1198,9 @@
     let latestYear = 'all';
     let THREE = null;
     let OrbitControls = null;
+    let BufferGeometryUtils = null;
+    let RoomEnvironment = null;
+    let LoopSubdivision = null;
     let renderer, scene, camera, controls, shapeGroup;
     let webglPending = true;
     let webglFailed = false;
@@ -1855,8 +1859,22 @@
       els.statPower.textContent = `${one(Number(row.avg_velo_FF) || 0)} mph / ${pct(Number(row.whiff_rate) || 0)}`;
       els.statMove.textContent = `H ${signed(Number(row.pfx_x_avg) || 0)} / V ${signed(Number(row.pfx_z_avg) || 0)} / ${row.slot}`;
       els.statPca.textContent = `${one(Number(row.pca_x) || 0)}, ${one(Number(row.pca_y) || 0)}, ${one(Number(row.pca_z) || 0)}`;
-      buildSelectedShape(row);
+      scheduleShapeBuild(row);
       renderSearchPanel();
+    }
+
+    let shapeBuildTimer = null;
+    let lastBuiltShapeId = null;
+
+    function scheduleShapeBuild(row) {
+      const ready = !!(shapeGroup && THREE);
+      if (ready && lastBuiltShapeId === row.id) return;
+      if (shapeBuildTimer) clearTimeout(shapeBuildTimer);
+      shapeBuildTimer = setTimeout(() => {
+        shapeBuildTimer = null;
+        if (shapeGroup && THREE) lastBuiltShapeId = row.id;
+        buildSelectedShape(row);
+      }, ready ? 140 : 0);
     }
 
     function pitchHex(pitch) {
@@ -2083,6 +2101,14 @@
         ]);
         THREE = threeModule;
         OrbitControls = controlsModule.OrbitControls;
+        const optional = await Promise.allSettled([
+          import('three/addons/utils/BufferGeometryUtils.js'),
+          import('three/addons/environments/RoomEnvironment.js'),
+          import('three-subdivide'),
+        ]);
+        if (optional[0].status === 'fulfilled') BufferGeometryUtils = optional[0].value;
+        if (optional[1].status === 'fulfilled') RoomEnvironment = optional[1].value.RoomEnvironment;
+        if (optional[2].status === 'fulfilled') LoopSubdivision = optional[2].value.LoopSubdivision;
         return true;
       } catch (err) {
         console.warn('WebGL library unavailable, using canvas fallback.', err);
@@ -2110,7 +2136,16 @@
       controls.maxDistance = 16;
       controls.enablePan = false;
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.66));
+      if (RoomEnvironment && THREE.PMREMGenerator) {
+        try {
+          const pmrem = new THREE.PMREMGenerator(renderer);
+          scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+          pmrem.dispose();
+        } catch (err) {
+          console.warn('Environment lighting unavailable.', err);
+        }
+      }
+      scene.add(new THREE.AmbientLight(0xffffff, scene.environment ? 0.3 : 0.66));
       const key = new THREE.DirectionalLight(0xffe5af, 1.1);
       key.position.set(4, 7, 5);
       key.castShadow = true;
@@ -2149,7 +2184,7 @@
       while (group.children.length) {
         const child = group.children[0];
         group.remove(child);
-        if (child.geometry) child.geometry.dispose();
+        if (child.geometry && !child.geometry.userData?.smoothCached) child.geometry.dispose();
         if (child.material) {
           if (Array.isArray(child.material)) child.material.forEach(mat => mat.dispose());
           else child.material.dispose();
@@ -2174,7 +2209,8 @@
 
     function makeMaterial(color, options = {}) {
       const base = color instanceof THREE.Color ? color : new THREE.Color(color);
-      return new THREE.MeshStandardMaterial({
+      const MaterialClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+      const material = new MaterialClass({
         color: base,
         emissive: options.emissive || base,
         emissiveIntensity: options.emissiveIntensity ?? 0.025,
@@ -2183,19 +2219,67 @@
         flatShading: !!options.flatShading,
         transparent: !!options.transparent,
         opacity: options.opacity ?? 1,
+        envMapIntensity: options.envMapIntensity ?? 0.6,
       });
+      if ('clearcoat' in material) {
+        material.clearcoat = options.clearcoat ?? 0.28;
+        material.clearcoatRoughness = options.clearcoatRoughness ?? 0.42;
+      }
+      return material;
     }
+
+    const smoothGeometryCache = new Map();
 
     function smoothGeometry(geometry, options = {}) {
       if (!geometry || options.faceted) return geometry;
-      if (geometry.computeVertexNormals) geometry.computeVertexNormals();
-      if (geometry.normalizeNormals) geometry.normalizeNormals();
-      return geometry;
+      const params = geometry.parameters;
+      const cacheKey = params ? `${geometry.type}|${JSON.stringify(params)}` : null;
+      if (cacheKey && smoothGeometryCache.has(cacheKey)) {
+        if (geometry.dispose) geometry.dispose();
+        return smoothGeometryCache.get(cacheKey);
+      }
+      let geo = geometry;
+      if (BufferGeometryUtils?.mergeVertices) {
+        geo = BufferGeometryUtils.mergeVertices(geo, 1e-4);
+      }
+      const posCount = geo.attributes?.position?.count || 0;
+      // Spheres, capsules, and tori are already curved; merged normals are
+      // enough. Subdivision only pays off on boxy low-poly parts.
+      const alreadyCurved = /Sphere|Capsule|Torus/.test(geometry.type || '');
+      if (LoopSubdivision && !alreadyCurved && posCount > 3 && posCount <= 400) {
+        const iterations = posCount <= 60 ? 3 : posCount <= 160 ? 2 : 1;
+        try {
+          geo = LoopSubdivision.modify(geo, iterations, {
+            split: false,
+            uvSmooth: false,
+            preserveEdges: false,
+            flatOnly: false,
+            maxTriangles: 6000,
+          });
+          if (BufferGeometryUtils?.mergeVertices) {
+            geo = BufferGeometryUtils.mergeVertices(geo, 1e-4);
+          }
+        } catch (err) {
+          console.warn('Subdivision failed, using merged geometry.', err);
+        }
+      }
+      if (geo.computeVertexNormals) geo.computeVertexNormals();
+      if (geo.normalizeNormals) geo.normalizeNormals();
+      if (geo !== geometry && geometry.dispose) geometry.dispose();
+      if (cacheKey) {
+        geo.userData.smoothCached = true;
+        if (smoothGeometryCache.size > 400) {
+          smoothGeometryCache.forEach(cached => { if (cached.dispose) cached.dispose(); });
+          smoothGeometryCache.clear();
+        }
+        smoothGeometryCache.set(cacheKey, geo);
+      }
+      return geo;
     }
 
     function addCreatureMesh(geometry, material, position, scale, rotation = [0, 0, 0], options = {}) {
-      smoothGeometry(geometry, options);
-      const mesh = new THREE.Mesh(geometry, material);
+      const smoothed = smoothGeometry(geometry, options);
+      const mesh = new THREE.Mesh(smoothed, material);
       mesh.position.set(position[0], position[1], position[2]);
       mesh.scale.set(scale[0], scale[1], scale[2]);
       mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
