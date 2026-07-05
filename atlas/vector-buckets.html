@@ -330,6 +330,72 @@
       text-transform: uppercase;
     }
 
+    .dex-flavor {
+      margin-top: 8px;
+      max-width: 460px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.5;
+      color: rgba(16,17,15,0.78);
+      background: rgba(255,253,246,0.9);
+      border: 1px solid rgba(16,17,15,0.22);
+      border-radius: 6px;
+      padding: 7px 9px;
+    }
+
+    .dex-flavor:empty {
+      display: none;
+    }
+
+    .anatomy-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      border: 2px solid var(--rule);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fffdf6;
+      box-shadow: 4px 4px 0 rgba(16,17,15,0.16);
+    }
+
+    .anatomy-cell {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 14px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      padding: 9px 11px;
+      border-right: 1px solid rgba(16,17,15,0.12);
+      border-bottom: 1px solid rgba(16,17,15,0.12);
+    }
+
+    .anatomy-dot {
+      width: 12px;
+      height: 12px;
+      margin-top: 1px;
+      border: 1.5px solid rgba(16,17,15,0.65);
+      border-radius: 50%;
+    }
+
+    .anatomy-cell span {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 8px;
+      font-weight: 900;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .anatomy-cell strong {
+      display: block;
+      margin-top: 2px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
     .stat-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(78px, 1fr));
@@ -554,6 +620,14 @@
       font-family: "JetBrains Mono", monospace;
       font-size: 10px;
       font-weight: 900;
+    }
+
+    .percentile-row {
+      grid-template-columns: 68px minmax(0, 1fr) 58px;
+    }
+
+    .percentile-row strong:last-child {
+      text-align: right;
     }
 
     .arsenal-code {
@@ -1018,7 +1092,73 @@
       .readout {
         max-width: none;
       }
-      .stat-grid {
+      .dex-flavor {
+      margin-top: 8px;
+      max-width: 460px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.5;
+      color: rgba(16,17,15,0.78);
+      background: rgba(255,253,246,0.9);
+      border: 1px solid rgba(16,17,15,0.22);
+      border-radius: 6px;
+      padding: 7px 9px;
+    }
+
+    .dex-flavor:empty {
+      display: none;
+    }
+
+    .anatomy-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      border: 2px solid var(--rule);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fffdf6;
+      box-shadow: 4px 4px 0 rgba(16,17,15,0.16);
+    }
+
+    .anatomy-cell {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 14px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      padding: 9px 11px;
+      border-right: 1px solid rgba(16,17,15,0.12);
+      border-bottom: 1px solid rgba(16,17,15,0.12);
+    }
+
+    .anatomy-dot {
+      width: 12px;
+      height: 12px;
+      margin-top: 1px;
+      border: 1.5px solid rgba(16,17,15,0.65);
+      border-radius: 50%;
+    }
+
+    .anatomy-cell span {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 8px;
+      font-weight: 900;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .anatomy-cell strong {
+      display: block;
+      margin-top: 2px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .stat-grid {
         grid-template-columns: 1fr;
         max-height: 174px;
         overflow: auto;
@@ -1089,6 +1229,7 @@
               <div class="eyebrow">Vector creature</div>
               <div id="readout-name" class="readout-name">Loading...</div>
               <div id="readout-line" class="readout-line">Generated anatomy maps velo, whiff, movement, arm slot, pitch mix, and PCA position.</div>
+              <div id="dex-flavor" class="dex-flavor"></div>
             </div>
           </div>
           <div class="stat-grid">
@@ -1100,11 +1241,13 @@
           </div>
         </section>
 
+        <div id="anatomy-strip" class="anatomy-strip" hidden></div>
+
         <section id="search-panel" class="daily-panel" hidden>
           <div class="panel-head">
-            <div class="eyebrow">Search anatomy</div>
-            <h2>Selected pitcher card</h2>
-            <p class="microcopy">Search a pitcher to inspect their generated type, body plan, legacy cluster, and vector traits.</p>
+            <div class="eyebrow">Dex entry</div>
+            <h2>Pitcher dex entry</h2>
+            <p class="microcopy">Every move, stat, and body part below is generated from the pitcher's real vector data. Nothing is decoration.</p>
           </div>
           <div id="daily-flow" class="matchup-grid">
             <div class="status">Search a pitcher to inspect their vector creature.</div>
@@ -1188,6 +1331,8 @@
       dailyFlow: document.getElementById('daily-flow'),
       searchPanel: document.getElementById('search-panel'),
       canvas: document.getElementById('vector-canvas'),
+      anatomyStrip: document.getElementById('anatomy-strip'),
+      dexFlavor: document.getElementById('dex-flavor'),
     };
 
     let clusters = {};
@@ -1861,6 +2006,20 @@
       els.statMove.textContent = `H ${signed(Number(row.pfx_x_avg) || 0)} / V ${signed(Number(row.pfx_z_avg) || 0)} / ${row.slot}`;
       els.statPca.textContent = `${one(Number(row.pca_x) || 0)}, ${one(Number(row.pca_y) || 0)}, ${one(Number(row.pca_z) || 0)}`;
       scheduleShapeBuild(row);
+      if (els.dexFlavor) els.dexFlavor.textContent = dexFlavorFor(row);
+      if (els.anatomyStrip) {
+        const cells = creatureLegendFor(row).map(entry => `
+          <div class="anatomy-cell">
+            <div class="anatomy-dot" style="background:${entry.dot}"></div>
+            <div><span>${escapeHtml(entry.part)}</span><strong>${escapeHtml(entry.trait)}</strong></div>
+          </div>`).join('');
+        els.anatomyStrip.innerHTML = `
+          <div class="anatomy-cell">
+            <div class="anatomy-dot" style="background:#10110f"></div>
+            <div><span>Anatomy decoder</span><strong>every body part = a real stat</strong></div>
+          </div>${cells}`;
+        els.anatomyStrip.hidden = false;
+      }
       renderSearchPanel();
     }
 
@@ -1916,6 +2075,73 @@
       return Math.round(clamp((value - min) / (max - min), 0, 1) * 100);
     }
 
+
+    // Anatomy decoder: mirrors the feature thresholds in addCreatureAppendages
+    // and sculptCreatureBody. If a threshold changes there, change it here.
+    function creatureLegendFor(row) {
+      const m = vectorMetrics(row);
+      const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
+      const veloN = clamp((m.velo - 88) / 12, 0.05, 1);
+      const whiffN = clamp((m.whiff - 0.14) / 0.22, 0.05, 1);
+      const horizN = clamp(Math.abs(m.rawHx) / 1.2, 0.05, 1);
+      const vertN = clamp((m.vz - 0.1) / 1.1, 0.05, 1);
+      const plan = row.shapePlan || creatureFormForRow(row).plan;
+      const bodyPlan = row.bodyPlan || '';
+      const mix = pitchMixEntries(row, seed).filter(e => e[1] > 0.07).slice(0, 4);
+      const has = p => mix.some(e => e[0] === p);
+      const shareOf = p => (mix.find(e => e[0] === p) || [null, 0])[1];
+      const entries = [];
+      const push = (dot, part, trait) => entries.push({ dot, part, trait });
+
+      if (plan === 'striker') push(row.color || '#888', 'Upright striker frame', `${pct(m.whiff)} whiff at ${one(m.velo)} mph`);
+      else if (plan === 'tank') push(row.color || '#888', 'Low burrow stance', `${pct(m.gb)} of contact beaten into the ground`);
+      else if (plan === 'serpent') push(row.color || '#888', 'Coiled drake body', `H ${signed(m.rawHx)} sweeping attack path`);
+      else if (plan === 'winged') push(row.color || '#888', 'Sky raptor build', `V ${signed(m.vz)} ride above barrels`);
+      else push(row.color || '#888', 'Round sprite build', `finesse profile, ${m.mixCount || 0} pitch shapes`);
+
+      if (veloN > 0.3) {
+        push('#ff5a45', shareOf('FF') > 0.45 ? 'Center horn' : 'Twin horns', `${one(m.velo)} mph velo band`);
+      }
+      if (has('FF') || vertN > 0.6) {
+        push(pitchHex('FF'), 'Back spike ridge', has('FF') ? `four-seam, ${Math.round(shareOf('FF') * 100)}% usage` : `carry +${one(m.vz)} vertical`);
+      }
+      const bladeShare = shareOf('SL') + shareOf('ST') + shareOf('FC');
+      const winged = plan === 'winged' || bodyPlan === 'Sky Raptor';
+      if (!winged && (bladeShare > 0.12 || bodyPlan === 'Blade Mantis')) {
+        push(pitchHex('SL'), 'Blade fins', `${Math.round(bladeShare * 100)}% slider family`);
+      }
+      const hooded = plan === 'serpent' && horizN > 0.35;
+      if (hooded) push(row.color || '#888', 'Hood flare', `H ${signed(m.rawHx)} horizontal sweep`);
+      if (!hooded && (shareOf('CH') + shareOf('FS')) > 0.1) {
+        push(pitchHex('CH'), 'Ear fins', `${Math.round((shareOf('CH') + shareOf('FS')) * 100)}% offspeed feel`);
+      }
+      if (winged) push(row.color || '#888', 'Wings', `span scales with +${one(m.vz)} ride`);
+      const clubShare = shareOf('CU') + shareOf('KC');
+      push(clubShare > 0.1 ? pitchHex('CU') : '#ffdf3d', clubShare > 0.1 ? 'Tail club' : 'Tail tip', clubShare > 0.1 ? `${Math.round(clubShare * 100)}% breaking-ball hammer` : 'signature accent');
+      if (plan !== 'serpent' && (whiffN > 0.45 || has('SI'))) {
+        push('#e4dbce', 'Claws', whiffN > 0.45 ? `${pct(m.whiff)} whiff rate` : 'sinker digging claws');
+      }
+      push('#ffffff', (plan === 'striker' || plan === 'winged' || veloN > 0.72) ? 'Fierce eyes' : 'Wide eyes',
+        (plan === 'striker' || plan === 'winged' || veloN > 0.72) ? 'power-tier hunter' : 'contact-management temperament');
+      return entries.slice(0, 8);
+    }
+
+    function dexFlavorFor(row) {
+      const m = vectorMetrics(row);
+      const seed = hashString(`${row.pitcher}-${row.game_year}`);
+      const plan = row.shapePlan || creatureFormForRow(row).plan;
+      const top = pitchMixEntries(row, seed)[0];
+      const move = top ? `Signature move: ${pitchName(top[0])}, ${Math.round(top[1] * 100)}% of all attacks.` : '';
+      const lines = {
+        striker: `Hunts in the strike zone at ${one(m.velo)} mph. ${Math.round(m.whiff * 100)}% of swings against it touch nothing.`,
+        tank: `Fights from the ground floor. ${pct(m.gb)} of contact against it dies in the dirt.`,
+        serpent: `Coils before it strikes, sweeping attacks ${m.rawHx >= 0 ? 'arm-side' : 'glove-side'} with H ${signed(m.rawHx)} run.`,
+        winged: `Attacks from above the barrel line, riding V ${signed(m.vz)} of vertical break.`,
+        soft: `Refuses to fight fair. Changes speeds across ${m.mixCount || 0} pitch shapes to win on timing.`,
+      };
+      return `${lines[plan] || lines.soft} ${move}`.trim();
+    }
+
     function renderArsenalModule(row) {
       const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
       const entries = pitchMixEntries(row, seed).slice(0, 5);
@@ -1934,7 +2160,7 @@
       }).join('');
       return `
         <section class="atlas-module">
-          <div class="atlas-module-title"><strong>Pitch Arsenal</strong><span>usage shape</span></div>
+          <div class="atlas-module-title"><strong>Move Set</strong><span>every move is a real pitch</span></div>
           <div class="arsenal-list">${rows || '<div class="status">No pitch mix available.</div>'}</div>
         </section>`;
     }
@@ -1942,11 +2168,11 @@
     function renderPercentileModule(row) {
       const m = vectorMetrics(row);
       const metrics = [
-        ['Velo', percentileValue(m.velo, 88, 100), `${one(m.velo)} mph`, '#ff5a45'],
-        ['Whiff', percentileValue(m.whiff, 0.12, 0.34), pct(m.whiff), '#f7c948'],
+        ['Power', percentileValue(m.velo, 88, 100), `${one(m.velo)} mph`, '#ff5a45'],
+        ['Sharpness', percentileValue(m.whiff, 0.12, 0.34), pct(m.whiff), '#f7c948'],
         ['Ride', percentileValue(m.vz, 0.1, 1.25), signed(m.vz), '#72a7f5'],
         ['Run', percentileValue(m.hx, 0.05, 1.15), signed(m.rawHx), '#9f5bd1'],
-        ['GB', percentileValue(m.gb, 0.25, 0.62), pct(m.gb), '#2aa876'],
+        ['Ground', percentileValue(m.gb, 0.25, 0.62), pct(m.gb), '#2aa876'],
       ];
       const rows = metrics.map(([label, value, shown, fill]) => `
         <div class="percentile-row">
@@ -1956,7 +2182,7 @@
         </div>`).join('');
       return `
         <section class="atlas-module">
-          <div class="atlas-module-title"><strong>Vector Percentiles</strong><span>atlas scale</span></div>
+          <div class="atlas-module-title"><strong>Base Stats</strong><span>atlas percentile scale</span></div>
           <div class="percentile-list">${rows}</div>
         </section>`;
     }
@@ -1965,7 +2191,7 @@
       const m = vectorMetrics(row);
       return `
         <section class="atlas-module wide">
-          <div class="atlas-module-title"><strong>Movement Profile</strong><span>pitcher vector anatomy</span></div>
+          <div class="atlas-module-title"><strong>Vector Lab</strong><span>movement + release detail</span></div>
           <div class="profile-grid">
             <div class="profile-cell"><span>Horizontal</span><strong>${signed(m.rawHx)}</strong></div>
             <div class="profile-cell"><span>Vertical</span><strong>${signed(m.vz)}</strong></div>
