@@ -499,6 +499,67 @@
       overflow-wrap: anywhere;
     }
 
+    .sort-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .sort-chip {
+      border: 1.5px solid var(--rule);
+      border-radius: 999px;
+      background: #fffdf6;
+      padding: 5px 11px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      transition: transform 0.06s ease;
+    }
+
+    .sort-chip:hover {
+      transform: translateY(-1px);
+    }
+
+    .sort-chip.active {
+      background: #ffe27a;
+      box-shadow: 2px 2px 0 rgba(16,17,15,0.35);
+    }
+
+    th[data-key] {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    th[data-key]:hover {
+      background: rgba(255,226,122,0.35);
+    }
+
+    th[data-key].sort-asc::after {
+      content: " \25B2";
+      font-size: 8px;
+    }
+
+    th[data-key].sort-desc::after {
+      content: " \25BC";
+      font-size: 8px;
+    }
+
+    .tier-stars {
+      font-size: 11px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .stat-hot {
+      color: #d64524;
+      font-weight: 900;
+    }
+
     .stat-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(78px, 1fr));
@@ -1261,6 +1322,67 @@
       overflow-wrap: anywhere;
     }
 
+    .sort-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .sort-chip {
+      border: 1.5px solid var(--rule);
+      border-radius: 999px;
+      background: #fffdf6;
+      padding: 5px 11px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      transition: transform 0.06s ease;
+    }
+
+    .sort-chip:hover {
+      transform: translateY(-1px);
+    }
+
+    .sort-chip.active {
+      background: #ffe27a;
+      box-shadow: 2px 2px 0 rgba(16,17,15,0.35);
+    }
+
+    th[data-key] {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    th[data-key]:hover {
+      background: rgba(255,226,122,0.35);
+    }
+
+    th[data-key].sort-asc::after {
+      content: " \25B2";
+      font-size: 8px;
+    }
+
+    th[data-key].sort-desc::after {
+      content: " \25BC";
+      font-size: 8px;
+    }
+
+    .tier-stars {
+      font-size: 11px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .stat-hot {
+      color: #d64524;
+      font-weight: 900;
+    }
+
     .stat-grid {
         grid-template-columns: 1fr;
         max-height: 174px;
@@ -1368,7 +1490,8 @@
           <div class="panel-head">
             <div class="eyebrow">Type table</div>
             <h1 id="table-title">Pitcher vector table</h1>
-            <p id="table-copy" class="microcopy">Rows are pitcher seasons. Vector forms are derived from the published Atlas numeric fields.</p>
+            <p id="table-copy" class="microcopy">Rows are pitcher seasons. Click any column to sort, or grab a preset.</p>
+            <div id="sort-chips" class="sort-chips"></div>
           </div>
           <div class="summary-strip">
             <div class="summary-cell"><span>Rows</span><strong id="sum-rows">0</strong></div>
@@ -1380,17 +1503,17 @@
             <table>
               <thead>
                 <tr>
-                  <th>Pitcher season</th>
-                  <th>Creature type</th>
-                  <th>Vector form</th>
-                  <th>Legacy cluster</th>
-                  <th>Velo</th>
-                  <th>Whiff</th>
-                  <th>Arm</th>
-                  <th>H mov</th>
-                  <th>V mov</th>
-                  <th>PCA</th>
-                  <th>Cluster prob</th>
+                  <th data-key="name">Pitcher season</th>
+                  <th data-key="type">Creature type</th>
+                  <th data-key="form">Vector form</th>
+                  <th data-key="cluster">Legacy cluster</th>
+                  <th data-key="velo">Velo</th>
+                  <th data-key="whiff">Whiff</th>
+                  <th data-key="k">K%</th>
+                  <th data-key="arm">Arm</th>
+                  <th data-key="hmov">H mov</th>
+                  <th data-key="vmov">V mov</th>
+                  <th data-key="tier">Tier</th>
                 </tr>
               </thead>
               <tbody id="pitcher-body">
@@ -2058,32 +2181,128 @@
       return top ? top[0] : 'None';
     }
 
+    let tableSort = { key: 'tier', dir: 'desc' };
+
+    const TIER_RANK = { T1_Apex: 4, T2_Core: 3, T3_Standard: 2, T4_Fringe: 1 };
+
+    const SORT_PRESETS = [
+      { key: 'tier', dir: 'desc', label: 'Apex first' },
+      { key: 'velo', dir: 'desc', label: 'Flamethrowers' },
+      { key: 'k', dir: 'desc', label: 'K kings' },
+      { key: 'whiff', dir: 'desc', label: 'Whiff monsters' },
+      { key: 'hmov', dir: 'desc', label: 'Sweep lords' },
+      { key: 'vmov', dir: 'desc', label: 'Sky riders' },
+      { key: 'gb', dir: 'desc', label: 'Worm burners' },
+      { key: 'name', dir: 'asc', label: 'A to Z' },
+    ];
+
+    function tableSortValue(row, key) {
+      switch (key) {
+        case 'name': return String(row.player_name).toLowerCase();
+        case 'type': return String(row.creatureType || '');
+        case 'form': return String(row.form || '');
+        case 'cluster': return String(row.bucketName || '');
+        case 'velo': return Number(row.avg_velo_FF) || 0;
+        case 'whiff': return Number(row.whiff_rate) || 0;
+        case 'arm': return Number(row.arm_angle) || 0;
+        case 'hmov': return Math.abs(Number(row.pfx_x_avg) || 0);
+        case 'vmov': return Number(row.pfx_z_avg) || 0;
+        case 'gb': return Number(row.groundball_rate) || 0;
+        case 'k': return Number.isFinite(row.kPct) ? row.kPct : -1;
+        case 'tier': return (TIER_RANK[row.tier] || 0) * 1000 + (row.is_sp ? 500 : 0) + clamp(10 - (Number(row.siera) || 9), 0, 10) * 10 + clamp((Number(row.kPct) || 0) * 10, 0, 9);
+        default: return 0;
+      }
+    }
+
+    function applyTableSort(rows) {
+      const { key, dir } = tableSort;
+      const flip = dir === 'desc' ? -1 : 1;
+      return [...rows].sort((a, b) => {
+        const va = tableSortValue(a, key);
+        const vb = tableSortValue(b, key);
+        let cmp;
+        if (typeof va === 'string' || typeof vb === 'string') {
+          cmp = String(va).localeCompare(String(vb));
+        } else {
+          cmp = va - vb;
+        }
+        if (cmp !== 0) return cmp * flip;
+        if (b.game_year !== a.game_year) return b.game_year - a.game_year;
+        return String(a.player_name).localeCompare(String(b.player_name));
+      });
+    }
+
+    function syncSortIndicators() {
+      document.querySelectorAll('th[data-key]').forEach(th => {
+        th.classList.toggle('sort-asc', th.dataset.key === tableSort.key && tableSort.dir === 'asc');
+        th.classList.toggle('sort-desc', th.dataset.key === tableSort.key && tableSort.dir === 'desc');
+      });
+      const chips = document.getElementById('sort-chips');
+      if (chips) {
+        chips.querySelectorAll('.sort-chip').forEach(chip => {
+          chip.classList.toggle('active', chip.dataset.key === tableSort.key && chip.dataset.dir === tableSort.dir);
+        });
+      }
+    }
+
+    function initTableSorting() {
+      const chips = document.getElementById('sort-chips');
+      if (chips) {
+        chips.innerHTML = SORT_PRESETS.map(p =>
+          `<button type="button" class="sort-chip" data-key="${p.key}" data-dir="${p.dir}">${p.label}</button>`
+        ).join('');
+        chips.querySelectorAll('.sort-chip').forEach(chip => {
+          chip.addEventListener('click', () => {
+            tableSort = { key: chip.dataset.key, dir: chip.dataset.dir };
+            renderTable(activeRows());
+          });
+        });
+      }
+      document.querySelectorAll('th[data-key]').forEach(th => {
+        th.addEventListener('click', () => {
+          const key = th.dataset.key;
+          if (tableSort.key === key) {
+            tableSort.dir = tableSort.dir === 'desc' ? 'asc' : 'desc';
+          } else {
+            const stringKeys = ['name', 'type', 'form', 'cluster'];
+            tableSort = { key, dir: stringKeys.includes(key) ? 'asc' : 'desc' };
+          }
+          renderTable(activeRows());
+        });
+      });
+    }
+
     function renderTable(rows) {
+      syncSortIndicators();
       if (!rows.length) {
         els.pitcherBody.innerHTML = '<tr><td colspan="11" class="status">No pitchers match these filters.</td></tr>';
         return;
       }
 
-      const sorted = [...rows].sort((a, b) => {
-        if (b.game_year !== a.game_year) return b.game_year - a.game_year;
-        return String(a.player_name).localeCompare(String(b.player_name));
-      });
+      const sorted = applyTableSort(rows);
 
       els.pitcherBody.innerHTML = sorted.map(row => {
         const selected = selectedPitcher && selectedPitcher.id === row.id;
+        const velo = Number(row.avg_velo_FF) || 0;
+        const whiff = Number(row.whiff_rate) || 0;
+        const rar = rarityFor(row);
+        const starCount = { apex: 4, core: 3, standard: 2, fringe: 1 }[rar.key] || 0;
+        const tierCell = row.tier
+          ? `<span class="tier-stars" style="color:${rar.color}" title="${rar.label}${Number.isFinite(row.siera) ? ` | SIERA ${one(row.siera)}` : ''}">${'\u2605'.repeat(starCount)}${'\u2606'.repeat(4 - starCount)}</span>`
+          : '<span class="mono">n/a</span>';
         return `
           <tr data-id="${escapeHtml(row.id)}" class="${selected ? 'selected' : ''}">
             <td class="name-cell">${escapeHtml(row.player_name)} <span class="mono">${row.game_year}</span></td>
             <td><span class="pill" title="${escapeHtml((row.typeReasons || []).join(' | '))}" style="background:${escapeHtml(row.typeColor)};color:#10110f">${escapeHtml(row.creatureType)}</span></td>
             <td><span class="pill">${escapeHtml(row.form)}</span></td>
             <td>${escapeHtml(row.bucketName)}</td>
-            <td class="mono">${one(Number(row.avg_velo_FF) || 0)}</td>
-            <td class="mono">${pct(Number(row.whiff_rate) || 0)}</td>
+            <td class="mono ${velo >= 97 ? 'stat-hot' : ''}">${one(velo)}</td>
+            <td class="mono ${whiff >= 0.3 ? 'stat-hot' : ''}">${pct(whiff)}</td>
+            <td class="mono ${Number.isFinite(row.kPct) && row.kPct >= 0.3 ? 'stat-hot' : ''}">${Number.isFinite(row.kPct) ? pct(row.kPct) : 'n/a'}</td>
             <td class="mono">${escapeHtml(row.slot)}</td>
             <td class="mono">${signed(Number(row.pfx_x_avg) || 0)}</td>
             <td class="mono">${signed(Number(row.pfx_z_avg) || 0)}</td>
-            <td class="mono">${one(Number(row.pca_x) || 0)}, ${one(Number(row.pca_y) || 0)}, ${one(Number(row.pca_z) || 0)}</td>
-            <td class="mono">${pct(row.prob)}</td>
+            <td>${tierCell}</td>
           </tr>`;
       }).join('');
 
@@ -3876,6 +4095,7 @@
       });
       enriched.forEach(row => rowById.set(row.id, row));
       populateFilters();
+      initTableSorting();
       selectedPitcher = defaultPitcher(enriched.filter(row => String(row.game_year) === latestYear)) || defaultPitcher(enriched);
       [els.search, els.year, els.role, els.form].forEach(el => {
         el.addEventListener('input', () => {
