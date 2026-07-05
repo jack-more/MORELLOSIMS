@@ -2148,8 +2148,8 @@
           console.warn('Environment lighting unavailable.', err);
         }
       }
-      scene.add(new THREE.AmbientLight(0xffffff, scene.environment ? 0.3 : 0.66));
-      const key = new THREE.DirectionalLight(0xffe5af, 1.1);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+      const key = new THREE.DirectionalLight(0xfff2d8, 1.35);
       key.position.set(4, 7, 5);
       key.castShadow = true;
       scene.add(key);
@@ -2211,24 +2211,47 @@
       return x - Math.floor(x);
     }
 
+    let toonGradientMap = null;
+
+    function getToonGradient() {
+      if (toonGradientMap || !THREE) return toonGradientMap;
+      const steps = new Uint8Array([110, 160, 215, 255]);
+      toonGradientMap = new THREE.DataTexture(steps, steps.length, 1, THREE.RedFormat);
+      toonGradientMap.minFilter = THREE.NearestFilter;
+      toonGradientMap.magFilter = THREE.NearestFilter;
+      toonGradientMap.needsUpdate = true;
+      return toonGradientMap;
+    }
+
     function makeMaterial(color, options = {}) {
       const base = color instanceof THREE.Color ? color : new THREE.Color(color);
-      const MaterialClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
-      const material = new MaterialClass({
+      if (options.shiny) {
+        const MaterialClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+        const material = new MaterialClass({
+          color: base,
+          emissive: options.emissive || base,
+          emissiveIntensity: options.emissiveIntensity ?? 0.025,
+          roughness: options.roughness ?? 0.2,
+          metalness: options.metalness ?? 0.05,
+          transparent: !!options.transparent,
+          opacity: options.opacity ?? 1,
+          envMapIntensity: options.envMapIntensity ?? 0.8,
+        });
+        if ('clearcoat' in material) {
+          material.clearcoat = options.clearcoat ?? 0.7;
+          material.clearcoatRoughness = options.clearcoatRoughness ?? 0.25;
+        }
+        if (options.doubleSide) material.side = THREE.DoubleSide;
+        return material;
+      }
+      const material = new THREE.MeshToonMaterial({
         color: base,
+        gradientMap: getToonGradient(),
         emissive: options.emissive || base,
-        emissiveIntensity: options.emissiveIntensity ?? 0.025,
-        roughness: options.roughness ?? 0.58,
-        metalness: options.metalness ?? 0.05,
-        flatShading: !!options.flatShading,
+        emissiveIntensity: options.emissiveIntensity ?? 0.02,
         transparent: !!options.transparent,
         opacity: options.opacity ?? 1,
-        envMapIntensity: options.envMapIntensity ?? 0.6,
       });
-      if ('clearcoat' in material) {
-        material.clearcoat = options.clearcoat ?? 0.28;
-        material.clearcoatRoughness = options.clearcoatRoughness ?? 0.42;
-      }
       if (options.doubleSide) material.side = THREE.DoubleSide;
       return material;
     }
@@ -2283,6 +2306,44 @@
       return geo;
     }
 
+    let outlineMaterial = null;
+
+    function getOutlineMaterial() {
+      if (!outlineMaterial && THREE) {
+        outlineMaterial = new THREE.MeshBasicMaterial({ color: 0x241f26, side: THREE.BackSide });
+      }
+      return outlineMaterial;
+    }
+
+    function makeOutlineGeometry(geometry, distance) {
+      const geo = geometry.clone();
+      const pos = geo.getAttribute('position');
+      const norm = geo.getAttribute('normal');
+      if (!pos || !norm) return null;
+      for (let i = 0; i < pos.count; i++) {
+        pos.setXYZ(
+          i,
+          pos.getX(i) + norm.getX(i) * distance,
+          pos.getY(i) + norm.getY(i) * distance,
+          pos.getZ(i) + norm.getZ(i) * distance
+        );
+      }
+      pos.needsUpdate = true;
+      return geo;
+    }
+
+    function addOutlineFor(mesh, distance) {
+      const geo = makeOutlineGeometry(mesh.geometry, distance);
+      if (!geo) return;
+      const outline = new THREE.Mesh(geo, getOutlineMaterial());
+      outline.position.copy(mesh.position);
+      outline.rotation.copy(mesh.rotation);
+      outline.scale.copy(mesh.scale);
+      outline.userData.skipCohesion = true;
+      outline.userData.isOutline = true;
+      shapeGroup.add(outline);
+    }
+
     function addCreatureMesh(geometry, material, position, scale, rotation = [0, 0, 0], options = {}) {
       const smoothed = smoothGeometry(geometry, options);
       const mesh = new THREE.Mesh(smoothed, material);
@@ -2292,6 +2353,7 @@
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       shapeGroup.add(mesh);
+      if (options.outline) addOutlineFor(mesh, options.outlineWidth ?? 0.012);
       return mesh;
     }
 
@@ -2525,7 +2587,27 @@
       return marchingCubesField;
     }
 
-    function extractFieldGeometry(mc) {
+    function snapColorsToPalette(colors, palette) {
+      if (!palette || !palette.length) return;
+      const pal = palette.map(c => {
+        const m = Math.max(c.r, c.g, c.b, 0.001);
+        return { c, nr: c.r / m, ng: c.g / m, nb: c.b / m };
+      });
+      for (let i = 0; i < colors.length; i += 3) {
+        const m = Math.max(colors[i], colors[i + 1], colors[i + 2], 0.001);
+        const nr = colors[i] / m, ng = colors[i + 1] / m, nb = colors[i + 2] / m;
+        let best = pal[0], bestD = Infinity;
+        for (const p of pal) {
+          const d = (p.nr - nr) * (p.nr - nr) + (p.ng - ng) * (p.ng - ng) + (p.nb - nb) * (p.nb - nb);
+          if (d < bestD) { bestD = d; best = p; }
+        }
+        colors[i] = Math.min(1, best.c.r * 1.16);
+        colors[i + 1] = Math.min(1, best.c.g * 1.16);
+        colors[i + 2] = Math.min(1, best.c.b * 1.16);
+      }
+    }
+
+    function extractFieldGeometry(mc, palette) {
       const count = Math.max(0, mc.count || 0);
       if (!count) return null;
       const src = mc.geometry;
@@ -2546,6 +2628,7 @@
         for (let i = 0; i < colors.length; i++) {
           colors[i] = Math.min(1, colors[i] * boost);
         }
+        snapColorsToPalette(colors, palette);
         geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       }
       let merged = geo;
@@ -2739,16 +2822,13 @@
       });
       mc.isolation = isolation;
       mc.update();
-      const geo = extractFieldGeometry(mc);
+      const paletteSet = new Map();
+      balls.forEach(b => paletteSet.set(b.color.getHexString(), b.color));
+      const geo = extractFieldGeometry(mc, [...paletteSet.values()]);
       if (!geo) return null;
-      const rocky = bodyPlan === 'Boulder Serpent';
-      const bodyMat = new THREE.MeshPhysicalMaterial({
+      const bodyMat = new THREE.MeshToonMaterial({
         vertexColors: true,
-        roughness: rocky ? 0.74 : 0.4,
-        metalness: 0.02,
-        clearcoat: rocky ? 0.12 : 0.55,
-        clearcoatRoughness: 0.32,
-        envMapIntensity: 0.85,
+        gradientMap: getToonGradient(),
       });
       const mesh = new THREE.Mesh(geo, bodyMat);
       mesh.scale.setScalar(1 / (2 * k));
@@ -2757,6 +2837,15 @@
       mesh.receiveShadow = true;
       mesh.userData.skipCohesion = true;
       shapeGroup.add(mesh);
+      const bodyOutline = makeOutlineGeometry(geo, 0.02);
+      if (bodyOutline) {
+        const outline = new THREE.Mesh(bodyOutline, getOutlineMaterial());
+        outline.scale.copy(mesh.scale);
+        outline.position.copy(mesh.position);
+        outline.userData.skipCohesion = true;
+        outline.userData.isOutline = true;
+        shapeGroup.add(outline);
+      }
       return anchors;
     }
 
@@ -2768,10 +2857,10 @@
       const fierce = plan === 'striker' || plan === 'winged' || veloN > 0.72;
       const eyeR = r * (fierce ? 0.34 : 0.42);
       const pupilColor = new THREE.Color(0x201d1a);
-      const scleraMat = makeMaterial(0xffffff, { roughness: 0.12, clearcoat: 0.9, emissiveIntensity: 0.01 });
-      const irisMat = makeMaterial(accentColor.clone().lerp(darkColor, 0.25), { roughness: 0.18, clearcoat: 0.8, emissiveIntensity: 0.05 });
-      const pupilMat = makeMaterial(pupilColor, { roughness: 0.1, emissiveIntensity: 0 });
-      const sparkMat = makeMaterial(0xffffff, { roughness: 0.05, emissiveIntensity: 0.6 });
+      const scleraMat = makeMaterial(0xffffff, { shiny: true, roughness: 0.12, clearcoat: 0.9, emissiveIntensity: 0.01 });
+      const irisMat = makeMaterial(accentColor.clone().lerp(darkColor, 0.25), { shiny: true, roughness: 0.18, clearcoat: 0.8, emissiveIntensity: 0.05 });
+      const pupilMat = makeMaterial(pupilColor, { shiny: true, roughness: 0.1, emissiveIntensity: 0 });
+      const sparkMat = makeMaterial(0xffffff, { shiny: true, roughness: 0.05, emissiveIntensity: 0.6 });
       const tilt = armRad * 0.3;
       [-1, 1].forEach(sx => {
         const ex = headC.x + sx * r * 0.48;
@@ -2877,7 +2966,7 @@
             [anchors.headC.x + sx * anchors.headR * 0.6, anchors.headC.y + anchors.headR * 0.55, anchors.headC.z - anchors.headR * 0.3],
             [1, 1, 1],
             [-0.9 - vertN * 0.2, 0, sx * 0.26],
-            { noSubdiv: true }
+            { noSubdiv: true, outline: true }
           );
         });
       }
@@ -2893,7 +2982,7 @@
             spikeGeo, crestMat,
             [p.x, p.y - 0.04, p.z + 0.05], [1, 1, 1],
             [0, 0, 0],
-            { noSubdiv: true }
+            { noSubdiv: true, outline: true }
           );
         });
       }
@@ -2910,7 +2999,7 @@
             finGeometry(len, len * 0.3, len * 0.16), bladeMat,
             [sh.x + sx * 0.06, sh.y + 0.03, sh.z], [sx, 1, 1],
             [0.05, sx * -0.5, sx * -0.55],
-            { noSubdiv: true }
+            { noSubdiv: true, outline: true }
           );
         });
       }
@@ -2926,7 +3015,7 @@
             [anchors.headC.x + sx * anchors.headR * 0.8, anchors.headC.y + anchors.headR * 0.34, anchors.headC.z - anchors.headR * 0.05],
             [sx, 1, 1],
             [0, sx * -0.3, sx * 0.7],
-            { noSubdiv: true }
+            { noSubdiv: true, outline: true }
           );
         });
       }
@@ -2939,7 +3028,8 @@
           new THREE.SphereGeometry(1, 20, 14),
           makeMaterial(clubShare > 0.1 ? pitchColor('CU', baseColor) : accentColor, { roughness: 0.3, clearcoat: 0.6, emissiveIntensity: 0.06 }),
           [anchors.tailTip.x, anchors.tailTip.y, anchors.tailTip.z],
-          [rTip, rTip, rTip], [0, 0, 0]
+          [rTip, rTip, rTip], [0, 0, 0],
+          { outline: true, outlineWidth: 0.02 }
         );
       }
 
@@ -2954,7 +3044,7 @@
               [f.x + cx * 0.06, f.y + 0.04, f.z + 0.06 - Math.abs(cx) * 0.02],
               [1, 1, 1],
               [Math.PI / 2.5, 0, cx * 0.3],
-              { noSubdiv: true }
+              { noSubdiv: true, outline: true }
             );
           });
         });
@@ -2970,7 +3060,7 @@
             wingGeometry(span, span * 0.55), wingMat,
             [sh.x, sh.y, sh.z], [sx, 1, 1],
             [0.12, sx * -0.4, sx * (0.5 - vertN * 0.15)],
-            { noSubdiv: true }
+            { noSubdiv: true, outline: true }
           );
         });
       }
@@ -2985,7 +3075,7 @@
             [anchors.headC.x + sx * anchors.headR * 0.55, anchors.headC.y - anchors.headR * 0.1, anchors.headC.z - anchors.headR * 0.3],
             [sx, 1, 1],
             [0, sx * -0.5, sx * 1.05],
-            { noSubdiv: true }
+            { noSubdiv: true, outline: true }
           );
         });
       }
