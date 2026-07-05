@@ -314,6 +314,109 @@
       box-shadow: 3px 3px 0 rgba(16, 17, 15, 0.22);
     }
 
+
+    .readout-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .type-orb {
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid rgba(16,17,15,0.72);
+      display: grid;
+      place-items: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 900;
+      color: #fffdf6;
+      text-shadow: 0 1px 2px rgba(16,17,15,0.55);
+      box-shadow: inset -3px -4px 6px rgba(16,17,15,0.28), inset 2px 3px 5px rgba(255,255,255,0.5);
+    }
+
+    .readout-stars {
+      margin-top: 4px;
+      font-size: 13px;
+      letter-spacing: 3px;
+      line-height: 1;
+      color: var(--tier-color, #8f8a80);
+      text-shadow: 0 1px 0 rgba(16,17,15,0.35);
+    }
+
+    .readout-stars:empty {
+      display: none;
+    }
+
+    .readout-power {
+      margin-top: 8px;
+      padding-top: 7px;
+      border-top: 2px solid rgba(16,17,15,0.5);
+      display: flex;
+      justify-content: flex-end;
+      gap: 14px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.4px;
+    }
+
+    .readout-power b {
+      font-size: 8px;
+      font-weight: 900;
+      color: var(--muted);
+      align-self: center;
+    }
+
+    .readout {
+      position: relative;
+      overflow: hidden;
+      border: 3px solid transparent;
+      background:
+        linear-gradient(rgba(255,250,240,0.94), rgba(255,250,240,0.94)) padding-box,
+        var(--tier-frame, linear-gradient(135deg, #3a352e, #6b655c, #3a352e)) border-box;
+    }
+
+    .readout[data-tier="apex"]::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(115deg,
+        transparent 18%,
+        rgba(255,255,255,0.42) 38%,
+        rgba(255,214,120,0.32) 46%,
+        rgba(120,235,255,0.22) 54%,
+        transparent 74%);
+      background-size: 260% 260%;
+      mix-blend-mode: screen;
+      animation: holo-sweep 4.6s ease-in-out infinite;
+    }
+
+    .readout[data-tier="core"]::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(115deg,
+        transparent 30%,
+        rgba(255,255,255,0.22) 48%,
+        rgba(150,200,255,0.14) 54%,
+        transparent 72%);
+      background-size: 260% 260%;
+      mix-blend-mode: screen;
+      animation: holo-sweep 6.5s ease-in-out infinite;
+    }
+
+    @keyframes holo-sweep {
+      0% { background-position: 120% 120%; }
+      55% { background-position: -20% -20%; }
+      100% { background-position: -20% -20%; }
+    }
+
     .readout-name {
       font-family: Anton, Impact, sans-serif;
       font-size: 26px;
@@ -1225,11 +1328,18 @@
         <section class="stage-panel">
           <canvas id="vector-canvas"></canvas>
           <div class="stage-overlay">
-            <div class="readout">
-              <div class="eyebrow">Vector creature</div>
-              <div id="readout-name" class="readout-name">Loading...</div>
+            <div class="readout" id="readout-card">
+              <div class="readout-top">
+                <div class="readout-title">
+                  <div class="eyebrow">Vector creature</div>
+                  <div id="readout-name" class="readout-name">Loading...</div>
+                </div>
+                <div id="type-orb" class="type-orb" hidden></div>
+              </div>
+              <div id="readout-stars" class="readout-stars"></div>
               <div id="readout-line" class="readout-line">Generated anatomy maps velo, whiff, movement, arm slot, pitch mix, and PCA position.</div>
               <div id="dex-flavor" class="dex-flavor"></div>
+              <div id="readout-power" class="readout-power" hidden></div>
             </div>
           </div>
           <div class="stat-grid">
@@ -1334,6 +1444,10 @@
       canvas: document.getElementById('vector-canvas'),
       anatomyStrip: document.getElementById('anatomy-strip'),
       dexFlavor: document.getElementById('dex-flavor'),
+      readoutCard: document.getElementById('readout-card'),
+      readoutStars: document.getElementById('readout-stars'),
+      typeOrb: document.getElementById('type-orb'),
+      readoutPower: document.getElementById('readout-power'),
     };
 
     let clusters = {};
@@ -2007,6 +2121,40 @@
       els.statMove.textContent = `H ${signed(Number(row.pfx_x_avg) || 0)} / V ${signed(Number(row.pfx_z_avg) || 0)} / ${row.slot}`;
       els.statPca.textContent = `${one(Number(row.pca_x) || 0)}, ${one(Number(row.pca_y) || 0)}, ${one(Number(row.pca_z) || 0)}`;
       scheduleShapeBuild(row);
+      const rarity = rarityFor(row);
+      const typeColor = row.color || '#138c9f';
+      if (els.readoutCard) {
+        els.readoutCard.dataset.tier = rarity.key;
+        const frames = {
+          apex: 'linear-gradient(135deg, #8a6508, #f7d774, #b8860b, #ffe9a3, #8a6508)',
+          core: 'linear-gradient(135deg, #2c3e5c, #9db8dc, #5b7ba6, #cfe0f2, #2c3e5c)',
+          standard: 'linear-gradient(135deg, #4a4438, #8b8272, #4a4438)',
+          fringe: 'linear-gradient(135deg, #55524c, #7c7870, #55524c)',
+        };
+        els.readoutCard.style.setProperty('--tier-frame', frames[rarity.key] || frames.standard);
+        els.readoutCard.style.setProperty('--tier-color', rarity.color);
+      }
+      if (els.readoutStars) {
+        const starCount = { apex: 4, core: 3, standard: 2, fringe: 1 }[rarity.key] || 0;
+        els.readoutStars.textContent = row.tier ? '\u2605'.repeat(starCount) + '\u2606'.repeat(4 - starCount) : '';
+      }
+      if (els.typeOrb) {
+        const primary = row.primaryType || String(row.creatureType || '').split('/')[0].trim();
+        els.typeOrb.hidden = !primary;
+        els.typeOrb.textContent = primary ? primary.slice(0, 2).toUpperCase() : '';
+        els.typeOrb.style.background = `radial-gradient(circle at 32% 28%, ${typeColor}, ${typeColor} 55%, rgba(16,17,15,0.55))`;
+        els.typeOrb.title = row.creatureType || '';
+      }
+      if (els.readoutPower) {
+        const m = vectorMetrics(row);
+        const bits = [`<b>PWR</b> ${Math.round(m.velo)}`, `<b>SHP</b> ${Math.round(m.whiff * 100)}`];
+        if (Number.isFinite(row.kPct)) bits.push(`<b>K</b> ${Math.round(row.kPct * 100)}`);
+        els.readoutPower.innerHTML = bits.join('<span style="opacity:0.35">/</span>');
+        els.readoutPower.hidden = false;
+      }
+      if (els.canvas) {
+        els.canvas.style.background = `radial-gradient(ellipse at 62% 60%, ${typeColor}2b 0%, ${typeColor}12 40%, rgba(0,0,0,0) 72%)`;
+      }
       if (els.dexFlavor) els.dexFlavor.textContent = dexFlavorFor(row);
       if (els.anatomyStrip) {
         const cells = creatureLegendFor(row).map(entry => `
