@@ -190,6 +190,15 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
         sign = "+" if sim_spread > 0 else ""
         sim_projection = f"{side_team} {sign}{sim_spread}"
 
+    def _num(raw):
+        raw = (raw or "").strip()
+        if not raw:
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
     return {
         "id": make_id(date, away, home, bet_type, side_team),
         "sport": "nba",
@@ -206,6 +215,8 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
         "units": risk,
         "sim_projection": sim_projection,
         "sim_edge": float(sim_edge) if sim_edge is not None else 0.0,
+        "closing_line": _num(row.get("closing_line")),
+        "closing_odds": _num(row.get("closing_odds")),
         "status": status,
         "result": result,
         "pl": pl,

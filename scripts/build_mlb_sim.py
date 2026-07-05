@@ -440,9 +440,20 @@ def moneyline_break_even(odds):
     return 100 / (odds + 100)
 
 
+# Upper bound of the plausibility window. When the model's win probability
+# beats the market break-even by this much, history says the model is wrong,
+# not the market: May-Jul 2026 settled picks with edge >= 0.18 ran well below
+# their prices (0.20+ bucket: 12-17, -15% ROI) while the market's Brier score
+# beat the model's (0.251 vs 0.268) on the model's own picks. Such games stay
+# on the board at C7 but do not qualify as tracked picks.
+MAX_PLAUSIBLE_EDGE = 0.18
+
+
 def confidence_cap_from_market_edge(price_edge):
     if price_edge is None:
         return 0
+    if price_edge >= MAX_PLAUSIBLE_EDGE:
+        return 7
     if price_edge >= 0.130:
         return 10
     if price_edge >= 0.080:
@@ -4050,6 +4061,38 @@ setupHrNavigation();
 with open(OUTPUT, "w") as f:
     f.write(html)
 
+# ─── Odds snapshots — per-run line capture so settlement can compute CLV ───
+# Every build appends current lines for unstarted games with a real book
+# line; the last snapshot before first pitch is the closing-line proxy that
+# settle_mlb.py attaches to picks as closing_away_ml/closing_home_ml.
+ODDS_SNAPSHOTS = os.path.join(REPO_ROOT, "mlbsim", "odds_snapshots.csv")
+ODDS_SNAPSHOT_FIELDS = ["date", "game_pk", "away", "home", "ts_utc", "away_ml", "home_ml", "book"]
+_snap_rows = []
+_snap_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+for g in games:
+    if g.get("has_started") or g.get("odds_source") in ("", "NO_LINE", None):
+        continue
+    if g.get("away_ml") is None or g.get("home_ml") is None:
+        continue
+    _snap_rows.append({
+        "date": TODAY,
+        "game_pk": g.get("game_pk", "") or "",
+        "away": g["away_abbr"],
+        "home": g["home_abbr"],
+        "ts_utc": _snap_ts,
+        "away_ml": g["away_ml"],
+        "home_ml": g["home_ml"],
+        "book": g.get("odds_source", ""),
+    })
+if _snap_rows:
+    _snap_new_file = not os.path.exists(ODDS_SNAPSHOTS)
+    with open(ODDS_SNAPSHOTS, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=ODDS_SNAPSHOT_FIELDS, lineterminator="\n")
+        if _snap_new_file:
+            writer.writeheader()
+        writer.writerows(_snap_rows)
+    print(f"  odds_snapshots.csv: +{len(_snap_rows)} line snapshots")
+
 # ─── Picks log — append today's pregame publishable picks to CSV ───────────
 PICKS_LOG = os.path.join(REPO_ROOT, "mlbsim", "picks_log.csv")
 writeable_picks = [g for g in qualified_picks if not g.get("has_started")]
@@ -4067,17 +4110,23 @@ PICKS_LOG_FIELDS = [
     "away_runs", "home_runs", "away_wp", "home_wp", "away_ml", "home_ml",
     "away_sp", "home_sp", "model_mode", "away_vector_run_delta", "home_vector_run_delta",
     "away_vector_xwoba", "home_vector_xwoba", "vector_edge", "vector_xwoba_edge",
-    "vector_gate", "result",
+    "vector_gate", "result", "game_pk",
 ]
 
 
 def _pick_log_key(row):
+    # game_pk keys one row per game so time shifts and pick-side flips
+    # replace the prior row instead of duplicating it; doubleheaders have
+    # distinct game_pks. Time is only a fallback for legacy rows.
+    game_pk = str(row.get("game_pk") or "")
+    if game_pk:
+        return (row.get("date", ""), row.get("away", ""), row.get("home", ""), game_pk)
     return (
         row.get("date", ""),
-        row.get("time", ""),
         row.get("away", ""),
         row.get("home", ""),
-        row.get("pick", ""),
+        "",
+        row.get("time", ""),
     )
 
 
@@ -4117,6 +4166,7 @@ for g in writeable_picks:
         "vector_xwoba_edge": g.get("vector_xwoba_edge", ""),
         "vector_gate": g.get("vector_gate_status", ""),
         "result": "",
+        "game_pk": g.get("game_pk", "") or "",
     }
     pick_log_rows[_pick_log_key(row)] = row
 

@@ -400,17 +400,8 @@ def _build_injury_adjusted_cache(matchups):
             team_ids.add(tid)
 
             # Resolve OUT player names → IDs
-            out_ids = set()
             team_rw = rw.get(abbr, {})
-            for name in team_rw.get("out", []):
-                pid = _match_player_name(name, roster)
-                if pid is not None:
-                    out_ids.add(int(pid))
-            for name, pos, status in team_rw.get("starters", []):
-                if status == "OUT":
-                    pid = _match_player_name(name, roster)
-                    if pid is not None:
-                        out_ids.add(int(pid))
+            out_ids, _ = _resolve_out_ids(team_rw, roster, abbr, "team out map")
 
             if out_ids:
                 # Merge with existing (in case same team appears in multiple matchups — shouldn't happen)
@@ -1687,6 +1678,33 @@ def _match_player_name(scraped_name, db_players):
     return None
 
 
+def _resolve_out_ids(lineup_info, roster, team_abbr, context=""):
+    """Match RotoWire OUT names to DB player ids. Loud on failure.
+
+    A name that fails to match would otherwise be silently treated as
+    available, which corrupts minutes projection and the spread.
+    Returns (out_ids, unmatched_names).
+    """
+    out_ids = set()
+    unmatched = []
+    names = list(lineup_info.get("out", []))
+    names += [name for name, _pos, status in lineup_info.get("starters", []) if status == "OUT"]
+    for name in names:
+        pid = _match_player_name(name, roster)
+        if pid is not None:
+            out_ids.add(int(pid))
+        elif name not in unmatched:
+            unmatched.append(name)
+    if unmatched:
+        logger.warning(
+            "INJURY MATCH FAILURE %s%s: %s not matched to roster — treated as AVAILABLE, projection may be wrong",
+            team_abbr,
+            f" ({context})" if context else "",
+            ", ".join(unmatched),
+        )
+    return out_ids, unmatched
+
+
 def project_minutes(roster_df, out_player_ids):
     """Redistribute minutes from OUT players to remaining rotation.
 
@@ -2553,34 +2571,11 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     away_roster = _get_full_roster(away_abbr)
 
     # ── Match RotoWire OUT players to DB player IDs ──
-    home_out_ids = set()
-    away_out_ids = set()
-
     home_lineup = rw_lineups.get(home_abbr, {})
     away_lineup = rw_lineups.get(away_abbr, {})
 
-    for name in home_lineup.get("out", []):
-        pid = _match_player_name(name, home_roster)
-        if pid is not None:
-            home_out_ids.add(pid)
-
-    for name in away_lineup.get("out", []):
-        pid = _match_player_name(name, away_roster)
-        if pid is not None:
-            away_out_ids.add(pid)
-
-    # Also mark starters who are OUT
-    for name, pos, status in home_lineup.get("starters", []):
-        if status == "OUT":
-            pid = _match_player_name(name, home_roster)
-            if pid is not None:
-                home_out_ids.add(pid)
-
-    for name, pos, status in away_lineup.get("starters", []):
-        if status == "OUT":
-            pid = _match_player_name(name, away_roster)
-            if pid is not None:
-                away_out_ids.add(pid)
+    home_out_ids, home_out_unmatched = _resolve_out_ids(home_lineup, home_roster, home_abbr, "spread model")
+    away_out_ids, away_out_unmatched = _resolve_out_ids(away_lineup, away_roster, away_abbr, "spread model")
 
     # ── Project minutes ──
     home_proj_min = project_minutes(home_roster, home_out_ids)
@@ -2758,6 +2753,8 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
         "away_b2b": away_b2b,
         "home_out": len(home_out_ids),
         "away_out": len(away_out_ids),
+        "home_out_unmatched": home_out_unmatched,
+        "away_out_unmatched": away_out_unmatched,
         "home_lineup_q": round(home_lineup_q, 1),
         "away_lineup_q": round(away_lineup_q, 1),
         "home_collapse": round(home_collapse_penalty, 1),
@@ -3443,6 +3440,35 @@ def get_matchups():
     with open("data/daily_picks.json", "w") as _dpf:
         json.dump(daily_snapshot, _dpf, indent=2)
     logger.info("Picks: saved daily snapshot: %d games → data/daily_picks.json", len(daily_snapshot["games"]))
+
+    # ── Line snapshots — per-run book line capture so grading can compute CLV ──
+    # Every pipeline run appends the current real book lines; the last row per
+    # (date, matchup) is the closing-line proxy grade_picks.py attaches to picks.
+    _snap_path = os.path.join("data", "line_snapshots.csv")
+    _snap_fields = ["date", "matchup", "ts_utc", "book_spread_home", "book_total", "home_ml", "away_ml"]
+    _snap_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    _snap_rows = [
+        {
+            "date": slate_date,
+            "matchup": g["matchup"],
+            "ts_utc": _snap_ts,
+            "book_spread_home": g["book_spread"] if g["book_spread"] is not None else "",
+            "book_total": g["book_total"] if g["book_total"] is not None else "",
+            "home_ml": g.get("home_ml") if g.get("home_ml") is not None else "",
+            "away_ml": g.get("away_ml") if g.get("away_ml") is not None else "",
+        }
+        for g in daily_snapshot["games"]
+        if g["book_spread"] is not None or g["book_total"] is not None
+    ]
+    if _snap_rows:
+        import csv as _csv
+        _snap_new = not os.path.exists(_snap_path)
+        with open(_snap_path, "a", newline="") as _sf:
+            _sw = _csv.DictWriter(_sf, fieldnames=_snap_fields, lineterminator="\n")
+            if _snap_new:
+                _sw.writeheader()
+            _sw.writerows(_snap_rows)
+        logger.info("Picks: appended %d line snapshots → %s", len(_snap_rows), _snap_path)
 
     return matchups, team_map, slate_date, event_ids
 
@@ -4795,15 +4821,8 @@ def generate_html():
         rw_lu = matchups[0].get("rw_lineups", {})
         for team_abbr, lineup_info in rw_lu.items():
             roster = _get_full_roster(team_abbr)
-            for name in lineup_info.get("out", []):
-                pid = _match_player_name(name, roster)
-                if pid is not None:
-                    global_out_pids.add(int(pid))
-            for name, pos, status in lineup_info.get("starters", []):
-                if status == "OUT":
-                    pid = _match_player_name(name, roster)
-                    if pid is not None:
-                        global_out_pids.add(int(pid))
+            out_ids, _ = _resolve_out_ids(lineup_info, roster, team_abbr, "trends filter")
+            global_out_pids |= out_ids
     logger.info("Trends: %d OUT players excluded from fallers", len(global_out_pids))
 
     # ── Build WOWY Trending Players HTML ──

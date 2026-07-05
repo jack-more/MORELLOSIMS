@@ -24,11 +24,12 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 PICKS_CSV = os.path.join(PROJECT_ROOT, "data", "picks.csv")
 RESULTS_JSON = os.path.join(PROJECT_ROOT, "data", "settlement_results.json")
+LINE_SNAPSHOTS = os.path.join(PROJECT_ROOT, "data", "line_snapshots.csv")
 
 sys.path.insert(0, PROJECT_ROOT)
 from config import STARTING_BANKROLL
 from collectors.games_espn import fetch_scores_for_grading, score_key
-CSV_FIELDS = ["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score"]
+CSV_FIELDS = ["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score", "closing_line", "closing_odds"]
 
 
 # ── CSV I/O ──────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ def parse_side(side_str):
 
     Returns (team_abbr, line_float, 'home_spread'|'away_spread') or None.
     """
-    m = re.match(r"([A-Z]{3})\s+([+-]?[\d.]+)", side_str.strip())
+    m = re.match(r"([A-Z]{2,3})\s+([+-]?[\d.]+)", side_str.strip())
     if not m:
         return None
     team = m.group(1)
@@ -177,7 +178,7 @@ def grade_ml(matchup, side_str, scores, pick_date=None):
         return None
 
     # Parse "GSW ML" → team = "GSW"
-    m = re.match(r"([A-Z]{3})\s+ML", side_str.strip())
+    m = re.match(r"([A-Z]{2,3})\s+ML", side_str.strip())
     if not m:
         return None
 
@@ -203,6 +204,49 @@ def grade_ml(matchup, side_str, scores, pick_date=None):
             return "L"
     else:
         return None
+
+
+# ── Closing lines (for CLV) ──────────────────────────────────────────
+
+def load_closing_snapshots():
+    """Last line snapshot per (date, matchup). generate_frontend.py appends
+    snapshots chronologically, so the final row is the closing-line proxy.
+    """
+    closing = {}
+    if not os.path.exists(LINE_SNAPSHOTS):
+        return closing
+    with open(LINE_SNAPSHOTS, newline="") as f:
+        for row in csv.DictReader(f):
+            closing[(row["date"], row["matchup"])] = row
+    return closing
+
+
+def attach_closing_line(pick, closing):
+    """Set closing_line / closing_odds on a pick from the last pre-game
+    snapshot. Spread lines are stored from the picked side's perspective
+    so CLV is simply pick line minus closing line.
+    """
+    row = closing.get((pick.get("date"), pick.get("matchup")))
+    if not row:
+        return
+    pick_type = pick.get("type", "spread")
+    away = (pick.get("matchup") or "").split(" @ ")[0].strip()
+    if pick_type == "spread" and row.get("book_spread_home") not in (None, ""):
+        parsed = parse_side(pick.get("side", ""))
+        if parsed is None:
+            return
+        team, _line = parsed
+        home_spread = float(row["book_spread_home"])
+        pick["closing_line"] = str(-home_spread if team == away else home_spread)
+    elif pick_type == "ml":
+        m = re.match(r"([A-Z]{2,3})\s+ML", (pick.get("side") or "").strip())
+        if not m:
+            return
+        ml = row.get("away_ml") if m.group(1) == away else row.get("home_ml")
+        if ml not in (None, ""):
+            pick["closing_odds"] = str(ml)
+    elif pick_type == "total" and row.get("book_total") not in (None, ""):
+        pick["closing_line"] = str(row["book_total"])
 
 
 # ── Main ─────────────────────────────────────────────────────────────
@@ -231,12 +275,14 @@ def grade_all():
 
     # Fetch scores
     scores = fetch_scores_for_grading(days=days_needed)
+    closing = load_closing_snapshots()
 
     # Grade each pending pick
     graded = 0
     for pick in picks:
         if pick["result"]:
             continue  # Already graded
+        attach_closing_line(pick, closing)
 
         matchup = pick["matchup"]
         side = pick["side"]

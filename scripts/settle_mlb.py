@@ -8,6 +8,7 @@ Append-only: never touches already-settled rows.
 
 Run before build_mlb_sim.py in the morning settle workflow.
 """
+import csv
 import json
 import os
 import time
@@ -16,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 PICKS_JSON = os.path.join(REPO, "picks", "mlb.json")
+ODDS_SNAPSHOTS = os.path.join(REPO, "mlbsim", "odds_snapshots.csv")
 STAKE_BY_CONF = {
     10: 100,
     9: 50,
@@ -83,6 +85,45 @@ def get_final_runs(game):
     return away_runs, home_runs
 
 
+def load_closing_lines():
+    """Last odds snapshot per game. build_mlb_sim.py appends snapshots
+    chronologically, so the final row per key is the closing-line proxy.
+
+    Returns {key: row} keyed by both (date, game_pk) and (date, away, home).
+    """
+    closing = {}
+    if not os.path.exists(ODDS_SNAPSHOTS):
+        return closing
+    try:
+        with open(ODDS_SNAPSHOTS, newline="") as f:
+            for row in csv.DictReader(f):
+                if row.get("game_pk"):
+                    closing[(row["date"], str(row["game_pk"]))] = row
+                closing[(row["date"], row.get("away"), row.get("home"))] = row
+    except Exception as e:
+        print(f"  [WARN] Could not read odds snapshots: {e}")
+    return closing
+
+
+def attach_closing_odds(pick, closing):
+    """Set closing_odds (price for the side taken) on a pick, if captured.
+
+    Used by report_calibration.py to compute closing line value.
+    """
+    row = None
+    if pick.get("game_pk"):
+        row = closing.get((pick["date"], str(pick["game_pk"])))
+    if row is None:
+        row = closing.get((pick["date"], pick.get("away"), pick.get("home")))
+    if row is None:
+        return
+    side_ml = row.get("away_ml") if pick.get("side") == pick.get("away") else row.get("home_ml")
+    if side_ml in (None, ""):
+        return
+    pick["closing_odds"] = side_ml
+    pick["closing_ts"] = row.get("ts_utc")
+
+
 def main():
     if not os.path.exists(PICKS_JSON):
         print("  picks/mlb.json missing — nothing to settle.")
@@ -101,8 +142,10 @@ def main():
     schedule_cache = {}
     settled_count = 0
     today_iso = datetime.now(ET).strftime("%Y-%m-%d")
+    closing_lines = load_closing_lines()
 
     for p in pending:
+        attach_closing_odds(p, closing_lines)
         if p["date"] not in schedule_cache:
             try:
                 schedule_cache[p["date"]] = fetch_schedule(p["date"])
