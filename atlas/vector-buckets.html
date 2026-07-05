@@ -577,6 +577,88 @@
       text-align: right;
     }
 
+    .battle-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .battle-tab {
+      border: 2px solid var(--rule);
+      border-radius: 999px;
+      background: #fffdf6;
+      padding: 6px 14px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .battle-tab.active {
+      background: #ffe27a;
+      box-shadow: 2px 2px 0 rgba(16,17,15,0.3);
+    }
+
+    .gym-lineup {
+      margin-top: 8px;
+      display: grid;
+      gap: 3px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    .gym-lineup div {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px dashed rgba(16,17,15,0.15);
+      padding-bottom: 2px;
+    }
+
+    .badge-case {
+      margin-top: 10px;
+      border-top: 2px solid rgba(16,17,15,0.4);
+      padding-top: 7px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .badge-dots {
+      margin-top: 5px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .badge-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(16,17,15,0.7);
+      display: grid;
+      place-items: center;
+      font-size: 6px;
+      font-weight: 900;
+      color: #fffdf6;
+      text-shadow: 0 1px 1px rgba(16,17,15,0.6);
+      box-shadow: inset -2px -2px 3px rgba(16,17,15,0.3);
+    }
+
+    #gym-select {
+      flex: 1;
+      min-width: 0;
+      border: 2px solid var(--rule);
+      border-radius: 7px;
+      background: #fff;
+      padding: 9px 10px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
     .battle-controls {
       display: flex;
       gap: 8px;
@@ -1611,6 +1693,88 @@
       text-align: right;
     }
 
+    .battle-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .battle-tab {
+      border: 2px solid var(--rule);
+      border-radius: 999px;
+      background: #fffdf6;
+      padding: 6px 14px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .battle-tab.active {
+      background: #ffe27a;
+      box-shadow: 2px 2px 0 rgba(16,17,15,0.3);
+    }
+
+    .gym-lineup {
+      margin-top: 8px;
+      display: grid;
+      gap: 3px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    .gym-lineup div {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px dashed rgba(16,17,15,0.15);
+      padding-bottom: 2px;
+    }
+
+    .badge-case {
+      margin-top: 10px;
+      border-top: 2px solid rgba(16,17,15,0.4);
+      padding-top: 7px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .badge-dots {
+      margin-top: 5px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .badge-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(16,17,15,0.7);
+      display: grid;
+      place-items: center;
+      font-size: 6px;
+      font-weight: 900;
+      color: #fffdf6;
+      text-shadow: 0 1px 1px rgba(16,17,15,0.6);
+      box-shadow: inset -2px -2px 3px rgba(16,17,15,0.3);
+    }
+
+    #gym-select {
+      flex: 1;
+      min-width: 0;
+      border: 2px solid var(--rule);
+      border-radius: 7px;
+      background: #fff;
+      padding: 9px 10px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
     .battle-controls {
       display: flex;
       gap: 8px;
@@ -1919,8 +2083,13 @@
               <div class="status">Select a pitcher above.</div>
             </div>
             <div class="battle-center">
+              <div class="battle-tabs">
+                <button type="button" class="battle-tab active" data-mode="duel">Duel</button>
+                <button type="button" class="battle-tab" data-mode="gym">Gym challenge</button>
+              </div>
               <div class="battle-controls">
                 <select id="hitter-select"></select>
+                <select id="gym-select" hidden></select>
                 <button type="button" id="fight-btn" class="fight-btn">FIGHT</button>
               </div>
               <div id="battle-log" class="battle-log"></div>
@@ -1991,6 +2160,7 @@
       clusters: './clusters.json',
       tiers: './pitcher_tiers.json',
       batters: './batters.json',
+      gyms: './gym_rosters.json',
     };
 
     const els = {
@@ -3139,6 +3309,7 @@
 
     // ---- Battle zone: real-rate duel simulator -------------------------
     let battleHitters = [];
+    let battleHittersAll = [];
     let leagueRates = null;
     let battleBusy = false;
     let rematchCount = 0;
@@ -3372,6 +3543,7 @@
       const select = document.getElementById('hitter-select');
       const btn = document.getElementById('fight-btn');
       if (!select || !btn) return;
+      battleHittersAll = battleHitters;
       const eligible = battleHitters
         .filter(h => (Number(h.season_PA_2026) || 0) >= 150)
         .sort((a, b) => (Number(b.season_wOBA_2026) || 0) - (Number(a.season_wOBA_2026) || 0));
@@ -3389,7 +3561,173 @@
         btn.textContent = 'FIGHT';
         renderBattleHitter();
       });
-      btn.addEventListener('click', runDuel);
+      btn.addEventListener('click', () => (battleMode === 'gym' ? runGym() : runDuel()));
+    }
+
+
+    // ---- Gym challenge: run the gauntlet, one trip through a real lineup
+    let gymData = [];
+    let battleMode = 'duel';
+    let currentGymIdx = 0;
+
+    function gymDifficulty(gym) {
+      const idx = gymData.indexOf(gym);
+      const q = idx / Math.max(1, gymData.length - 1);
+      if (q > 0.86) return { stars: 4, color: '#f0b429', label: 'ELITE' };
+      if (q > 0.6) return { stars: 3, color: '#6f42c1', label: 'HARD' };
+      if (q > 0.3) return { stars: 2, color: '#2c6ea8', label: 'SOLID' };
+      return { stars: 1, color: '#2aa876', label: 'OPENER' };
+    }
+
+    function badgeStore() {
+      try { return JSON.parse(localStorage.getItem('atlas_gym_badges') || '{}'); }
+      catch (err) { return {}; }
+    }
+
+    function saveBadge(pitcherId, gymAbbr) {
+      const store = badgeStore();
+      const list = new Set(store[pitcherId] || []);
+      list.add(gymAbbr);
+      store[pitcherId] = [...list];
+      try { localStorage.setItem('atlas_gym_badges', JSON.stringify(store)); } catch (err) { /* private mode */ }
+    }
+
+    function renderBadgeCase(container) {
+      if (!selectedPitcher || !gymData.length) return '';
+      const earned = new Set((badgeStore()[selectedPitcher.id]) || []);
+      const dots = gymData.map(gym => {
+        const diff = gymDifficulty(gym);
+        const has = earned.has(gym.abbr);
+        return `<span class="badge-dot" title="${escapeHtml(gym.name)}${has ? ' (earned)' : ''}" style="background:${has ? diff.color : '#d8d2c6'};opacity:${has ? 1 : 0.45}">${escapeHtml(gym.abbr.slice(0, 2))}</span>`;
+      }).join('');
+      return `<div class="badge-case">BADGE CASE: ${earned.size}/${gymData.length}<div class="badge-dots">${dots}</div></div>`;
+    }
+
+    function renderGymCard() {
+      const card = document.getElementById('battle-hitter');
+      const gym = gymData[currentGymIdx];
+      if (!card || !gym) return;
+      const diff = gymDifficulty(gym);
+      card.style.setProperty('--fighter-frame', `linear-gradient(135deg, ${diff.color}, #e9e2d2, ${diff.color})`);
+      const lineupRows = gym.lineup.map(id => {
+        const h = battleHittersAll.find(b => String(b.batter) === String(id));
+        if (!h) return '';
+        const r = hitterRates(h);
+        return `<div><span>${escapeHtml(h.batter_name)}</span><span>wOBA ${three(r.woba)}</span></div>`;
+      }).join('');
+      card.innerHTML = `
+        <div class="fighter-name">${escapeHtml(gym.name)} Gym</div>
+        <div class="fighter-line">${escapeHtml(gym.lg)} ${escapeHtml(gym.div)} | ${diff.label} | ${'\u2605'.repeat(diff.stars)}${'\u2606'.repeat(4 - diff.stars)} | leader: ${escapeHtml(gym.leader.name)}</div>
+        <div class="gym-lineup">${lineupRows}</div>
+        ${renderBadgeCase()}`;
+    }
+
+    async function runGym() {
+      if (battleBusy || !selectedPitcher) return;
+      const gym = gymData[currentGymIdx];
+      if (!gym) return;
+      battleBusy = true;
+      const btn = document.getElementById('fight-btn');
+      const logEl = document.getElementById('battle-log');
+      const verdictEl = document.getElementById('battle-verdict');
+      btn.disabled = true;
+      logEl.innerHTML = '';
+      verdictEl.textContent = '';
+      renderBattlePitcher(selectedPitcher);
+      renderGymCard();
+      const row = selectedPitcher;
+      const mathBody = document.getElementById('battle-math-body');
+      if (mathBody) {
+        mathBody.innerHTML = `Gym rules: one trip through the ${escapeHtml(gym.name)} lineup (9 PA).
+          Per-PA odds re-blended log5 for each hitter. Damage = linear weights.
+          Strikeouts feed the pitcher +10 HP momentum (house rule, shown in log). Survive all 9 with HP left to take the badge.`;
+      }
+      rematchCount += 1;
+      const rng = mulberry32(hashString(`${row.id}-gym-${gym.abbr}-${rematchCount}`));
+      const seedMix = pitchMixEntries(row, hashString(row.id)).filter(e => e[1] > 0.04);
+      let pitcherHP = 100;
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      let survived = true;
+      for (let pa = 0; pa < gym.lineup.length; pa++) {
+        const hitter = battleHittersAll.find(b => String(b.batter) === String(gym.lineup[pa]));
+        if (!hitter) continue;
+        await wait(pa === 0 ? 250 : 800);
+        const probs = duelProbabilities(row, hitter);
+        let pick = rng() * seedMix.reduce((s, e) => s + e[1], 0);
+        let pitch = seedMix.length ? seedMix[0][0] : 'FF';
+        for (const [p, share] of seedMix) { pick -= share; if (pick <= 0) { pitch = p; break; } }
+        const kind = sampleOutcome(probs, rng);
+        const toPitcher = kind === 'hr' || kind === 'bb' || kind === 'hit';
+        let dmgText;
+        if (toPitcher) {
+          pitcherHP -= DMG[kind];
+          dmgText = `-${DMG[kind]} P`;
+        } else if (kind === 'k') {
+          pitcherHP = Math.min(100, pitcherHP + 10);
+          dmgText = '+10 P';
+        } else {
+          dmgText = 'out';
+        }
+        setHP('pitcher', pitcherHP);
+        const entry = document.createElement('div');
+        entry.className = `log-entry${kind === 'hr' ? ' big' : ''}`;
+        entry.innerHTML = `
+          <span class="log-pa">${pa + 1}/9</span>
+          <span class="log-pitch" style="background:${pitchHex(pitch)}">${escapeHtml(pitch)}</span>
+          <span>${escapeHtml(hitter.batter_name)}: ${escapeHtml(outcomeText(kind, row, rng))}</span>
+          <span class="log-dmg ${toPitcher ? 'to-pitcher' : 'to-hitter'}">${dmgText}</span>`;
+        logEl.appendChild(entry);
+        logEl.scrollTop = logEl.scrollHeight;
+        if (pitcherHP <= 0) { survived = false; break; }
+      }
+      await wait(650);
+      if (survived && pitcherHP > 0) {
+        saveBadge(row.id, gym.abbr);
+        verdictEl.textContent = `BADGE EARNED! ${row.player_name} conquers the ${gym.name} gym!`;
+      } else {
+        verdictEl.textContent = `${gym.name} gym holds. ${row.player_name} is knocked out.`;
+      }
+      renderGymCard();
+      btn.textContent = 'REMATCH';
+      btn.disabled = false;
+      battleBusy = false;
+    }
+
+    function setBattleMode(mode) {
+      battleMode = mode;
+      document.querySelectorAll('.battle-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.mode === mode);
+      });
+      document.getElementById('hitter-select').hidden = mode !== 'duel';
+      document.getElementById('gym-select').hidden = mode !== 'gym';
+      document.getElementById('battle-log').innerHTML = '';
+      document.getElementById('battle-verdict').textContent = '';
+      const btn = document.getElementById('fight-btn');
+      btn.textContent = mode === 'gym' ? 'CHALLENGE' : 'FIGHT';
+      rematchCount = 0;
+      if (mode === 'gym') renderGymCard();
+      else renderBattleHitter();
+    }
+
+    function initGymZone() {
+      const select = document.getElementById('gym-select');
+      if (!select || !gymData.length) return;
+      select.innerHTML = gymData.map((gym, i) => {
+        const diff = gymDifficulty(gym);
+        return `<option value="${i}">${escapeHtml(gym.abbr)} | ${escapeHtml(gym.name)} ${'\u2605'.repeat(diff.stars)} (${escapeHtml(gym.leader.name)})</option>`;
+      }).join('');
+      currentGymIdx = 0;
+      select.addEventListener('change', () => {
+        currentGymIdx = Number(select.value) || 0;
+        rematchCount = 0;
+        document.getElementById('battle-log').innerHTML = '';
+        document.getElementById('battle-verdict').textContent = '';
+        document.getElementById('fight-btn').textContent = 'CHALLENGE';
+        renderGymCard();
+      });
+      document.querySelectorAll('.battle-tab').forEach(tab => {
+        tab.addEventListener('click', () => setBattleMode(tab.dataset.mode));
+      });
     }
 
     function renderSearchPanel() {
@@ -4778,13 +5116,15 @@
         return false;
       });
 
-      const [pitcherData, clusterData, tierData, batterData] = await Promise.all([
+      const [pitcherData, clusterData, tierData, batterData, gymJson] = await Promise.all([
         loadJson(DATA_URLS.pitchers),
         loadJson(DATA_URLS.clusters),
         loadJson(DATA_URLS.tiers).catch(() => []),
         loadJson(DATA_URLS.batters).catch(() => []),
+        loadJson(DATA_URLS.gyms).catch(() => null),
       ]);
       battleHitters = Array.isArray(batterData) ? batterData : [];
+      gymData = gymJson && Array.isArray(gymJson.gyms) ? gymJson.gyms : [];
       pitchers = pitcherData;
       clusters = clusterData;
       const tierMap = new Map();
@@ -4808,6 +5148,7 @@
       initTableSorting();
       computeLeagueRates();
       initBattleZone();
+      initGymZone();
       selectedPitcher = defaultPitcher(enriched.filter(row => String(row.game_year) === latestYear)) || defaultPitcher(enriched);
       [els.search, els.year, els.role, els.form].forEach(el => {
         el.addEventListener('input', () => {
