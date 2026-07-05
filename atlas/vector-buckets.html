@@ -1201,6 +1201,7 @@
     let BufferGeometryUtils = null;
     let RoomEnvironment = null;
     let LoopSubdivision = null;
+    let MarchingCubesClass = null;
     let renderer, scene, camera, controls, shapeGroup;
     let webglPending = true;
     let webglFailed = false;
@@ -2105,10 +2106,12 @@
           import('three/addons/utils/BufferGeometryUtils.js'),
           import('three/addons/environments/RoomEnvironment.js'),
           import('three-subdivide'),
+          import('three/addons/objects/MarchingCubes.js'),
         ]);
         if (optional[0].status === 'fulfilled') BufferGeometryUtils = optional[0].value;
         if (optional[1].status === 'fulfilled') RoomEnvironment = optional[1].value.RoomEnvironment;
         if (optional[2].status === 'fulfilled') LoopSubdivision = optional[2].value.LoopSubdivision;
+        if (optional[3].status === 'fulfilled') MarchingCubesClass = optional[3].value.MarchingCubes;
         return true;
       } catch (err) {
         console.warn('WebGL library unavailable, using canvas fallback.', err);
@@ -2163,6 +2166,7 @@
       shapeGroup = new THREE.Group();
       shapeGroup.position.set(2.15, 0.05, 0);
       scene.add(shapeGroup);
+      window.__shapeGroup = shapeGroup;
 
       window.addEventListener('resize', resizeThree);
       resizeThree();
@@ -2225,6 +2229,7 @@
         material.clearcoat = options.clearcoat ?? 0.28;
         material.clearcoatRoughness = options.clearcoatRoughness ?? 0.42;
       }
+      if (options.doubleSide) material.side = THREE.DoubleSide;
       return material;
     }
 
@@ -2233,7 +2238,8 @@
     function smoothGeometry(geometry, options = {}) {
       if (!geometry || options.faceted) return geometry;
       const params = geometry.parameters;
-      const cacheKey = params ? `${geometry.type}|${JSON.stringify(params)}` : null;
+      const cacheable = params && !/Extrude|Lathe/.test(geometry.type || '');
+      const cacheKey = cacheable ? `${geometry.type}|${JSON.stringify(params)}` : null;
       if (cacheKey && smoothGeometryCache.has(cacheKey)) {
         if (geometry.dispose) geometry.dispose();
         return smoothGeometryCache.get(cacheKey);
@@ -2245,8 +2251,8 @@
       const posCount = geo.attributes?.position?.count || 0;
       // Spheres, capsules, and tori are already curved; merged normals are
       // enough. Subdivision only pays off on boxy low-poly parts.
-      const alreadyCurved = /Sphere|Capsule|Torus/.test(geometry.type || '');
-      if (LoopSubdivision && !alreadyCurved && posCount > 3 && posCount <= 400) {
+      const alreadyCurved = /Sphere|Capsule|Torus|Lathe|Extrude/.test(geometry.type || '');
+      if (LoopSubdivision && !options.noSubdiv && !alreadyCurved && posCount > 3 && posCount <= 400) {
         const iterations = posCount <= 60 ? 3 : posCount <= 160 ? 2 : 1;
         try {
           geo = LoopSubdivision.modify(geo, iterations, {
@@ -2501,968 +2507,487 @@
       return plans[Math.floor(seededUnit(seed, 9) * plans.length) % plans.length];
     }
 
-    function addCoreBody(row, plan, metrics) {
-      const {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        bodyColor,
-        accentColor,
-        darkColor,
-        glowColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        armRad,
-        side,
-        morph,
-      } = metrics;
-      const dna = morph || pitcherMorphDNA(row);
-      const primary = row.primaryType || String(row.creatureType || 'Normal').split('/')[0].trim();
+    // ---- Creature sculpting v2 ----------------------------------------
+    // One continuous organic body sculpted from a metaball field instead of
+    // stacked primitives. Every feature maps to a real trait:
+    //   stature/chest bulk = velo band, width = horizontal movement,
+    //   tail sweep = movement direction, crest = FF/ride, blades = SL/ST/FC,
+    //   ear fins = CH/FS, tail club = CU/KC, claws = whiff/SI, wings = fly-ball
+    //   profile, coil stance = groundball rate.
+
+    let marchingCubesField = null;
+
+    function getMarchingCubes() {
+      if (!MarchingCubesClass || !THREE) return null;
+      if (!marchingCubesField) {
+        marchingCubesField = new MarchingCubesClass(64, new THREE.MeshBasicMaterial(), false, true, 90000);
+      }
+      return marchingCubesField;
+    }
+
+    function extractFieldGeometry(mc) {
+      const count = Math.max(0, mc.count || 0);
+      if (!count) return null;
+      const src = mc.geometry;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(src.getAttribute('position').array.slice(0, count * 3), 3));
+      const colorAttr = src.getAttribute('color');
+      if (colorAttr) {
+        const colors = colorAttr.array.slice(0, count * 3);
+        // MarchingCubes emits color values scaled far below the input palette;
+        // renormalize so the 95th percentile vertex hits full palette brightness
+        const maxima = [];
+        for (let i = 0; i < colors.length; i += 3) {
+          maxima.push(Math.max(colors[i], colors[i + 1], colors[i + 2]));
+        }
+        maxima.sort((a, b) => a - b);
+        const p95 = maxima[Math.floor(maxima.length * 0.95)] || 1;
+        const boost = clamp(0.92 / Math.max(p95, 0.001), 1, 24);
+        for (let i = 0; i < colors.length; i++) {
+          colors[i] = Math.min(1, colors[i] * boost);
+        }
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      }
+      let merged = geo;
+      if (BufferGeometryUtils?.mergeVertices) {
+        merged = BufferGeometryUtils.mergeVertices(geo, 1e-4);
+      }
+      merged.computeVertexNormals();
+      return merged;
+    }
+
+    function sculptCreatureBody(row, plan, metrics) {
+      const mc = getMarchingCubes();
+      if (!mc) return null;
+      const { seed, baseColor, bodyColor, darkColor, whiffN, veloN, horizN, vertN, gbN, side, morph } = metrics;
       const bodyPlan = row.bodyPlan || '';
-      const coreMat = makeMaterial(bodyColor, {
-        emissive: baseColor,
-        emissiveIntensity: 0.045 + whiffN * 0.04,
-        roughness: ['Rock', 'Ground'].includes(primary) ? 0.72 : primary === 'Steel' ? 0.38 : 0.5,
-        metalness: primary === 'Steel' ? 0.24 : 0.05,
-      });
-      const armorMat = makeMaterial(darkColor.clone().lerp(accentColor, 0.2), {
-        emissive: baseColor,
-        emissiveIntensity: 0.03,
-        roughness: 0.62,
-        metalness: primary === 'Steel' ? 0.26 : 0.08,
-      });
-      const glowMat = makeMaterial(glowColor, {
-        emissive: accentColor,
-        emissiveIntensity: 0.075,
-        roughness: 0.34,
-        metalness: 0.12,
-      });
+      const bellyColor = bodyColor.clone().lerp(new THREE.Color(0xfaf0d8), 0.7);
+      const backColor = bodyColor.clone().lerp(baseColor, 0.5);
+      const tailColor = bodyColor.clone().lerp(darkColor, 0.16);
+      const headColor = bodyColor.clone().lerp(bellyColor, 0.2);
+      const balls = [];
+      const push = (x, y, z, r, color) => balls.push({ x, y, z, r, color: color || bodyColor });
+      const anchors = { plan, feet: [], shoulders: [], spineTop: [] };
 
-      if (bodyPlan === 'Boulder Serpent') {
-        addCreatureMesh(
-          new THREE.DodecahedronGeometry(1, 0),
-          coreMat,
-          [0, bodyY, 0],
-          [bodyW * (1.08 + dna.armorOffset * 0.22), bodyH * (0.66 + dna.armorOffset * 0.14), bodyD * 0.98],
-          [0.18 + dna.markerTwist * 0.08, side * (0.28 + horizN * 0.18), side * (0.12 + dna.asymmetry)]
-        );
-        const rockOffsets = [-1, 0, 1, ...(dna.plateCount > 6 ? [-1.65, 1.65] : [])];
-        rockOffsets.forEach((rockIndex, i) => {
-          addCreatureMesh(
-            new THREE.DodecahedronGeometry(1, 0),
-            makeMaterial(bodyColor.clone().lerp(darkColor, 0.12 + i * 0.07), {
-              emissive: baseColor,
-              emissiveIntensity: 0.018,
-              roughness: 0.78,
-              metalness: 0.04,
-            }),
-            [rockIndex * bodyW * 0.34, bodyY + bodyH * (0.18 - Math.abs(rockIndex) * 0.03), -bodyD * 0.18],
-            [bodyW * (0.28 + seededUnit(seed, 230 + i) * 0.08), bodyH * 0.2, bodyD * 0.26],
-            [seededUnit(seed, 240 + i) * 0.7, side * rockIndex * 0.32, rockIndex * 0.28]
-          );
-        });
-        addCreatureMesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          armorMat,
-          [0, bodyY - bodyH * 0.45, bodyD * 0.06],
-          [bodyW * 0.94, bodyH * 0.12, bodyD * 0.7],
-          [0.06, side * 0.12, 0]
-        );
-        return;
-      }
-
-      if (bodyPlan === 'Blade Mantis') {
-        addCreatureMesh(
-          new THREE.CylinderGeometry(0.72, 0.38 + dna.armorOffset * 0.2, 1.0 + dna.crestHeight * 0.34, dna.bodySides),
-          coreMat,
-          [dna.asymmetry * 0.18, bodyY + bodyH * 0.04, bodyD * 0.08],
-          [bodyW * (0.68 + dna.armorOffset * 0.18), bodyH * 0.72, bodyD * (0.62 + dna.armorOffset * 0.2)],
-          [0.08 + dna.markerTwist * 0.05, side * (0.18 + dna.armorOffset * 0.16), side * (0.16 + dna.asymmetry)]
-        );
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.42 + dna.armorOffset * 0.18, 1.0 + dna.bladeCount * 0.045, dna.accentSides),
-          makeMaterial(bodyColor.clone().lerp(darkColor, 0.08), {
-            emissive: baseColor,
-            emissiveIntensity: 0.042,
-            roughness: 0.48,
-            metalness: 0.08,
-          }),
-          [-dna.asymmetry * 0.12, bodyY - bodyH * 0.1, -bodyD * (0.66 + dna.armorOffset * 0.22)],
-          [bodyW * (0.58 + dna.armorOffset * 0.24), bodyD * (0.76 + dna.armorOffset * 0.26), bodyH * 0.54],
-          [Math.PI / 2.05, side * (0.08 + dna.asymmetry), side * 0.1]
-        );
-        [-1, 1].forEach(plateSide => {
-          addCreatureMesh(
-            new THREE.BoxGeometry(0.12, 0.72, 0.5),
-            glowMat,
-            [plateSide * bodyW * 0.48, bodyY + bodyH * 0.12, bodyD * 0.16],
-            [1, 1, 0.26],
-            [0.12, 0, plateSide * 0.36]
-          );
-        });
-        return;
-      }
-
-      if (bodyPlan === 'Sky Raptor' || plan === 'winged') {
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.54 + dna.armorOffset * 0.18, 1.18 + dna.wingSplit * 0.11, dna.bodySides),
-          coreMat,
-          [dna.asymmetry * 0.16, bodyY, bodyD * 0.03],
-          [bodyW * (0.82 + dna.armorOffset * 0.18), bodyD * 0.88, bodyH * (0.72 + dna.wingSplit * 0.04)],
-          [Math.PI / 2.05, side * (0.08 + dna.asymmetry * 0.3), Math.PI / 4 + side * armRad * 0.12]
-        );
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.2 + vertN * 0.08, 0.9 + veloN * 0.24, 4),
-          glowMat,
-          [0, bodyY - bodyH * 0.28, bodyD * 0.14],
-          [1, 1, 0.18],
-          [0.18, 0, Math.PI / 4]
-        );
-        addCreatureMesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          armorMat,
-          [0, bodyY + bodyH * 0.28, -bodyD * 0.18],
-          [bodyW * 0.58, bodyH * 0.11, bodyD * 0.52],
-          [0.08, side * 0.1, 0]
-        );
-        return;
-      }
-
-      if (bodyPlan === 'River Drake') {
-        const coreCurve = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(side * -bodyW * 0.48, bodyY - bodyH * 0.16, bodyD * 0.08),
-          new THREE.Vector3(0, bodyY + bodyH * 0.1, bodyD * 0.04),
-          new THREE.Vector3(side * bodyW * 0.44, bodyY + bodyH * 0.02, -bodyD * 0.26),
-        ]);
-        addCreatureMesh(
-          new THREE.TubeGeometry(coreCurve, 32, 0.17 + bodyD * 0.13, 12, false),
-          coreMat,
-          [0, 0, 0],
-          [1, 1, 1],
-          [0, 0, side * 0.05]
-        );
-        addCreatureMesh(
-          new THREE.CapsuleGeometry(0.36, 0.62, 8, 18),
-          makeMaterial(bodyColor.clone().lerp(glowColor, 0.12), {
-            emissive: baseColor,
-            emissiveIntensity: 0.048,
-            roughness: 0.44,
-          }),
-          [0, bodyY + bodyH * 0.08, bodyD * 0.14],
-          [bodyW * 0.68, bodyH * 0.44, bodyD * 0.86],
-          [0.08, side * 0.34, side * 0.12]
-        );
-        return;
-      }
-
-      if (plan === 'tank') {
-        const shellGeometry = bodyPlan === 'Burrow Tank'
-          ? new THREE.DodecahedronGeometry(1, 0)
-          : dna.variant % 3 === 0
-            ? new THREE.BoxGeometry(1, 1, 1)
-            : dna.variant % 3 === 1
-              ? new THREE.DodecahedronGeometry(1, 0)
-              : new THREE.CylinderGeometry(0.72, 0.86, 0.9, dna.bodySides);
-        addCreatureMesh(
-          shellGeometry,
-          coreMat,
-          [0, bodyY - bodyH * 0.02, 0],
-          [bodyW * 1.12, bodyH * 0.56, bodyD * 1.04],
-          [0.08, side * 0.1, side * 0.04]
-        );
-        addCreatureMesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          armorMat,
-          [0, bodyY + bodyH * 0.3, -bodyD * 0.08],
-          [bodyW * 0.92, bodyH * 0.16, bodyD * 0.82],
-          [0.04, side * 0.08, 0]
-        );
-        if (bodyPlan === 'Burrow Tank') {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.18 + horizN * 0.08, 0.7 + veloN * 0.18, 12),
-            glowMat,
-            [side * bodyW * 0.62, bodyY - bodyH * 0.02, bodyD * 0.24],
-            [1, 1, 0.84],
-            [Math.PI / 2, 0, side * 0.12]
-          );
-        } else {
-          [-1, 1].forEach(plateSide => {
-            addCreatureMesh(
-              new THREE.BoxGeometry(0.34, 0.14, 0.54),
-              glowMat,
-              [plateSide * bodyW * 0.38, bodyY + bodyH * 0.48, -bodyD * 0.1],
-              [1, 1, 1],
-              [0.1, 0, plateSide * 0.16]
-            );
-          });
-        }
-        return;
-      }
-
-      if (bodyPlan === 'Puzzle Sprite' || (plan === 'soft' && primary === 'Psychic')) {
-        addCreatureMesh(
-          new THREE.OctahedronGeometry(1, 0),
-          coreMat,
-          [0, bodyY, 0],
-          [bodyW * 0.86, bodyH * 0.78, bodyD * 0.86],
-          [0.22, side * 0.32, Math.PI / 4 + side * 0.08]
-        );
-        addCreatureMesh(
-          new THREE.TorusGeometry(0.48 + horizN * 0.14, 0.035 + whiffN * 0.018, 8, 36),
-          glowMat,
-          [0, bodyY + bodyH * 0.03, 0],
-          [bodyW * 1.0, bodyH * 0.66, bodyD * 0.66],
-          [Math.PI / 2.35, side * 0.18, side * 0.38]
-        );
-        return;
-      }
-
-      if (bodyPlan === 'Contact Sprout') {
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.58 + dna.armorOffset * 0.2, 0.96 + dna.beadCount * 0.04, dna.bodySides),
-          coreMat,
-          [0, bodyY - bodyH * 0.08, 0],
-          [bodyW * 0.88, bodyH * 0.78, bodyD * 0.86],
-          [0.02, side * 0.18, side * 0.04]
-        );
-        [-1, 1].forEach(leafSide => {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.26 + vertN * 0.08, 0.86 + horizN * 0.22, 4),
-            makeMaterial(accentColor, {
-              emissive: baseColor,
-              emissiveIntensity: 0.04,
-              transparent: true,
-              opacity: 0.9,
-              roughness: 0.54,
-            }),
-            [leafSide * bodyW * 0.46, bodyY + bodyH * 0.18, -bodyD * 0.02],
-            [1, 1, 0.18],
-            [0.16, 0, leafSide * (Math.PI / 2.55)]
-          );
-        });
-        return;
-      }
-
-      if (bodyPlan === 'Flame Striker' || plan === 'striker') {
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.44 + dna.armorOffset * 0.18, 1.18 + dna.crestHeight * 0.34, dna.bodySides),
-          coreMat,
-          [0, bodyY + bodyH * 0.02, bodyD * 0.05],
-          [bodyW * 0.78, bodyH * 0.92, bodyD * 0.82],
-          [0.04, side * 0.24, side * 0.12]
-        );
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.18 + whiffN * 0.08, 0.8 + veloN * 0.38, primary === 'Electric' ? 4 : 18),
-          glowMat,
-          [0, bodyY + bodyH * 0.42, -bodyD * 0.1],
-          [1, 1, 0.26],
-          [0.28, 0, side * 0.1]
-        );
-        addCreatureMesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          armorMat,
-          [0, bodyY - bodyH * 0.28, bodyD * 0.12],
-          [bodyW * 0.64, bodyH * 0.1, bodyD * 0.62],
-          [0.04, side * 0.08, 0]
-        );
-        return;
-      }
+      const H = 1.35 + veloN * 0.75 + whiffN * 0.25;
+      const Wd = 0.5 + horizN * 0.3;
+      const curl = side * (0.35 + horizN * 0.65);
 
       if (plan === 'serpent') {
-        const coreCurve = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(side * -bodyW * 0.56, bodyY - bodyH * 0.08, bodyD * 0.02),
-          new THREE.Vector3(0, bodyY + bodyH * 0.11, -bodyD * 0.02),
-          new THREE.Vector3(side * bodyW * 0.52, bodyY - bodyH * 0.02, -bodyD * 0.34),
-        ]);
-        addCreatureMesh(
-          new THREE.TubeGeometry(coreCurve, 34, 0.15 + bodyD * 0.12, 14, false),
-          coreMat,
-          [0, 0, 0],
-          [1, 1, 1],
-          [0, 0, 0]
-        );
-        return;
+        const boulder = bodyPlan === 'Boulder Serpent';
+        const segs = boulder ? 14 : 18;
+        const headY = 1.05 + vertN * 0.25;
+        anchors.headC = new THREE.Vector3(0, headY, 0.55);
+        anchors.headR = 0.34 + veloN * 0.05;
+        push(0, headY, 0.55, anchors.headR, headColor);
+        push(0, headY - 0.08, 0.74, 0.16, bellyColor);
+        for (let i = 1; i <= segs; i++) {
+          const t = i / segs;
+          const jitter = 1 + (seededUnit(seed, 300 + i) - 0.5) * (boulder ? 0.4 : 0.1);
+          const rSeg = Math.max(0.13, (0.32 - t * 0.17) * (boulder ? 1.25 : 1) * jitter);
+          const ang = t * Math.PI * (0.85 + horizN * 0.25);
+          const xx = Math.sin(ang) * curl * 0.6 * t;
+          const yy = Math.max(rSeg * 0.85, headY * (1 - t * t * 1.02));
+          const zz = 0.55 - t * (1.45 + vertN * 0.25);
+          push(xx, yy, zz, rSeg, i < 4 ? bodyColor : tailColor.clone().lerp(bodyColor, 1 - t));
+          if (i % 2 === 0 && i < segs - 2) push(xx, yy - rSeg * 0.25, zz + rSeg * 0.5, rSeg * 0.62, bellyColor);
+          if (i === segs) anchors.tailTip = new THREE.Vector3(xx, yy, zz);
+        }
+        push(0, headY - 0.35, 0.5, 0.24, bellyColor);
+        anchors.chestC = new THREE.Vector3(0, headY - 0.3, 0.58);
+        anchors.spineTop.push(new THREE.Vector3(0, headY + anchors.headR * 0.7, 0.32));
+      } else if (plan === 'tank') {
+        const torsoY = 0.52 + gbN * 0.2;
+        push(0, torsoY, -0.1, 0.52 + Wd * 0.25, backColor);
+        push(0, torsoY - 0.06, 0.28, 0.44, bodyColor);
+        push(0, torsoY - 0.16, 0.34, 0.34, bellyColor);
+        push(0, torsoY + 0.1, -0.55, 0.38, backColor);
+        anchors.headC = new THREE.Vector3(0, torsoY + 0.3, 0.66);
+        anchors.headR = 0.34;
+        push(0, torsoY + 0.3, 0.62, 0.34, headColor);
+        push(0, torsoY + 0.2, 0.82, 0.16, bellyColor);
+        [[-1, 0.32], [1, 0.32], [-1, -0.42], [1, -0.42]].forEach(pair => {
+          const lx = pair[0] * (0.42 + Wd * 0.16);
+          push(lx * 0.82, torsoY - 0.18, pair[1] * 0.9, 0.22, bodyColor);
+          push(lx, 0.34, pair[1], 0.19, bodyColor);
+          push(lx, 0.14, pair[1] + 0.03, 0.16, tailColor);
+          anchors.feet.push(new THREE.Vector3(lx, 0.1, pair[1] + 0.06));
+        });
+        const tt = new THREE.Vector3(curl * 0.3, torsoY - 0.05, -1.0);
+        push(curl * 0.16, torsoY + 0.02, -0.82, 0.2, tailColor);
+        push(tt.x, tt.y, tt.z, 0.13, tailColor);
+        anchors.tailTip = tt;
+        anchors.spineTop.push(new THREE.Vector3(0, torsoY + 0.6 + Wd * 0.15, -0.12));
+        anchors.spineTop.push(new THREE.Vector3(0, torsoY + 0.48, -0.5));
+        anchors.chestC = new THREE.Vector3(0, torsoY, 0.44);
+        anchors.shoulders.push(new THREE.Vector3(-(0.5 + Wd * 0.2), torsoY + 0.2, 0.2));
+        anchors.shoulders.push(new THREE.Vector3(0.5 + Wd * 0.2, torsoY + 0.2, 0.2));
+      } else if (plan === 'winged') {
+        const chestY = 0.95 + vertN * 0.2;
+        const headY = chestY + 0.55;
+        push(0, chestY, 0.1, 0.42 + veloN * 0.08, bodyColor);
+        push(0, chestY - 0.12, 0.32, 0.28, bellyColor);
+        push(0, chestY + 0.2, -0.2, 0.3, backColor);
+        anchors.headC = new THREE.Vector3(0, headY, 0.18);
+        anchors.headR = 0.3;
+        push(0, headY, 0.16, 0.3, headColor);
+        push(0, headY - 0.1, 0.42, 0.13, bellyColor);
+        push(0, headY - 0.3, 0.12, 0.18, bodyColor);
+        [-1, 1].forEach(sx => {
+          push(sx * 0.2, chestY - 0.46, 0.04, 0.14, bodyColor);
+          push(sx * 0.21, (chestY - 0.46) * 0.55, 0.05, 0.11, bodyColor);
+          push(sx * 0.22, 0.17, 0.07, 0.12, tailColor);
+          anchors.feet.push(new THREE.Vector3(sx * 0.22, 0.1, 0.1));
+        });
+        const tp = new THREE.Vector3(curl * 0.25, chestY - 0.1, -0.78 - vertN * 0.2);
+        push(0, chestY + 0.02, -0.5, 0.16, tailColor);
+        push(tp.x, tp.y, tp.z, 0.09, tailColor);
+        anchors.tailTip = tp;
+        anchors.shoulders.push(new THREE.Vector3(-0.34, chestY + 0.16, -0.04));
+        anchors.shoulders.push(new THREE.Vector3(0.34, chestY + 0.16, -0.04));
+        anchors.spineTop.push(new THREE.Vector3(0, headY + 0.16, -0.14));
+        anchors.chestC = new THREE.Vector3(0, chestY, 0.38);
+      } else if (plan === 'soft') {
+        const baseY = 0.55 + gbN * 0.1;
+        push(0, baseY, 0, 0.56, bodyColor);
+        push(0, baseY - 0.1, 0.28, 0.44, bellyColor);
+        const headY = baseY + 0.62;
+        anchors.headC = new THREE.Vector3(0, headY, 0.1);
+        anchors.headR = 0.44;
+        push(0, headY, 0.06, 0.44, headColor);
+        [-1, 1].forEach(sx => {
+          push(sx * 0.3, 0.16, 0.14, 0.13, bodyColor);
+          anchors.feet.push(new THREE.Vector3(sx * 0.3, 0.1, 0.18));
+          push(sx * 0.5, baseY + 0.12, 0.02, 0.14, bodyColor);
+        });
+        const tp = new THREE.Vector3(curl * 0.2, baseY, -0.64);
+        push(tp.x, tp.y, tp.z, 0.1, tailColor);
+        anchors.tailTip = tp;
+        anchors.spineTop.push(new THREE.Vector3(0, headY + 0.3, -0.16));
+        anchors.chestC = new THREE.Vector3(0, baseY, 0.44);
+        anchors.shoulders.push(new THREE.Vector3(-0.5, baseY + 0.12, 0.02));
+        anchors.shoulders.push(new THREE.Vector3(0.5, baseY + 0.12, 0.02));
+      } else {
+        // striker: upright, athletic biped
+        const mantis = bodyPlan === 'Blade Mantis';
+        const hipY = H * 0.44;
+        const chestY = H * 0.7;
+        const headY = H * 1.0;
+        push(0, hipY, 0, 0.34 + Wd * 0.08, bodyColor);
+        push(0, (hipY + chestY) / 2, 0.03, 0.31, bodyColor);
+        push(0, chestY, 0.06, 0.4 + veloN * 0.12, backColor);
+        push(0, chestY - 0.1, 0.24, 0.26, bellyColor);
+        anchors.headC = new THREE.Vector3(0, headY, 0.14);
+        anchors.headR = 0.33 + (1 - veloN) * 0.04;
+        push(0, headY, 0.12, anchors.headR, headColor);
+        [-1, 1].forEach(sx => {
+          const lx = sx * 0.24;
+          push(lx, hipY - 0.2, 0, 0.19, bodyColor);
+          push(lx * 1.2, hipY * 0.5, -0.04, 0.15, bodyColor);
+          push(lx * 1.23, hipY * 0.28, 0.01, 0.14, bodyColor);
+          push(lx * 1.25, 0.17, 0.07, 0.16, tailColor);
+          anchors.feet.push(new THREE.Vector3(lx * 1.25, 0.1, 0.12));
+        });
+        anchors.shoulders.push(new THREE.Vector3(-(0.38 + veloN * 0.1), chestY + 0.06, 0.05));
+        anchors.shoulders.push(new THREE.Vector3(0.38 + veloN * 0.1, chestY + 0.06, 0.05));
+        anchors.shoulders.forEach(sh => {
+          push(sh.x, sh.y, sh.z, mantis ? 0.17 : 0.16, mantis ? backColor : bodyColor);
+          if (!mantis) push(sh.x * 1.12, sh.y - 0.24, 0.16, 0.12, bodyColor);
+        });
+        const tSegs = 4;
+        for (let i = 1; i <= tSegs; i++) {
+          const t = i / tSegs;
+          const tp = new THREE.Vector3(
+            curl * t * t * 0.5,
+            hipY - t * 0.25 + Math.sin(t * Math.PI) * 0.08,
+            -0.3 - t * (0.7 + horizN * 0.3)
+          );
+          push(tp.x, tp.y, tp.z, 0.2 * (1 - t) + 0.07, tailColor);
+          if (i === tSegs) anchors.tailTip = tp;
+        }
+        anchors.spineTop.push(new THREE.Vector3(0, chestY + 0.28, -0.38));
+        anchors.spineTop.push(new THREE.Vector3(0, (chestY + hipY) / 2 + 0.18, -0.34));
+        anchors.spineTop.push(new THREE.Vector3(0, hipY + 0.04, -0.34));
+        anchors.chestC = new THREE.Vector3(0, chestY, 0.4);
       }
 
-      if (plan === 'soft') {
-        addCreatureMesh(
-          dna.variant % 2 === 0 ? new THREE.DodecahedronGeometry(1, 0) : new THREE.IcosahedronGeometry(1, 0),
-          coreMat,
-          [0, bodyY, 0],
-          [bodyW * 0.9, bodyH * 0.72, bodyD * 0.9],
-          [0.18, side * 0.24, side * 0.08]
+      let minX = Infinity, minY = Infinity, minZ = Infinity;
+      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+      balls.forEach(b => {
+        minX = Math.min(minX, b.x - b.r); maxX = Math.max(maxX, b.x + b.r);
+        minY = Math.min(minY, b.y - b.r); maxY = Math.max(maxY, b.y + b.r);
+        minZ = Math.min(minZ, b.z - b.r); maxZ = Math.max(maxZ, b.z + b.r);
+      });
+      const center = new THREE.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+      const maxHalf = Math.max(maxX - minX, maxY - minY, maxZ - minZ) / 2 + 0.12;
+      const k = 0.34 / maxHalf;
+      const subtract = 45;
+      const isolation = 70;
+      mc.reset();
+      balls.forEach(b => {
+        // surface sits where strength/d^2 - subtract == isolation, so size
+        // the strength for the true world radius at that threshold
+        const rf = Math.max(0.015, b.r * k * 0.95);
+        mc.addBall(
+          0.5 + (b.x - center.x) * k,
+          0.5 + (b.y - center.y) * k,
+          0.5 + (b.z - center.z) * k,
+          (subtract + isolation) * rf * rf,
+          subtract,
+          b.color
         );
-        addCreatureMesh(
-          new THREE.TorusGeometry(0.42 + horizN * 0.12, 0.03 + vertN * 0.012, 8, 28),
-          makeMaterial(accentColor, {
-            emissive: accentColor,
-            emissiveIntensity: 0.05,
-            transparent: true,
-            opacity: 0.82,
-            roughness: 0.45,
-          }),
-          [0, bodyY + bodyH * 0.02, 0],
-          [bodyW, bodyH * 0.62, bodyD * 0.68],
-          [Math.PI / 2.2, side * 0.2, side * 0.28]
-        );
-        return;
-      }
-
-      addCreatureMesh(
-        new THREE.BoxGeometry(1, 1, 1),
-        coreMat,
-        [0, bodyY, 0],
-        [bodyW, bodyH * 0.72, bodyD],
-        [0.04 * (seededUnit(seed, 5) - 0.5), armRad * 0.15, (seededUnit(seed, 6) - 0.5) * 0.18]
-      );
+      });
+      mc.isolation = isolation;
+      mc.update();
+      const geo = extractFieldGeometry(mc);
+      if (!geo) return null;
+      const rocky = bodyPlan === 'Boulder Serpent';
+      const bodyMat = new THREE.MeshPhysicalMaterial({
+        vertexColors: true,
+        roughness: rocky ? 0.74 : 0.4,
+        metalness: 0.02,
+        clearcoat: rocky ? 0.12 : 0.55,
+        clearcoatRoughness: 0.32,
+        envMapIntensity: 0.85,
+      });
+      const mesh = new THREE.Mesh(geo, bodyMat);
+      mesh.scale.setScalar(1 / (2 * k));
+      mesh.position.copy(center);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.skipCohesion = true;
+      shapeGroup.add(mesh);
+      return anchors;
     }
 
-    function addCreatureHead(row, plan, metrics) {
-      const {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        bodyColor,
-        accentColor,
-        darkColor,
-        glowColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        armRad,
-        side,
-        morph,
-      } = metrics;
-      const dna = morph || pitcherMorphDNA(row);
-      const primary = row.primaryType || String(row.creatureType || 'Normal').split('/')[0].trim();
-      const boulderSerpent = row.bodyPlan === 'Boulder Serpent';
-      const bladeMantis = row.bodyPlan === 'Blade Mantis';
-      const headScale = 0.32 + whiffN * 0.17;
-      const headX = side * (0.13 + horizN * 0.17);
-      const headY = bodyY + bodyH * (plan === 'tank' ? 0.7 : 0.78);
-      const headZ = 0.2 + vertN * 0.2;
-      const headMat = makeMaterial(bodyColor.clone().lerp(new THREE.Color(0xffffff), 0.08), {
-        emissive: baseColor,
-        emissiveIntensity: 0.035,
-        roughness: primary === 'Steel' ? 0.34 : 0.5,
-        metalness: primary === 'Steel' ? 0.25 : 0.05,
-      });
-      const frontZ = headZ + headScale * 0.86;
-      let headGeometry = new THREE.SphereGeometry(1, 36, 22);
-      let headSize = [headScale * 1.04, headScale * 0.92, headScale];
-      let headRotation = [0, side * 0.18, -side * armRad * 0.1];
-
-      if (boulderSerpent || ['Steel', 'Rock', 'Ground'].includes(primary)) {
-        headGeometry = primary === 'Steel' && !boulderSerpent ? new THREE.BoxGeometry(1, 1, 1) : new THREE.DodecahedronGeometry(1, 0);
-        headSize = [headScale * 1.08, headScale * 0.82, headScale * 0.9];
-        headRotation = [0.05, side * 0.26, side * 0.08];
-      } else if (['Psychic', 'Ghost', 'Dark', 'Poison'].includes(primary)) {
-        headGeometry = new THREE.OctahedronGeometry(1, 0);
-        headSize = [headScale * 0.9, headScale * 1.08, headScale * 0.86];
-        headRotation = [0.18, side * 0.42, side * 0.12];
-      } else if (bladeMantis || ['Bug', 'Grass'].includes(primary)) {
-        headGeometry = new THREE.SphereGeometry(1, dna.bodySides * 4, 14);
-        headSize = [headScale * (1.08 + dna.armorOffset * 0.24), headScale * 0.84, headScale * (0.78 + dna.armorOffset * 0.18)];
-      } else if (['Fire', 'Fighting', 'Dragon', 'Electric'].includes(primary)) {
-        headGeometry = new THREE.CapsuleGeometry(0.58, 0.52, 8, 18);
-        headSize = [headScale * 0.82, headScale * 1.22, headScale * 0.92];
-        headRotation = [0.12, side * 0.22, side * 0.22];
-      } else if (['Flying', 'Water', 'Ice'].includes(primary)) {
-        headSize = [headScale * 0.86, headScale * 0.86, headScale * 1.18];
-      }
-
-      addCreatureMesh(headGeometry, headMat, [headX, headY, headZ], headSize, headRotation);
-
-      const eyeColor = ['Ghost', 'Dark', 'Poison'].includes(primary) ? accentColor : new THREE.Color(0xffffff);
-      const pupilColor = ['Electric', 'Fire', 'Dragon'].includes(primary) ? darkColor.clone().lerp(accentColor, 0.25) : new THREE.Color(0x10110f);
-      const eyeWide = primary === 'Bug' || bladeMantis ? 0.14 : primary === 'Psychic' ? 0.11 : 0.08;
-      const eyeTall = primary === 'Bug' || bladeMantis ? 0.16 : primary === 'Ghost' ? 0.11 : 0.08;
-      [-1, 1].forEach(eyeSide => {
+    function addCreatureFace(row, plan, metrics, anchors) {
+      const { veloN, armRad, darkColor, accentColor } = metrics;
+      const headC = anchors.headC;
+      const r = anchors.headR;
+      if (!headC || !r) return;
+      const fierce = plan === 'striker' || plan === 'winged' || veloN > 0.72;
+      const eyeR = r * (fierce ? 0.34 : 0.42);
+      const pupilColor = new THREE.Color(0x201d1a);
+      const scleraMat = makeMaterial(0xffffff, { roughness: 0.12, clearcoat: 0.9, emissiveIntensity: 0.01 });
+      const irisMat = makeMaterial(accentColor.clone().lerp(darkColor, 0.25), { roughness: 0.18, clearcoat: 0.8, emissiveIntensity: 0.05 });
+      const pupilMat = makeMaterial(pupilColor, { roughness: 0.1, emissiveIntensity: 0 });
+      const sparkMat = makeMaterial(0xffffff, { roughness: 0.05, emissiveIntensity: 0.6 });
+      const tilt = armRad * 0.3;
+      [-1, 1].forEach(sx => {
+        const ex = headC.x + sx * r * 0.48;
+        const ey = headC.y + r * 0.2 + sx * Math.sin(tilt) * r * 0.08;
+        const ez = headC.z + r * 0.6;
         addCreatureMesh(
-          new THREE.SphereGeometry(1, 18, 12),
-          makeMaterial(eyeColor, { emissive: eyeColor, emissiveIntensity: primary === 'Psychic' ? 0.08 : 0.025, roughness: 0.28 }),
-          [headX + eyeSide * headScale * 0.34, headY + headScale * 0.1, frontZ],
-          [eyeWide, eyeTall, 0.042],
-          [0, 0, eyeSide * (primary === 'Bug' || bladeMantis ? 0.28 : 0)]
+          new THREE.SphereGeometry(1, 24, 16), scleraMat,
+          [ex, ey, ez], [eyeR, eyeR * (fierce ? 0.74 : 1), eyeR * 0.7],
+          [0, sx * 0.3, fierce ? sx * -0.22 : 0]
+        );
+        const fwd = eyeR * 0.42;
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 20, 14), irisMat,
+          [ex + sx * fwd * 0.24, ey, ez + fwd], [eyeR * 0.58, eyeR * (fierce ? 0.5 : 0.62), eyeR * 0.42],
+          [0, sx * 0.3, 0]
         );
         addCreatureMesh(
-          new THREE.SphereGeometry(1, 12, 8),
-          makeMaterial(pupilColor, { emissive: pupilColor, emissiveIntensity: primary === 'Electric' ? 0.04 : 0, roughness: 0.2 }),
-          [headX + eyeSide * headScale * 0.37, headY + headScale * 0.09, frontZ + 0.024],
-          [0.032, 0.032, 0.018],
+          new THREE.SphereGeometry(1, 16, 12), pupilMat,
+          [ex + sx * fwd * 0.3, ey, ez + fwd * 1.55], [eyeR * 0.3, eyeR * (fierce ? 0.3 : 0.38), eyeR * 0.22],
+          [0, 0, 0]
+        );
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 12, 8), sparkMat,
+          [ex + sx * fwd * 0.12, ey + eyeR * 0.32, ez + fwd * 1.7], [eyeR * 0.14, eyeR * 0.14, eyeR * 0.1],
           [0, 0, 0]
         );
       });
-
-      if (primary === 'Bug' || bladeMantis) {
-        [-1, 1].forEach(antennaSide => {
-          const antennaCurve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(headX + antennaSide * headScale * 0.34, headY + headScale * 0.54, headZ),
-            new THREE.Vector3(headX + antennaSide * headScale * dna.antennaSpread, headY + headScale * (0.96 + dna.armorOffset * 0.12), headZ + 0.08),
-            new THREE.Vector3(headX + antennaSide * (headScale * (0.9 + dna.antennaSpread * 0.35) + horizN * 0.18), headY + headScale * (1.18 + dna.armorOffset * 0.18), headZ + 0.2),
-          ]);
+      if (fierce) {
+        const browMat = makeMaterial(darkColor, { roughness: 0.4, emissiveIntensity: 0.02 });
+        [-1, 1].forEach(sx => {
           addCreatureMesh(
-            new THREE.TubeGeometry(antennaCurve, 18, 0.018 + whiffN * 0.012, 8, false),
-            makeMaterial(darkColor, { roughness: 0.48 }),
+            new THREE.CapsuleGeometry(r * 0.085, r * 0.5, 6, 12), browMat,
+            [headC.x + sx * r * 0.48, headC.y + r * 0.56, headC.z + r * 0.44],
+            [1, 1, 1],
+            [0.25, 0, sx * (Math.PI / 2 - 0.42)]
+          );
+        });
+      } else {
+        const mouthMat = makeMaterial(darkColor, { roughness: 0.35, emissiveIntensity: 0 });
+        addCreatureMesh(
+          new THREE.TorusGeometry(r * 0.24, r * 0.045, 8, 20, 1.15), mouthMat,
+          [headC.x, headC.y - r * 0.28, headC.z + r * 0.72],
+          [1, 1, 1],
+          [0.3, 0, 3 * Math.PI / 2 - 0.575]
+        );
+      }
+    }
+
+    function finGeometry(length, height, sweep = 0) {
+      const s = new THREE.Shape();
+      s.moveTo(0, 0);
+      s.quadraticCurveTo(length * 0.25, height * 1.1, length * 0.9, height * 0.5 + sweep);
+      s.quadraticCurveTo(length * 1.02, height * 0.28 + sweep * 0.5, length, sweep * 0.3);
+      s.quadraticCurveTo(length * 0.5, -height * 0.08, 0, 0);
+      const geo = new THREE.ExtrudeGeometry(s, {
+        depth: 0.045, bevelEnabled: true, bevelThickness: 0.018, bevelSize: 0.024, bevelSegments: 3, curveSegments: 20,
+      });
+      geo.translate(0, 0, -0.0225);
+      return geo;
+    }
+
+    function wingGeometry(span, chord) {
+      const s = new THREE.Shape();
+      s.moveTo(0, 0);
+      s.quadraticCurveTo(span * 0.2, chord * 0.95, span * 0.55, chord * 0.74);
+      s.quadraticCurveTo(span * 0.95, chord * 0.6, span, chord * 0.15);
+      s.quadraticCurveTo(span * 0.72, chord * 0.02, span * 0.62, -chord * 0.18);
+      s.quadraticCurveTo(span * 0.45, -chord * 0.03, span * 0.36, -chord * 0.16);
+      s.quadraticCurveTo(span * 0.2, -chord * 0.02, 0, 0);
+      const geo = new THREE.ExtrudeGeometry(s, {
+        depth: 0.05, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.028, bevelSegments: 3, curveSegments: 24,
+      });
+      geo.translate(0, 0, -0.025);
+      return geo;
+    }
+
+    function hornGeometry(len, r) {
+      const pts = [];
+      for (let i = 0; i <= 10; i++) {
+        const t = i / 10;
+        pts.push(new THREE.Vector2(Math.max(0.004, r * Math.pow(1 - t, 1.4)), len * t));
+      }
+      return new THREE.LatheGeometry(pts, 22);
+    }
+
+    function addCreatureAppendages(row, plan, metrics, anchors) {
+      const { seed, veloN, whiffN, horizN, vertN, side, baseColor, bodyColor, accentColor, darkColor } = metrics;
+      const bodyPlan = row.bodyPlan || '';
+      const mix = pitchMixEntries(row, seed).filter(entry => entry[1] > 0.07).slice(0, 4);
+      const has = pitch => mix.some(entry => entry[0] === pitch);
+      const shareOf = pitch => (mix.find(entry => entry[0] === pitch) || [null, 0])[1];
+
+      // Horns scale with fastball velo band; single center horn for FF-heavy
+      if (veloN > 0.3 && anchors.headC) {
+        const hornCap = Math.min(1, anchors.headR * 2.4);
+        const hornLen = (0.18 + veloN * 0.34) * hornCap;
+        const hornR = (0.045 + veloN * 0.03) * hornCap;
+        const hornMat = makeMaterial(darkColor.clone().lerp(accentColor, 0.3), { roughness: 0.26, clearcoat: 0.55 });
+        const single = shareOf('FF') > 0.45;
+        (single ? [0] : [-1, 1]).forEach(sx => {
+          addCreatureMesh(
+            hornGeometry(hornLen, hornR), hornMat,
+            [anchors.headC.x + sx * anchors.headR * 0.6, anchors.headC.y + anchors.headR * 0.55, anchors.headC.z - anchors.headR * 0.3],
+            [1, 1, 1],
+            [-0.9 - vertN * 0.2, 0, sx * 0.26],
+            { noSubdiv: true }
+          );
+        });
+      }
+
+      // Dorsal spike ridge = four-seam ride
+      if ((has('FF') || vertN > 0.6) && anchors.spineTop.length) {
+        const crestMat = makeMaterial(pitchColor('FF', baseColor).lerp(bodyColor, 0.45), { roughness: 0.32, clearcoat: 0.55, emissiveIntensity: 0.04 });
+        anchors.spineTop.forEach((p, i) => {
+          const spikeLen = (0.24 + vertN * 0.3) * (1 - i * 0.2);
+          const spikeGeo = hornGeometry(spikeLen, 0.05 + vertN * 0.025);
+          spikeGeo.rotateX(-(0.55 + i * 0.28));
+          addCreatureMesh(
+            spikeGeo, crestMat,
+            [p.x, p.y - 0.04, p.z + 0.05], [1, 1, 1],
             [0, 0, 0],
-            [1, 1, 1],
-            [0, 0, 0]
-          );
-          addCreatureMesh(
-            new THREE.SphereGeometry(1, 12, 8),
-            makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.06 }),
-            [headX + antennaSide * (headScale * 1.0 + horizN * 0.18), headY + headScale * 1.24, headZ + 0.2],
-            [0.06, 0.06, 0.06],
-            [0, 0, 0]
-          );
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.055 + horizN * 0.02, 0.3 + whiffN * 0.18, 14),
-            makeMaterial(darkColor.clone().lerp(accentColor, 0.2), { roughness: 0.42 }),
-            [headX + antennaSide * headScale * 0.28, headY - headScale * 0.18, frontZ + 0.02],
-            [1, 1, 1],
-            [Math.PI / 2.3, 0, antennaSide * 0.45]
+            { noSubdiv: true }
           );
         });
-        if (bladeMantis) {
+      }
+
+      // Shoulder blades = slider/sweeper/cutter share
+      const bladeShare = shareOf('SL') + shareOf('ST') + shareOf('FC');
+      const winged = plan === 'winged' || bodyPlan === 'Sky Raptor';
+      if (!winged && (bladeShare > 0.12 || bodyPlan === 'Blade Mantis') && anchors.shoulders.length) {
+        const bladeMat = makeMaterial(pitchColor('SL', baseColor), { roughness: 0.32, clearcoat: 0.55, emissiveIntensity: 0.04, doubleSide: true });
+        const len = 0.35 + bladeShare * 0.7 + (bodyPlan === 'Blade Mantis' ? 0.3 : 0);
+        anchors.shoulders.forEach((sh, i) => {
+          const sx = i === 0 ? -1 : 1;
           addCreatureMesh(
-            new THREE.ConeGeometry(0.08 + whiffN * 0.03, 0.48 + veloN * 0.18, dna.accentSides),
-            makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.07, roughness: 0.34 }),
-            [headX, headY + headScale * 0.62, headZ + headScale * 0.18],
-            [1, 1, 0.18],
-            [0.1, 0, Math.PI / 4]
+            finGeometry(len, len * 0.3, len * 0.16), bladeMat,
+            [sh.x + sx * 0.06, sh.y + 0.03, sh.z], [sx, 1, 1],
+            [0.05, sx * -0.5, sx * -0.55],
+            { noSubdiv: true }
           );
-        }
-        if (dna.variantName === 'mask') {
+        });
+      }
+
+      // Ear fins = changeup/splitter feel
+      const hooded = plan === 'serpent' && horizN > 0.35;
+      if (!hooded && (shareOf('CH') + shareOf('FS')) > 0.1 && anchors.headC) {
+        const earMat = makeMaterial(pitchColor('CH', baseColor), { roughness: 0.4, clearcoat: 0.4, emissiveIntensity: 0.04, doubleSide: true });
+        const el = anchors.headR * (0.8 + shareOf('CH') * 1.4);
+        [-1, 1].forEach(sx => {
           addCreatureMesh(
-            new THREE.TorusGeometry(0.18 + whiffN * 0.05, 0.018 + veloN * 0.01, 8, 24),
-            makeMaterial(darkColor.clone().lerp(accentColor, 0.3), { emissive: accentColor, emissiveIntensity: 0.05, roughness: 0.38 }),
-            [headX, headY + headScale * 0.06, frontZ + 0.032],
-            [1.45, 0.72, 0.12],
-            [0, 0, side * 0.08]
+            finGeometry(el, el * 0.5, el * 0.1), earMat,
+            [anchors.headC.x + sx * anchors.headR * 0.8, anchors.headC.y + anchors.headR * 0.34, anchors.headC.z - anchors.headR * 0.05],
+            [sx, 1, 1],
+            [0, sx * -0.3, sx * 0.7],
+            { noSubdiv: true }
           );
-        } else if (dna.variantName === 'crest') {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.07 + whiffN * 0.05, 0.58 + dna.crestHeight * 0.5, dna.accentSides),
-            makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.08, roughness: 0.34 }),
-            [headX + dna.asymmetry * 0.08, headY + headScale * 0.88, headZ + headScale * 0.08],
-            [1, 1, 0.18],
-            [0.18, side * 0.08, Math.PI / 4 + dna.markerTwist * 0.16]
-          );
-        } else if (dna.variantName === 'keel') {
-          addCreatureMesh(
-            new THREE.BoxGeometry(0.12, 0.56 + dna.crestHeight * 0.45, 0.08),
-            makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.065, roughness: 0.4 }),
-            [headX, headY + headScale * 0.72, headZ + headScale * 0.2],
-            [1, 1, 1],
-            [0.15, side * 0.12, dna.markerTwist * 0.14]
-          );
-        } else if (dna.variantName === 'fork') {
-          [-1, 1].forEach(forkSide => {
+        });
+      }
+
+      // Tail tip: club grows with curveball share
+      if (anchors.tailTip) {
+        const clubShare = shareOf('CU') + shareOf('KC');
+        const rTip = 0.07 + clubShare * 0.42 + whiffN * 0.04;
+        addCreatureMesh(
+          new THREE.SphereGeometry(1, 20, 14),
+          makeMaterial(clubShare > 0.1 ? pitchColor('CU', baseColor) : accentColor, { roughness: 0.3, clearcoat: 0.6, emissiveIntensity: 0.06 }),
+          [anchors.tailTip.x, anchors.tailTip.y, anchors.tailTip.z],
+          [rTip, rTip, rTip], [0, 0, 0]
+        );
+      }
+
+      // Claws = whiff rate or sinker share
+      if (anchors.feet.length && (whiffN > 0.45 || has('SI'))) {
+        const clawMat = makeMaterial(new THREE.Color(0xf3ead6).lerp(darkColor, 0.15), { roughness: 0.24, clearcoat: 0.7 });
+        const clawLen = 0.12 + whiffN * 0.12;
+        anchors.feet.forEach(f => {
+          [-1, 0, 1].forEach(cx => {
             addCreatureMesh(
-              new THREE.ConeGeometry(0.055 + whiffN * 0.025, 0.38 + horizN * 0.22, 4),
-              makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.065, roughness: 0.38 }),
-              [headX + forkSide * headScale * 0.36, headY + headScale * 0.7, headZ + headScale * 0.1],
-              [1, 1, 0.2],
-              [forkSide * 0.28, 0, forkSide * 0.46]
-            );
-          });
-        } else if (dna.variantName === 'mantle') {
-          [-1, 1].forEach(mantleSide => {
-            addCreatureMesh(
-              new THREE.BoxGeometry(0.12, 0.34 + vertN * 0.16, 0.08),
-              makeMaterial(darkColor.clone().lerp(accentColor, 0.32), { emissive: accentColor, emissiveIntensity: 0.04, roughness: 0.46 }),
-              [headX + mantleSide * headScale * 0.56, headY + headScale * 0.2, headZ + headScale * 0.02],
+              new THREE.ConeGeometry(0.035 + whiffN * 0.014, clawLen, 12), clawMat,
+              [f.x + cx * 0.06, f.y + 0.04, f.z + 0.06 - Math.abs(cx) * 0.02],
               [1, 1, 1],
-              [0.1, mantleSide * 0.18, mantleSide * 0.34]
+              [Math.PI / 2.5, 0, cx * 0.3],
+              { noSubdiv: true }
             );
           });
-        }
-        return;
-      }
-
-      if (['Flying', 'Water', 'Ice'].includes(primary)) {
-        const beakColor = primary === 'Ice' ? glowColor : accentColor;
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.13 + horizN * 0.06, 0.52 + veloN * 0.22, primary === 'Water' ? 18 : 4),
-          makeMaterial(beakColor, { emissive: beakColor, emissiveIntensity: 0.055, roughness: 0.38 }),
-          [headX + side * 0.02, headY - headScale * 0.02, frontZ + headScale * 0.34],
-          [1, 1, 0.82],
-          [Math.PI / 2, 0, side * 0.08]
-        );
-        [-1, 1].forEach(finSide => {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.12 + vertN * 0.05, 0.42 + vertN * 0.18, 4),
-            makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.16), { transparent: true, opacity: 0.88 }),
-            [headX + finSide * headScale * 0.52, headY + headScale * 0.16, headZ - headScale * 0.04],
-            [1, 1, 0.16],
-            [0.1, 0, finSide * (Math.PI / 2.35)]
-          );
         });
-        return;
       }
 
-      if (boulderSerpent || ['Steel', 'Rock', 'Ground'].includes(primary)) {
-        const helmetColor = primary === 'Steel' ? glowColor : darkColor.clone().lerp(accentColor, 0.18);
-        addCreatureMesh(
-          new THREE.BoxGeometry(0.72, 0.12, 0.34),
-          makeMaterial(helmetColor, { emissive: baseColor, emissiveIntensity: 0.035, metalness: primary === 'Steel' ? 0.32 : 0.08 }),
-          [headX, headY + headScale * 0.52, headZ + 0.03],
-          [headScale * 1.25, 1, headScale * 1.05],
-          [0.05, side * 0.08, 0]
-        );
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.12 + horizN * 0.04, 0.38 + veloN * 0.16, primary === 'Ground' ? 8 : 4),
-          makeMaterial(helmetColor, { emissive: accentColor, emissiveIntensity: 0.045, roughness: 0.42 }),
-          [headX, headY - headScale * 0.1, frontZ + headScale * 0.18],
-          [1, 1, 0.8],
-          [Math.PI / 2, 0, 0]
-        );
-        return;
-      }
-
-      if (['Fire', 'Fighting', 'Dragon', 'Electric'].includes(primary)) {
-        const hornCount = primary === 'Dragon' ? 3 + Math.min(3, Math.round(dna.ridgeCount / 3)) : primary === 'Electric' ? 2 + (dna.variant % 2) : 2 + Math.min(3, Math.round(dna.crestHeight * 2));
-        for (let i = 0; i < hornCount; i++) {
-          const offset = (i - (hornCount - 1) / 2) * 0.17;
-          const hornH = 0.24 + whiffN * 0.34 + seededUnit(seed, 20 + i) * 0.12;
+      // Wings for fly-ball raptors: span tracks induced vertical break
+      if ((plan === 'winged' || bodyPlan === 'Sky Raptor') && anchors.shoulders.length) {
+        const span = 0.75 + vertN * 0.6;
+        const wingMat = makeMaterial(bodyColor.clone().lerp(baseColor, 0.55), { roughness: 0.38, clearcoat: 0.4, emissiveIntensity: 0.03, doubleSide: true });
+        anchors.shoulders.forEach((sh, i) => {
+          const sx = i === 0 ? -1 : 1;
           addCreatureMesh(
-            new THREE.ConeGeometry(primary === 'Electric' ? 0.04 : 0.055 + vertN * 0.035, hornH, primary === 'Electric' ? 4 : 18),
-            makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.085 + whiffN * 0.05, metalness: 0.16, roughness: 0.38 }),
-            [headX + offset, headY + headScale * 0.82, headZ - 0.02],
-            [1, 1, 1],
-            [side * 0.18, 0, offset * 1.1]
-          );
-        }
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.15 + horizN * 0.06, 0.42 + veloN * 0.18, primary === 'Electric' ? 4 : 24),
-          makeMaterial(glowColor, { emissive: accentColor, emissiveIntensity: 0.065, roughness: 0.36 }),
-          [headX + side * 0.03, headY - headScale * 0.03, frontZ + headScale * 0.28],
-          [1, 1, 0.78],
-          [Math.PI / 2, 0, side * 0.08]
-        );
-        return;
-      }
-
-      if (['Psychic', 'Ghost', 'Dark', 'Poison'].includes(primary)) {
-        const maskColor = primary === 'Psychic' ? accentColor : darkColor.clone().lerp(accentColor, 0.22);
-        addCreatureMesh(
-          new THREE.TorusGeometry(0.2 + whiffN * 0.06, 0.022, 8, 24),
-          makeMaterial(maskColor, { emissive: maskColor, emissiveIntensity: 0.055, roughness: 0.38 }),
-          [headX, headY + headScale * 0.04, frontZ + 0.03],
-          [1.15, 0.78, 0.12],
-          [0, 0, side * 0.12]
-        );
-        [-1, 1].forEach(prongSide => {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.05 + whiffN * 0.02, 0.42 + horizN * 0.24, 12),
-            makeMaterial(maskColor, { emissive: maskColor, emissiveIntensity: 0.045, roughness: 0.42 }),
-            [headX + prongSide * headScale * 0.42, headY + headScale * 0.58, headZ - 0.02],
-            [1, 1, 1],
-            [prongSide * 0.32, 0, prongSide * 0.44]
-          );
-        });
-        return;
-      }
-
-      if (primary === 'Grass') {
-        [-1, 1].forEach(leafSide => {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.14 + vertN * 0.04, 0.58 + horizN * 0.18, 4),
-            makeMaterial(accentColor, { emissive: baseColor, emissiveIntensity: 0.035, transparent: true, opacity: 0.9 }),
-            [headX + leafSide * headScale * 0.48, headY + headScale * 0.42, headZ - headScale * 0.04],
-            [1, 1, 0.18],
-            [0.18, 0, leafSide * (Math.PI / 2.6)]
-          );
-        });
-        return;
-      }
-
-      [-1, 1].forEach(earSide => {
-        addCreatureMesh(
-          new THREE.SphereGeometry(1, 18, 10),
-          makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.28), {
-            emissive: baseColor,
-            emissiveIntensity: 0.035,
-            roughness: 0.52,
-          }),
-          [headX + earSide * headScale * 0.52, headY + headScale * 0.54, headZ - headScale * 0.08],
-          [0.14, 0.32 + whiffN * 0.1, 0.1],
-          [0, 0, earSide * 0.32]
-        );
-      });
-    }
-
-    function addPlanFeatures(plan, row, metrics) {
-      const {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        accentColor,
-        darkColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        side,
-        morph,
-      } = metrics;
-      const dna = morph || pitcherMorphDNA(row);
-
-      if (plan === 'serpent') {
-        const boulderSerpent = row.bodyPlan === 'Boulder Serpent';
-        const count = (boulderSerpent ? 7 : 5) + Math.round(horizN * 4) + Math.min(3, Math.round(dna.ridgeCount / 4));
-        for (let i = 0; i < count; i++) {
-          const t = i / Math.max(1, count - 1);
-          const bend = Math.sin(t * Math.PI * 1.35 + seededUnit(seed, 120) * 0.8);
-          const segmentColor = boulderSerpent
-            ? new THREE.Color(0x9a9386).lerp(baseColor, 0.18 + t * 0.12)
-            : baseColor.clone().lerp(new THREE.Color(0xffffff), 0.06 + t * 0.08);
-          addCreatureMesh(
-            boulderSerpent ? new THREE.DodecahedronGeometry(1, 0) : new THREE.SphereGeometry(1, 24, 14),
-            makeMaterial(segmentColor, {
-              emissive: baseColor,
-              emissiveIntensity: boulderSerpent ? 0.015 : 0.035,
-              roughness: boulderSerpent ? 0.74 : 0.5,
-              metalness: boulderSerpent ? 0.06 : 0.05,
-            }),
-            [
-              side * (bodyW * 0.2 + t * (boulderSerpent ? 1.15 + horizN * 1.05 : 0.75 + horizN * 0.7)),
-              bodyY - bodyH * (boulderSerpent ? 0.3 : 0.18) + Math.sin(t * Math.PI) * bodyH * (boulderSerpent ? 0.18 : 0.24),
-              -bodyD * (boulderSerpent ? 0.68 + t * 1.35 : 0.75 + t * 1.15) + bend * (boulderSerpent ? 0.12 : 0.18),
-            ],
-            [
-              (boulderSerpent ? 0.34 - t * 0.13 : 0.28 - t * 0.11) * (1 + horizN * 0.36),
-              boulderSerpent ? 0.28 - t * 0.1 : 0.2 - t * 0.06,
-              boulderSerpent ? 0.32 - t * 0.1 : 0.24 - t * 0.08,
-            ],
-            [seededUnit(seed, 130 + i) * 0.5, side * t * 0.5, (seededUnit(seed, 140 + i) - 0.5) * 0.55]
-          );
-        }
-        return;
-      }
-
-      if (plan === 'winged') {
-        [-1, 1].forEach(wingSide => {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.3 + vertN * 0.18, 0.95 + vertN * 0.7 + dna.wingSplit * 0.13, dna.accentSides),
-            makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.2), {
-              emissive: baseColor,
-              emissiveIntensity: 0.055,
-              transparent: true,
-              opacity: 0.86,
-              roughness: 0.44,
-            }),
-            [wingSide * (bodyW + 0.52), bodyY + bodyH * 0.08, -bodyD * 0.1],
-            [1, 1, 0.18 + whiffN * 0.08],
-            [0.1, 0, wingSide * (Math.PI / 2.8)]
-          );
-          for (let i = 0; i < dna.wingSplit; i++) {
-            const k = dna.wingSplit === 1 ? 0.5 : i / (dna.wingSplit - 1);
-            addCreatureMesh(
-              new THREE.ConeGeometry(0.08 + vertN * 0.04, 0.46 + k * 0.18, 4),
-              makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.055, transparent: true, opacity: 0.82, roughness: 0.42 }),
-              [wingSide * (bodyW + 0.34 + k * 0.28), bodyY + bodyH * (0.08 - k * 0.14), -bodyD * (0.06 + k * 0.24)],
-              [1, 1, 0.14],
-              [0.12, 0, wingSide * (Math.PI / 2.4 + k * 0.16)]
-            );
-          }
-        });
-        return;
-      }
-
-      if (plan === 'tank') {
-        for (let i = 0; i < 4; i++) {
-          const t = (i - 1.5) / 1.5;
-          addCreatureMesh(
-            new THREE.BoxGeometry(0.28 + vertN * 0.08, 0.08 + veloN * 0.04, 0.38 + horizN * 0.12),
-            makeMaterial(darkColor.clone().lerp(accentColor, 0.22), {
-              emissive: baseColor,
-              emissiveIntensity: 0.025,
-              roughness: 0.66,
-              metalness: 0.08,
-            }),
-            [t * bodyW * 0.44, bodyY + bodyH * 0.58 - Math.abs(t) * 0.04, -bodyD * 0.18],
-            [1, 1, 1],
-            [0.15, t * 0.22, t * 0.08]
-          );
-        }
-        [-1, 1].forEach(footSide => {
-          addCreatureMesh(
-            new THREE.SphereGeometry(1, 16, 10),
-            makeMaterial(darkColor, { roughness: 0.7 }),
-            [footSide * bodyW * 0.7, 0.19, -bodyD * 0.12],
-            [0.18 + horizN * 0.08, 0.08, 0.22 + vertN * 0.08],
-            [0, 0, 0]
-          );
-        });
-        return;
-      }
-
-      if (plan === 'striker') {
-        const bladeMantis = row.bodyPlan === 'Blade Mantis';
-        if (bladeMantis) {
-          [-1, 1].forEach(clawSide => {
-            const clawPitch = dna.primaryPitch;
-            const clawLength = 0.76 + veloN * 0.28 + dna.bladeCount * 0.035;
-            const clawWidth = ['SL', 'ST', 'SW'].includes(clawPitch) ? 0.12 + whiffN * 0.05 : 0.16 + horizN * 0.05;
-            addCreatureMesh(
-              new THREE.ConeGeometry(clawWidth, clawLength, pitchShapeSides(clawPitch, 4)),
-              makeMaterial(accentColor, {
-                emissive: accentColor,
-                emissiveIntensity: 0.09,
-                roughness: 0.32,
-                metalness: 0.14,
-              }),
-              [
-                clawSide * (bodyW * 0.92 + 0.2),
-                bodyY + bodyH * 0.18,
-                bodyD * 0.54,
-              ],
-              [1, 1, 0.16 + whiffN * 0.08],
-              [Math.PI / 2.2, 0, clawSide * (Math.PI / 2.7 + dna.markerTwist * 0.14)]
-            );
-            if (['CU', 'KC', 'CH', 'FS'].includes(dna.secondaryPitch)) {
-              addCreatureMesh(
-                new THREE.TorusGeometry(0.12 + whiffN * 0.04, 0.018, 8, 22),
-                makeMaterial(baseColor.clone().lerp(accentColor, 0.32), { emissive: accentColor, emissiveIntensity: 0.045, roughness: 0.4 }),
-                [
-                  clawSide * (bodyW * 0.98 + 0.24),
-                  bodyY + bodyH * 0.2,
-                  bodyD * 0.5,
-                ],
-                [1, 0.78, 0.18],
-                [Math.PI / 2.4, clawSide * 0.18, clawSide * 0.4]
-              );
-            }
-            addCreatureMesh(
-              new THREE.SphereGeometry(1, 14, 10),
-              makeMaterial(darkColor.clone().lerp(accentColor, 0.16), { roughness: 0.5 }),
-              [
-                clawSide * bodyW * 0.72,
-                bodyY + bodyH * 0.08,
-                bodyD * 0.42,
-              ],
-              [0.1 + horizN * 0.05, 0.08, 0.1],
-              [0, 0, 0]
-            );
-          });
-        }
-        [-1, 1].forEach(clawSide => {
-          for (let i = 0; i < 3; i++) {
-            addCreatureMesh(
-              new THREE.ConeGeometry(0.045 + whiffN * 0.03, 0.36 + veloN * 0.22, 14),
-              makeMaterial(accentColor, {
-                emissive: accentColor,
-                emissiveIntensity: 0.09,
-                roughness: 0.34,
-                metalness: 0.18,
-              }),
-              [
-                clawSide * (bodyW * 0.88 + i * 0.08),
-                bodyY - bodyH * (0.02 + i * 0.03),
-                bodyD * (0.62 + i * 0.05),
-              ],
-              [1, 1, 1],
-              [Math.PI / 2.15, 0, clawSide * (0.15 + i * 0.1)]
-            );
-          }
-        });
-        return;
-      }
-
-      [-1, 1].forEach(earSide => {
-        addCreatureMesh(
-          new THREE.SphereGeometry(1, 18, 10),
-          makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.28), {
-            emissive: baseColor,
-            emissiveIntensity: 0.035,
-            roughness: 0.52,
-          }),
-          [earSide * bodyW * 0.5, bodyY + bodyH * 0.76, -bodyD * 0.06],
-          [0.18, 0.36 + whiffN * 0.12, 0.12],
-          [0, 0, earSide * 0.32]
-        );
-      });
-    }
-
-    function addMorphSignatureFeatures(row, plan, metrics) {
-      const {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        accentColor,
-        darkColor,
-        glowColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        side,
-        morph,
-      } = metrics;
-      const dna = morph || pitcherMorphDNA(row);
-      const entries = dna.entries.slice(0, 4);
-      const pitchSet = new Set(entries.map(([pitch]) => pitch));
-      const topY = bodyY + bodyH * 0.42;
-
-      entries.forEach(([pitch, share], idx) => {
-        const pitchMatColor = pitchColor(pitch, baseColor);
-        const pitchMat = makeMaterial(pitchMatColor, {
-          emissive: pitchMatColor,
-          emissiveIntensity: 0.045 + share * 0.06,
-          roughness: 0.36,
-          metalness: pitch === 'FC' || pitch === 'FF' ? 0.16 : 0.06,
-          transparent: ['CH', 'FS', 'FO'].includes(pitch),
-          opacity: ['CH', 'FS', 'FO'].includes(pitch) ? 0.82 : 1,
-        });
-        const t = entries.length === 1 ? 0.5 : idx / Math.max(1, entries.length - 1);
-        const y = bodyY - bodyH * 0.32 + t * bodyH * 0.78;
-        const stagger = (seededUnit(seed, 310 + idx) - 0.5) * bodyW * 0.32;
-
-        if (pitch === 'FF') {
-          const count = 2 + Math.round(share * 6);
-          for (let i = 0; i < count; i++) {
-            const k = count === 1 ? 0.5 : i / (count - 1);
-            addCreatureMesh(
-              new THREE.ConeGeometry(0.05 + share * 0.08, 0.28 + veloN * 0.26, dna.bodySides),
-              pitchMat,
-              [side * dna.spineLean * 0.12, bodyY - bodyH * 0.34 + k * bodyH * 0.86, -bodyD * (0.98 + k * 0.06)],
-              [1, 1, 0.42],
-              [Math.PI * 0.34, side * dna.asymmetry, side * (0.1 + k * 0.18)]
-            );
-          }
-          return;
-        }
-
-        if (pitch === 'SI') {
-          [-1, 1].forEach(trackSide => {
-            addCreatureMesh(
-              new THREE.BoxGeometry(0.46 + share * 0.36, 0.08, 0.16 + horizN * 0.08),
-              pitchMat,
-              [trackSide * bodyW * (0.48 + share * 0.16), 0.22 + idx * 0.018, bodyD * (0.14 + t * 0.22)],
-              [1, 1, 1],
-              [0.04, trackSide * 0.14, trackSide * 0.04]
-            );
-          });
-          return;
-        }
-
-        if (['SL', 'ST', 'SW'].includes(pitch)) {
-          const bladeCount = 1 + Math.round(share * 5);
-          [-1, 1].forEach(bladeSide => {
-            for (let i = 0; i < bladeCount; i++) {
-              const k = bladeCount === 1 ? 0.5 : i / (bladeCount - 1);
-              addCreatureMesh(
-                new THREE.ConeGeometry(0.08 + share * 0.08, 0.48 + whiffN * 0.42, pitch === 'SL' ? 3 : 4),
-                pitchMat,
-                [
-                  bladeSide * (bodyW * (0.78 + k * 0.12) + share * 0.16),
-                  bodyY - bodyH * 0.22 + k * bodyH * 0.62,
-                  bodyD * (0.26 + idx * 0.08),
-                ],
-                [1, 1, 0.14 + share * 0.16],
-                [Math.PI / 2.2, 0, bladeSide * (Math.PI / 2.65 + dna.markerTwist * 0.2)]
-              );
-            }
-          });
-          return;
-        }
-
-        if (['CU', 'KC'].includes(pitch)) {
-          const ringCount = 1 + Math.round(share * 4);
-          for (let i = 0; i < ringCount; i++) {
-            const k = ringCount === 1 ? 0.5 : i / (ringCount - 1);
-            addCreatureMesh(
-              new THREE.TorusGeometry(0.16 + share * 0.16 + k * 0.04, 0.018 + share * 0.018, 8, 30),
-              pitchMat,
-              [stagger + side * (k - 0.5) * bodyW * 0.44, y + k * bodyH * 0.12, -bodyD * (0.92 + idx * 0.1)],
-              [1, 0.82 + vertN * 0.3, 0.42],
-              [Math.PI / 2.2, side * (0.35 + k * 0.22), dna.markerTwist]
-            );
-          }
-          return;
-        }
-
-        if (['CH', 'FS', 'FO'].includes(pitch)) {
-          const beadCount = 2 + Math.round(share * 7);
-          for (let i = 0; i < beadCount; i++) {
-            const k = beadCount === 1 ? 0.5 : i / (beadCount - 1);
-            const orbit = Math.sin(k * Math.PI * 1.35 + dna.markerTwist);
-            addCreatureMesh(
-              new THREE.SphereGeometry(1, 14, 10),
-              pitchMat,
-              [
-                side * (bodyW * 0.62 + orbit * 0.18 + idx * 0.05),
-                bodyY - bodyH * 0.24 + k * bodyH * 0.74,
-                bodyD * (0.18 - k * 0.24),
-              ],
-              [0.055 + share * 0.18, 0.055 + share * 0.14, 0.055 + share * 0.18],
-              [0, 0, 0]
-            );
-          }
-          return;
-        }
-
-        if (pitch === 'FC') {
-          const slashCount = 2 + Math.round(share * 5);
-          for (let i = 0; i < slashCount; i++) {
-            const k = slashCount === 1 ? 0.5 : i / (slashCount - 1);
-            addCreatureMesh(
-              new THREE.BoxGeometry(0.08 + share * 0.08, 0.38 + veloN * 0.18, 0.18 + share * 0.16),
-              pitchMat,
-              [side * (bodyW * 0.42 + k * 0.18), bodyY - bodyH * 0.3 + k * bodyH * 0.78, bodyD * 0.36],
-              [1, 1, 1],
-              [0.16, side * 0.24, side * (0.62 + dna.markerTwist * 0.2)]
-            );
-          }
-        }
-      });
-
-      if (dna.variantName === 'crest' || pitchSet.has('FF')) {
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.16 + whiffN * 0.08, 0.58 + dna.crestHeight, dna.accentSides),
-          makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.08, roughness: 0.34 }),
-          [dna.asymmetry * 0.25, topY + bodyH * 0.08, -bodyD * 0.18],
-          [1, 1, 0.26],
-          [0.25, side * 0.1, Math.PI / 4 + dna.markerTwist * 0.15]
-        );
-      }
-
-      if (dna.variantName === 'fork' || dna.tailStyle === 'fork') {
-        [-1, 1].forEach(forkSide => {
-          addCreatureMesh(
-            new THREE.ConeGeometry(0.07 + horizN * 0.04, 0.48 + whiffN * 0.18, 4),
-            makeMaterial(glowColor, { emissive: accentColor, emissiveIntensity: 0.065, roughness: 0.38 }),
-            [forkSide * (bodyW * 0.18 + horizN * 0.12), bodyY - bodyH * 0.16, -bodyD * 1.1],
-            [1, 1, 0.22],
-            [Math.PI / 2.25, forkSide * 0.36, forkSide * 0.24]
+            wingGeometry(span, span * 0.55), wingMat,
+            [sh.x, sh.y, sh.z], [sx, 1, 1],
+            [0.12, sx * -0.4, sx * (0.5 - vertN * 0.15)],
+            { noSubdiv: true }
           );
         });
       }
 
-      if (dna.variantName === 'mask') {
-        addCreatureMesh(
-          new THREE.TorusGeometry(0.24 + horizN * 0.08, 0.025, 8, 28),
-          makeMaterial(darkColor.clone().lerp(accentColor, 0.35), { emissive: accentColor, emissiveIntensity: 0.045, roughness: 0.42 }),
-          [dna.asymmetry * 0.18, bodyY + bodyH * 0.18, bodyD * 0.58],
-          [1.2, 0.7, 0.2],
-          [0.08, side * 0.16, dna.markerTwist * 0.2]
-        );
+      // Serpent hood flares with horizontal sweep
+      if (hooded && anchors.headC) {
+        const hoodMat = makeMaterial(bodyColor.clone().lerp(darkColor, 0.25), { roughness: 0.4, clearcoat: 0.4, doubleSide: true });
+        const hl = anchors.headR * (1.0 + horizN * 0.7);
+        [-1, 1].forEach(sx => {
+          addCreatureMesh(
+            finGeometry(hl, hl * 0.62, hl * 0.05), hoodMat,
+            [anchors.headC.x + sx * anchors.headR * 0.55, anchors.headC.y - anchors.headR * 0.1, anchors.headC.z - anchors.headR * 0.3],
+            [sx, 1, 1],
+            [0, sx * -0.5, sx * 1.05],
+            { noSubdiv: true }
+          );
+        });
       }
     }
 
@@ -3493,7 +3018,10 @@
       const armRad = THREE.MathUtils.degToRad(clamp(arm, -110, 70) * 0.5);
       const side = horiz >= 0 ? 1 : -1;
       const baseColor = new THREE.Color(row.color || '#138c9f');
-      const bodyColor = baseColor.clone().lerp(new THREE.Color(0xf5e8b8), 0.34 + seededUnit(seed, 1) * 0.18);
+      const bodyColor = baseColor.clone().lerp(new THREE.Color(0xf5e8b8), 0.22 + seededUnit(seed, 1) * 0.14);
+      const bodyHSL = { h: 0, s: 0, l: 0 };
+      bodyColor.getHSL(bodyHSL);
+      bodyColor.setHSL(bodyHSL.h, clamp(bodyHSL.s, 0.32, 0.62), clamp(bodyHSL.l, 0.58, 0.74));
       const accentColor = baseColor.clone().lerp(new THREE.Color(0xffdf3d), 0.45);
       const darkColor = baseColor.clone().lerp(new THREE.Color(0x10110f), 0.64);
       const glowColor = baseColor.clone().lerp(new THREE.Color(0xffffff), 0.18);
@@ -3529,153 +3057,30 @@
       shapeGroup.scale.setScalar(fitScale);
       const bodyY = 0.72 + bodyH * 0.42;
 
-      addCoreBody(row, plan, {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        bodyColor,
-        accentColor,
-        darkColor,
-        glowColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        armRad,
-        side,
-        morph,
-      });
-
-      addCreatureHead(row, plan, {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        bodyColor,
-        accentColor,
-        darkColor,
-        glowColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        armRad,
-        side,
-        morph,
-      });
-
-      const finLen = 0.55 + horizN * 0.85;
-      [-1, 1].forEach(finSide => {
+      const metrics = {
+        seed, bodyW, bodyH, bodyD, bodyY,
+        baseColor, bodyColor, accentColor, darkColor, glowColor,
+        whiffN, veloN, horizN, vertN, gbN,
+        armRad, side, morph, pcaY,
+      };
+      let shadowSpread = bodyW * 2.2;
+      const anchors = sculptCreatureBody(row, plan, metrics);
+      if (anchors) {
+        addCreatureFace(row, plan, metrics, anchors);
+        addCreatureAppendages(row, plan, metrics, anchors);
+        shapeGroup.scale.setScalar(1);
+        const bounds = new THREE.Box3().setFromObject(shapeGroup);
+        const height = Math.max(0.6, bounds.max.y - shapeGroup.position.y);
+        const spread = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z, 0.8);
+        shadowSpread = spread;
+        shapeGroup.scale.setScalar(clamp(Math.min(3.1 / height, 4.8 / spread), 0.6, 2.2));
+      } else {
         addCreatureMesh(
-          new THREE.ConeGeometry(0.2 + whiffN * 0.08, finLen, 32),
-          makeMaterial(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.12), { emissive: baseColor, emissiveIntensity: 0.05, transparent: true, opacity: 0.92 }),
-          [finSide * (bodyW + 0.18), bodyY + bodyH * 0.04, -0.02],
-          [1, 1, 0.32 + vertN * 0.18],
-          [0, 0, finSide * (Math.PI / 2.35 + armRad * 0.22)]
-        );
-      });
-
-      const mixEntries = pitchMixEntries(row, seed);
-      mixEntries.forEach(([pitch, share], i) => {
-        const t = mixEntries.length === 1 ? 0.5 : i / (mixEntries.length - 1);
-        const plateColor = pitchColor(pitch, baseColor);
-        const plateH = 0.12 + Math.sqrt(share) * 0.38;
-        const plateW = 0.08 + share * 0.42;
-        const y = bodyY - bodyH * 0.36 + t * bodyH * 0.78;
-        const x = (seededUnit(seed, 50 + i) - 0.5) * bodyW * 0.5;
-        const z = -bodyD * (0.86 + seededUnit(seed, 60 + i) * 0.12);
-        addCreatureMesh(
-          new THREE.ConeGeometry(plateW, plateH, 4),
-          makeMaterial(plateColor, { emissive: plateColor, emissiveIntensity: 0.045, roughness: 0.42, metalness: 0.08 }),
-          [x, y, z],
-          [1, 1, 0.34 + vertN * 0.22],
-          [Math.PI * 0.38, seededUnit(seed, 70 + i) * 0.4, (seededUnit(seed, 80 + i) - 0.5) * 0.42]
-        );
-      });
-
-      addPlanFeatures(plan, row, {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        accentColor,
-        darkColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        side,
-        morph,
-      });
-
-      addMorphSignatureFeatures(row, plan, {
-        seed,
-        bodyW,
-        bodyH,
-        bodyD,
-        bodyY,
-        baseColor,
-        accentColor,
-        darkColor,
-        glowColor,
-        whiffN,
-        veloN,
-        horizN,
-        vertN,
-        side,
-        morph,
-      });
-
-      const spineCount = 3 + Math.round((horizN + vertN + whiffN) * 3);
-      for (let i = 0; i < spineCount; i++) {
-        const t = spineCount === 1 ? 0 : i / (spineCount - 1);
-        const spineH = 0.12 + whiffN * 0.26 + t * vertN * 0.16;
-        addCreatureMesh(
-          new THREE.ConeGeometry(0.055 + t * 0.025, spineH, 16),
-          makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.055, metalness: 0.12 }),
-          [side * Math.sin(t * Math.PI) * 0.08, bodyY - bodyH * 0.42 + t * bodyH * 0.92, -bodyD * 0.86],
-          [1, 1, 1],
-          [Math.PI * 0.34, 0, side * 0.08]
+          new THREE.CapsuleGeometry(bodyW * 0.55, bodyH * 0.7, 8, 24),
+          makeMaterial(bodyColor, { roughness: 0.4 }),
+          [0, bodyY, 0], [1, 1, 1], [0, 0, 0]
         );
       }
-
-      const tailCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0, bodyY - bodyH * 0.12, -bodyD * 0.82),
-        new THREE.Vector3(side * (0.2 + horizN * 0.34), bodyY + vertN * 0.18, -bodyD - 0.52),
-        new THREE.Vector3(side * (0.45 + horizN * 0.72), bodyY - 0.12 + pcaY * 0.04, -bodyD - 1.0 - veloN * 0.24),
-      ]);
-      addCreatureMesh(
-        new THREE.TubeGeometry(tailCurve, 36, 0.045 + whiffN * 0.045, 14, false),
-        makeMaterial(darkColor, { emissive: baseColor, emissiveIntensity: 0.035, roughness: 0.46 }),
-        [0, 0, 0],
-        [1, 1, 1],
-        [0, 0, 0]
-      );
-      addCreatureMesh(
-        new THREE.SphereGeometry(1, 20, 12),
-        makeMaterial(accentColor, { emissive: accentColor, emissiveIntensity: 0.07, roughness: 0.4 }),
-        [side * (0.45 + horizN * 0.72), bodyY - 0.12 + pcaY * 0.04, -bodyD - 1.0 - veloN * 0.24],
-        [0.13 + whiffN * 0.12, 0.13 + whiffN * 0.08, 0.13 + whiffN * 0.12],
-        [0, 0, 0]
-      );
-
-      const footColor = darkColor.clone().lerp(new THREE.Color(0xffdf3d), 0.12);
-      [-1, 1].forEach(footSide => {
-        addCreatureMesh(
-          new THREE.SphereGeometry(1, 18, 10),
-          makeMaterial(footColor, { roughness: 0.62 }),
-          [footSide * bodyW * 0.38, 0.16, 0.16 + gbN * 0.12],
-          [0.22 + gbN * 0.18, 0.08, 0.18 + veloN * 0.08],
-          [0, footSide * 0.18, 0]
-        );
-      });
 
       keepShapeComponentsTogether(row, plan, {
         bodyW,
@@ -3689,7 +3094,7 @@
         new THREE.CylinderGeometry(1, 1, 0.03, 48),
         makeMaterial(0x10110f, { transparent: true, opacity: 0.18, emissiveIntensity: 0 }),
         [0, 0.02, 0],
-        [bodyW * 1.45, 1, bodyD * 1.25],
+        [shadowSpread * 0.33, 1, shadowSpread * 0.27],
         [0, 0, 0]
       );
       shadow.castShadow = false;
