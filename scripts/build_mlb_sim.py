@@ -3185,7 +3185,9 @@ def render_hr_watch_tab():
     longshot_damage = display_pool[HR_CORE_MAX_ROWS:HR_CORE_MAX_ROWS + HR_LONGSHOT_MAX_ROWS]
     core_ids = {bm.get("id") for bm in core_hr}
 
-    if os.getenv("MLB_HR_AUDIT"):
+    # Default-on: the GO-YARD card (post_daily_cards.py) needs a fresh audit
+    # every build. Set MLB_HR_AUDIT_DISABLE=1 to skip.
+    if not os.getenv("MLB_HR_AUDIT_DISABLE"):
         def audit_row(bm):
             return {
                 "name": bm.get("name"),
