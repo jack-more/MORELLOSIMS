@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Atlas Vector Types</title>
+  <title>MLBDex | The Pokedex of Pitching</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@500;700;900&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
@@ -499,6 +499,16 @@
       overflow-wrap: anywhere;
     }
 
+    .battle-canvas {
+      display: block;
+      width: 100%;
+      height: 300px;
+      border-bottom: 2px solid var(--rule);
+      background:
+        radial-gradient(ellipse at 50% 78%, rgba(255,223,61,0.14), rgba(0,0,0,0) 60%),
+        linear-gradient(180deg, rgba(244,240,230,0.4), rgba(255,253,246,0.9));
+    }
+
     .battle-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr);
@@ -745,6 +755,13 @@
     .log-dmg.to-pitcher { color: #d64524; }
     .log-dmg.to-hitter { color: #2c6ea8; }
 
+    .log-entry.pitch-line {
+      border-style: dashed;
+      background: rgba(255,253,246,0.6);
+      font-weight: 700;
+      opacity: 0.85;
+    }
+
     .log-entry.big {
       border-width: 2px;
       border-color: #d64524;
@@ -787,7 +804,17 @@
     }
 
     @media (max-width: 900px) {
-      .battle-grid {
+      .battle-canvas {
+      display: block;
+      width: 100%;
+      height: 300px;
+      border-bottom: 2px solid var(--rule);
+      background:
+        radial-gradient(ellipse at 50% 78%, rgba(255,223,61,0.14), rgba(0,0,0,0) 60%),
+        linear-gradient(180deg, rgba(244,240,230,0.4), rgba(255,253,246,0.9));
+    }
+
+    .battle-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -1615,6 +1642,16 @@
       overflow-wrap: anywhere;
     }
 
+    .battle-canvas {
+      display: block;
+      width: 100%;
+      height: 300px;
+      border-bottom: 2px solid var(--rule);
+      background:
+        radial-gradient(ellipse at 50% 78%, rgba(255,223,61,0.14), rgba(0,0,0,0) 60%),
+        linear-gradient(180deg, rgba(244,240,230,0.4), rgba(255,253,246,0.9));
+    }
+
     .battle-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr);
@@ -1861,6 +1898,13 @@
     .log-dmg.to-pitcher { color: #d64524; }
     .log-dmg.to-hitter { color: #2c6ea8; }
 
+    .log-entry.pitch-line {
+      border-style: dashed;
+      background: rgba(255,253,246,0.6);
+      font-weight: 700;
+      opacity: 0.85;
+    }
+
     .log-entry.big {
       border-width: 2px;
       border-color: #d64524;
@@ -1903,7 +1947,17 @@
     }
 
     @media (max-width: 900px) {
-      .battle-grid {
+      .battle-canvas {
+      display: block;
+      width: 100%;
+      height: 300px;
+      border-bottom: 2px solid var(--rule);
+      background:
+        radial-gradient(ellipse at 50% 78%, rgba(255,223,61,0.14), rgba(0,0,0,0) 60%),
+        linear-gradient(180deg, rgba(244,240,230,0.4), rgba(255,253,246,0.9));
+    }
+
+    .battle-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -2002,7 +2056,7 @@
   <div class="shell">
     <header class="topbar">
       <div class="brand">
-        <div class="logo">Atlas</div>
+        <div class="logo">MLBDex</div>
         <div class="subbrand">pitcher type vs vector creature</div>
       </div>
       <div class="controls">
@@ -2017,7 +2071,7 @@
           <option value="all">All creature types</option>
         </select>
       </div>
-      <a class="link-button" href="./">Open Atlas</a>
+      <a class="link-button" href="/">MorelloSims</a>
     </header>
 
     <main class="layout">
@@ -2076,8 +2130,9 @@
           <div class="panel-head">
             <div class="eyebrow">Battle zone</div>
             <h2>Duel simulator</h2>
-            <p class="microcopy">Six plate appearances, winner takes the duel. Outcome odds blend the pitcher's and hitter's real 2026 rates against league average (log5). Damage = linear-weight run values. No dice you couldn't audit.</p>
+            <p class="microcopy">Both creatures take the arena. Duels run pitch-by-pitch (six PAs); gyms run a nine-hitter gauntlet AB-by-AB. Outcome odds blend real 2026 rates against league average (log5), damage is linear-weight run values. No dice you couldn't audit.</p>
           </div>
+          <canvas id="battle-canvas" class="battle-canvas"></canvas>
           <div class="battle-grid">
             <div class="fighter-card" id="battle-pitcher">
               <div class="status">Select a pitcher above.</div>
@@ -2997,6 +3052,7 @@
       }
       if (els.dexFlavor) els.dexFlavor.textContent = dexFlavorFor(row);
       renderBattlePitcher(row);
+      if (battleStageReady) stageBattlers(null);
       if (els.anatomyStrip) {
         const cells = creatureLegendFor(row).map(entry => `
           <div class="anatomy-cell">
@@ -3113,7 +3169,7 @@
       glowDisc.rotation.x = -Math.PI / 2;
       glowDisc.position.y = 0.02;
       glowDisc.userData.skipCohesion = true;
-      shapeGroup.add(glowDisc);
+      getBuildTarget().add(glowDisc);
 
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(ringR, rarity.key === 'apex' ? 0.028 : 0.018, 10, 64),
@@ -3125,7 +3181,7 @@
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.05;
       ring.userData.skipCohesion = true;
-      shapeGroup.add(ring);
+      getBuildTarget().add(ring);
       auraAnimated.push({ mesh: ring, kind: 'ring', base: ringR, phase: 0 });
 
       if (rarity.key === 'apex') {
@@ -3136,7 +3192,7 @@
         halo.position.set(0, height * 0.5, -0.45);
         halo.scale.setScalar(Math.max(2.4, height * 1.55));
         halo.userData.skipCohesion = true;
-        shapeGroup.add(halo);
+        getBuildTarget().add(halo);
 
         for (let i = 0; i < 9; i++) {
           const ang = (i / 9) * Math.PI * 2;
@@ -3148,7 +3204,7 @@
           spark.scale.setScalar(0.1 + (i % 3) * 0.045);
           spark.position.set(Math.cos(ang) * radius, 0.15, Math.sin(ang) * radius * 0.85);
           spark.userData.skipCohesion = true;
-          shapeGroup.add(spark);
+          getBuildTarget().add(spark);
           auraAnimated.push({
             mesh: spark, kind: 'spark',
             baseX: spark.position.x, baseZ: spark.position.z,
@@ -3409,6 +3465,38 @@
       return pool[Math.floor(rng() * pool.length) % pool.length];
     }
 
+
+    // Duels sim pitch-by-pitch: the PA outcome comes from the audited log5
+    // odds; the count sequence is then generated to be consistent with it.
+    function buildCount(kind, rng, whiffN) {
+      const events = [];
+      let b = 0, s = 0, guard = 0;
+      const strikeVerb = final => {
+        if (final) return rng() < 0.5 + whiffN * 0.3 ? 'swinging strike three!' : 'frozen for strike three!';
+        return rng() < 0.45 + whiffN * 0.25 ? 'swinging strike' : 'called strike';
+      };
+      if (kind === 'bb') {
+        while (b < 4 && guard++ < 8) {
+          if (s < 2 && rng() < 0.3) { s++; events.push({ b, s, verb: rng() < 0.5 ? 'fouled off' : 'called strike' }); }
+          else { b++; events.push({ b, s, verb: b === 4 ? 'ball four.' : 'ball' }); }
+        }
+      } else if (kind === 'k') {
+        while (s < 3 && guard++ < 8) {
+          if (b < 3 && rng() < 0.3) { b++; events.push({ b, s, verb: 'ball' }); }
+          else if (s === 2 && rng() < 0.32) { events.push({ b, s, verb: 'fouled off, still alive' }); }
+          else { s++; events.push({ b, s, verb: strikeVerb(s === 3) }); }
+        }
+      } else {
+        const lead = Math.floor(rng() * 3.2);
+        for (let i = 0; i < lead && guard++ < 6; i++) {
+          if (b < 3 && rng() < 0.45) { b++; events.push({ b, s, verb: 'ball' }); }
+          else if (s < 2) { s++; events.push({ b, s, verb: rng() < 0.5 ? 'fouled off' : 'called strike' }); }
+        }
+        events.push({ b, s, verb: 'swings...' });
+      }
+      return events;
+    }
+
     function fighterCardHTML(kind, data) {
       if (kind === 'pitcher') {
         const row = data;
@@ -3427,9 +3515,12 @@
       }
       const h = data;
       const r = hitterRates(h);
+      const hRow = hitterRowFor(h);
+      const hRar = rarityFor(hRow);
+      const hStars = { apex: 4, core: 3, standard: 2, fringe: 1 }[hRar.key] || 0;
       return `
         <div class="fighter-name">${escapeHtml(h.batter_name)}</div>
-        <div class="fighter-line">2026: ${Math.round(r.pa)} PA | wOBA ${three(r.woba)}</div>
+        <div class="fighter-line">${escapeHtml(hRow.bodyPlan)} | ${Math.round(r.pa)} PA | wOBA ${three(r.woba)} | <span style="color:${hRar.color}">${'\u2605'.repeat(hStars)}${'\u2606'.repeat(4 - hStars)}</span></div>
         <div class="fighter-stats">
           <div><span>HR</span>${pct(r.hr)}</div>
           <div><span>K</span>${pct(r.k)}</div>
@@ -3481,7 +3572,8 @@
         K ${pct(probs.k)} (hitter ${pct(probs.hr8.k)} x pitcher ${pct(probs.pK)} vs lg ${pct(L.k)})<br>
         BB ${pct(probs.bb)} | HR ${pct(probs.hr)} (GB-suppressed: lg HR x (lgGB/${pct(probs.gb)})^0.7)<br>
         Hit ${pct(probs.hit)} (whiff-adjusted) | Out ${pct(probs.out)}<br>
-        Damage = linear weights: HR 1.40, hit 0.55, BB 0.32 runs vs pitcher; K 0.30, out 0.25 vs hitter (x60/x90 HP scale).`;
+        Damage = linear weights: HR 1.40, hit 0.55, BB 0.32 runs vs pitcher; K 0.30, out 0.25 vs hitter (x60/x90 HP scale).<br>
+        Duels sim pitch-by-pitch: the PA outcome is drawn from these audited odds first, then the count sequence is generated to match it. Gyms sim AB-by-AB to keep the 9-hitter gauntlet tight.`;
     }
 
     async function runDuel() {
@@ -3500,29 +3592,50 @@
       const row = selectedPitcher;
       const probs = duelProbabilities(row, hitter);
       renderBattleMath(row, hitter, probs);
+      stageBattlers(hitterRowFor(hitter));
       rematchCount += 1;
       const rng = mulberry32(hashString(`${row.id}-${hitter.batter}-${rematchCount}`));
       const seedMix = pitchMixEntries(row, hashString(row.id)).filter(e => e[1] > 0.04);
+      const drawPitch = () => {
+        let pick = rng() * seedMix.reduce((s, e) => s + e[1], 0);
+        let pitch = seedMix.length ? seedMix[0][0] : 'FF';
+        for (const [p, share] of seedMix) { pick -= share; if (pick <= 0) { pitch = p; break; } }
+        return pitch;
+      };
+      const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.14) / 0.22, 0.05, 1);
       let pitcherHP = 100;
       let hitterHP = 100;
       const wait = ms => new Promise(r => setTimeout(r, ms));
       for (let pa = 1; pa <= 6 && pitcherHP > 0 && hitterHP > 0; pa++) {
-        await wait(pa === 1 ? 250 : 850);
-        let pick = rng() * seedMix.reduce((s, e) => s + e[1], 0);
-        let pitch = seedMix.length ? seedMix[0][0] : 'FF';
-        for (const [p, share] of seedMix) { pick -= share; if (pick <= 0) { pitch = p; break; } }
+        await wait(pa === 1 ? 250 : 700);
         const kind = sampleOutcome(probs, rng);
+        const seq = buildCount(kind, rng, whiffN);
+        for (const ev of seq) {
+          const pitch = drawPitch();
+          battleFx.pLunge = 1;
+          const line = document.createElement('div');
+          line.className = 'log-entry pitch-line';
+          line.innerHTML = `
+            <span class="log-pa">${ev.b}-${ev.s}</span>
+            <span class="log-pitch" style="background:${pitchHex(pitch)}">${escapeHtml(pitch)}</span>
+            <span>${escapeHtml(pitchName(pitch))}, ${escapeHtml(ev.verb)}</span>
+            <span class="log-dmg"></span>`;
+          logEl.appendChild(line);
+          logEl.scrollTop = logEl.scrollHeight;
+          await wait(340);
+        }
         const toPitcher = kind === 'hr' || kind === 'bb' || kind === 'hit';
         const dmg = DMG[kind];
-        if (toPitcher) pitcherHP -= dmg; else hitterHP -= dmg;
+        if (toPitcher) { pitcherHP -= dmg; battleFx.pShake = kind === 'hr' ? 1.7 : 1; battleFx.hLunge = 1; }
+        else { hitterHP -= dmg; battleFx.hShake = 1; }
         setHP('pitcher', pitcherHP);
         setHP('hitter', hitterHP);
         const entry = document.createElement('div');
         entry.className = `log-entry${kind === 'hr' ? ' big' : ''}`;
         entry.innerHTML = `
           <span class="log-pa">PA ${pa}</span>
-          <span class="log-pitch" style="background:${pitchHex(pitch)}">${escapeHtml(pitch)}</span>
-          <span>${escapeHtml(pitchName(pitch))}: ${escapeHtml(outcomeText(kind, row, rng))}</span>
+          <span class="log-pitch" style="background:${pitchHex('FF')};visibility:hidden">--</span>
+          <span>${escapeHtml(hitter.batter_name)} ${escapeHtml(outcomeText(kind, row, rng))}</span>
           <span class="log-dmg ${toPitcher ? 'to-pitcher' : 'to-hitter'}">-${dmg} ${toPitcher ? 'P' : 'H'}</span>`;
         logEl.appendChild(entry);
         logEl.scrollTop = logEl.scrollHeight;
@@ -3560,10 +3673,172 @@
         document.getElementById('battle-verdict').textContent = '';
         btn.textContent = 'FIGHT';
         renderBattleHitter();
+        const h = battleHittersAll.find(x => String(x.batter) === String(currentHitterId));
+        if (h && battleStageReady) stageBattlers(hitterRowFor(h));
       });
       btn.addEventListener('click', () => (battleMode === 'gym' ? runGym() : runDuel()));
     }
 
+
+
+    // ---- Hitter creatures: the inverse dex ----------------------------
+    // Body plans map to real hitting traits, mirrored from the pitcher DNA:
+    //   Berserker (striker frame) = high HR + high K, Slugger Bruiser (tank)
+    //   = high HR, Hawkeye (winged) = elite walk rate, Contact Sprite (soft)
+    //   = low K contact game. Synthetic "moves" are the rates themselves.
+    function computeHitterTiers() {
+      const pool = battleHitters.filter(h => (Number(h.season_PA_2026) || 0) >= 150)
+        .sort((a, b) => (Number(b.season_wOBA_2026) || 0) - (Number(a.season_wOBA_2026) || 0));
+      pool.forEach((h, i) => {
+        const q = i / Math.max(1, pool.length - 1);
+        h._tier = q <= 0.1 ? 'T1_Apex' : q <= 0.25 ? 'T2_Core' : q <= 0.5 ? 'T3_Standard' : 'T4_Fringe';
+      });
+    }
+
+    function hitterRowFor(h) {
+      const r = hitterRates(h);
+      const power = clamp(r.hr / 0.055, 0, 1);
+      const punch = clamp((r.k - 0.1) / 0.22, 0, 1);
+      const eye = clamp((r.bb - 0.03) / 0.12, 0, 1);
+      const contact = 1 - punch;
+      let plan = 'soft';
+      let bodyPlan = 'Contact Sprite';
+      let type = 'Grass';
+      let color = '#2aa876';
+      if (power > 0.55 && punch > 0.55) { plan = 'striker'; bodyPlan = 'Berserker'; type = 'Dark'; color = '#6f42c1'; }
+      else if (power > 0.5) { plan = 'tank'; bodyPlan = 'Slugger Bruiser'; type = 'Fire'; color = '#d64524'; }
+      else if (eye > 0.6) { plan = 'winged'; bodyPlan = 'Hawkeye'; type = 'Flying'; color = '#2c6ea8'; }
+      const mixRaw = { FF: 0.15 + power, SL: 0.1 + punch * 0.7, CH: 0.1 + eye * 0.8, SI: 0.1 + contact * 0.6 };
+      const total = Object.values(mixRaw).reduce((s, v) => s + v, 0);
+      const pitch_mix = {};
+      Object.entries(mixRaw).forEach(([k, v]) => { pitch_mix[k] = v / total; });
+      return {
+        id: `bat-${h.batter}`,
+        pitcher: `bat-${h.batter}`,
+        player_name: h.batter_name,
+        displayName: h.batter_name,
+        game_year: 2026,
+        clusterId: 'LINEUP',
+        bucketName: 'Lineup',
+        creatureType: type,
+        primaryType: type,
+        typeColor: color,
+        color,
+        bodyPlan,
+        shapePlan: plan,
+        form: bodyPlan,
+        slot: 'Box',
+        hand: 'R',
+        role: 'BAT',
+        is_sp: 0,
+        prob: 1,
+        pitch_mix,
+        avg_velo_FF: 88 + power * 10 + punch * 2,
+        whiff_rate: 0.14 + punch * 0.2,
+        groundball_rate: clamp(0.5 - power * 0.2, 0.25, 0.6),
+        pfx_x_avg: (eye - 0.5) * 1.2,
+        pfx_z_avg: 0.2 + eye * 0.9,
+        arm_angle: -55,
+        pca_x: 0, pca_y: 0, pca_z: 0,
+        tier: h._tier,
+        kPct: r.k,
+        bbPct: r.bb,
+        siera: undefined,
+      };
+    }
+
+    // ---- Battle arena: both creatures on one 3D stage ------------------
+    let battleScene = null;
+    let battleRenderer = null;
+    let battleCamera = null;
+    let battlePitcherGroup = null;
+    let battleHitterGroup = null;
+    let battleStageReady = false;
+    let battleBuiltFor = { pitcher: null, hitter: null };
+    const battleFx = { pLunge: 0, pShake: 0, hLunge: 0, hShake: 0 };
+
+    function initBattleStage() {
+      if (battleStageReady || !THREE) return;
+      const canvas = document.getElementById('battle-canvas');
+      if (!canvas) return;
+      battleScene = new THREE.Scene();
+      battleCamera = new THREE.PerspectiveCamera(38, 2, 0.1, 80);
+      battleCamera.position.set(0, 2.3, 8.2);
+      battleCamera.lookAt(0, 1.15, 0);
+      battleRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      battleRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      if (THREE.SRGBColorSpace) battleRenderer.outputColorSpace = THREE.SRGBColorSpace;
+      if (THREE.ACESFilmicToneMapping) battleRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      battleRenderer.toneMappingExposure = 1.08;
+      battleScene.add(new THREE.AmbientLight(0xffffff, 0.85));
+      const key = new THREE.DirectionalLight(0xfff2d8, 1.35);
+      key.position.set(3, 7, 5);
+      battleScene.add(key);
+      battlePitcherGroup = new THREE.Group();
+      battlePitcherGroup.position.set(-2.0, 0, 0);
+      battlePitcherGroup.rotation.y = 0.85;
+      battleHitterGroup = new THREE.Group();
+      battleHitterGroup.position.set(2.0, 0, 0);
+      battleHitterGroup.rotation.y = Math.PI - 0.85;
+      battleScene.add(battlePitcherGroup, battleHitterGroup);
+      window.__battleStage = { pitcher: battlePitcherGroup, hitter: battleHitterGroup, renderer: battleRenderer, scene: battleScene, camera: battleCamera, canvas };
+      const resize = () => {
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width) return;
+        battleRenderer.setSize(Math.floor(rect.width), Math.floor(rect.height), false);
+        battleCamera.aspect = rect.width / rect.height;
+        battleCamera.updateProjectionMatrix();
+      };
+      window.addEventListener('resize', resize);
+      resize();
+      battleStageReady = true;
+    }
+
+    function composeCreatureInto(group, row) {
+      if (!THREE || !group) return;
+      clearGroup(group);
+      group.scale.setScalar(1);
+      const M = computeCreatureMetrics(row);
+      const metrics = {
+        seed: M.seed, bodyW: M.bodyW, bodyH: M.bodyH, bodyD: M.bodyD, bodyY: M.bodyY,
+        baseColor: M.baseColor, bodyColor: M.bodyColor, accentColor: M.accentColor,
+        darkColor: M.darkColor, glowColor: M.glowColor,
+        whiffN: M.whiffN, veloN: M.veloN, horizN: M.horizN, vertN: M.vertN, gbN: M.gbN,
+        armRad: M.armRad, side: M.side, morph: M.morph, pcaY: M.pcaY,
+      };
+      buildTarget = group;
+      try {
+        const anchors = sculptCreatureBody(row, M.plan, metrics);
+        if (anchors) {
+          addCreatureFace(row, M.plan, metrics, anchors);
+          addCreatureAppendages(row, M.plan, metrics, anchors);
+          const prevPos = group.position.clone();
+          group.position.set(0, 0, 0);
+          group.updateMatrixWorld(true);
+          const bounds = new THREE.Box3().setFromObject(group);
+          group.position.copy(prevPos);
+          const height = Math.max(0.6, bounds.max.y);
+          const spread = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z, 0.8);
+          addRarityAura(M.rarity, height, spread);
+          group.scale.setScalar(clamp(Math.min(2.1 / height, 2.9 / spread), 0.5, 1.5));
+        }
+      } finally {
+        buildTarget = null;
+      }
+    }
+
+    function stageBattlers(hitterRowLike) {
+      initBattleStage();
+      if (!battleStageReady || !selectedPitcher) return;
+      if (battleBuiltFor.pitcher !== selectedPitcher.id) {
+        composeCreatureInto(battlePitcherGroup, selectedPitcher);
+        battleBuiltFor.pitcher = selectedPitcher.id;
+      }
+      if (hitterRowLike && battleBuiltFor.hitter !== hitterRowLike.id) {
+        composeCreatureInto(battleHitterGroup, hitterRowLike);
+        battleBuiltFor.hitter = hitterRowLike.id;
+      }
+    }
 
     // ---- Gym challenge: run the gauntlet, one trip through a real lineup
     let gymData = [];
@@ -3642,6 +3917,7 @@
           Per-PA odds re-blended log5 for each hitter. Damage = linear weights.
           Strikeouts feed the pitcher +10 HP momentum (house rule, shown in log). Survive all 9 with HP left to take the badge.`;
       }
+      stageBattlers(null);
       rematchCount += 1;
       const rng = mulberry32(hashString(`${row.id}-gym-${gym.abbr}-${rematchCount}`));
       const seedMix = pitchMixEntries(row, hashString(row.id)).filter(e => e[1] > 0.04);
@@ -3651,6 +3927,7 @@
       for (let pa = 0; pa < gym.lineup.length; pa++) {
         const hitter = battleHittersAll.find(b => String(b.batter) === String(gym.lineup[pa]));
         if (!hitter) continue;
+        stageBattlers(hitterRowFor(hitter));
         await wait(pa === 0 ? 250 : 800);
         const probs = duelProbabilities(row, hitter);
         let pick = rng() * seedMix.reduce((s, e) => s + e[1], 0);
@@ -3662,9 +3939,13 @@
         if (toPitcher) {
           pitcherHP -= DMG[kind];
           dmgText = `-${DMG[kind]} P`;
+          battleFx.pShake = kind === 'hr' ? 1.7 : 1;
+          battleFx.hLunge = 1;
         } else if (kind === 'k') {
           pitcherHP = Math.min(100, pitcherHP + 10);
           dmgText = '+10 P';
+          battleFx.hShake = 1;
+          battleFx.pLunge = 1;
         } else {
           dmgText = 'out';
         }
@@ -3705,8 +3986,16 @@
       const btn = document.getElementById('fight-btn');
       btn.textContent = mode === 'gym' ? 'CHALLENGE' : 'FIGHT';
       rematchCount = 0;
-      if (mode === 'gym') renderGymCard();
-      else renderBattleHitter();
+      if (mode === 'gym') {
+        renderGymCard();
+        const gym = gymData[currentGymIdx];
+        const leader = gym && battleHittersAll.find(x => String(x.batter) === String(gym.leader.batter));
+        if (leader) stageBattlers(hitterRowFor(leader));
+      } else {
+        renderBattleHitter();
+        const h = battleHittersAll.find(x => String(x.batter) === String(currentHitterId));
+        if (h) stageBattlers(hitterRowFor(h));
+      }
     }
 
     function initGymZone() {
@@ -3724,6 +4013,9 @@
         document.getElementById('battle-verdict').textContent = '';
         document.getElementById('fight-btn').textContent = 'CHALLENGE';
         renderGymCard();
+        const gym = gymData[currentGymIdx];
+        const leader = gym && battleHittersAll.find(x => String(x.batter) === String(gym.leader.batter));
+        if (leader && battleStageReady) stageBattlers(hitterRowFor(leader));
       });
       document.querySelectorAll('.battle-tab').forEach(tab => {
         tab.addEventListener('click', () => setBattleMode(tab.dataset.mode));
@@ -4097,7 +4389,7 @@
       outline.scale.copy(mesh.scale);
       outline.userData.skipCohesion = true;
       outline.userData.isOutline = true;
-      shapeGroup.add(outline);
+      getBuildTarget().add(outline);
     }
 
     function addCreatureMesh(geometry, material, position, scale, rotation = [0, 0, 0], options = {}) {
@@ -4108,7 +4400,7 @@
       mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      shapeGroup.add(mesh);
+      getBuildTarget().add(mesh);
       if (options.outline) addOutlineFor(mesh, options.outlineWidth ?? 0.012);
       return mesh;
     }
@@ -4397,7 +4689,7 @@
 
     function sculptCreatureBody(row, plan, metrics) {
       const mc = getMarchingCubes();
-      if (!mc) return null;
+      if (!mc || !getBuildTarget()) return null;
       const { seed, baseColor, bodyColor, accentColor, darkColor, whiffN, veloN, horizN, vertN, gbN, side, morph } = metrics;
       const bodyPlan = row.bodyPlan || '';
       const bellyColor = bodyColor.clone().lerp(new THREE.Color(0xfaf0d8), 0.7);
@@ -4608,7 +4900,7 @@
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData.skipCohesion = true;
-      shapeGroup.add(mesh);
+      getBuildTarget().add(mesh);
       const bodyOutline = makeOutlineGeometry(geo, 0.02);
       if (bodyOutline) {
         const outline = new THREE.Mesh(bodyOutline, getOutlineMaterial());
@@ -4616,7 +4908,7 @@
         outline.position.copy(mesh.position);
         outline.userData.skipCohesion = true;
         outline.userData.isOutline = true;
-        shapeGroup.add(outline);
+        getBuildTarget().add(outline);
       }
       return anchors;
     }
@@ -4853,18 +5145,10 @@
       }
     }
 
-    function buildSelectedShape(row) {
-      if (!shapeGroup || !THREE) {
-        if (webglPending && !webglFailed) {
-          setPendingCohesionReport(row, !THREE ? 'three-loading' : 'shape-group-loading');
-          return;
-        }
-        setFallbackCohesionReport(row, !THREE ? 'three-unavailable' : 'shape-group-unavailable');
-        drawFallbackCanvas(row);
-        return;
-      }
-      clearGroup(shapeGroup);
-      shapeGroup.scale.setScalar(1);
+    let buildTarget = null;
+    const getBuildTarget = () => buildTarget || shapeGroup;
+
+    function computeCreatureMetrics(row) {
       const seed = hashString(`${row.pitcher}-${row.game_year}-${row.clusterId}-${row.player_name}`);
       const veloN = clamp(((Number(row.avg_velo_FF) || 90) - 88) / 12, 0.05, 1);
       const whiffN = clamp(((Number(row.whiff_rate) || 0.18) - 0.14) / 0.22, 0.05, 1);
@@ -4886,16 +5170,11 @@
       bodyColor.setHSL(bodyHSL.h, clamp(bodyHSL.s, 0.32, 0.62), clamp(bodyHSL.l, 0.58, 0.74));
       const rarity = rarityFor(row);
       if (rarity.key === 'fringe') bodyColor.lerp(new THREE.Color(0xb6b0a4), 0.16);
-      auraAnimated = [];
-      if (getOutlineMaterial()) {
-        getOutlineMaterial().color.set(rarity.key === 'apex' ? 0x4a3608 : rarity.key === 'core' ? 0x1d2b40 : 0x241f26);
-      }
       const accentColor = baseColor.clone().lerp(new THREE.Color(0xffdf3d), 0.45);
       const darkColor = baseColor.clone().lerp(new THREE.Color(0x10110f), 0.64);
       const glowColor = baseColor.clone().lerp(new THREE.Color(0xffffff), 0.18);
       const plan = row.shapePlan || creatureFormForRow(row).plan;
       const morph = pitcherMorphDNA(row);
-
       let bodyW = 0.58 + horizN * 0.55 + seededUnit(seed, 3) * 0.12;
       let bodyH = 0.82 + veloN * 0.95 + whiffN * 0.3;
       let bodyD = 0.48 + vertN * 0.48 + seededUnit(seed, 4) * 0.1;
@@ -4921,9 +5200,33 @@
         bodyH *= 0.92;
         bodyD *= 1.08;
       }
-      const fitScale = clamp(2.65 / Math.max(bodyH, bodyW * 1.2), 0.74, 1.04);
-      shapeGroup.scale.setScalar(fitScale);
       const bodyY = 0.72 + bodyH * 0.42;
+      return {
+        seed, veloN, whiffN, horizN, vertN, gbN, pcaX, pcaY, pcaZ, armRad, side,
+        baseColor, bodyColor, accentColor, darkColor, glowColor,
+        plan, morph, rarity, bodyW, bodyH, bodyD, bodyY,
+      };
+    }
+
+    function buildSelectedShape(row) {
+      if (!shapeGroup || !THREE) {
+        if (webglPending && !webglFailed) {
+          setPendingCohesionReport(row, !THREE ? 'three-loading' : 'shape-group-loading');
+          return;
+        }
+        setFallbackCohesionReport(row, !THREE ? 'three-unavailable' : 'shape-group-unavailable');
+        drawFallbackCanvas(row);
+        return;
+      }
+      clearGroup(shapeGroup);
+      shapeGroup.scale.setScalar(1);
+      const M = computeCreatureMetrics(row);
+      const { seed, veloN, whiffN, horizN, vertN, gbN, pcaX, pcaY, pcaZ, armRad, side,
+        baseColor, bodyColor, accentColor, darkColor, glowColor, plan, morph, rarity,
+        bodyW, bodyH, bodyD, bodyY } = M;
+      if (getOutlineMaterial()) {
+        getOutlineMaterial().color.set(rarity.key === 'apex' ? 0x4a3608 : rarity.key === 'core' ? 0x1d2b40 : 0x241f26);
+      }
 
       const metrics = {
         seed, bodyW, bodyH, bodyD, bodyY,
@@ -4977,6 +5280,7 @@
       requestAnimationFrame(animate);
       if (controls) controls.update();
       if (shapeGroup) shapeGroup.rotation.y += 0.004;
+      if (auraAnimated.length > 260) auraAnimated = auraAnimated.filter(n => n.mesh.parent);
       if (auraAnimated.length) {
         const t = performance.now() * 0.001;
         auraAnimated.forEach(node => {
@@ -4993,6 +5297,16 @@
         });
       }
       if (renderer && scene && camera) renderer.render(scene, camera);
+      if (battleStageReady) {
+        const bt = performance.now() * 0.001;
+        battleFx.pLunge *= 0.88; battleFx.pShake *= 0.86;
+        battleFx.hLunge *= 0.88; battleFx.hShake *= 0.86;
+        battlePitcherGroup.position.x = -2.0 + battleFx.pLunge * 0.6 + Math.sin(bt * 47) * 0.06 * battleFx.pShake;
+        battlePitcherGroup.position.y = Math.sin(bt * 1.35) * 0.025;
+        battleHitterGroup.position.x = 2.0 - battleFx.hLunge * 0.6 + Math.sin(bt * 51) * 0.06 * battleFx.hShake;
+        battleHitterGroup.position.y = Math.sin(bt * 1.55 + 1.7) * 0.025;
+        battleRenderer.render(battleScene, battleCamera);
+      }
     }
 
     function drawFallbackCanvas(row) {
@@ -5147,6 +5461,7 @@
       populateFilters();
       initTableSorting();
       computeLeagueRates();
+      computeHitterTiers();
       initBattleZone();
       initGymZone();
       selectedPitcher = defaultPitcher(enriched.filter(row => String(row.game_year) === latestYear)) || defaultPitcher(enriched);
