@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GO-YARD World | MorelloSims</title>
+<style>
+  :root { --ink:#161513; --cement:#98968f; --paper:#cbcac6; --gold:#b98a1e; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; }
+  body { background:var(--cement); font-family:"Helvetica Neue",Arial,sans-serif; overflow:hidden; }
+  #scene { position:fixed; inset:0; }
+  header {
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex; align-items:center; gap:14px; padding:14px 22px;
+    background:linear-gradient(rgba(22,21,19,.85), rgba(22,21,19,0));
+    pointer-events:none;
+  }
+  header img { width:44px; height:44px; }
+  header .wordmark { color:#f2f0ea; font-weight:900; font-size:20px; letter-spacing:.5px; }
+  header .sub { color:#f5cd0a; font-family:ui-monospace,Menlo,monospace; font-size:11px; letter-spacing:.12em; }
+  header a { margin-left:auto; pointer-events:auto; color:#f2f0ea; text-decoration:none;
+    font-family:ui-monospace,Menlo,monospace; font-size:12px; border:2px solid #f2f0ea;
+    border-radius:8px; padding:6px 12px; background:rgba(22,21,19,.4); }
+  #tags { position:fixed; inset:0; z-index:5; pointer-events:none; }
+  .tag {
+    position:absolute; transform:translate(-50%,-120%); pointer-events:auto; cursor:pointer;
+    background:var(--paper); border:3px solid var(--ink); border-radius:12px;
+    padding:8px 12px 7px; min-width:150px; box-shadow:4px 6px 0 rgba(22,21,19,.35);
+    transition:opacity .2s;
+  }
+  .tag .nm { font-weight:900; font-size:14px; color:var(--ink); letter-spacing:.02em; }
+  .tag .vs { font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#524f4a; margin-top:2px; }
+  .tag .lift { position:absolute; top:-16px; right:-14px; background:var(--ink); color:#f5cd0a;
+    font-weight:900; font-size:15px; padding:4px 9px; border-radius:10px; transform:rotate(6deg);
+    box-shadow:2px 3px 0 rgba(22,21,19,.35); }
+  .tag .lane { display:inline-block; margin-top:5px; font-family:ui-monospace,Menlo,monospace;
+    font-size:9px; letter-spacing:.1em; color:#fff; padding:2px 8px; border-radius:6px; }
+  .lane.DAMAGE { background:#a82020; } .lane.SURGE { background:#b06a08; } .lane.PRESSURE { background:#1e549e; }
+  #ticket {
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:10;
+    background:var(--paper); border:3px solid var(--ink); border-radius:14px;
+    padding:10px 22px; display:flex; gap:22px; align-items:center;
+    box-shadow:5px 7px 0 rgba(22,21,19,.35); white-space:nowrap;
+  }
+  #ticket .t { font-weight:900; font-size:15px; color:var(--ink); }
+  #ticket .d { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#524f4a; }
+  #ticket .dots span { display:inline-block; width:9px; height:9px; border-radius:50%; margin-left:5px; border:2px solid var(--ink); }
+  @media (max-width:640px){ #ticket{ gap:12px; padding:8px 14px; } #ticket .d{ display:none; } .tag{ min-width:120px; } }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="scene"></div>
+<header>
+  <img src="../assets/morello-logo-cutout.png" alt="">
+  <div>
+    <div class="wordmark">GO-YARD WORLD</div>
+    <div class="sub">MORELLO SIMS · HOME RUN LOTTO</div>
+  </div>
+  <a href="../mlbsim/">FULL BOARD →</a>
+</header>
+<div id="tags"></div>
+<div id="ticket">
+  <span class="t">💛 TODAY'S GO-YARD</span>
+  <span class="d" id="tdate">—</span>
+  <span class="dots"><span style="background:#3ac83c"></span><span style="background:#facd0a"></span><span style="background:#f56e14"></span></span>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+const TEAM_COLORS = {ARI:'#A71930',AZ:'#A71930',ATL:'#CE1141',BAL:'#DF4601',BOS:'#BD3039',CHC:'#0E3386',CIN:'#C6011F',CLE:'#00385D',COL:'#333366',CWS:'#27251F',DET:'#0C2340',HOU:'#002D62',KC:'#004687',LAA:'#BA0021',LAD:'#005A9C',MIA:'#00A3E0',MIL:'#0C2C56',MIN:'#002B5C',NYM:'#002D72',NYY:'#092C5C',OAK:'#003831',ATH:'#003831',PHI:'#E81828',PIT:'#27251F',SD:'#2F241D',SEA:'#0C2C56',SF:'#FD5A1E',STL:'#C41E3A',TB:'#092C5C',TEX:'#003278',TOR:'#134A8E',WSH:'#AB0003',WAS:'#AB0003'};
+
+// ── renderer / scene ────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.getElementById('scene').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x9fd8e8, 60, 240);
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, .1, 500);
+camera.position.set(0, 7.5, 26);
+
+scene.add(new THREE.HemisphereLight(0xeaf6ff, 0x2e8ba8, 1.15));
+const sun = new THREE.DirectionalLight(0xfff3d8, 1.6);
+sun.position.set(30, 42, 18);
+scene.add(sun);
+
+// ── sky dome ────────────────────────────────────────────────────────
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(280, 24, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    uniforms: { top:{value:new THREE.Color(0x3fa7d6)}, bot:{value:new THREE.Color(0xcfeef7)} },
+    vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+    fragmentShader:`varying vec3 vP; uniform vec3 top,bot;
+      void main(){ float h=normalize(vP).y*.5+.5; gl_FragColor=vec4(mix(bot,top,smoothstep(.05,.65,h)),1.);}`
+  }));
+scene.add(sky);
+
+// clouds: soft billboards
+const cloudTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64,64,8,64,64,60);
+  grad.addColorStop(0,'rgba(255,255,255,.95)'); grad.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle = grad; g.fillRect(0,0,128,128);
+  return new THREE.CanvasTexture(c);
+})();
+for (let i=0;i<26;i++){
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:cloudTex, transparent:true, opacity:.55+Math.random()*.3, depthWrite:false }));
+  const a = Math.random()*Math.PI*2, r = 90+Math.random()*130;
+  s.position.set(Math.cos(a)*r, 22+Math.random()*30, Math.sin(a)*r);
+  const sc = 24+Math.random()*36; s.scale.set(sc, sc*.42, 1);
+  scene.add(s);
+}
+
+// ── water ───────────────────────────────────────────────────────────
+const waterUniforms = { uTime:{value:0},
+  deep:{value:new THREE.Color(0x0fa3b8)}, shallow:{value:new THREE.Color(0x7fe6e0)},
+  sunDir:{value:sun.position.clone().normalize()} };
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(520, 520, 1, 1),
+  new THREE.ShaderMaterial({
+    uniforms: waterUniforms, transparent:false,
+    vertexShader:`varying vec2 vUv; varying vec3 vW;
+      void main(){ vUv=uv*40.; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz;
+        gl_Position=projectionMatrix*viewMatrix*w; }`,
+    fragmentShader:`
+      varying vec2 vUv; varying vec3 vW;
+      uniform float uTime; uniform vec3 deep, shallow, sunDir;
+      float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+      float noise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+        return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+      void main(){
+        vec2 p1 = vUv + vec2(uTime*.06, uTime*.045);
+        vec2 p2 = vUv*1.7 - vec2(uTime*.05, uTime*.033);
+        float n = noise(p1)*.6 + noise(p2)*.4;
+        vec3 col = mix(deep, shallow, smoothstep(.32,.78,n));
+        // caustic-ish bright veins
+        float vein = smoothstep(.48,.5,abs(n-.5));
+        col = mix(col*1.18, col, vein);
+        // view fresnel toward horizon
+        vec3 V = normalize(cameraPosition - vW);
+        float fres = pow(1.-max(V.y,0.), 2.2);
+        col = mix(col, vec3(.78,.93,.97), fres*.55);
+        // sparkles
+        float sp = noise(vUv*7. + uTime*.9);
+        float glint = smoothstep(.985,1.,sp);
+        col += glint*1.2;
+        gl_FragColor = vec4(col,1.);
+      }`
+  }));
+water.rotation.x = -Math.PI/2;
+scene.add(water);
+
+// ── stone pillars ───────────────────────────────────────────────────
+function pillar(x, z, h, r){
+  const geo = new THREE.CylinderGeometry(r*.82, r, h, 9, 6);
+  const pos = geo.attributes.position;
+  for (let i=0;i<pos.count;i++){
+    const y = pos.getY(i);
+    const k = 1 + (Math.sin(y*1.7 + x)*.09) + (Math.random()*.05);
+    pos.setX(i, pos.getX(i)*k); pos.setZ(i, pos.getZ(i)*k);
+  }
+  geo.computeVertexNormals();
+  const rock = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:0xb9a179, roughness:.95, flatShading:true }));
+  rock.position.set(x, h/2 - 1.5, z);
+  const moss = new THREE.Mesh(new THREE.SphereGeometry(r*.95, 8, 5),
+    new THREE.MeshStandardMaterial({ color:0x7fbf4d, roughness:.9, flatShading:true }));
+  moss.scale.y = .38; moss.position.set(x, h - 1.4, z);
+  scene.add(rock, moss);
+}
+pillar(-26, -38, 26, 6); pillar(24, -52, 34, 8); pillar(-44, -70, 40, 10);
+pillar(46, -24, 20, 5);  pillar(8, -88, 46, 12); pillar(-12, -50, 18, 4);
+
+// ── creature gliders ────────────────────────────────────────────────
+function makeGlider(hex){
+  const c = new THREE.Color(hex).lerp(new THREE.Color('#ffffff'), .18);
+  const grp = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color:c, roughness:.35, metalness:.05 });
+  const bellyMat = new THREE.MeshStandardMaterial({ color:0xf4f1e8, roughness:.5 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.55, 1.6, 6, 12), bodyMat);
+  body.rotation.z = Math.PI/2;
+  const belly = new THREE.Mesh(new THREE.CapsuleGeometry(.42, 1.4, 6, 12), bellyMat);
+  belly.rotation.z = Math.PI/2; belly.position.y = -.22; belly.scale.set(1,.7,.9);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.5, 14, 12), bodyMat);
+  head.position.x = 1.35; head.scale.set(1.15,.9,.9);
+  const eyeMat = new THREE.MeshBasicMaterial({ color:0x161513 });
+  for (const s of [-1,1]){
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 8), eyeMat);
+    eye.position.set(1.72, .12, s*.28); grp.add(eye);
+  }
+  // swept wings
+  const wingShape = new THREE.Shape();
+  wingShape.moveTo(0,0); wingShape.quadraticCurveTo(1.4,.5,3.1,.2);
+  wingShape.quadraticCurveTo(1.6,-.35,0,-.5); wingShape.lineTo(0,0);
+  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth:.07, bevelEnabled:false });
+  for (const s of [-1,1]){
+    const w = new THREE.Mesh(wingGeo, bodyMat);
+    w.rotation.x = -Math.PI/2; w.rotation.z = s>0 ? -.12 : Math.PI+.12;
+    w.position.set(-.1, .1, 0); w.userData.side = s;
+    grp.add(w);
+  }
+  // tail fin
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(.3, 1.1, 4), bodyMat);
+  tail.rotation.z = Math.PI/2; tail.position.x = -1.5; tail.scale.z = .3;
+  grp.add(body, belly, head, tail);
+  // gold aura ring
+  const aura = new THREE.Mesh(new THREE.TorusGeometry(1.5, .045, 8, 40),
+    new THREE.MeshBasicMaterial({ color:0xf5cd0a, transparent:true, opacity:.8 }));
+  aura.rotation.x = Math.PI/2; grp.add(aura); grp.userData.aura = aura;
+  return grp;
+}
+
+// sparkle trail
+const trailGeo = new THREE.BufferGeometry();
+const TRAIL_N = 400;
+const trailPos = new Float32Array(TRAIL_N*3).fill(0);
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+const trail = new THREE.Points(trailGeo, new THREE.PointsMaterial({
+  color:0xfff6c0, size:.22, transparent:true, opacity:.9, depthWrite:false }));
+scene.add(trail);
+let trailIdx = 0;
+
+// ripple rings where gliders skim
+const ripples = [];
+function spawnRipple(x, z){
+  const m = new THREE.Mesh(new THREE.RingGeometry(.2,.28,32),
+    new THREE.MeshBasicMaterial({ color:0xeafcff, transparent:true, opacity:.75, side:THREE.DoubleSide, depthWrite:false }));
+  m.rotation.x = -Math.PI/2; m.position.set(x,.06,z);
+  scene.add(m); ripples.push({ m, t:0 });
+}
+
+// ── load today's picks ──────────────────────────────────────────────
+const FALLBACK = { generated:new Date().toISOString(), core:[
+  {name:'Coby Mayo', team:'BAL', opp_pitcher:'Sam Aldegheri', opp_team:'LAA', lane:'SURGE', hr_rate:.142, base_hr_rate:.039},
+  {name:'JJ Wetherholt', team:'STL', opp_pitcher:'Merrill Kelly', opp_team:'AZ', lane:'DAMAGE', hr_rate:.127, base_hr_rate:.037},
+  {name:'Yordan Alvarez', team:'HOU', opp_pitcher:'Dylan Cease', opp_team:'TOR', lane:'DAMAGE', hr_rate:.110, base_hr_rate:.060},
+]};
+let fliers = [];
+const tagsEl = document.getElementById('tags');
+
+async function loadPicks(){
+  let audit = FALLBACK;
+  try {
+    const r = await fetch('../mlbsim/hr_lotto_audit.json', { cache:'no-store' });
+    if (r.ok) audit = await r.json();
+  } catch(e){}
+  const core = (audit.core || []).slice(0, 5);
+  document.getElementById('tdate').textContent = (audit.generated||'').slice(0,10);
+  core.forEach((p, i) => {
+    const g = makeGlider(TEAM_COLORS[p.team] || '#444');
+    g.scale.setScalar(1.45);
+    scene.add(g);
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    const lift = (p.hr_rate / Math.max(p.base_hr_rate||.001,.001));
+    tag.innerHTML = `<div class="lift">${lift.toFixed(1)}×</div>
+      <div class="nm">${p.name.toUpperCase()}</div>
+      <div class="vs">${p.team} vs ${p.opp_pitcher} (${p.opp_team})</div>
+      <span class="lane ${p.lane||'DAMAGE'}">${p.lane||'DAMAGE'}</span>`;
+    tagsEl.appendChild(tag);
+    fliers.push({ g, tag, seed: i*2.4 + .6, r: 8 + i*3.4, speed: .16 - .018*i, h: 2.1 + (i%3)*1.5 });
+  });
+}
+loadPicks();
+
+// ── animate ─────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+let camA = 0;
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+let dragX = 0, down = null;
+addEventListener('pointerdown', e => down = e.clientX);
+addEventListener('pointermove', e => { if (down!==null){ dragX += (e.clientX-down)*.0022; down = e.clientX; } });
+addEventListener('pointerup', () => down = null);
+
+function tick(){
+  const t = clock.getElapsedTime();
+  waterUniforms.uTime.value = t;
+
+  camA += .0006 + (dragX - camA)*.02;
+  camera.position.x = Math.sin(camA)*26;
+  camera.position.z = Math.cos(camA)*26;
+  camera.position.y = 7.5 + Math.sin(t*.3)*.5;
+  camera.lookAt(0, 2.5, -6);
+
+  for (const f of fliers){
+    const a = t*f.speed + f.seed;
+    const x = Math.sin(a)*f.r, z = Math.cos(a*.83)*f.r - 8;
+    const y = f.h + Math.sin(t*1.1 + f.seed)*0.9;
+    const prev = f.g.position.clone();
+    f.g.position.set(x, y, z);
+    const dir = f.g.position.clone().sub(prev);
+    if (dir.lengthSq() > 1e-6){
+      f.g.lookAt(f.g.position.clone().add(dir));
+      f.g.rotateY(-Math.PI/2);
+      f.g.rotation.z = THREE.MathUtils.clamp(-dir.x*2.2, -.5, .5); // bank
+    }
+    f.g.userData.aura.rotation.z = t*1.4;
+    f.g.userData.aura.scale.setScalar(1 + Math.sin(t*2.4 + f.seed)*.06);
+    // wing flap
+    f.g.children.forEach(ch => { if (ch.userData.side)
+      ch.rotation.y = ch.userData.side * Math.sin(t*5 + f.seed)*.18; });
+    // trail
+    trailPos[trailIdx*3] = x - dir.x*3; trailPos[trailIdx*3+1] = y + .2; trailPos[trailIdx*3+2] = z - dir.z*3;
+    trailIdx = (trailIdx+1) % TRAIL_N;
+    // skim ripples
+    if (y < 1.7 && Math.random() < .12) spawnRipple(x, z);
+    // project tag to screen
+    const v = f.g.position.clone(); v.y += 1.6; v.project(camera);
+    if (v.z < 1){
+      const dist = camera.position.distanceTo(f.g.position);
+      const s = THREE.MathUtils.clamp(30/dist, .55, 1.05);
+      f.tag.style.left = ((v.x*.5+.5)*innerWidth) + 'px';
+      f.tag.style.top = ((-v.y*.5+.5)*innerHeight) + 'px';
+      f.tag.style.transform = `translate(-50%,-120%) scale(${s.toFixed(2)})`;
+      f.tag.style.opacity = 1;
+      f.tag.style.zIndex = Math.round(1000 - dist);
+    } else f.tag.style.opacity = 0;
+  }
+  trailGeo.attributes.position.needsUpdate = true;
+
+  for (let i=ripples.length-1;i>=0;i--){
+    const r = ripples[i]; r.t += .016;
+    r.m.scale.setScalar(1 + r.t*6);
+    r.m.material.opacity = .75*(1 - r.t/1.1);
+    if (r.t > 1.1){ scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); ripples.splice(i,1); }
+  }
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>

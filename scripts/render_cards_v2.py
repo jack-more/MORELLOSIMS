@@ -207,7 +207,9 @@ def qr_stub(base, xy, url, size=170, ink=INK, paper=PAPER):
 
 
 def card_url(campaign, content=""):
-    u = f"https://morellosims.com/mlbsim/?utm_source=card&utm_medium=social&utm_campaign={campaign}"
+    # goyard cards deep-link into the 3D world; everything else to the board
+    page = "goyard" if campaign == "goyard" else "mlbsim"
+    u = f"https://morellosims.com/{page}/?utm_source=card&utm_medium=social&utm_campaign={campaign}"
     if content:
         u += f"&utm_content={content}"
     return u
