@@ -18,7 +18,23 @@ INDEX = os.path.join(REPO, "index.html")
 NBA_PATH = os.path.join(REPO, "picks", "nba.json")
 MLB_PATH = os.path.join(REPO, "picks", "mlb.json")
 BASELINES_PATH = os.path.join(REPO, "picks", "baselines.json")
+MODEL_ERA_PATH = os.path.join(REPO, "picks", "model_era.json")
 TRACKED_MIN_CONF = {"mlb": 8}
+
+
+def load_model_era():
+    """MODEL V2 era config (picks/model_era.json). When present, the MLB hero
+    record counts only picks dated >= start_date (fresh 0-0 slate); everything
+    earlier folds into a v1 archive line. Missing/invalid file → legacy
+    behavior (single combined record)."""
+    try:
+        with open(MODEL_ERA_PATH) as f:
+            era = json.load(f)
+        if era.get("start_date"):
+            return era
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    return None
 
 
 def load_baselines():
@@ -217,21 +233,32 @@ def render_week(wk_data, sport):
                     </details>'''
 
 
-def render_sport_block(picks, sport, hero_color, baseline=None):
+def render_sport_block(picks, sport, hero_color, baseline=None, era=None, archive=None, ledger_picks=None):
     """Render a full dispatch card for one sport.
     `baseline` is the pre-tracking-era manual record (dict with wins/losses/
     risked/pl) — when provided, hero stats include it. Per-pick rows below
     only show auto-tracked picks (we don't have per-pick rows for baselines).
+    `era`/`archive`: MODEL V2 mode — hero stats come from `picks` (era picks
+    only, no baseline), `archive` is the aggregated v1 record shown as a
+    secondary line, and `ledger_picks` (full history) fills the table so the
+    append-only ledger stays complete.
     """
-    if not picks and not baseline:
+    if not picks and not baseline and not era:
         return ""
 
     agg = aggregate(picks, baseline=baseline)
-    grouped = group_by_week(picks)
+    grouped = group_by_week(ledger_picks if ledger_picks is not None else picks)
     weeks_html = "".join(render_week(g, sport) for g in grouped.values())
 
     sport_upper = sport.upper()
-    hero_title = f'{sport_upper} SIM: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
+    if era:
+        era_label = esc(era.get("label") or "MODEL V2")
+        if agg["settled"]:
+            hero_title = f'{sport_upper} SIM · {era_label}: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
+        else:
+            hero_title = f'{sport_upper} SIM · {era_label}: 0-0 — FRESH SLATE'
+    else:
+        hero_title = f'{sport_upper} SIM: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
     css_class = "post-nba-picks" if sport == "nba" else "post-mlb-picks"
     methodology = (
         '<a href="/nbasim/" style="color:#2a9d5f;">nbasim</a>' if sport == "nba"
@@ -241,7 +268,9 @@ def render_sport_block(picks, sport, hero_color, baseline=None):
         f"Picks sourced from the {sport_upper} SIM pipeline. Lines via The Odds API. "
         f"Full methodology at {methodology}."
     )
-    if picks:
+    if era:
+        date_range = f'SINCE {short_date(era["start_date"])}, 2026'
+    elif picks:
         earliest = min(p["date"] for p in picks)
         latest = max(p["date"] for p in picks)
         date_range = f'{short_date(earliest)} — {short_date(latest)}, 2026'
@@ -250,6 +279,15 @@ def render_sport_block(picks, sport, hero_color, baseline=None):
         date_range = f'SINCE {baseline["since"]}'
     else:
         date_range = '—'
+
+    if era and archive:
+        archive_line = (
+            f'<span class="mono" style="font-size:11px; color:#777;">'
+            f'v1 archive: {archive["wins"]}-{archive["losses"]} ({archive["roi"]:+.1f}% ROI) — '
+            f'full ledger below, nothing deleted.</span><br>'
+        )
+    else:
+        archive_line = ""
 
     return f'''
             <details class="blog-card {css_class}" open>
@@ -280,7 +318,7 @@ def render_sport_block(picks, sport, hero_color, baseline=None):
                         </div>
                     </div>
                     <p class="blog-preview">
-                        {agg["total"]} picks across {agg["settled"]} settled. Auto-rendered from <code>picks/{sport}.json</code>.
+                        {archive_line}{agg["total"]} picks across {agg["settled"]} settled. Auto-rendered from <code>picks/{sport}.json</code>.
                     </p>
                 </summary>
                 <div class="blog-card-body">
@@ -375,8 +413,22 @@ def install_or_replace_dispatch(html, nba_html, mlb_html):
     return mlb_replaced
 
 
-def render_home_stat_bubbles(sport, agg):
+def render_home_stat_bubbles(sport, agg, era=None, archive=None):
     sport_upper = sport.upper()
+    # Keep exactly two .home-stat-bubble divs — update_home_card_bubbles'
+    # strip regex depends on that shape.
+    if era:
+        if agg["settled"]:
+            second = f'<div class="home-stat-bubble"><span class="bubble-label">ROI</span><span class="bubble-value">{agg["roi"]:+.1f}%</span></div>'
+        elif archive:
+            second = f'<div class="home-stat-bubble"><span class="bubble-label">V1 ARCHIVE</span><span class="bubble-value">{archive["wins"]}-{archive["losses"]}</span></div>'
+        else:
+            second = '<div class="home-stat-bubble"><span class="bubble-label">SLATE</span><span class="bubble-value">FRESH</span></div>'
+        return f'''
+                <div class="home-stat-bubbles mono" aria-label="{sport_upper} tracked record and ROI">
+                    <div class="home-stat-bubble"><span class="bubble-label">V2 REC</span><span class="bubble-value">{agg["wins"]}-{agg["losses"]}</span></div>
+                    {second}
+                </div>'''
     return f'''
                 <div class="home-stat-bubbles mono" aria-label="{sport_upper} tracked record and ROI">
                     <div class="home-stat-bubble"><span class="bubble-label">REC</span><span class="bubble-value">{agg["wins"]}-{agg["losses"]}</span></div>
@@ -384,9 +436,9 @@ def render_home_stat_bubbles(sport, agg):
                 </div>'''
 
 
-def update_home_card_bubbles(html, sport, agg):
+def update_home_card_bubbles(html, sport, agg, era=None, archive=None):
     """Keep homepage dashboard card bubbles synced to the picks contract."""
-    block = render_home_stat_bubbles(sport, agg)
+    block = render_home_stat_bubbles(sport, agg, era=era, archive=archive)
     card_re = re.compile(
         rf'(<article class="card card-{sport}"[^>]*>)(.*?)(\n\s*<div class="card-header">)',
         re.DOTALL,
@@ -420,8 +472,25 @@ def main():
     nba_picks = official_picks(nba_picks, "nba")
     mlb_picks = official_picks(mlb_picks, "mlb")
 
+    # MODEL V2 era (MLB only): hero record counts era picks from a 0-0 slate;
+    # v1 picks + baseline collapse into the archive line. Ledger keeps all rows.
+    era = load_model_era()
+    if era:
+        start = era["start_date"]
+        mlb_era_picks = [p for p in mlb_picks if p["date"] >= start]
+        mlb_v1_picks = [p for p in mlb_picks if p["date"] < start]
+        mlb_archive = aggregate(mlb_v1_picks, baseline=mlb_baseline)
+        mlb_agg = aggregate(mlb_era_picks)
+        mlb_html = render_sport_block(
+            mlb_era_picks, "mlb", "#FFEA00",
+            era=era, archive=mlb_archive, ledger_picks=mlb_picks,
+        )
+    else:
+        mlb_archive = None
+        mlb_agg = aggregate(mlb_picks, baseline=mlb_baseline)
+        mlb_html = render_sport_block(mlb_picks, "mlb", "#FFEA00", baseline=mlb_baseline)
+
     nba_html = render_sport_block(nba_picks, "nba", "#00FF55", baseline=nba_baseline)
-    mlb_html = render_sport_block(mlb_picks, "mlb", "#FFEA00", baseline=mlb_baseline)
 
     with open(INDEX) as f:
         html = f.read()
@@ -431,16 +500,16 @@ def main():
         new_html, "nba", aggregate(nba_picks, baseline=nba_baseline)
     )
     new_html = update_home_card_bubbles(
-        new_html, "mlb", aggregate(mlb_picks, baseline=mlb_baseline)
+        new_html, "mlb", mlb_agg, era=era, archive=mlb_archive
     )
 
     with open(INDEX, "w") as f:
         f.write(new_html)
 
     nba_agg = aggregate(nba_picks, baseline=nba_baseline)
-    mlb_agg = aggregate(mlb_picks, baseline=mlb_baseline)
+    era_tag = f' [{era.get("label", "MODEL V2")} era]' if era else ""
     print(f"  NBA: {nba_agg['wins']}-{nba_agg['losses']} ({nba_agg['pending']}P) · {nba_agg['roi']:+.1f}% ROI")
-    print(f"  MLB: {mlb_agg['wins']}-{mlb_agg['losses']} ({mlb_agg['pending']}P) · {mlb_agg['roi']:+.1f}% ROI")
+    print(f"  MLB{era_tag}: {mlb_agg['wins']}-{mlb_agg['losses']} ({mlb_agg['pending']}P) · {mlb_agg['roi']:+.1f}% ROI")
     print(f"  Wrote {INDEX}")
 
 

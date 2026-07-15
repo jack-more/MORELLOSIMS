@@ -16,6 +16,30 @@ from collections import defaultdict
 
 from mlb_momo import matchup_swing_to_momo, momentum_to_momi, ms_class, woba_class
 from mlb_vector_live_gate import apply_live_vector_projection, apply_vector_gate_to_candidates
+# Gate/staking/calibration constants + pure helpers live in mlb_model_gates
+# so they can be unit-tested without executing this live builder.
+from mlb_model_gates import (
+    STAKE_BY_CONF,
+    MAX_FAV_BY_CONF,
+    MIN_MODEL_EDGE_BY_CONF,
+    MAX_PLAUSIBLE_EDGE,
+    MAX_PUBLISHABLE_FAV_ODDS,
+    stake_for_conf,
+    moneyline_break_even,
+    confidence_cap_from_market_edge,
+    load_wp_calibration,
+    calibrate_win_prob,
+    display_wp_pair,
+)
+
+# Fitted raw→actual win-probability curve (reports/wp_calibration.json,
+# refit via scripts/fit_wp_calibration.py). None → identity (graceful
+# fallback when the file is missing or stale). Applied to pick_model_prob
+# BEFORE the edge gates so MIN_MODEL_EDGE_BY_CONF and the plausibility
+# window operate on honest probabilities.
+WP_CALIBRATION_CURVE = load_wp_calibration()
+if WP_CALIBRATION_CURVE:
+    print(f"  WP calibration: {len(WP_CALIBRATION_CURVE)} curve points loaded")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -25,6 +49,35 @@ PICKS_DIR = os.path.join(REPO_ROOT, "picks")
 BASELINES_PATH = os.path.join(PICKS_DIR, "baselines.json")
 MLB_PICKS_PATH = os.path.join(PICKS_DIR, "mlb.json")
 MLB_TRACKED_MIN_CONF = 8
+MODEL_ERA_PATH = os.path.join(PICKS_DIR, "model_era.json")
+
+
+def load_model_era():
+    """picks/model_era.json — single source of truth for the model era.
+
+    MODEL V2 (recalibrated WP, -160 ceiling, flat 50u, expanded vector mode)
+    launches 0-0 post All-Star break; picks from era start_date onward are
+    stamped model_version so the v2 ledger is separable from the archived v1
+    history without touching historical rows.
+    """
+    try:
+        with open(MODEL_ERA_PATH) as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"  WARN: could not load picks/model_era.json ({e}); picks get no model_version stamp")
+        return {}
+
+
+MODEL_ERA = load_model_era()
+
+
+def model_version_for_date(date_str):
+    """Era tag for picks made on date_str, or None before the era starts."""
+    era = MODEL_ERA.get("era")
+    start = MODEL_ERA.get("start_date")
+    if era and start and str(date_str) >= str(start):
+        return era
+    return None
 
 
 def load_season_record():
@@ -372,26 +425,9 @@ def get_base_woba(bid):
 LG_H_RATE = 0.245; LG_BB_RATE = 0.08; LG_HR_RATE = 0.03; LG_TB_RATE = 0.40
 MIN_CONF_PICK = MLB_TRACKED_MIN_CONF  # C:8+ qualifies as an official pick.
 MAX_MISSING_BATTERS_FOR_PICK = 0
-STAKE_BY_CONF = {
-    10: 100,
-    9: 50,
-    8: 30,
-    7: 20,
-}
-MAX_FAV_BY_CONF = {
-    # Emergency cap only. The real price gate below compares model win
-    # probability against the sportsbook break-even probability.
-    8: -180,
-    9: -200,
-    10: -220,
-}
-MIN_MODEL_EDGE_BY_CONF = {
-    # Required model probability over market break-even. When the tracked
-    # season is near flat, C8 cannot be a barely-over-juice play.
-    8: 0.055,
-    9: 0.080,
-    10: 0.130,
-}
+# STAKE_BY_CONF, MAX_FAV_BY_CONF, MIN_MODEL_EDGE_BY_CONF now live in
+# mlb_model_gates.py (imported above). Staking is flat 50u per published
+# tier — see the empirics comment there.
 
 
 def env_float(name, default):
@@ -410,7 +446,11 @@ def env_int(name, default):
 
 VECTOR_RUN_SCALE = env_float("MLB_VECTOR_RUN_SCALE", 12.0)
 VECTOR_RUN_CAP = env_float("MLB_VECTOR_RUN_CAP", 1.2)
-VECTOR_MIN_HITTERS_SCORED = env_int("MLB_VECTOR_MIN_HITTERS_SCORED", 7)
+# Lowered 7 → 5 (2026-07-15): VECTOR_NATIVE ran +29.9% ROI on its first n=9
+# settled picks while LEGACY carried the calibration collapse; requiring 7
+# vector-scored hitters per side kept the sample tiny. 5 per side still
+# means the majority of each lineup is vector-scored.
+VECTOR_MIN_HITTERS_SCORED = env_int("MLB_VECTOR_MIN_HITTERS_SCORED", 5)
 
 
 def confidence_from_run_diff(run_diff):
@@ -427,42 +467,10 @@ def confidence_from_run_diff(run_diff):
     return 0
 
 
-def moneyline_break_even(odds):
-    """Return implied break-even probability for American odds."""
-    try:
-        odds = int(odds)
-    except (TypeError, ValueError):
-        return None
-    if odds == 0:
-        return None
-    if odds < 0:
-        return abs(odds) / (abs(odds) + 100)
-    return 100 / (odds + 100)
-
-
-# Upper bound of the plausibility window. When the model's win probability
-# beats the market break-even by this much, history says the model is wrong,
-# not the market: May-Jul 2026 settled picks with edge >= 0.18 ran well below
-# their prices (0.20+ bucket: 12-17, -15% ROI) while the market's Brier score
-# beat the model's (0.251 vs 0.268) on the model's own picks. Such games stay
-# on the board at C7 but do not qualify as tracked picks.
-MAX_PLAUSIBLE_EDGE = 0.18
-
-
-def confidence_cap_from_market_edge(price_edge):
-    if price_edge is None:
-        return 0
-    if price_edge >= MAX_PLAUSIBLE_EDGE:
-        return 7
-    if price_edge >= 0.130:
-        return 10
-    if price_edge >= 0.080:
-        return 9
-    if price_edge >= 0.055:
-        return 8
-    if price_edge >= 0.035:
-        return 7
-    return 6
+# moneyline_break_even, MAX_PLAUSIBLE_EDGE, and confidence_cap_from_market_edge
+# now live in mlb_model_gates.py (imported above). That module also carries
+# MAX_PUBLISHABLE_FAV_ODDS = -160: no tracked C8+ pick shorter than -160
+# (≤ -200 favorites ran 12-9 but -22.4% ROI needing 70.4% to break even).
 
 
 def apply_projection_fields(g):
@@ -503,15 +511,18 @@ def apply_projection_fields(g):
     except (ValueError, TypeError):
         pick_odds_raw = 0
 
-    pick_model_prob = (home_wp if pick_team == home_abbr else away_wp) / 100
+    # Raw Pythagorean prob, then the fitted recalibration (identity when no
+    # curve). Gates below run on the CALIBRATED probability.
+    pick_model_prob_raw = (home_wp if pick_team == home_abbr else away_wp) / 100
+    pick_model_prob = calibrate_win_prob(pick_model_prob_raw, WP_CALIBRATION_CURVE)
     pick_break_even = moneyline_break_even(pick_odds_raw)
     pick_price_edge = None
     odds_too_heavy = False
     if pick_break_even is not None:
         pick_price_edge = pick_model_prob - pick_break_even
-        market_conf_cap = confidence_cap_from_market_edge(pick_price_edge)
-        if pick_odds_raw < -180 and pick_price_edge < 0.130:
-            market_conf_cap = min(market_conf_cap, 8)
+        # -160 hard price ceiling applied inside the cap (caps C8+ to C7);
+        # it subsumes the old "< -180 → cap 8" special case.
+        market_conf_cap = confidence_cap_from_market_edge(pick_price_edge, pick_odds_raw)
         conf = min(conf, market_conf_cap)
         if not ATLAS_CURRENT_FOR_PICKS:
             conf = 0
@@ -533,6 +544,7 @@ def apply_projection_fields(g):
         "pick_team": pick_team,
         "odds_too_heavy": odds_too_heavy,
         "pick_model_prob": round(pick_model_prob, 4),
+        "pick_model_prob_raw": round(pick_model_prob_raw, 4),
         "pick_break_even": round(pick_break_even, 4) if pick_break_even is not None else None,
         "pick_price_edge": round(pick_price_edge, 4) if pick_price_edge is not None else None,
         "min_price_edge": min_price_edge,
@@ -558,12 +570,21 @@ def apply_vector_native_runs(games):
     summary = {"adjusted": 0, "skipped": 0}
     for g in games:
         if not g.get("has_lineups") or g.get("vector_projection_status") != "SCORED":
+            # Distinguish a silent fallback (vector layer wanted to run but
+            # the Statcast cache/history was unusable) from ordinary legacy
+            # games, so the mode stamped on picks stays auditable.
+            if g.get("has_lineups") and g.get("vector_projection_status") in ("UNAVAILABLE", "FAIL"):
+                g["model_mode"] = "LEGACY_FALLBACK"
+                g["vector_native_reason"] = (
+                    g.get("vector_projection_reason")
+                    or g.get("vector_projection_status")
+                )
             summary["skipped"] += 1
             continue
         away_scored = int(g.get("away_vector_hitters_scored") or 0)
         home_scored = int(g.get("home_vector_hitters_scored") or 0)
         if away_scored < VECTOR_MIN_HITTERS_SCORED or home_scored < VECTOR_MIN_HITTERS_SCORED:
-            g["model_mode"] = "ARCHETYPE_BASE"
+            g["model_mode"] = "LEGACY"
             g["vector_native_reason"] = f"thin_vector_lineup:{away_scored}/{home_scored}"
             summary["skipped"] += 1
             continue
@@ -598,9 +619,7 @@ def apply_vector_native_runs(games):
     )
     return summary
 
-def stake_for_conf(conf):
-    """Return $PP risk by confidence grade."""
-    return STAKE_BY_CONF.get(int(conf or 0), 0)
+# stake_for_conf imported from mlb_model_gates (flat 50u per published tier).
 
 def get_base_rates(bid):
     """Return batter's own H/BB/HR/TB rates for thin-sample regression."""
@@ -895,9 +914,12 @@ def _fetch_action_network_odds():
         if not (home and away):
             continue
 
-        # Walk book priority — first book with a real ML wins
+        # Collect EVERY priority book with a real ML (the response carries
+        # up to 10 books); the first one is the display/pick price, the full
+        # list feeds odds_snapshots.csv so CLV can be measured per book.
         odds_list = g.get("odds") or []
         odds_by_book = {o.get("book_id"): o for o in odds_list}
+        books = []
         for book_id, book_name in ACTION_BOOK_PRIORITY:
             o = odds_by_book.get(book_id)
             if not o:
@@ -905,12 +927,18 @@ def _fetch_action_network_odds():
             h_ml = o.get("ml_home")
             a_ml = o.get("ml_away")
             if h_ml is not None and a_ml is not None:
-                result[(away, home)] = {
+                books.append({
+                    "book": book_name,
                     "away_ml": int(a_ml),
                     "home_ml": int(h_ml),
-                    "book": book_name,
-                }
-                break
+                })
+        if books:
+            result[(away, home)] = {
+                "away_ml": books[0]["away_ml"],
+                "home_ml": books[0]["home_ml"],
+                "book": books[0]["book"],
+                "all_books": books,
+            }
     return result
 
 
@@ -1711,15 +1739,18 @@ for g in games_raw:
         pick_odds_raw = int(pick_ml_str)
     except (ValueError, TypeError):
         pick_odds_raw = 0
-    pick_model_prob = (home_wp if pick_team == home_abbr else away_wp) / 100
+    # Raw Pythagorean prob, then the fitted recalibration (identity when no
+    # curve). Gates below run on the CALIBRATED probability.
+    pick_model_prob_raw = (home_wp if pick_team == home_abbr else away_wp) / 100
+    pick_model_prob = calibrate_win_prob(pick_model_prob_raw, WP_CALIBRATION_CURVE)
     pick_break_even = moneyline_break_even(pick_odds_raw)
     pick_price_edge = None
     odds_too_heavy = False
     if pick_break_even is not None:
         pick_price_edge = pick_model_prob - pick_break_even
-        market_conf_cap = confidence_cap_from_market_edge(pick_price_edge)
-        if pick_odds_raw < -180 and pick_price_edge < 0.130:
-            market_conf_cap = min(market_conf_cap, 8)
+        # -160 hard price ceiling applied inside the cap (caps C8+ to C7);
+        # it subsumes the old "< -180 → cap 8" special case.
+        market_conf_cap = confidence_cap_from_market_edge(pick_price_edge, pick_odds_raw)
         conf = min(conf, market_conf_cap)
         if not ATLAS_CURRENT_FOR_PICKS:
             conf = 0
@@ -1754,9 +1785,14 @@ for g in games_raw:
         "away_runs_raw_base": away_runs_raw, "home_runs_raw_base": home_runs_raw,
         "away_runs_tiered_base": away_runs_tiered, "home_runs_tiered_base": home_runs_tiered,
         "away_bp_delta": away_bp_delta, "home_bp_delta": home_bp_delta,
-        "model_mode": "ARCHETYPE_BASE",
+        # LEGACY = archetype/BaseRuns model. apply_vector_native_runs()
+        # upgrades this to VECTOR_NATIVE (or LEGACY_FALLBACK when the vector
+        # layer wanted to run but the Statcast cache was unusable), so every
+        # pick row carries an auditable model mode.
+        "model_mode": "LEGACY",
         "away_wp": away_wp, "home_wp": home_wp,
         "away_ml": away_ml, "home_ml": home_ml, "odds_source": odds_source,
+        "odds_all_books": game_odds.get("all_books") or [],
         "away_woba": away_woba, "home_woba": home_woba,
         "away_batters": away_batters, "home_batters": home_batters,
         "has_lineups": has_lineups,
@@ -1766,6 +1802,7 @@ for g in games_raw:
         "pick_team": pick_team,
         "odds_too_heavy": odds_too_heavy,
         "pick_model_prob": round(pick_model_prob, 4),
+        "pick_model_prob_raw": round(pick_model_prob_raw, 4),
         "pick_break_even": round(pick_break_even, 4) if pick_break_even is not None else None,
         "pick_price_edge": round(pick_price_edge, 4) if pick_price_edge is not None else None,
         "min_price_edge": min_price_edge,
@@ -2080,6 +2117,11 @@ def render_game(g, idx):
     away_record_html = f'<div class="team-record">{away_record}</div>' if away_record else ""
     home_record_html = f'<div class="team-record">{home_record}</div>' if home_record else ""
 
+    # Displayed win% honesty cap (display only): the model has never shown
+    # real >65% skill — stated 67-82% picks won ~51-55% — so anything higher
+    # renders as 65/35. Raw values stay in the pick record for refits.
+    away_wp_display, home_wp_display = display_wp_pair(g["away_wp"], g["home_wp"])
+
     return f'''<div class="game-card" data-conf="{g["conf"]}" data-value="{g["value"]}" data-edge="{g["edge"]}">
   <div class="run-bar ma-premium">
   <div class="run-bar-seg" style="width:{aw}%;background:{ac}">{ar}</div>
@@ -2094,7 +2136,7 @@ def render_game(g, idx):
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
-    <div class="spread">{g["away_wp"]}% \u2014 {g["home_wp"]}%</div>
+    <div class="spread">{away_wp_display}% \u2014 {home_wp_display}%</div>
     <div class="ou-line">{ou_line}</div>
     {pick_html}
   </div>
@@ -4076,6 +4118,24 @@ for g in games:
         continue
     if g.get("away_ml") is None or g.get("home_ml") is None:
         continue
+    # One row per book the odds fetch saw (Action Network carries up to 10
+    # books per game). Secondary books are written FIRST and the display/
+    # pick book LAST so settle_mlb.py's last-row-wins closing-line proxy
+    # keeps matching the book the pick was actually priced at.
+    display_book = g.get("odds_source", "")
+    for b in g.get("odds_all_books") or []:
+        if b.get("book") == display_book:
+            continue
+        _snap_rows.append({
+            "date": TODAY,
+            "game_pk": g.get("game_pk", "") or "",
+            "away": g["away_abbr"],
+            "home": g["home_abbr"],
+            "ts_utc": _snap_ts,
+            "away_ml": f'{b["away_ml"]:+d}',
+            "home_ml": f'{b["home_ml"]:+d}',
+            "book": b.get("book", ""),
+        })
     _snap_rows.append({
         "date": TODAY,
         "game_pk": g.get("game_pk", "") or "",
@@ -4084,7 +4144,7 @@ for g in games:
         "ts_utc": _snap_ts,
         "away_ml": g["away_ml"],
         "home_ml": g["home_ml"],
-        "book": g.get("odds_source", ""),
+        "book": display_book,
     })
 if _snap_rows:
     _snap_new_file = not os.path.exists(ODDS_SNAPSHOTS)
@@ -4112,7 +4172,7 @@ PICKS_LOG_FIELDS = [
     "away_runs", "home_runs", "away_wp", "home_wp", "away_ml", "home_ml",
     "away_sp", "home_sp", "model_mode", "away_vector_run_delta", "home_vector_run_delta",
     "away_vector_xwoba", "home_vector_xwoba", "vector_edge", "vector_xwoba_edge",
-    "vector_gate", "result", "game_pk",
+    "vector_gate", "result", "game_pk", "model_version",
 ]
 
 
@@ -4160,6 +4220,7 @@ for g in writeable_picks:
         "away_sp": g["away_sp"],
         "home_sp": g["home_sp"],
         "model_mode": g.get("model_mode", ""),
+        "model_version": model_version_for_date(TODAY) or "",
         "away_vector_run_delta": g.get("away_vector_run_delta", ""),
         "home_vector_run_delta": g.get("home_vector_run_delta", ""),
         "away_vector_xwoba": g.get("away_vector_xwoba", ""),
@@ -4305,7 +4366,14 @@ for g in writeable_picks:
         "units": stake_for_conf(g["conf"]),
         "sim_projection": f'{g["away_abbr"]} {g["away_runs"]} - {g["home_abbr"]} {g["home_runs"]}',
         "sim_edge": g.get("edge"),
+        # Raw + calibrated model win% for the picked side — raw is kept so
+        # future refits of reports/wp_calibration.json use the exact pregame
+        # number; calibrated is what the gates ran on.
+        "model_wp_raw": round(g["pick_model_prob_raw"] * 100, 1) if g.get("pick_model_prob_raw") is not None else None,
+        "model_wp_calibrated": round(g["pick_model_prob"] * 100, 1) if g.get("pick_model_prob") is not None else None,
         "model_mode": g.get("model_mode"),
+        "model_version": model_version_for_date(TODAY),
+        "odds_book": g.get("odds_source"),
         "away_vector_run_delta": g.get("away_vector_run_delta"),
         "home_vector_run_delta": g.get("home_vector_run_delta"),
         "away_vector_xwoba": g.get("away_vector_xwoba"),

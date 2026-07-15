@@ -14,5 +14,31 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false;
     }
+
+    // Email leads — written only by the emailCapture Cloud Function
+    // (admin SDK bypasses rules). No public access.
+    match /email_leads/{leadId} {
+      allow read, write: if false;
+    }
+
+    // Tail/fade votes — written only by the recordTail Cloud Function.
+    // Owner may read their own votes to render button state.
+    match /user_tails/{userId}/picks/{pickId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // Aggregate tail/fade counts — publicly readable, function-only writes
+    match /tail_counts/{pickId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Check-in streaks — written only by the checkIn Cloud Function.
+    // Owner may read their own streak.
+    match /user_streaks/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
   }
 }

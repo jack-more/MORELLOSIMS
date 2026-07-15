@@ -1,0 +1,91 @@
+name: Social Daily
+
+# Daily public social posts (Telegram public channel + X @MorelloSims).
+#
+# Timing is keyed off mlb-pipeline.yml:
+#   - settle job runs 06:00 UTC (2 AM ET)      -> recap posts 11:30 UTC (7:30 AM ET)
+#   - first picks build 11:00 UTC (7 AM ET,
+#     generate-picks timeout 45 min)           -> picks post 12:15 UTC (8:15 AM ET)
+#
+# All destinations no-op gracefully when secrets are absent (log + exit 0),
+# so this workflow stays green while credentials are being set up.
+
+on:
+  schedule:
+    # Recap of yesterday's settled card — 7:30 AM ET
+    - cron: '30 11 * * *'
+    # Today's picks teaser — 8:15 AM ET, after the 11:00 UTC pipeline build
+    - cron: '15 12 * * *'
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to post'
+        required: true
+        default: 'picks'
+        type: choice
+        options:
+          - picks
+          - recap
+          - both
+      dry_run:
+        description: 'Dry run (render + print, no posting)'
+        required: true
+        default: true
+        type: boolean
+      date:
+        description: 'Override target date (YYYY-MM-DD, optional)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install requests pillow requests-oauthlib
+
+      - name: Post to socials
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_PUBLIC_CHANNEL_ID: ${{ secrets.TELEGRAM_PUBLIC_CHANNEL_ID }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${{ github.event.schedule }}" = "30 11 * * *" ]; then
+              MODES="recap"
+            else
+              MODES="picks"
+            fi
+            DRY_FLAG=""
+            DATE_ARG=""
+          else
+            MODES="${{ inputs.mode }}"
+            if [ "$MODES" = "both" ]; then MODES="recap picks"; fi
+            DRY_FLAG=""
+            if [ "${{ inputs.dry_run }}" = "true" ]; then DRY_FLAG="--dry-run"; fi
+            DATE_ARG=""
+            if [ -n "${{ inputs.date }}" ]; then DATE_ARG="--date ${{ inputs.date }}"; fi
+          fi
+          for MODE in $MODES; do
+            echo "=== mode: $MODE ==="
+            python3 scripts/post_social_daily.py --mode "$MODE" $DRY_FLAG $DATE_ARG
+          done

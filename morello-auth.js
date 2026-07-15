@@ -32,6 +32,11 @@
     checkoutUrl: 'https://us-central1-morello-sims.cloudfunctions.net/createCheckoutSession'
   };
 
+  // Cloud Function endpoints (direct — morellosims.com is GitHub Pages,
+  // so /api/* hosting rewrites only work on the web.app domain)
+  const FUNCTIONS_BASE = 'https://us-central1-morello-sims.cloudfunctions.net';
+  const REF_STORAGE_KEY = 'ma_ref_code';
+
   const GA_MEASUREMENT_ID = 'G-00PNGPWNPV';
   const GA_TRACKING_HOSTS = [
     'morellosims.com',
@@ -91,6 +96,12 @@
   let firebaseReady = false;
   let analyticsReady = false;
   let packageViewTracked = false;
+  let freePickViewTracked = false;
+  let currentRefCode = null;
+  let currentReferralCount = 0;
+  let currentStreak = 0;
+  let checkInDone = false;
+  let userVotes = {}; // pickId -> 'tail' | 'fade'
   const PICK_PACKAGE_TIERS = ['pickmaker_nba', 'pickmaker_mlb', 'pickmaker_dual'];
 
   // ── Detect which page we're on ──
@@ -103,6 +114,8 @@
     if (path.startsWith('/atlas')) return 'atlas';
     if (path.startsWith('/mlbsim')) return 'mlbsim';
     if (path.startsWith('/nbasim')) return 'nbasim';
+    if (path.startsWith('/goyard')) return 'goyard';
+    if (path.startsWith('/fantasy')) return 'fantasy';
     // Legacy detection for old URLs / local dev
     if (path.includes('cosmos.html') || path.includes('cosmos')) return 'atlas';
     if (path.includes('mlbsim.html')) return 'mlbsim';
@@ -294,6 +307,10 @@
           // 2) Try Firestore for Stripe-managed tiers
           try {
             const doc = await firebase.firestore().collection('users').doc(user.uid).get();
+            if (doc.exists) {
+              currentRefCode = doc.data().refCode || null;
+              currentReferralCount = Number(doc.data().referral_count || 0);
+            }
             if (doc.exists && doc.data().tier) {
               const data = doc.data();
               currentTier = data.tier;
@@ -325,6 +342,11 @@
         currentTier = 'free';
         currentAccessExpiresAt = null;
         currentPackageAccessHours = null;
+        currentRefCode = null;
+        currentReferralCount = 0;
+        currentStreak = 0;
+        checkInDone = false;
+        userVotes = {};
       }
       firebaseReady = true;
       onAuthReady(user);
@@ -342,6 +364,12 @@
     if (currentTier === 'admin') {
       renderAdminToolbar();
     }
+    if (user) {
+      runCheckIn();
+    } else {
+      removeStreakChip();
+    }
+    setupTailButtons();
   }
 
   // ══════════════════════════════════════════════════
@@ -357,10 +385,12 @@
     nav.className = 'ma-site-nav';
 
     const sites = [
-      { label: 'HOME',  path: '/',        color: '#AAAAAA', page: 'home' },
-      { label: 'NBA',   path: '/nbasim/', color: '#00FF55', page: 'nbasim' },
-      { label: 'MLB',   path: '/mlbsim/', color: '#FFEA00', page: 'mlbsim' },
-      { label: 'ATLAS', path: '/atlas/',  color: '#FF6B00', page: 'atlas' }
+      { label: 'HOME',    path: '/',         color: '#AAAAAA', page: 'home' },
+      { label: 'NBA',     path: '/nbasim/',  color: '#00FF55', page: 'nbasim' },
+      { label: 'MLB',     path: '/mlbsim/',  color: '#FFEA00', page: 'mlbsim' },
+      { label: 'ATLAS',   path: '/atlas/',   color: '#FF6B00', page: 'atlas' },
+      { label: 'GOYARD',  path: '/goyard/',  color: '#00CFFF', page: 'goyard' },
+      { label: 'FANTASY', path: '/fantasy/', color: '#B266FF', page: 'fantasy' }
     ];
 
     sites.forEach(site => {
@@ -561,6 +591,13 @@
       ` : ''}
       ${(tier === 'pickmaker_nba' || tier === 'pickmaker_mlb' || tier === 'pickmaker_dual') ? `
         <button class="ma-btn-secondary" onclick="window.morelloAuth.openModal('pricing')">BUY ANOTHER PASS</button>
+      ` : ''}
+      ${currentRefCode ? `
+        <div class="ma-invite-box">
+          <div class="ma-invite-label">YOUR INVITE LINK</div>
+          <div class="ma-invite-link" id="ma-invite-link" onclick="window.morelloAuth.copyInviteLink()">morellosims.com/?ref=${currentRefCode}</div>
+          <div class="ma-invite-meta">3 signups = 1 week free &middot; ${currentReferralCount} signup${currentReferralCount === 1 ? '' : 's'} so far</div>
+        </div>
       ` : ''}
       <button class="ma-btn-secondary ma-btn-danger" onclick="window.morelloAuth.handleSignout()" style="margin-top:12px">SIGN OUT</button>
     `;
@@ -928,9 +965,13 @@
     const hasPickAccess = hasAccess('pickmaker_mlb');
     const isMethodologyUnlocked = tier === 'all_access' || tier === 'admin';
 
-    // 1) Selective blur on premium elements (replaces full-page gate)
+    // 1) Selective blur on premium elements (replaces full-page gate).
+    //    Freemium hook: the first C8+ pick of the day stays unblurred for
+    //    everyone as the FREE PICK OF THE DAY.
+    const freePickCard = hasPickAccess ? null : findFreePickCard();
     document.querySelectorAll('.ma-premium').forEach(el => {
-      if (hasPickAccess) {
+      const isFreePick = freePickCard && freePickCard.contains(el);
+      if (hasPickAccess || isFreePick) {
         el.classList.remove('ma-blur');
         el.classList.add('ma-unblurred');
       } else {
@@ -938,6 +979,7 @@
         el.classList.remove('ma-unblurred');
       }
     });
+    applyFreePickBadge(freePickCard);
 
     // 2) CTA banner for free users
     if (!hasPickAccess) {
@@ -1029,6 +1071,360 @@
         el.classList.remove('ma-unblurred');
       }
     });
+  }
+
+  // ══════════════════════════════════════════════════
+  // GROWTH FEATURES — free pick, tail/fade, streaks,
+  // referrals, email capture
+  // ══════════════════════════════════════════════════
+
+  // ── Injected styles for growth UI (dark mono aesthetic) ──
+  function injectGrowthStyles() {
+    if (document.getElementById('ma-growth-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'ma-growth-styles';
+    style.textContent = `
+      .ma-free-pick { outline: 2px solid #FFEA00; }
+      .ma-free-pick-badge { display:block; background:#FFEA00; color:#080808; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:2px; padding:6px 12px; text-transform:uppercase; }
+      .ma-free-pick-cta { display:block; width:calc(100% - 24px); margin:6px 12px 10px; padding:9px 12px; background:transparent; border:1px solid #FFEA00; color:#FFEA00; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; text-align:center; transition:background .12s,color .12s; }
+      .ma-free-pick-cta:hover { background:#FFEA00; color:#080808; }
+      .ma-tail-bar { display:flex; align-items:center; gap:8px; padding:7px 12px; border-top:1px solid #1e1e1e; font-family:'JetBrains Mono',monospace; }
+      .ma-tail-bar-label { font-size:8px; color:#666; letter-spacing:2px; font-weight:700; margin-right:auto; }
+      .ma-tail-btn { display:inline-flex; align-items:center; gap:6px; background:#0a0a0a; border:1px solid #2a2a2a; color:#888; font-family:inherit; font-size:9px; font-weight:700; letter-spacing:1.5px; padding:4px 10px; cursor:pointer; text-transform:uppercase; transition:border-color .12s,color .12s; }
+      .ma-tail-btn:hover { border-color:#555; color:#ccc; }
+      .ma-tail-btn:disabled { opacity:.5; cursor:wait; }
+      .ma-tail-btn .ma-tail-count { color:#fff; }
+      .ma-tail-btn.ma-vote-active[data-side="tail"] { border-color:#00FF55; color:#00FF55; }
+      .ma-tail-btn.ma-vote-active[data-side="tail"] .ma-tail-count { color:#00FF55; }
+      .ma-tail-btn.ma-vote-active[data-side="fade"] { border-color:#FF0040; color:#FF0040; }
+      .ma-tail-btn.ma-vote-active[data-side="fade"] .ma-tail-count { color:#FF0040; }
+      .ma-streak-chip { display:inline-flex; align-items:center; gap:6px; background:#0a0a0a; border:1px solid #2a2a2a; color:#fff; font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; letter-spacing:1px; padding:4px 8px; white-space:nowrap; }
+      .ma-streak-bonus { color:#FFEA00; }
+      .ma-invite-box { margin-top:14px; padding:12px; border:1px dashed #333; background:#0a0a0a; text-align:left; font-family:'JetBrains Mono',monospace; }
+      .ma-invite-box .ma-invite-label { font-size:8px; letter-spacing:2px; color:#666; font-weight:700; margin-bottom:6px; }
+      .ma-invite-link { font-size:11px; color:#FFEA00; cursor:pointer; word-break:break-all; }
+      .ma-invite-link:hover { text-decoration:underline; }
+      .ma-invite-meta { margin-top:6px; font-size:9px; color:#888; letter-spacing:.5px; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // ── FREE PICK OF THE DAY (MLB) ──
+  // The first C8+ game card of the slate; falls back to the highest-conf
+  // card on slates with no C8 so the showcase always exists.
+  function findFreePickCard() {
+    let cards = Array.from(document.querySelectorAll('#tab-lines .game-card'));
+    if (!cards.length) cards = Array.from(document.querySelectorAll('.game-card'));
+    if (!cards.length) return null;
+    const conf = (c) => parseInt(c.getAttribute('data-conf') || '0', 10);
+    return cards.find(c => conf(c) >= 8) ||
+      cards.reduce((best, c) => (conf(c) > conf(best) ? c : best), cards[0]);
+  }
+
+  function applyFreePickBadge(card) {
+    // Clean up any previous state (admin view-as re-runs this)
+    document.querySelectorAll('.ma-free-pick-badge, .ma-free-pick-cta').forEach(el => el.remove());
+    document.querySelectorAll('.ma-free-pick').forEach(el => el.classList.remove('ma-free-pick'));
+    if (!card) return;
+
+    card.classList.add('ma-free-pick');
+
+    const badge = document.createElement('div');
+    badge.className = 'ma-free-pick-badge';
+    badge.innerHTML = '&#9733; FREE PICK OF THE DAY';
+    card.insertBefore(badge, card.firstChild);
+
+    const cta = document.createElement('button');
+    cta.className = 'ma-free-pick-cta';
+    cta.innerHTML = 'Unlock all picks &rarr;';
+    cta.onclick = () => {
+      trackEvent('free_pick_cta_click', { pick_conf: card.getAttribute('data-conf') || '' });
+      openUpgradeModal('free_pick_cta');
+    };
+    const header = card.querySelector('.card-header');
+    if (header && header.parentNode === card) {
+      card.insertBefore(cta, header.nextSibling);
+    } else {
+      card.insertBefore(cta, badge.nextSibling);
+    }
+
+    if (!freePickViewTracked) {
+      freePickViewTracked = true;
+      trackEvent('free_pick_viewed', {
+        pick_conf: card.getAttribute('data-conf') || '',
+        pick_id: pickIdForCard(card, 'mlb') || ''
+      });
+    }
+  }
+
+  // ── TAIL / FADE ──
+  function slateSlug() {
+    let label = '';
+    const slateInfo = document.querySelector('.slate-info span');
+    if (slateInfo) label = slateInfo.textContent || '';
+    if (!/SLATE/i.test(label)) {
+      const heading = Array.from(document.querySelectorAll('h2'))
+        .find(h => /SLATE/i.test(h.textContent || ''));
+      if (heading) label = heading.textContent || '';
+    }
+    const slug = label.replace(/SLATE/i, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    return String(new Date().getFullYear()) + (slug || 'day');
+  }
+
+  function pickIdForCard(card, sport, slug) {
+    const abbrSel = sport === 'nba' ? '.mc-abbr' : '.team-abbr';
+    const abbrs = Array.from(card.querySelectorAll(abbrSel))
+      .map(el => (el.textContent || '').trim())
+      .filter(Boolean);
+    if (abbrs.length < 2) return null;
+    const raw = [sport, slug || slateSlug(), abbrs[0], abbrs[1]].join('_');
+    return raw.replace(/[^A-Za-z0-9_-]/g, '');
+  }
+
+  function setupTailButtons() {
+    if (PAGE !== 'mlbsim' && PAGE !== 'nbasim') return;
+
+    // Rebuild from scratch on each auth change — idempotent
+    document.querySelectorAll('.ma-tail-bar').forEach(el => el.remove());
+
+    const sport = PAGE === 'nbasim' ? 'nba' : 'mlb';
+    let cards = [];
+    if (currentUser) {
+      cards = Array.from(document.querySelectorAll(sport === 'nba' ? '.matchup-card' : '.game-card'));
+    } else if (sport === 'mlb') {
+      // Anonymous users only vote on the free pick of the day
+      const freeCard = findFreePickCard();
+      if (freeCard) cards = [freeCard];
+    }
+    if (!cards.length) return;
+
+    const slug = slateSlug();
+    const bars = [];
+    cards.forEach(card => {
+      const pickId = pickIdForCard(card, sport, slug);
+      if (!pickId) return;
+      const bar = renderTailBar(card, pickId, sport);
+      if (bar) bars.push({ pickId, bar });
+    });
+
+    loadTailData(bars);
+  }
+
+  function renderTailBar(card, pickId, sport) {
+    const bar = document.createElement('div');
+    bar.className = 'ma-tail-bar';
+    bar.setAttribute('data-pick-id', pickId);
+    bar.innerHTML = `
+      <span class="ma-tail-bar-label">COMMUNITY</span>
+      <button class="ma-tail-btn" data-side="tail">&#9650; TAIL <span class="ma-tail-count">0</span></button>
+      <button class="ma-tail-btn" data-side="fade">&#9660; FADE <span class="ma-tail-count">0</span></button>
+    `;
+    bar.querySelectorAll('.ma-tail-btn').forEach(btn => {
+      btn.addEventListener('click', () => handleTailVote(bar, pickId, btn.getAttribute('data-side')));
+    });
+
+    const anchor = card.querySelector(sport === 'nba' ? '.mc-header' : '.card-header');
+    if (anchor && anchor.parentNode === card) {
+      card.insertBefore(bar, anchor.nextSibling);
+    } else {
+      card.appendChild(bar);
+    }
+    updateTailBarActive(bar, pickId);
+    return bar;
+  }
+
+  function updateTailBarCounts(bar, counts) {
+    bar.querySelectorAll('.ma-tail-btn').forEach(btn => {
+      const side = btn.getAttribute('data-side');
+      const countEl = btn.querySelector('.ma-tail-count');
+      if (countEl) countEl.textContent = String(Math.max(0, Number((counts || {})[side] || 0)));
+    });
+  }
+
+  function updateTailBarActive(bar, pickId) {
+    const vote = userVotes[pickId] || null;
+    bar.querySelectorAll('.ma-tail-btn').forEach(btn => {
+      btn.classList.toggle('ma-vote-active', btn.getAttribute('data-side') === vote);
+    });
+  }
+
+  function loadTailData(bars) {
+    if (!bars.length || typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return;
+    const store = firebase.firestore();
+
+    // Public aggregate counts
+    bars.forEach(({ pickId, bar }) => {
+      store.collection('tail_counts').doc(pickId).get()
+        .then(doc => { if (doc.exists) updateTailBarCounts(bar, doc.data()); })
+        .catch(() => {});
+    });
+
+    // Signed-in user's own votes
+    if (currentUser) {
+      store.collection('user_tails').doc(currentUser.uid).collection('picks').get()
+        .then(snap => {
+          userVotes = {};
+          snap.forEach(doc => { userVotes[doc.id] = doc.data().side; });
+          bars.forEach(({ pickId, bar }) => updateTailBarActive(bar, pickId));
+        })
+        .catch(() => {});
+    }
+  }
+
+  async function handleTailVote(bar, pickId, side) {
+    if (!currentUser) {
+      trackEvent('tail_signup_prompt', { pick_id: pickId, tail_side: side });
+      openModal('signup');
+      return;
+    }
+
+    const btns = bar.querySelectorAll('.ma-tail-btn');
+    btns.forEach(b => { b.disabled = true; });
+    try {
+      const token = await currentUser.getIdToken();
+      const resp = await fetch(FUNCTIONS_BASE + '/recordTail', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ pickId, side })
+      });
+      const data = await resp.json();
+      if (data && data.ok) {
+        if (data.side) userVotes[pickId] = data.side;
+        else delete userVotes[pickId];
+        if (data.counts) updateTailBarCounts(bar, data.counts);
+        updateTailBarActive(bar, pickId);
+        trackEvent('tail_vote', { pick_id: pickId, tail_side: data.side || 'removed' });
+      }
+    } catch (err) {
+      console.warn('[morello-auth] Tail vote failed:', err);
+    } finally {
+      btns.forEach(b => { b.disabled = false; });
+    }
+  }
+
+  // ── CHECK-IN STREAK ──
+  async function runCheckIn() {
+    if (checkInDone || !currentUser) return;
+    checkInDone = true;
+    try {
+      const token = await currentUser.getIdToken();
+      const resp = await fetch(FUNCTIONS_BASE + '/checkIn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ refCode: getStoredRefCode() })
+      });
+      const data = await resp.json();
+      if (data && data.ok) {
+        currentStreak = Number(data.streak || 0);
+        if (data.refCode) currentRefCode = data.refCode;
+        if (typeof data.referralCount === 'number') currentReferralCount = data.referralCount;
+        if (data.referralApplied) clearStoredRefCode();
+        renderStreakChip();
+        trackEvent('daily_check_in', { streak_days: currentStreak });
+      }
+    } catch (err) {
+      console.warn('[morello-auth] Check-in failed:', err);
+    }
+  }
+
+  function renderStreakChip() {
+    removeStreakChip();
+    if (!currentUser || currentStreak < 1) return;
+
+    const chip = document.createElement('div');
+    chip.id = 'ma-streak-chip';
+    chip.className = 'ma-streak-chip';
+    chip.innerHTML = '&#128293; ' + currentStreak + '-day streak' +
+      (currentStreak >= 5 ? ' <span class="ma-streak-bonus">STREAK BONUS</span>' : '');
+    if (currentStreak >= 5) {
+      chip.title = 'Streak bonus active — 5+ straight days on the board. Perks coming soon.';
+    }
+
+    const profileBtn = document.getElementById('ma-profile-btn');
+    if (profileBtn && profileBtn.parentNode) {
+      profileBtn.parentNode.insertBefore(chip, profileBtn);
+    } else {
+      const indicators = document.querySelector('.status-indicators');
+      if (indicators) indicators.appendChild(chip);
+    }
+  }
+
+  function removeStreakChip() {
+    const existing = document.getElementById('ma-streak-chip');
+    if (existing) existing.remove();
+  }
+
+  // ── REFERRALS ──
+  function captureRefFromUrl() {
+    try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (ref && /^[A-Za-z0-9]{4,12}$/.test(ref)) {
+        window.localStorage.setItem(REF_STORAGE_KEY, ref.toUpperCase());
+      }
+    } catch (err) {
+      // localStorage blocked — referral attribution silently unavailable
+    }
+  }
+
+  function getStoredRefCode() {
+    try {
+      return window.localStorage.getItem(REF_STORAGE_KEY) || '';
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function clearStoredRefCode() {
+    try {
+      window.localStorage.removeItem(REF_STORAGE_KEY);
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  function copyInviteLink() {
+    if (!currentRefCode) return;
+    const link = 'https://morellosims.com/?ref=' + currentRefCode;
+    const flash = () => {
+      const el = document.getElementById('ma-invite-link');
+      if (el) {
+        const original = el.textContent;
+        el.textContent = 'COPIED';
+        setTimeout(() => { el.textContent = original; }, 1200);
+      }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(flash).catch(() => {});
+    } else {
+      window.prompt('Copy your invite link:', link);
+    }
+    trackEvent('invite_link_copy');
+  }
+
+  // ── EMAIL CAPTURE (public helper for landing pages) ──
+  async function submitEmailCapture(email, source) {
+    try {
+      const resp = await fetch(FUNCTIONS_BASE + '/emailCapture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, source: source || PAGE })
+      });
+      const data = await resp.json();
+      if (data && data.ok) {
+        trackEvent('email_capture', { capture_source: source || PAGE });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn('[morello-auth] Email capture failed:', err);
+      return false;
+    }
   }
 
   // ── Generic page access gate ──
@@ -1260,6 +1656,8 @@
 
   function init() {
     initAnalytics();
+    injectGrowthStyles();
+    captureRefFromUrl();
 
     // Render site navigation immediately (no auth needed)
     renderSiteNav();
@@ -1291,7 +1689,11 @@
     trackEvent,
     getEffectiveTier,
     getCurrentUser: () => currentUser,
-    getCurrentTier: () => currentTier
+    getCurrentTier: () => currentTier,
+    copyInviteLink,
+    emailCapture: submitEmailCapture,
+    getStreak: () => currentStreak,
+    getRefCode: () => currentRefCode
   };
 
   // ── Auto-init ──

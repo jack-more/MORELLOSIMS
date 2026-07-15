@@ -18,10 +18,14 @@ from datetime import datetime, timedelta, timezone
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 PICKS_JSON = os.path.join(REPO, "picks", "mlb.json")
 ODDS_SNAPSHOTS = os.path.join(REPO, "mlbsim", "odds_snapshots.csv")
+# Fallback only (used when a pick row is missing `units`). Flat 50u across
+# published tiers as of MODEL V2 (2026-07-15): the old ladder {8:30, 9:50,
+# 10:100} put the biggest stake on C10, the tier with the worst realized
+# edge. Must stay in sync with scripts/mlb_model_gates.py.
 STAKE_BY_CONF = {
-    10: 100,
+    10: 50,
     9: 50,
-    8: 30,
+    8: 50,
 }
 
 ET = timezone(timedelta(hours=-4))
@@ -86,10 +90,14 @@ def get_final_runs(game):
 
 
 def load_closing_lines():
-    """Last odds snapshot per game. build_mlb_sim.py appends snapshots
-    chronologically, so the final row per key is the closing-line proxy.
+    """Last odds snapshot per game (and per book). build_mlb_sim.py appends
+    snapshots chronologically — since 2026-07-15 one row PER BOOK per run,
+    with the display/pick book written last in each batch — so the final row
+    per key is the closing-line proxy for the pick's own book, and per-book
+    closers are kept alongside for book-exact CLV.
 
-    Returns {key: row} keyed by both (date, game_pk) and (date, away, home).
+    Returns {key: {"": last_row_any_book, book_name: last_row_for_book}}
+    keyed by both (date, game_pk) and (date, away, home).
     """
     closing = {}
     if not os.path.exists(ODDS_SNAPSHOTS):
@@ -97,9 +105,14 @@ def load_closing_lines():
     try:
         with open(ODDS_SNAPSHOTS, newline="") as f:
             for row in csv.DictReader(f):
+                keys = [(row["date"], row.get("away"), row.get("home"))]
                 if row.get("game_pk"):
-                    closing[(row["date"], str(row["game_pk"]))] = row
-                closing[(row["date"], row.get("away"), row.get("home"))] = row
+                    keys.append((row["date"], str(row["game_pk"])))
+                for key in keys:
+                    per_book = closing.setdefault(key, {})
+                    per_book[""] = row  # last row overall (pick's book)
+                    if row.get("book"):
+                        per_book[row["book"]] = row
     except Exception as e:
         print(f"  [WARN] Could not read odds snapshots: {e}")
     return closing
@@ -108,13 +121,19 @@ def load_closing_lines():
 def attach_closing_odds(pick, closing):
     """Set closing_odds (price for the side taken) on a pick, if captured.
 
+    Prefers the closing row from the book the pick was priced at
+    (pick["odds_book"], stamped by build_mlb_sim.py since 2026-07-15);
+    otherwise the last snapshot row for the game.
     Used by report_calibration.py to compute closing line value.
     """
-    row = None
+    per_book = None
     if pick.get("game_pk"):
-        row = closing.get((pick["date"], str(pick["game_pk"])))
-    if row is None:
-        row = closing.get((pick["date"], pick.get("away"), pick.get("home")))
+        per_book = closing.get((pick["date"], str(pick["game_pk"])))
+    if per_book is None:
+        per_book = closing.get((pick["date"], pick.get("away"), pick.get("home")))
+    if not per_book:
+        return
+    row = per_book.get(pick.get("odds_book") or "") or per_book.get("")
     if row is None:
         return
     side_ml = row.get("away_ml") if pick.get("side") == pick.get("away") else row.get("home_ml")
@@ -122,6 +141,8 @@ def attach_closing_odds(pick, closing):
         return
     pick["closing_odds"] = side_ml
     pick["closing_ts"] = row.get("ts_utc")
+    if row.get("book"):
+        pick["closing_book"] = row.get("book")
 
 
 def main():
@@ -194,6 +215,9 @@ def main():
         else:
             pl = -units
 
+        # Picks are updated in place, so build-time fields (model_version,
+        # model_mode, model_wp_raw/calibrated, odds_book, …) are preserved
+        # through settlement by construction — never strip or rewrite them.
         p["status"] = "win" if is_win else "loss"
         p["result"] = f"{away_runs}-{home_runs}"
         p["pl"] = pl
