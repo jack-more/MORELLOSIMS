@@ -70,8 +70,47 @@ CLUSTER_FALLBACK_SCALES = {
     "spin_overall": 250.0,
 }
 
+# Pitch-mix usage families used as first-class clustering features.
+# The original taxonomy was fit on aggregate pitch shape only, which let
+# mix-defined identities (RHP Cutman) leak into shape-adjacent clusters.
+MIX_FEATURE_FAMILIES = {
+    "mix_heater": "heater",
+    "mix_cutter": "cutter",
+    "mix_curve": "curve",
+    "mix_slider": "slider",
+    "mix_change": "change",
+    "mix_split": "split",
+}
+
+MIX_FEATURE_WEIGHTS = {
+    "mix_heater": 1.00,
+    "mix_cutter": 1.40,
+    "mix_curve": 1.20,
+    "mix_slider": 1.00,
+    "mix_change": 1.00,
+    "mix_split": 1.20,
+}
+
+MIX_FALLBACK_SCALES = {
+    "mix_heater": 0.15,
+    "mix_cutter": 0.12,
+    "mix_curve": 0.10,
+    "mix_slider": 0.14,
+    "mix_change": 0.10,
+    "mix_split": 0.08,
+}
+
 CLUSTER_PROBA_TEMP = 0.65
 CLUSTER_TOP_N = 3
+
+GMM_MIN_FIT_ROWS = 40    # per hand; below this skip the EM refit
+GMM_REG_COVAR = 5e-2     # variance floor in standardized feature space
+GMM_MAX_ITER = 100
+GMM_TOL = 1e-4
+GMM_MEAN_ANCHOR = 30.0   # pseudo-observations pinning each component mean
+                         # to its taxonomy anchor (MAP prior, keeps small
+                         # clusters like Knuckleball Wizard from being
+                         # absorbed by dense neighbors during EM)
 
 HEATER_TYPES = {"FF", "FA", "SI", "FC"}
 CURVE_TYPES = {"CU", "KC"}
@@ -86,6 +125,13 @@ KNUCKLEBALL_MIN_SHARE = 0.15
 KNUCKLEBALL_MAX_EEPHUS_SHARE = 0.10
 KNUCKLEBALL_MIN_FASTBALL_VELO = 75.0
 KNUCKLEBALL_MIN_REAL_FASTBALL_SHARE = 0.10
+
+# A pitcher whose family share is this dominant IS that archetype — shape
+# distance may not override pitch identity (the RHP Cutman repair). Applied
+# in both the profile-distance and GMM-posterior assignment paths.
+FAMILY_DOMINANCE_LABELS = {
+    "cutter": (0.45, "Cutman"),
+}
 
 PITCH_FAMILY_MINIMUMS = {
     "Split Demon": ("split", 0.08),
@@ -329,6 +375,20 @@ def build_cluster_assignment_model():
         stdev = float(np.std(vals)) if len(vals) >= 2 else 0.0
         scales[f] = stdev if stdev > 0 else fallback
 
+    # Mix feature scales come from whatever rows carry pitch_mix (current
+    # season) since historical rows predate mix capture.
+    mix_all = defaultdict(list)
+    for ps in pitcher_seasons:
+        pm = ps.get("pitch_mix")
+        if not pm:
+            continue
+        for feat, val in _mix_feature_values(pm).items():
+            mix_all[feat].append(val)
+    for f, fallback in MIX_FALLBACK_SCALES.items():
+        vals = mix_all.get(f) or []
+        stdev = float(np.std(vals)) if len(vals) >= 2 else 0.0
+        scales[f] = stdev if stdev > 0 else fallback
+
     profiles = {}
     for cid, meta in clusters_meta.items():
         rows = by_cluster.get(cid, [])
@@ -357,6 +417,13 @@ def build_cluster_assignment_model():
             if isinstance(meta_val, (int, float)) and not pd.isna(meta_val):
                 profile[f] = float(meta_val)
 
+        # Mix profile targets persisted by update_cluster_meta; refreshed
+        # in-run by _attach_mix_profiles once seed labels exist.
+        for f in MIX_FEATURE_WEIGHTS:
+            meta_val = meta.get(f)
+            if isinstance(meta_val, (int, float)) and not pd.isna(meta_val):
+                profile[f] = float(meta_val)
+
         profiles[cid] = profile
 
     print(f"  Cluster assignment profiles: {len(profiles)} clusters")
@@ -376,6 +443,19 @@ def _cluster_distance(features, profile, scales):
         if f != "arm_angle" and fv == 0:
             continue
         scale = scales.get(f) or CLUSTER_FALLBACK_SCALES[f]
+        z = (float(fv) - float(pv)) / scale
+        weighted += weight * z * z
+        total_weight += weight
+
+    # Pitch-mix usage features (only when both the pitcher and the cluster
+    # profile carry mix data — historical rows and unseeded profiles do not).
+    mix_values = _mix_feature_values(features.get("pitch_mix") or {})
+    for f, weight in MIX_FEATURE_WEIGHTS.items():
+        fv = mix_values.get(f)
+        pv = profile.get(f)
+        if not isinstance(fv, (int, float)) or not isinstance(pv, (int, float)):
+            continue
+        scale = scales.get(f) or MIX_FALLBACK_SCALES[f]
         z = (float(fv) - float(pv)) / scale
         weighted += weight * z * z
         total_weight += weight
@@ -421,6 +501,26 @@ def _mix_family_share(pitch_mix, family):
     if family == "knuckle":
         return _mix_share(pitch_mix, KNUCKLE_TYPES)
     return 0.0
+
+
+def _mix_feature_values(pitch_mix):
+    """Pitch-mix usage expressed as clustering features (family shares)."""
+    if not pitch_mix:
+        return {}
+    return {
+        feat: round(_mix_family_share(pitch_mix, family), 4)
+        for feat, family in MIX_FEATURE_FAMILIES.items()
+    }
+
+
+def _dominant_family_label(pitch_mix):
+    """Return the archetype label a dominant family share forces, if any."""
+    if not pitch_mix:
+        return None
+    for family, (minimum, label) in FAMILY_DOMINANCE_LABELS.items():
+        if _mix_family_share(pitch_mix, family) >= minimum:
+            return label
+    return None
 
 
 def _active_pitch_count(pitch_mix, threshold=0.05):
@@ -554,6 +654,17 @@ def assign_current_cluster(features, profiles, scales):
     if not candidates:
         candidates = list(profiles.items())
 
+    # Dominant pitch identity beats shape distance (e.g. cutter >= 0.45
+    # must land in a Cutman cluster when the hand has one).
+    dom_label = _dominant_family_label(features.get("pitch_mix") or {})
+    if dom_label:
+        dom = [
+            (cid, profile) for cid, profile in candidates
+            if dom_label in (profile.get("archetype") or "")
+        ]
+        if dom:
+            candidates = dom
+
     ranked = []
     for cid, profile in candidates:
         distance = _cluster_distance(features, profile, scales)
@@ -575,6 +686,321 @@ def assign_current_cluster(features, profiles, scales):
         for (cid, _), score in zip(top, raw)
     }
     return best, proba
+
+
+GMM_FEATURES = list(CLUSTER_FEATURE_WEIGHTS) + list(MIX_FEATURE_WEIGHTS)
+
+
+def _attach_mix_profiles(profiles, records):
+    """Set per-cluster pitch-mix profile medians from current-season members.
+
+    Historical pitcher_seasons rows carry no pitch_mix, so mix profile
+    targets come from the seeded current-season assignment (and persist to
+    clusters.json via update_cluster_meta for the next run's cold start)."""
+    by_cluster = defaultdict(lambda: defaultdict(list))
+    for r in records:
+        pm = r.get("pitch_mix")
+        cid = r.get("cluster")
+        if not pm or not cid:
+            continue
+        for feat, val in _mix_feature_values(pm).items():
+            by_cluster[cid][feat].append(val)
+
+    clusters_updated = 0
+    for cid, feats in by_cluster.items():
+        profile = profiles.get(cid)
+        if profile is None:
+            continue
+        touched = False
+        for feat, vals in feats.items():
+            # Fill-only: persisted clusters.json mix targets are the stable
+            # taxonomy anchors — overwriting them from the current seed every
+            # run would ratchet anchors toward whatever EM last decided.
+            if feat not in profile and len(vals) >= 2:
+                profile[feat] = float(np.median(vals))
+                touched = True
+        clusters_updated += 1 if touched else 0
+    print(f"  Mix profiles attached for {clusters_updated} clusters")
+    return clusters_updated
+
+
+def _reassign_current_rows(records, profiles, scales, clusters_meta):
+    """Reassign every current-season row from its stored features."""
+    changed = 0
+    for r in records:
+        if r.get("game_year") != SEASON:
+            continue
+        features = _pitcher_assignment_features(r)
+        cluster, gmm_proba = assign_current_cluster(features, profiles, scales)
+        if cluster != r.get("cluster"):
+            changed += 1
+        r["cluster"] = cluster
+        r["gmm_proba"] = gmm_proba
+        r["archetype"] = _cluster_short_label(cluster, clusters_meta) or "Untyped"
+        profile = profiles.get(cluster, {})
+        for axis in ("pca_x", "pca_y", "pca_z"):
+            v = profile.get(axis)
+            if isinstance(v, (int, float)):
+                r[axis] = v
+    return changed
+
+
+def _anchored_map_em(X, means0, vars0, weights0, anchor=GMM_MEAN_ANCHOR):
+    """Diagonal-covariance GMM fit by MAP EM with a Gaussian prior pinning
+    each component mean to its taxonomy anchor (means0, with `anchor`
+    pseudo-observations). Deterministic — no random init. Returns
+    (means, variances, weights, responsibilities, converged)."""
+    n, d = X.shape
+    k = means0.shape[0]
+    means = means0.copy()
+    variances = np.maximum(vars0.copy(), GMM_REG_COVAR)
+    weights = weights0.copy()
+
+    prev_ll = -np.inf
+    converged = False
+    resp = np.full((n, k), 1.0 / k)
+    for _ in range(GMM_MAX_ITER):
+        # E-step: log responsibilities under diagonal Gaussians
+        log_prob = (
+            -0.5 * (
+                ((X[:, None, :] - means[None, :, :]) ** 2 / variances[None, :, :])
+                + np.log(2 * np.pi * variances[None, :, :])
+            ).sum(axis=2)
+            + np.log(weights)[None, :]
+        )
+        log_norm = np.logaddexp.reduce(log_prob, axis=1)
+        resp = np.exp(log_prob - log_norm[:, None])
+        ll = float(log_norm.mean())
+        if abs(ll - prev_ll) < GMM_TOL:
+            converged = True
+            break
+        prev_ll = ll
+
+        # M-step with MAP mean update: anchor acts as `anchor` extra
+        # observations located at the taxonomy anchor mean.
+        nk = resp.sum(axis=0)
+        weights = (nk + 1.0) / (n + k)
+        means = (resp.T @ X + anchor * means0) / (nk[:, None] + anchor)
+        diff_sq = (X[:, None, :] - means[None, :, :]) ** 2
+        variances = (
+            (resp[:, :, None] * diff_sq).sum(axis=0) / np.maximum(nk[:, None], 1e-9)
+        )
+        variances = np.maximum(variances, GMM_REG_COVAR)
+
+    return means, variances, weights, resp, converged
+
+
+def fit_current_season_gmm(records, profiles, scales, clusters_meta):
+    """Refit the per-hand Gaussian mixture over shape + pitch-mix features.
+
+    True EM refit, anchored to the existing archetype taxonomy: component
+    means initialize at the seeded cluster means with a MAP prior holding
+    them near their anchors, and after EM every fitted component must still
+    sit nearest an anchor carrying the same archetype label — cluster
+    identities cannot silently drift. gmm_proba becomes a genuine mixture
+    posterior (top 3, pitch-family-impossible labels vetoed)."""
+    current = [r for r in records if r.get("game_year") == SEASON]
+    reassigned = 0
+    for hand, prefix in (("RHP", "R_"), ("LHP", "L_")):
+        hand_rows = [
+            r for r in current
+            if ("RHP" if int(r.get("is_rhp", 1) or 0) else "LHP") == hand
+            and r.get("pitch_mix")
+        ]
+        cluster_ids = sorted(cid for cid in clusters_meta if cid.startswith(prefix))
+        if len(hand_rows) < GMM_MIN_FIT_ROWS or len(hand_rows) <= len(cluster_ids):
+            print(f"  GMM {hand}: only {len(hand_rows)} rows — skipping EM refit")
+            continue
+
+        # Standardized feature matrix (shape zeroes are missing-value
+        # sentinels, mirroring _cluster_distance; mix zeroes are real).
+        raw = []
+        for r in hand_rows:
+            feats = _pitcher_assignment_features(r)
+            mix = _mix_feature_values(feats.get("pitch_mix") or {})
+            row = []
+            for col in GMM_FEATURES:
+                if col in CLUSTER_FEATURE_WEIGHTS:
+                    v = feats.get(col)
+                    if not isinstance(v, (int, float)) or pd.isna(v) or v == 0:
+                        v = None
+                else:
+                    v = mix.get(col)
+                row.append(float(v) if v is not None else np.nan)
+            raw.append(row)
+        X = np.array(raw, dtype=float)
+        col_means = np.nanmean(X, axis=0)
+        col_stds = np.nanstd(X, axis=0)
+        col_stds[col_stds <= 0] = 1.0
+        X = np.nan_to_num((X - col_means) / col_stds, nan=0.0)
+
+        # Anchor component means at the STABLE taxonomy profiles (historical
+        # shape medians + persisted mix targets from clusters.json). Using
+        # per-run member means here would let anchors trail the previous EM
+        # output and ratchet boundary rows into dense neighbors over runs.
+        cid_index = {cid: i for i, cid in enumerate(cluster_ids)}
+        member_sums = np.zeros((len(cluster_ids), X.shape[1]))
+        counts = np.zeros(len(cluster_ids))
+        for x, r in zip(X, hand_rows):
+            i = cid_index.get(r.get("cluster"))
+            if i is None:
+                continue
+            member_sums[i] += x
+            counts[i] += 1
+        means_init = np.zeros((len(cluster_ids), X.shape[1]))
+        for i, cid in enumerate(cluster_ids):
+            profile = profiles.get(cid, {})
+            member_mean = member_sums[i] / counts[i] if counts[i] > 0 else None
+            for j, col in enumerate(GMM_FEATURES):
+                pv = profile.get(col)
+                if isinstance(pv, (int, float)) and not pd.isna(pv):
+                    means_init[i, j] = (float(pv) - col_means[j]) / col_stds[j]
+                elif member_mean is not None:
+                    means_init[i, j] = member_mean[j]
+        # Per-component variance init from seed members (global unit var
+        # in standardized space when a cluster is too thin).
+        vars_init = np.ones_like(means_init)
+        for i, cid in enumerate(cluster_ids):
+            member_rows = np.array([
+                x for x, r in zip(X, hand_rows) if r.get("cluster") == cid
+            ])
+            if len(member_rows) >= 5:
+                vars_init[i] = np.maximum(member_rows.var(axis=0), GMM_REG_COVAR)
+        weights_init = (counts + 1.0) / (counts + 1.0).sum()
+
+        means, variances, weights, proba, converged = _anchored_map_em(
+            X, means_init, vars_init, weights_init
+        )
+
+        # Taxonomy anchor check: a fitted component whose mean lands nearest
+        # an anchor with a DIFFERENT archetype label means the mixture
+        # drifted off the intended taxonomy. Fail loudly, never ship.
+        drifted = []
+        for i, cid in enumerate(cluster_ids):
+            dists = np.linalg.norm(means_init - means[i], axis=1)
+            nearest = cluster_ids[int(np.argmin(dists))]
+            if (_cluster_short_label(nearest, clusters_meta)
+                    != _cluster_short_label(cid, clusters_meta)):
+                drifted.append(f"{cid}→{nearest}")
+        if drifted:
+            raise RuntimeError(
+                f"GMM {hand} refit drifted off the archetype taxonomy: {drifted}"
+            )
+        for row_i, r in enumerate(hand_rows):
+            feats = _pitcher_assignment_features(r)
+            dom_label = _dominant_family_label(feats.get("pitch_mix") or {})
+            dom_cids = {
+                cid for cid in cluster_ids
+                if dom_label in (_cluster_short_label(cid, clusters_meta) or "")
+            } if dom_label else set()
+            scored = []
+            for i, cid in enumerate(cluster_ids):
+                profile = profiles.get(cid) or {
+                    "archetype": _cluster_short_label(cid, clusters_meta)
+                }
+                if dom_cids and cid not in dom_cids:
+                    continue  # dominant pitch identity restricts candidates
+                if math.isinf(_pitch_family_penalty(feats, profile)):
+                    continue  # family-impossible label vetoed
+                scored.append((cid, float(proba[row_i, i])))
+            scored.sort(key=lambda item: item[1], reverse=True)
+            top = [(cid, p) for cid, p in scored[:CLUSTER_TOP_N] if p > 1e-6]
+            if not top and scored:
+                # Candidate set survived the vetoes but holds ~zero posterior
+                # mass (dominance-restricted rows) — assign the best of it.
+                top = [(scored[0][0], 1.0)]
+            if not top:
+                continue  # keep the distance-based seed assignment
+            total = sum(p for _, p in top)
+            best = top[0][0]
+            if best != r.get("cluster"):
+                reassigned += 1
+            r["cluster"] = best
+            r["gmm_proba"] = {cid: round(p / total, 4) for cid, p in top}
+            r["archetype"] = _cluster_short_label(best, clusters_meta) or "Untyped"
+            best_profile = profiles.get(best, {})
+            for axis in ("pca_x", "pca_y", "pca_z"):
+                v = best_profile.get(axis)
+                if isinstance(v, (int, float)):
+                    r[axis] = v
+
+        print(
+            f"  GMM {hand}: fit {len(hand_rows)} rows × {X.shape[1]} features, "
+            f"{len(cluster_ids)} components, converged={converged}"
+        )
+
+    print(f"  GMM refit reassigned {reassigned} current-season rows")
+    return reassigned
+
+
+def validate_cluster_label_consistency(records, clusters_meta, strict=True):
+    """Cluster-level guard: a cluster's current-season members must actually
+    throw the pitch family its label claims. Catches a mislabeled
+    clusters.json entry (the R_14 'Uncle Charlie' corruption) before label
+    sync can erase an archetype with it."""
+    by_cluster = defaultdict(list)
+    for r in records:
+        if r.get("game_year") != SEASON or not r.get("pitch_mix"):
+            continue
+        by_cluster[r.get("cluster")].append(r)
+
+    issues = []
+    for cid, rows in sorted(by_cluster.items()):
+        if len(rows) < 3:
+            continue
+        label = _cluster_short_label(cid, clusters_meta) or ""
+        for name, (family, minimum) in PITCH_FAMILY_MINIMUMS.items():
+            if name not in label:
+                continue
+            shares = [_mix_family_share(r["pitch_mix"], family) for r in rows]
+            median = float(np.median(shares))
+            if median < minimum:
+                issues.append(
+                    f"{cid} labeled {label} but median {family} share is "
+                    f"{median:.3f} < {minimum:.2f} across {len(rows)} members"
+                )
+
+    if issues:
+        print(f"  WARN: Cluster label consistency found {len(issues)} issue(s)")
+        for issue in issues:
+            print(f"    - {issue}")
+        if strict:
+            raise RuntimeError("Cluster label consistency validation failed")
+    else:
+        print("  Cluster label consistency passed")
+    return len(issues)
+
+
+def update_cluster_meta(records, clusters_meta):
+    """Regenerate clusters.json profile stats from assigned atlas rows:
+    membership counts, shape medians, and pitch-mix family medians (mix_*).
+    Names, colors, PCA anchors, hand and is_sp stay untouched."""
+    by_cluster = defaultdict(list)
+    for r in records:
+        cid = r.get("cluster")
+        if cid:
+            by_cluster[cid].append(r)
+
+    for cid, meta in clusters_meta.items():
+        rows = by_cluster.get(cid, [])
+        meta["pitcher_count"] = len(rows)
+        for f in ("avg_velo_FF", "whiff_rate", "groundball_rate", "spin_overall"):
+            med = _median_or_none([r.get(f) for r in rows if r.get(f)])
+            if med is not None:
+                meta[f] = round(med, 4)
+        # Mix targets are taxonomy anchors: write once at bootstrap, then
+        # leave them alone so the GMM anchor can't drift run-over-run.
+        mix_rows = [_mix_feature_values(r["pitch_mix"])
+                    for r in rows if r.get("pitch_mix")]
+        for feat in MIX_FEATURE_FAMILIES:
+            if feat in meta:
+                continue
+            vals = [m[feat] for m in mix_rows if feat in m]
+            if len(vals) >= 2:
+                meta[feat] = round(float(np.median(vals)), 4)
+
+    save_atlas("clusters.json", clusters_meta)
+    return len(clusters_meta)
 
 
 # ─── Step 3: Compute hitter-vs-cluster stats for 2026 ───────────────────────
@@ -1032,6 +1458,16 @@ def compute_pitcher_seasons(df, pitcher_idx, cluster_profiles, cluster_scales, c
             "gmm_proba": gmm_proba,
         })
 
+    # Second pass: seed labels above give per-cluster pitch-mix targets, so
+    # reassign with mix-aware distance, then refit the anchored GMM so
+    # gmm_proba is a true mixture posterior over shape + pitch mix.
+    _attach_mix_profiles(cluster_profiles, records)
+    changed_mix = _reassign_current_rows(
+        records, cluster_profiles, cluster_scales, clusters_meta
+    )
+    print(f"  Mix-aware reseed changed {changed_mix} rows")
+    fit_current_season_gmm(records, cluster_profiles, cluster_scales, clusters_meta)
+
     print(f"  Generated {len(records)} pitcher-season records for 2026")
     known = sum(1 for r in records if r["archetype"] != "Untyped")
     print(f"  Known cluster: {known}, Untyped: {len(records) - known}")
@@ -1351,6 +1787,13 @@ def validate_pitcher_archetype_labels(records, strict=True):
                 f'{r.get("player_name", "unknown")} '
                 f'({r.get("cluster", "no_cluster")} {r.get("archetype", "")}): {violation}'
             )
+        dom = _dominant_family_label(r.get("pitch_mix") or {})
+        if dom and dom not in (r.get("archetype") or ""):
+            issues.append(
+                f'{r.get("player_name", "unknown")} '
+                f'({r.get("cluster", "no_cluster")} {r.get("archetype", "")}): '
+                f'dominant pitch family requires {dom} label'
+            )
 
     cutman_family = PITCH_FAMILY_MINIMUMS["Cutman"][0]
     cutman_min = PITCH_FAMILY_MINIMUMS["Cutman"][1]
@@ -1393,43 +1836,39 @@ def sync_existing_pitcher_labels():
     records = load_atlas("pitcher_seasons.json")
     profiles, scales, clusters_meta = build_cluster_assignment_model()
 
-    changed_cluster = 0
-    changed_label = 0
-    examples = []
-    for r in records:
-        if r.get("game_year") != SEASON:
+    # Saved assignments are the seeds — re-running the profile-distance pass
+    # over already-assigned rows would fight the GMM posterior every run and
+    # oscillate boundary rows. Only rows with no cluster get distance-seeded;
+    # everything else goes straight to the anchored EM refit.
+    current = [r for r in records if r.get("game_year") == SEASON]
+    changed_seed = 0
+    for r in current:
+        if r.get("cluster"):
             continue
         features = _pitcher_assignment_features(r)
-        old_cluster = r.get("cluster")
-        old_label = r.get("archetype")
         cluster, gmm_proba = assign_current_cluster(features, profiles, scales)
-        label = _cluster_short_label(cluster, clusters_meta) or "Untyped"
-        if old_cluster != cluster:
-            changed_cluster += 1
-            if len(examples) < 12:
-                examples.append(
-                    f'{r.get("player_name", "unknown")}: '
-                    f'{old_cluster}/{old_label} -> {cluster}/{label}'
-                )
-        if old_label != label:
-            changed_label += 1
         r["cluster"] = cluster
-        r["archetype"] = label
         r["gmm_proba"] = gmm_proba
+        r["archetype"] = _cluster_short_label(cluster, clusters_meta) or "Untyped"
+        changed_seed += 1
+    _attach_mix_profiles(profiles, current)
+    n_refit = fit_current_season_gmm(records, profiles, scales, clusters_meta)
 
+    n_over = _apply_cluster_overrides(records)
     n_sync = _sync_archetype_labels(records, clusters_meta)
     validate_pitcher_archetype_labels(records, strict=True)
+    validate_cluster_label_consistency(records, clusters_meta, strict=True)
+    update_cluster_meta(records, clusters_meta)
     save_atlas("pitcher_seasons.json", records)
     n_tiers = recompute_pitcher_tiers()
 
-    print(f"  Current-year cluster changes: {changed_cluster}")
-    print(f"  Current-year label changes: {changed_label}")
+    print(f"  Unseeded rows distance-assigned: {changed_seed}")
+    print(f"  GMM refit changes: {n_refit}")
+    print(f"  Cluster overrides applied: {n_over}")
     print(f"  Cross-year label syncs: {n_sync}")
     print(f"  Pitcher tiers recomputed: {n_tiers}")
-    for example in examples:
-        print(f"    {example}")
     print("  NOTE: This did not rebuild hitter_vs_cluster. Run full refresh for that.")
-    return changed_cluster, changed_label
+    return changed_seed + n_refit, n_sync
 
 
 def merge_pitcher_seasons(new_records):
@@ -1455,6 +1894,8 @@ def merge_pitcher_seasons(new_records):
     print(f"    Archetype labels synced: {n_sync}")
 
     validate_pitcher_archetype_labels(merged, strict=True)
+    validate_cluster_label_consistency(merged, clusters_meta, strict=True)
+    update_cluster_meta(merged, clusters_meta)
     save_atlas("pitcher_seasons.json", merged)
     return len(new_records)
 
