@@ -593,8 +593,12 @@ def apply_vector_native_runs(games):
         home_delta = clipped_vector_run_delta(g.get("home_woba"), g.get("home_vector_xwoba"))
         away_runs_raw = max(0.1, (g.get("away_runs_raw_base") or 0) + away_delta)
         home_runs_raw = max(0.1, (g.get("home_runs_raw_base") or 0) + home_delta)
-        away_runs_tiered = away_runs_raw * (g.get("home_tier_mult") or 1.0)
-        home_runs_tiered = home_runs_raw * (g.get("away_tier_mult") or 1.0)
+        away_runs_tiered = (
+            away_runs_raw * (g.get("home_tier_mult") or 1.0) * (g.get("home_tto_mult") or 1.0)
+        )
+        home_runs_tiered = (
+            home_runs_raw * (g.get("away_tier_mult") or 1.0) * (g.get("away_tto_mult") or 1.0)
+        )
         park_factor = g.get("park_factor") or 1.0
 
         g["away_woba_base"] = g.get("away_woba")
@@ -1109,6 +1113,173 @@ def bullpen_run_delta(opp_team_id, sp_id):
     delta = bp_ip * (opp_bp["rp_runs_per_ip"] - _LEAGUE_RP_RUNS_PER_IP)
     return round(delta, 2)
 
+
+# ─── Times-through-order / role-transition adjustment ────────────────────────
+# A pitcher's rate stats carry the TTO composition of the role they were
+# earned in. A career reliever's sample is ~all first-look, max-effort
+# innings; when that arm starts, the lineup's 2nd/3rd look and the pacing
+# cost of a starter's workload are unpriced by his SIERA tier and by
+# hitter-vs-cluster history (the Griffin Jax failure). The penalty scales
+# with the COMPOSITION DEFICIT between today's expected TTO2+ exposure and
+# the TTO2+ share of the pitcher's recent sample, so established starters
+# (whose stats already include TTO2/3 innings) are untouched. Judged by
+# scripts/report_calibration.py, not W-L.
+_siera_atlas = _load_atlas_safe("pitcher_siera.json", {})
+_siera_meta_by_pid_year = {}
+for _rec in _siera_atlas.values():
+    if _rec.get("pitcher") and _rec.get("game_year"):
+        # Historical siera rows carry ip but not pa — approximate BF from IP.
+        _ip = float(_rec.get("ip") or 0)
+        _bf = _rec.get("pa") or (_ip * 4.3)
+        _siera_meta_by_pid_year[(int(_rec["pitcher"]), int(_rec["game_year"]))] = (_bf, _ip)
+
+_ps_by_pid_year = {}
+for _r in pitcher_seasons:
+    if _r.get("game_year", 0) >= 2024:
+        _ps_by_pid_year[(int(_r["pitcher"]), int(_r["game_year"]))] = _r
+
+TTO_SEASON = 2026
+TTO_RECENCY_WEIGHT = {2026: 1.5, 2025: 1.0, 2024: 0.6}
+
+
+def _fetch_season_pitching_roles(season):
+    """games/games_started/batters_faced per pitcher from the MLB Stats API.
+    Historical atlas rows can't distinguish a 65-IP reliever from a 65-IP
+    partial-season starter; real GS counts can. Returns {} on any failure
+    (callers fall back to the IP-volume heuristic)."""
+    url = (
+        "https://statsapi.mlb.com/api/v1/stats"
+        f"?stats=season&group=pitching&season={season}&playerPool=ALL&limit=5000"
+    )
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+        out = {}
+        for split in data.get("stats", [{}])[0].get("splits", []):
+            pid = split.get("player", {}).get("id")
+            stat = split.get("stat", {})
+            if not pid:
+                continue
+            out[int(pid)] = {
+                "games": int(stat.get("gamesPitched") or stat.get("games") or 0),
+                "gs": int(stat.get("gamesStarted") or 0),
+                "bf": int(stat.get("battersFaced") or 0),
+            }
+        print(f"  TTO: season {season} pitching roles loaded ({len(out)} pitchers)")
+        return out
+    except Exception as e:
+        print(f"  WARN: TTO role fetch failed for {season} ({e}); using IP heuristic")
+        return {}
+
+
+_season_roles = {yr: _fetch_season_pitching_roles(yr) for yr in (2024, 2025)}
+BF_PER_IP = 4.3
+RELIEF_BF_PER_APP = 4.2
+RP_SAMPLE_TTO2PLUS = 0.04    # TTO2+ share of a relief-only sample
+TTO2PLUS_WOBA_PENALTY = 0.018  # league re-look wOBA inflation vs first look
+RUNS_WOBA_ELASTICITY = 3.1     # relative run change per unit wOBA change
+ROLE_CONVERSION_RUN_MULT = 0.11  # pacing/stuff decay at a full RP→SP deficit
+SP_TTO_MULT_CAP = 1.12
+GAME_BF = 38.0
+
+
+def _expected_tto2plus_share(bf):
+    return max(0.0, bf - 9.0) / bf if bf > 0 else 0.0
+
+
+def sp_role_tto_mult(sp_id):
+    """Multiplier (>= 1.0) on the batting team's runs vs this starter.
+    Returns (multiplier, audit_meta)."""
+    if not sp_id:
+        return 1.0, {}
+    sp_data = _sp_innings.get(str(sp_id), {})
+    sp_avg_ip = sp_data.get("avg_ip_per_start") or _LEAGUE_SP_IP
+    exp_bf = sp_avg_ip * BF_PER_IP
+    exp_share = _expected_tto2plus_share(exp_bf)
+
+    total_w = 0.0
+    share_w = 0.0
+    measured = None
+    for year, recency in TTO_RECENCY_WEIGHT.items():
+        row = _ps_by_pid_year.get((int(sp_id), year))
+        if not row:
+            continue
+        bf, season_ip = _siera_meta_by_pid_year.get((int(sp_id), year)) or (0, 0.0)
+        starts = row.get("starts") or 0
+        apps = row.get("appearances") or 0
+        if year == TTO_SEASON and apps:
+            bf_start = starts * exp_bf
+            bf_relief = max(0, apps - starts) * RELIEF_BF_PER_APP
+            denom = bf_start + bf_relief
+            start_frac = bf_start / denom if denom else float(bool(row.get("is_sp")))
+            if not bf:
+                bf = denom
+        else:
+            role = (_season_roles.get(year) or {}).get(int(sp_id))
+            if role and role.get("games"):
+                # Exact composition from real GS counts: start BF vs relief BF.
+                bf_start = role["gs"] * 24.0
+                bf_relief = max(0, role["games"] - role["gs"]) * RELIEF_BF_PER_APP
+                denom = bf_start + bf_relief
+                start_frac = bf_start / denom if denom else 0.0
+                if role.get("bf"):
+                    bf = role["bf"]
+            else:
+                # Historical is_sp flags are unreliable in the negative
+                # direction (the whole 2025 season is flagged 0), so infer
+                # role from IP volume — modern relievers essentially never
+                # exceed ~85 IP — with a positive is_sp flag as a floor.
+                ip_frac = max(0.0, min(1.0, (season_ip - 65.0) / 55.0))
+                start_frac = max(ip_frac, 0.9 if row.get("is_sp") else 0.0)
+            if not bf:
+                continue
+        # Start innings carry the same TTO composition the pitcher faces
+        # today (career starters net out to zero deficit by construction);
+        # relief innings are ~all first look. Deficit therefore measures the
+        # relief-earned fraction of the sample.
+        season_share = (
+            start_frac * exp_share + (1 - start_frac) * RP_SAMPLE_TTO2PLUS
+        )
+        # Measured per-pitcher TTO splits (written by the atlas refresh) beat
+        # the league-average penalty once the sample is real.
+        tto = row.get("tto") or {}
+        if (
+            year == TTO_SEASON
+            and (tto.get("tto1_pa") or 0) >= 30
+            and (tto.get("tto2plus_pa") or 0) >= 30
+            and tto.get("tto1_woba") is not None
+            and tto.get("tto2plus_woba") is not None
+        ):
+            measured = max(0.0, min(0.06, tto["tto2plus_woba"] - tto["tto1_woba"]))
+        total_w += bf * recency
+        share_w += bf * recency * season_share
+
+    if total_w <= 0:
+        return 1.0, {}
+    sample_share = share_w / total_w
+    deficit = max(0.0, exp_share - sample_share)
+    if deficit < 0.05:
+        return 1.0, {"tto_deficit": round(deficit, 3)}
+
+    recent = recent_pitcher_idx.get(int(sp_id)) or {}
+    mix = recent.get("pitch_mix") or {}
+    active = sum(1 for v in mix.values() if v >= 0.05)
+    arsenal = 1.4 if active and active <= 2 else (1.15 if active == 3 else 1.0)
+
+    woba_pen = measured if measured is not None else TTO2PLUS_WOBA_PENALTY
+    sp_game_frac = min(1.0, exp_bf / GAME_BF)
+    per_sp_inflation = deficit * arsenal * (
+        RUNS_WOBA_ELASTICITY * woba_pen + ROLE_CONVERSION_RUN_MULT
+    )
+    mult = min(1.0 + per_sp_inflation * sp_game_frac, SP_TTO_MULT_CAP)
+    return round(mult, 4), {
+        "tto_deficit": round(deficit, 3),
+        "sample_tto2plus": round(sample_share, 3),
+        "expected_tto2plus": round(exp_share, 3),
+        "arsenal_pitches": active,
+        "measured_tto_woba_delta": measured,
+    }
+
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
 sched = fetch(f"{MLB_API}/schedule?sportId=1&date={TODAY}&hydrate=probablePitcher,lineups,linescore,team,venue")
@@ -1386,6 +1557,11 @@ for g in games_raw:
         home_tier_name = home_tier.get("tier", "T3_Standard")
         home_tier_mult = home_tier.get("effective_multiplier", 1.0)
 
+    # TTO/role-transition multipliers (same convention as tier mults: the
+    # AWAY SP's multiplier scales the HOME team's runs, and vice versa).
+    away_tto_mult, away_tto_meta = sp_role_tto_mult(away_sp_id)
+    home_tto_mult, home_tto_meta = sp_role_tto_mult(home_sp_id)
+
     def process_lineup(lineup_raw, opp_gmm_proba, team_abbr, opp_h2h=None):
         """Process a lineup using GMM-weighted multi-cluster matching.
         opp_gmm_proba: dict of {cluster: probability} from the opposing pitcher's GMM."""
@@ -1595,9 +1771,12 @@ for g in games_raw:
         home_batters, home_runs_raw, home_woba, home_pa = process_lineup(
             home_lineup_raw, away_gmm, home_abbr, home_direct_h2h)
 
-        # Apply tier multipliers (opposing SP's tier scales the batting team's runs)
-        away_runs_tiered = away_runs_raw * home_tier_mult
-        home_runs_tiered = home_runs_raw * away_tier_mult
+        # Apply tier multipliers (opposing SP's tier scales the batting team's
+        # runs) plus the TTO/role-transition multiplier (a converted reliever's
+        # tier and HVC history are first-look samples; re-look exposure is
+        # priced here).
+        away_runs_tiered = away_runs_raw * home_tier_mult * home_tto_mult
+        home_runs_tiered = home_runs_raw * away_tier_mult * away_tto_mult
 
         # Apply bullpen run-delta. The opposing team's bullpen (and their SP's
         # avg innings) determine how much late-inning exposure the batting
@@ -1781,6 +1960,8 @@ for g in games_raw:
         "away_hand": away_hand, "home_hand": home_hand,
         "away_tier": away_tier_name, "home_tier": home_tier_name,
         "away_tier_mult": away_tier_mult, "home_tier_mult": home_tier_mult,
+        "away_tto_mult": away_tto_mult, "home_tto_mult": home_tto_mult,
+        "away_tto_meta": away_tto_meta, "home_tto_meta": home_tto_meta,
         "away_runs": away_runs, "home_runs": home_runs,
         "away_runs_raw_base": away_runs_raw, "home_runs_raw_base": home_runs_raw,
         "away_runs_tiered_base": away_runs_tiered, "home_runs_tiered_base": home_runs_tiered,

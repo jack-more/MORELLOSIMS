@@ -1413,6 +1413,23 @@ def compute_pitcher_seasons(df, pitcher_idx, cluster_profiles, cluster_scales, c
         else:
             arm_angle = prev.get("arm_angle", 0) if prev else 0
 
+        # Times-through-order splits: performance on the lineup's 1st vs 2nd+
+        # look. Powers build_mlb_sim's role-transition adjustment with
+        # measured per-pitcher penalties instead of the league constant.
+        tto_info = {}
+        pa_rows = group[group["events"].notna()]
+        if len(pa_rows) and "at_bat_number" in pa_rows.columns and "game_pk" in pa_rows.columns:
+            pa_rows = pa_rows.sort_values(["game_pk", "at_bat_number"])
+            tto_counts = pa_rows.groupby(["game_pk", "batter"]).cumcount() + 1
+            hit_types = pa_rows["events"].apply(event_to_hit_type)
+            t1_mask = tto_counts == 1
+            tto_info = {
+                "tto1_pa": int(t1_mask.sum()),
+                "tto2plus_pa": int((~t1_mask).sum()),
+                "tto1_woba": compute_woba(hit_types[t1_mask].tolist()),
+                "tto2plus_woba": compute_woba(hit_types[~t1_mask].tolist()),
+            }
+
         features = {
             "is_rhp": is_rhp,
             "is_sp": is_sp,
@@ -1456,6 +1473,7 @@ def compute_pitcher_seasons(df, pitcher_idx, cluster_profiles, cluster_scales, c
             "pfx_x_avg": avg_pfx_x,
             "pfx_z_avg": avg_pfx_z,
             "gmm_proba": gmm_proba,
+            "tto": tto_info,
         })
 
     # Second pass: seed labels above give per-cluster pitch-mix targets, so
