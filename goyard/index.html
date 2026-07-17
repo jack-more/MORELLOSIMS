@@ -3,354 +3,418 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GO-YARD World | MorelloSims</title>
-<meta name="description" content="GO-YARD: the Morello Sims daily home run lotto, rendered as an explorable 3D water world — one island per home-run pick.">
-<meta property="og:title" content="GO-YARD World — Daily Home Run Lotto · Morello Sims">
-<meta property="og:description" content="The daily home run lotto as an explorable 3D water world — one island per home-run pick.">
+<title>GO-YARD | MorelloSims Home Run Lotto</title>
+<meta name="description" content="GO-YARD: the Morello Sims daily home run lotto. Today's launch board — who the model says is most likely to leave the yard, and why.">
+<meta property="og:title" content="GO-YARD — Daily Home Run Lotto · Morello Sims">
+<meta property="og:description" content="Today's launch board: who the model says is most likely to leave the yard, and why.">
 <meta property="og:url" content="https://morellosims.com/goyard/">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://morellosims.com/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@MorelloSims">
-<meta name="twitter:title" content="GO-YARD World — Daily Home Run Lotto · Morello Sims">
-<meta name="twitter:description" content="The daily home run lotto as an explorable 3D water world — one island per home-run pick.">
+<meta name="twitter:title" content="GO-YARD — Daily Home Run Lotto · Morello Sims">
+<meta name="twitter:description" content="Today's launch board: who the model says is most likely to leave the yard, and why.">
 <meta name="twitter:image" content="https://morellosims.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root { --ink:#161513; --cement:#98968f; --paper:#cbcac6; --gold:#b98a1e; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html,body { height:100%; }
-  body { background:var(--cement); font-family:"Helvetica Neue",Arial,sans-serif; overflow:hidden; }
-  #scene { position:fixed; inset:0; }
-  header {
-    position:fixed; top:0; left:0; right:0; z-index:10;
+  :root{
+    --bg:#9E9E9E; --black:#080808; --card:#FFFFFF; --accent:#FFEA00;
+    --meta:#4A4A4A; --red:#FF3333; --green:#00A334;
+    --font-display:'Anton',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--black); font-family:var(--font-body);
+    background-image:radial-gradient(#8a8a8a 1px, transparent 1px);
+    background-size:26px 26px; min-height:100vh;
+  }
+  a{color:inherit}
+
+  /* ── header ── */
+  header{
     display:flex; align-items:center; gap:14px; padding:14px 22px;
-    background:linear-gradient(rgba(22,21,19,.85), rgba(22,21,19,0));
-    pointer-events:none;
+    background:var(--black); border-bottom:3px solid var(--black);
   }
-  header img { width:44px; height:44px; }
-  header .wordmark { color:#f2f0ea; font-weight:900; font-size:20px; letter-spacing:.5px; }
-  header .sub { color:#f5cd0a; font-family:ui-monospace,Menlo,monospace; font-size:11px; letter-spacing:.12em; }
-  header a { margin-left:auto; pointer-events:auto; color:#f2f0ea; text-decoration:none;
-    font-family:ui-monospace,Menlo,monospace; font-size:12px; border:2px solid #f2f0ea;
-    border-radius:8px; padding:6px 12px; background:rgba(22,21,19,.4); }
-  #tags { position:fixed; inset:0; z-index:5; pointer-events:none; }
-  .tag {
-    position:absolute; transform:translate(-50%,-120%); pointer-events:auto; cursor:pointer;
-    background:var(--paper); border:3px solid var(--ink); border-radius:12px;
-    padding:8px 12px 7px; min-width:150px; box-shadow:4px 6px 0 rgba(22,21,19,.35);
-    transition:opacity .2s;
+  .wordmark{
+    font-family:var(--font-display); font-size:30px; letter-spacing:1px; color:var(--accent);
+    background:var(--black); line-height:1; padding-top:2px;
   }
-  .tag .nm { font-weight:900; font-size:14px; color:var(--ink); letter-spacing:.02em; }
-  .tag .vs { font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#524f4a; margin-top:2px; }
-  .tag .lift { position:absolute; top:-16px; right:-14px; background:var(--ink); color:#f5cd0a;
-    font-weight:900; font-size:15px; padding:4px 9px; border-radius:10px; transform:rotate(6deg);
-    box-shadow:2px 3px 0 rgba(22,21,19,.35); }
-  .tag .lane { display:inline-block; margin-top:5px; font-family:ui-monospace,Menlo,monospace;
-    font-size:9px; letter-spacing:.1em; color:#fff; padding:2px 8px; border-radius:6px; }
-  .lane.DAMAGE { background:#a82020; } .lane.SURGE { background:#b06a08; } .lane.PRESSURE { background:#1e549e; }
-  #ticket {
-    position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:10;
-    background:var(--paper); border:3px solid var(--ink); border-radius:14px;
-    padding:10px 22px; display:flex; gap:22px; align-items:center;
-    box-shadow:5px 7px 0 rgba(22,21,19,.35); white-space:nowrap;
+  .wordmark span{color:#fff}
+  .sub{font-family:var(--font-mono); font-size:10px; letter-spacing:.14em; color:#bbb; margin-top:3px}
+  header .right{margin-left:auto; display:flex; gap:10px}
+  .btn{
+    font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:.06em;
+    text-decoration:none; padding:8px 14px; border:2px solid var(--accent);
+    color:var(--black); background:var(--accent); box-shadow:3px 3px 0 #555;
   }
-  #ticket .t { font-weight:900; font-size:15px; color:var(--ink); }
-  #ticket .d { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#524f4a; }
-  #ticket .dots span { display:inline-block; width:9px; height:9px; border-radius:50%; margin-left:5px; border:2px solid var(--ink); }
-  @media (max-width:640px){ #ticket{ gap:12px; padding:8px 14px; } #ticket .d{ display:none; } .tag{ min-width:120px; } }
+  .btn.ghost{background:transparent; color:#fff; border-color:#fff}
+
+  .wrap{max-width:1160px; margin:0 auto; padding:26px 18px 70px}
+
+  /* ── hero strip ── */
+  .hero{display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px}
+  h1{font-family:var(--font-display); font-size:clamp(40px,7vw,72px); line-height:.95; letter-spacing:1px; margin-bottom:10px}
+  h1 .yard{color:#fff; text-shadow:3px 3px 0 var(--black)}
+  .tagline{font-family:var(--font-mono); font-size:12px; color:#333; max-width:44ch; line-height:1.5}
+  .datechip{
+    font-family:var(--font-mono); font-size:12px; font-weight:700; background:var(--black); color:var(--accent);
+    padding:6px 12px; box-shadow:3px 3px 0 #555; white-space:nowrap;
+  }
+
+  /* ── launch map ── */
+  .field-box{
+    background:var(--card); border:3px solid var(--black); box-shadow:8px 8px 0 var(--black);
+    margin-bottom:34px; overflow:hidden; position:relative;
+  }
+  .field-head{
+    display:flex; align-items:center; gap:10px; padding:10px 16px;
+    border-bottom:3px solid var(--black); background:var(--accent);
+  }
+  .field-head .t{font-family:var(--font-display); font-size:20px; letter-spacing:1px}
+  .field-head .s{font-family:var(--font-mono); font-size:10px; color:#333; margin-left:auto; text-align:right}
+  #field{display:block; width:100%; height:auto; background:#f4f2ec}
+  .replay{
+    position:absolute; right:12px; bottom:12px; font-family:var(--font-mono); font-size:11px; font-weight:700;
+    background:var(--black); color:var(--accent); border:0; padding:7px 12px; cursor:pointer; box-shadow:3px 3px 0 rgba(0,0,0,.35);
+  }
+
+  /* ── cards ── */
+  .rowhead{display:flex; align-items:baseline; gap:12px; margin:0 0 12px}
+  .rowhead h2{font-family:var(--font-display); font-size:26px; letter-spacing:1px}
+  .rowhead .s{font-family:var(--font-mono); font-size:11px; color:#333}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:20px; margin-bottom:40px}
+
+  .pick{
+    background:var(--card); border:3px solid var(--black); box-shadow:6px 6px 0 var(--black);
+    position:relative; transition:transform .12s, box-shadow .12s; cursor:pointer;
+  }
+  .pick:hover{transform:translate(-2px,-2px); box-shadow:9px 9px 0 var(--black)}
+  .pick.flash{animation:flash .5s}
+  @keyframes flash{0%{background:var(--accent)}100%{background:var(--card)}}
+  .pick .top{border-bottom:3px solid var(--black); padding:12px 14px 10px; display:flex; gap:10px; align-items:flex-start; border-top:8px solid var(--tc,#333)}
+  .pick .rank{
+    font-family:var(--font-display); font-size:26px; width:40px; height:40px; flex:0 0 40px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--black); color:var(--accent);
+  }
+  .pick .who{min-width:0}
+  .pick .nm{font-family:var(--font-display); font-size:24px; letter-spacing:.5px; line-height:1.02; text-transform:uppercase}
+  .pick .vs{font-family:var(--font-mono); font-size:11px; color:var(--meta); margin-top:3px}
+  .pick .lift{
+    margin-left:auto; text-align:center; background:var(--accent); border:3px solid var(--black);
+    padding:4px 10px 2px; box-shadow:3px 3px 0 var(--black); transform:rotate(3deg); flex:0 0 auto;
+  }
+  .pick .lift .x{font-family:var(--font-display); font-size:28px; line-height:1}
+  .pick .lift .l{font-family:var(--font-mono); font-size:8px; font-weight:700; letter-spacing:.1em}
+  .pick .body{padding:12px 14px 14px}
+  .plain{font-size:13px; line-height:1.45; margin-bottom:12px}
+  .plain b{font-weight:800}
+
+  .meter{margin-bottom:10px}
+  .meter .lab{display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.06em; margin-bottom:3px}
+  .meter .bar{height:14px; border:2px solid var(--black); background:#eee; position:relative}
+  .meter .fill{position:absolute; inset:0; width:0; background:var(--tc,#333); transition:width .8s cubic-bezier(.2,.9,.3,1)}
+  .meter .usual{position:absolute; top:-4px; bottom:-4px; width:3px; background:var(--black)}
+  .meter.today .fill{background:var(--accent); border-right:2px solid var(--black)}
+
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:11px}
+  .chip{font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.05em; border:2px solid var(--black); padding:3px 8px; background:#fff}
+  .chip.lane{color:#fff; border-color:var(--black)}
+  .chip.hot{background:var(--accent)}
+
+  .foot{font-family:var(--font-mono); font-size:10px; color:#333; border-top:2px dashed #999; margin-top:12px; padding-top:8px; display:flex; justify-content:space-between}
+
+  /* watch list */
+  .watch .pick .nm{font-size:19px}
+  .watch .pick .rank{background:#555}
+
+  .disclaimer{font-family:var(--font-mono); font-size:10px; color:#444; text-align:center; margin-top:10px; line-height:1.6}
+  .empty{
+    background:var(--card); border:3px solid var(--black); box-shadow:6px 6px 0 var(--black);
+    padding:38px 20px; text-align:center; font-family:var(--font-mono); font-size:13px;
+  }
+  @media (max-width:640px){
+    header{padding:12px 14px} .wordmark{font-size:24px}
+    .wrap{padding:18px 12px 50px}
+    .grid{grid-template-columns:1fr; gap:14px}
+  }
 </style>
-<script type="importmap">
-{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-</script>
 </head>
 <body>
-<div id="scene"></div>
 <header>
-  <img src="../assets/morello-logo-cutout.png" alt="">
   <div>
-    <div class="wordmark">GO-YARD WORLD</div>
+    <div class="wordmark">GO-<span>YARD</span></div>
     <div class="sub">MORELLO SIMS · HOME RUN LOTTO</div>
   </div>
-  <a href="../mlbsim/">FULL BOARD →</a>
+  <div class="right">
+    <a class="btn ghost" href="../mlbsim/">FULL BOARD →</a>
+  </div>
 </header>
-<div id="tags"></div>
-<div id="ticket">
-  <span class="t">💛 TODAY'S GO-YARD</span>
-  <span class="d" id="tdate">—</span>
-  <span class="dots"><span style="background:#3ac83c"></span><span style="background:#facd0a"></span><span style="background:#f56e14"></span></span>
+
+<div class="wrap">
+  <div class="hero">
+    <div>
+      <h1>TODAY'S <span class="yard">LAUNCH BOARD</span></h1>
+      <div class="tagline">One sim slate. ~290 plate events a game. These are the bats the model says leave the yard today — and exactly why.</div>
+    </div>
+    <div class="datechip" id="tdate">—</div>
+  </div>
+
+  <div class="field-box">
+    <div class="field-head">
+      <span class="t">LAUNCH MAP</span>
+      <span class="s">deeper into the seats = bigger boost vs the hitter's usual HR rate</span>
+    </div>
+    <svg id="field" viewBox="0 0 1000 560" role="img" aria-label="Launch map: each ball is one pick, distance shows model boost"></svg>
+    <button class="replay" id="replay">↻ RE-LAUNCH</button>
+  </div>
+
+  <div class="rowhead"><h2>CORE PICKS</h2><span class="s" id="coresub">tap a card to send one</span></div>
+  <div class="grid" id="core"></div>
+
+  <div id="watchwrap" class="watch" style="display:none">
+    <div class="rowhead"><h2>WATCH LIST</h2><span class="s">on the radar, one lane short of core</span></div>
+    <div class="grid" id="watch"></div>
+  </div>
+
+  <div class="disclaimer">HR LOTTO IS THE FUN TAB. LONGSHOTS MISS MORE THAN THEY HIT — THAT'S WHY THEY PAY.<br>MODEL OUTPUT, NOT ADVICE. SUPPORT: MORELLOSIMS@GMAIL.COM</div>
 </div>
 
-<script type="module">
-import * as THREE from 'three';
+<canvas id="confetti" style="position:fixed;inset:0;pointer-events:none;z-index:50"></canvas>
 
+<script>
 const TEAM_COLORS = {ARI:'#A71930',AZ:'#A71930',ATL:'#CE1141',BAL:'#DF4601',BOS:'#BD3039',CHC:'#0E3386',CIN:'#C6011F',CLE:'#00385D',COL:'#333366',CWS:'#27251F',DET:'#0C2340',HOU:'#002D62',KC:'#004687',LAA:'#BA0021',LAD:'#005A9C',MIA:'#00A3E0',MIL:'#0C2C56',MIN:'#002B5C',NYM:'#002D72',NYY:'#092C5C',OAK:'#003831',ATH:'#003831',PHI:'#E81828',PIT:'#27251F',SD:'#2F241D',SEA:'#0C2C56',SF:'#FD5A1E',STL:'#C41E3A',TB:'#092C5C',TEX:'#003278',TOR:'#134A8E',WSH:'#AB0003',WAS:'#AB0003'};
+const LANE_COLORS = {DAMAGE:'#a82020', SURGE:'#b06a08', PRESSURE:'#1e549e', FORM:'#1e7a3c', H2H:'#5c2d91', STACK:'#8a6d00'};
+const LANE_BLURB = {
+  DAMAGE:'raw power vs this pitcher type',
+  SURGE:'power surging above his baseline',
+  PRESSURE:'lineup pressure piles up runs',
+  FORM:'swinging it hot right now',
+  H2H:'owns this pitcher head-to-head',
+  STACK:'whole lineup smells blood'
+};
+const $ = s => document.querySelector(s);
 
-// ── renderer / scene ────────────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-document.getElementById('scene').appendChild(renderer.domElement);
+function liftOf(p){
+  if (p.hr_rate && p.base_hr_rate) return p.hr_rate / Math.max(p.base_hr_rate, .001);
+  return 1;
+}
+function fmtPct(x){ return (100*(x||0)).toFixed(1) + '%'; }
 
-const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x9fd8e8, 60, 240);
-const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, .1, 500);
-camera.position.set(0, 7.5, 26);
-
-scene.add(new THREE.HemisphereLight(0xeaf6ff, 0x2e8ba8, 1.15));
-const sun = new THREE.DirectionalLight(0xfff3d8, 1.6);
-sun.position.set(30, 42, 18);
-scene.add(sun);
-
-// ── sky dome ────────────────────────────────────────────────────────
-const sky = new THREE.Mesh(
-  new THREE.SphereGeometry(280, 24, 16),
-  new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    uniforms: { top:{value:new THREE.Color(0x3fa7d6)}, bot:{value:new THREE.Color(0xcfeef7)} },
-    vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-    fragmentShader:`varying vec3 vP; uniform vec3 top,bot;
-      void main(){ float h=normalize(vP).y*.5+.5; gl_FragColor=vec4(mix(bot,top,smoothstep(.05,.65,h)),1.);}`
-  }));
-scene.add(sky);
-
-// clouds: soft billboards
-const cloudTex = (() => {
-  const c = document.createElement('canvas'); c.width = c.height = 128;
-  const g = c.getContext('2d');
-  const grad = g.createRadialGradient(64,64,8,64,64,60);
-  grad.addColorStop(0,'rgba(255,255,255,.95)'); grad.addColorStop(1,'rgba(255,255,255,0)');
-  g.fillStyle = grad; g.fillRect(0,0,128,128);
-  return new THREE.CanvasTexture(c);
-})();
-for (let i=0;i<26;i++){
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:cloudTex, transparent:true, opacity:.55+Math.random()*.3, depthWrite:false }));
-  const a = Math.random()*Math.PI*2, r = 90+Math.random()*130;
-  s.position.set(Math.cos(a)*r, 22+Math.random()*30, Math.sin(a)*r);
-  const sc = 24+Math.random()*36; s.scale.set(sc, sc*.42, 1);
-  scene.add(s);
+// ── plain-english line ──
+function plainLine(p, lift){
+  const l = lift.toFixed(1);
+  const lane = (p.lane||'').toUpperCase();
+  const why = LANE_BLURB[lane] || 'the matchup breaks his way';
+  return `Model makes <b>${p.name}</b> about <b>${l}× more likely</b> than his usual to go yard tonight — ${why}.`;
 }
 
-// ── water ───────────────────────────────────────────────────────────
-const waterUniforms = { uTime:{value:0},
-  deep:{value:new THREE.Color(0x0fa3b8)}, shallow:{value:new THREE.Color(0x7fe6e0)},
-  sunDir:{value:sun.position.clone().normalize()} };
-const water = new THREE.Mesh(
-  new THREE.PlaneGeometry(520, 520, 1, 1),
-  new THREE.ShaderMaterial({
-    uniforms: waterUniforms, transparent:false,
-    vertexShader:`varying vec2 vUv; varying vec3 vW;
-      void main(){ vUv=uv*40.; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz;
-        gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader:`
-      varying vec2 vUv; varying vec3 vW;
-      uniform float uTime; uniform vec3 deep, shallow, sunDir;
-      float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-      float noise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
-        return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
-      void main(){
-        vec2 p1 = vUv + vec2(uTime*.06, uTime*.045);
-        vec2 p2 = vUv*1.7 - vec2(uTime*.05, uTime*.033);
-        float n = noise(p1)*.6 + noise(p2)*.4;
-        vec3 col = mix(deep, shallow, smoothstep(.32,.78,n));
-        // caustic-ish bright veins
-        float vein = smoothstep(.48,.5,abs(n-.5));
-        col = mix(col*1.18, col, vein);
-        // view fresnel toward horizon
-        vec3 V = normalize(cameraPosition - vW);
-        float fres = pow(1.-max(V.y,0.), 2.2);
-        col = mix(col, vec3(.78,.93,.97), fres*.55);
-        // sparkles
-        float sp = noise(vUv*7. + uTime*.9);
-        float glint = smoothstep(.985,1.,sp);
-        col += glint*1.2;
-        gl_FragColor = vec4(col,1.);
-      }`
-  }));
-water.rotation.x = -Math.PI/2;
-scene.add(water);
+// ── cards ──
+function heatChip(p){
+  const s = p.streak||0, h5 = p.hit_games_5||0, g5 = p.games_5||0;
+  if (s >= 5) return {t:`🔥 ${s}-GAME HIT STREAK`, hot:true};
+  if (s >= 3) return {t:`${s}-GAME HIT STREAK`, hot:true};
+  if (g5 >= 5 && h5 >= 4) return {t:`HITS IN ${h5} OF LAST 5`, hot:true};
+  return null;
+}
 
-// ── stone pillars ───────────────────────────────────────────────────
-function pillar(x, z, h, r){
-  const geo = new THREE.CylinderGeometry(r*.82, r, h, 9, 6);
-  const pos = geo.attributes.position;
-  for (let i=0;i<pos.count;i++){
-    const y = pos.getY(i);
-    const k = 1 + (Math.sin(y*1.7 + x)*.09) + (Math.random()*.05);
-    pos.setX(i, pos.getX(i)*k); pos.setZ(i, pos.getZ(i)*k);
+function card(p, i, isCore){
+  const lift = liftOf(p);
+  const tc = TEAM_COLORS[p.team] || '#333';
+  const laneU = (p.lane||'').toUpperCase();
+  const laneC = LANE_COLORS[laneU] || '#333';
+  const el = document.createElement('div');
+  el.className = 'pick';
+  el.style.setProperty('--tc', tc);
+  const todayW = Math.min(100, (p.hr_rate||0)/0.20*100);
+  const usualX = Math.min(97, (p.base_hr_rate||0)/0.20*100);
+  const heat = heatChip(p);
+  const parkNote = p.park_factor && p.park_factor >= 1.04 ? `<span class="chip">PARK +${Math.round((p.park_factor-1)*100)}%</span>` :
+                   p.park_factor && p.park_factor <= 0.96 ? `<span class="chip">PARK ${Math.round((p.park_factor-1)*100)}%</span>` : '';
+  const h2h = (p.h2h_pa||0) >= 6 && (p.h2h_hr||0) > 0 ? `<span class="chip">${p.h2h_hr} HR OFF HIM (${p.h2h_pa} PA)</span>` : '';
+  el.innerHTML = `
+    <div class="top">
+      <div class="rank">${isCore ? (i+1) : '·'}</div>
+      <div class="who">
+        <div class="nm">${p.name||'—'}</div>
+        <div class="vs">${p.team||''} · bats #${p.order||'?'} · vs ${p.opp_pitcher||'?'} (${p.opp_team||''})</div>
+      </div>
+      <div class="lift"><div class="x">${lift.toFixed(1)}×</div><div class="l">VS USUAL</div></div>
+    </div>
+    <div class="body">
+      <div class="plain">${plainLine(p, lift)}</div>
+      <div class="meter today">
+        <div class="lab"><span>TONIGHT'S HR CHANCE / AB</span><span>${fmtPct(p.hr_rate)}</span></div>
+        <div class="bar"><div class="fill" data-w="${todayW}"></div><div class="usual" style="left:${usualX}%"></div></div>
+        <div class="lab" style="margin-top:2px"><span></span><span style="color:#666">▲ his usual: ${fmtPct(p.base_hr_rate)}</span></div>
+      </div>
+      <div class="chips">
+        <span class="chip lane" style="background:${laneC}">${laneU||'—'} LANE</span>
+        ${heat ? `<span class="chip ${heat.hot?'hot':''}">${heat.t}</span>` : ''}
+        ${p.season_hr ? `<span class="chip">${p.season_hr} HR THIS SEASON</span>` : ''}
+        ${parkNote}${h2h}
+      </div>
+      <div class="foot"><span>MOMO ${p.momo ?? '—'}${(p.momi&&p.momi!==p.momo)?(' → '+p.momi):''}</span><span>TEAM TOTAL ${p.team_total ?? '—'}</span></div>
+    </div>`;
+  el.addEventListener('click', () => { el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'), 500); boom(el); });
+  return el;
+}
+
+// ── launch map (SVG) ──
+function drawField(picks){
+  const svg = $('#field');
+  svg.innerHTML = '';
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    (parent||svg).appendChild(n); return n;
+  };
+  const HX = 500, HY = 520;         // home plate
+  const WALL = 330, MAXR = 505;     // outfield wall radius, deepest seat
+  const C45 = Math.SQRT1_2;         // foul-line direction (45°)
+
+  // grass + dirt
+  mk('path', {d:`M ${HX} ${HY} L ${HX-WALL*C45} ${HY-WALL*C45} A ${WALL} ${WALL} 0 0 1 ${HX+WALL*C45} ${HY-WALL*C45} Z`, fill:'#7fae63'});
+  // bleachers bands
+  for (let i=0;i<4;i++){
+    const r0 = WALL + 31 + i*40;
+    mk('path', {d:`M ${HX-r0*C45} ${HY-r0*C45} A ${r0} ${r0} 0 0 1 ${HX+r0*C45} ${HY-r0*C45}`,
+      fill:'none', stroke: i%2 ? '#c9c5ba' : '#b7b3a6', 'stroke-width':40});
   }
-  geo.computeVertexNormals();
-  const rock = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color:0xb9a179, roughness:.95, flatShading:true }));
-  rock.position.set(x, h/2 - 1.5, z);
-  const moss = new THREE.Mesh(new THREE.SphereGeometry(r*.95, 8, 5),
-    new THREE.MeshStandardMaterial({ color:0x7fbf4d, roughness:.9, flatShading:true }));
-  moss.scale.y = .38; moss.position.set(x, h - 1.4, z);
-  scene.add(rock, moss);
-}
-pillar(-26, -38, 26, 6); pillar(24, -52, 34, 8); pillar(-44, -70, 40, 10);
-pillar(46, -24, 20, 5);  pillar(8, -88, 46, 12); pillar(-12, -50, 18, 4);
+  // wall
+  mk('path', {d:`M ${HX-WALL*C45} ${HY-WALL*C45} A ${WALL} ${WALL} 0 0 1 ${HX+WALL*C45} ${HY-WALL*C45}`,
+    fill:'none', stroke:'#080808', 'stroke-width':6});
+  // infield diamond + mound
+  mk('path', {d:`M ${HX} ${HY} L ${HX-92} ${HY-92} L ${HX} ${HY-184} L ${HX+92} ${HY-92} Z`, fill:'#c99a5b', stroke:'#080808', 'stroke-width':3});
+  mk('circle', {cx:HX, cy:HY-92, r:16, fill:'#c99a5b', stroke:'#080808', 'stroke-width':3});
+  // foul lines
+  mk('line', {x1:HX, y1:HY, x2:HX-MAXR*C45, y2:HY-MAXR*C45, stroke:'#fff', 'stroke-width':3});
+  mk('line', {x1:HX, y1:HY, x2:HX+MAXR*C45, y2:HY-MAXR*C45, stroke:'#fff', 'stroke-width':3});
 
-// ── creature gliders ────────────────────────────────────────────────
-function makeGlider(hex){
-  const c = new THREE.Color(hex).lerp(new THREE.Color('#ffffff'), .18);
-  const grp = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color:c, roughness:.35, metalness:.05 });
-  const bellyMat = new THREE.MeshStandardMaterial({ color:0xf4f1e8, roughness:.5 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.55, 1.6, 6, 12), bodyMat);
-  body.rotation.z = Math.PI/2;
-  const belly = new THREE.Mesh(new THREE.CapsuleGeometry(.42, 1.4, 6, 12), bellyMat);
-  belly.rotation.z = Math.PI/2; belly.position.y = -.22; belly.scale.set(1,.7,.9);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.5, 14, 12), bodyMat);
-  head.position.x = 1.35; head.scale.set(1.15,.9,.9);
-  const eyeMat = new THREE.MeshBasicMaterial({ color:0x161513 });
-  for (const s of [-1,1]){
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 8), eyeMat);
-    eye.position.set(1.72, .12, s*.28); grp.add(eye);
-  }
-  // swept wings
-  const wingShape = new THREE.Shape();
-  wingShape.moveTo(0,0); wingShape.quadraticCurveTo(1.4,.5,3.1,.2);
-  wingShape.quadraticCurveTo(1.6,-.35,0,-.5); wingShape.lineTo(0,0);
-  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth:.07, bevelEnabled:false });
-  for (const s of [-1,1]){
-    const w = new THREE.Mesh(wingGeo, bodyMat);
-    w.rotation.x = -Math.PI/2; w.rotation.z = s>0 ? -.12 : Math.PI+.12;
-    w.position.set(-.1, .1, 0); w.userData.side = s;
-    grp.add(w);
-  }
-  // tail fin
-  const tail = new THREE.Mesh(new THREE.ConeGeometry(.3, 1.1, 4), bodyMat);
-  tail.rotation.z = Math.PI/2; tail.position.x = -1.5; tail.scale.z = .3;
-  grp.add(body, belly, head, tail);
-  // gold aura ring
-  const aura = new THREE.Mesh(new THREE.TorusGeometry(1.5, .045, 8, 40),
-    new THREE.MeshBasicMaterial({ color:0xf5cd0a, transparent:true, opacity:.8 }));
-  aura.rotation.x = Math.PI/2; grp.add(aura); grp.userData.aura = aura;
-  return grp;
-}
+  if (!picks.length) return;
+  const maxLift = Math.max(...picks.map(liftOf), 2.2);
+  picks.forEach((p, i) => {
+    const lift = liftOf(p);
+    // spray angle: spread across fair territory, ranked center-out
+    const angles = [90, 113, 67, 125, 55, 101, 79];
+    const aDeg = angles[i % angles.length];
+    const a = aDeg * Math.PI/180;
+    // distance: wall + normalized lift into the seats
+    const depth = WALL + 40 + (Math.min(lift,maxLift)/maxLift) * (MAXR - WALL - 70);
+    const x2 = HX + Math.cos(a)*depth, y2 = HY - Math.sin(a)*depth;
+    const tc = TEAM_COLORS[p.team] || '#333';
 
-// sparkle trail
-const trailGeo = new THREE.BufferGeometry();
-const TRAIL_N = 400;
-const trailPos = new Float32Array(TRAIL_N*3).fill(0);
-trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
-const trail = new THREE.Points(trailGeo, new THREE.PointsMaterial({
-  color:0xfff6c0, size:.22, transparent:true, opacity:.9, depthWrite:false }));
-scene.add(trail);
-let trailIdx = 0;
+    // trajectory arc
+    const mx = (HX+x2)/2, my = Math.min(HY - Math.sin(a)*depth*0.72, y2) - 90;
+    const path = mk('path', {d:`M ${HX} ${HY-14} Q ${mx} ${my} ${x2} ${y2}`,
+      fill:'none', stroke:tc, 'stroke-width':3.5, 'stroke-dasharray':'2 7', 'stroke-linecap':'round', opacity:.9});
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = `0 ${len}`;
+    path.animate([{strokeDasharray:`0 ${len}`},{strokeDasharray:`${len} 0`}],
+      {duration:900, delay:350+i*420, fill:'forwards', easing:'cubic-bezier(.3,.6,.4,1)'});
 
-// ripple rings where gliders skim
-const ripples = [];
-function spawnRipple(x, z){
-  const m = new THREE.Mesh(new THREE.RingGeometry(.2,.28,32),
-    new THREE.MeshBasicMaterial({ color:0xeafcff, transparent:true, opacity:.75, side:THREE.DoubleSide, depthWrite:false }));
-  m.rotation.x = -Math.PI/2; m.position.set(x,.06,z);
-  scene.add(m); ripples.push({ m, t:0 });
-}
+    // ball flying along the arc
+    const ball = mk('g', {opacity:0});
+    mk('circle', {cx:0, cy:0, r:9, fill:'#fff', stroke:'#080808','stroke-width':2.5}, ball);
+    mk('path', {d:'M -4 -6 Q 0 0 -4 6 M 4 -6 Q 0 0 4 6', stroke:'#c22', 'stroke-width':1.4, fill:'none'}, ball);
+    ball.animate([{opacity:0},{opacity:1,offset:.01},{opacity:1}], {duration:900, delay:350+i*420, fill:'forwards'});
+    // manual path-follow
+    const t0 = performance.now() + 350 + i*420;
+    (function fly(){
+      const t = (performance.now() - t0) / 900;
+      if (t >= 1){ ball.setAttribute('transform', `translate(${x2} ${y2})`); land(); return; }
+      if (t >= 0){
+        const pt = path.getPointAtLength(len * Math.min(Math.max(t,0),1));
+        ball.setAttribute('transform', `translate(${pt.x} ${pt.y})`);
+      }
+      requestAnimationFrame(fly);
+    })();
 
-// ── load today's picks ──────────────────────────────────────────────
-const FALLBACK = { generated:new Date().toISOString(), core:[
-  {name:'Coby Mayo', team:'BAL', opp_pitcher:'Sam Aldegheri', opp_team:'LAA', lane:'SURGE', hr_rate:.142, base_hr_rate:.039},
-  {name:'JJ Wetherholt', team:'STL', opp_pitcher:'Merrill Kelly', opp_team:'AZ', lane:'DAMAGE', hr_rate:.127, base_hr_rate:.037},
-  {name:'Yordan Alvarez', team:'HOU', opp_pitcher:'Dylan Cease', opp_team:'TOR', lane:'DAMAGE', hr_rate:.110, base_hr_rate:.060},
-]};
-let fliers = [];
-const tagsEl = document.getElementById('tags');
-
-async function loadPicks(){
-  let audit = FALLBACK;
-  try {
-    const r = await fetch('../mlbsim/hr_lotto_audit.json', { cache:'no-store' });
-    if (r.ok) audit = await r.json();
-  } catch(e){}
-  const core = (audit.core || []).slice(0, 5);
-  document.getElementById('tdate').textContent = (audit.generated||'').slice(0,10);
-  core.forEach((p, i) => {
-    const g = makeGlider(TEAM_COLORS[p.team] || '#444');
-    g.scale.setScalar(1.45);
-    scene.add(g);
-    const tag = document.createElement('div');
-    tag.className = 'tag';
-    const lift = (p.hr_rate / Math.max(p.base_hr_rate||.001,.001));
-    tag.innerHTML = `<div class="lift">${lift.toFixed(1)}×</div>
-      <div class="nm">${p.name.toUpperCase()}</div>
-      <div class="vs">${p.team} vs ${p.opp_pitcher} (${p.opp_team})</div>
-      <span class="lane ${p.lane||'DAMAGE'}">${p.lane||'DAMAGE'}</span>`;
-    tagsEl.appendChild(tag);
-    fliers.push({ g, tag, seed: i*2.4 + .6, r: 8 + i*3.4, speed: .16 - .018*i, h: 2.1 + (i%3)*1.5 });
+    function land(){
+      const burst = mk('g', {transform:`translate(${x2} ${y2})`});
+      for (let s=0;s<8;s++){
+        const ba = s/8*Math.PI*2;
+        const ln = mk('line', {x1:0,y1:0,x2:Math.cos(ba)*20,y2:Math.sin(ba)*20, stroke:'#FFEA00','stroke-width':4,'stroke-linecap':'round'});
+        burst.appendChild(ln);
+        ln.animate([{opacity:1, transform:'scale(.2)'},{opacity:0, transform:'scale(1.4)'}], {duration:520, fill:'forwards'});
+      }
+      // number badge
+      const badge = mk('g', {transform:`translate(${x2} ${y2})`, style:'cursor:pointer'});
+      mk('circle', {cx:0, cy:0, r:15, fill:'#080808'}, badge);
+      mk('circle', {cx:0, cy:0, r:15, fill:'none', stroke:tc, 'stroke-width':3.5}, badge);
+      const tx2 = mk('text', {x:0, y:5.5, 'text-anchor':'middle', fill:'#FFEA00',
+        style:'font-family:Anton,sans-serif;font-size:16px'}, badge);
+      tx2.textContent = i+1;
+      const label = mk('text', {x:0, y:-24, 'text-anchor':'middle', fill:'#080808',
+        style:`font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;paint-order:stroke;stroke:#f4f2ec;stroke-width:4px`}, badge);
+      label.textContent = `${(p.name||'').split(' ').slice(-1)[0].toUpperCase()} ${lift.toFixed(1)}×`;
+      badge.addEventListener('click', () => {
+        const el = document.querySelectorAll('#core .pick')[i];
+        if (el){ el.scrollIntoView({behavior:'smooth', block:'center'}); el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),600); }
+      });
+      badge.animate([{opacity:0},{opacity:1}], {duration:250, fill:'forwards'});
+    }
   });
 }
-loadPicks();
 
-// ── animate ─────────────────────────────────────────────────────────
-const clock = new THREE.Clock();
-let camA = 0;
-addEventListener('resize', () => {
-  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-let dragX = 0, down = null;
-addEventListener('pointerdown', e => down = e.clientX);
-addEventListener('pointermove', e => { if (down!==null){ dragX += (e.clientX-down)*.0022; down = e.clientX; } });
-addEventListener('pointerup', () => down = null);
-
-function tick(){
-  const t = clock.getElapsedTime();
-  waterUniforms.uTime.value = t;
-
-  camA += .0006 + (dragX - camA)*.02;
-  camera.position.x = Math.sin(camA)*26;
-  camera.position.z = Math.cos(camA)*26;
-  camera.position.y = 7.5 + Math.sin(t*.3)*.5;
-  camera.lookAt(0, 2.5, -6);
-
-  for (const f of fliers){
-    const a = t*f.speed + f.seed;
-    const x = Math.sin(a)*f.r, z = Math.cos(a*.83)*f.r - 8;
-    const y = f.h + Math.sin(t*1.1 + f.seed)*0.9;
-    const prev = f.g.position.clone();
-    f.g.position.set(x, y, z);
-    const dir = f.g.position.clone().sub(prev);
-    if (dir.lengthSq() > 1e-6){
-      f.g.lookAt(f.g.position.clone().add(dir));
-      f.g.rotateY(-Math.PI/2);
-      f.g.rotation.z = THREE.MathUtils.clamp(-dir.x*2.2, -.5, .5); // bank
-    }
-    f.g.userData.aura.rotation.z = t*1.4;
-    f.g.userData.aura.scale.setScalar(1 + Math.sin(t*2.4 + f.seed)*.06);
-    // wing flap
-    f.g.children.forEach(ch => { if (ch.userData.side)
-      ch.rotation.y = ch.userData.side * Math.sin(t*5 + f.seed)*.18; });
-    // trail
-    trailPos[trailIdx*3] = x - dir.x*3; trailPos[trailIdx*3+1] = y + .2; trailPos[trailIdx*3+2] = z - dir.z*3;
-    trailIdx = (trailIdx+1) % TRAIL_N;
-    // skim ripples
-    if (y < 1.7 && Math.random() < .12) spawnRipple(x, z);
-    // project tag to screen
-    const v = f.g.position.clone(); v.y += 1.6; v.project(camera);
-    if (v.z < 1){
-      const dist = camera.position.distanceTo(f.g.position);
-      const s = THREE.MathUtils.clamp(30/dist, .55, 1.05);
-      f.tag.style.left = ((v.x*.5+.5)*innerWidth) + 'px';
-      f.tag.style.top = ((-v.y*.5+.5)*innerHeight) + 'px';
-      f.tag.style.transform = `translate(-50%,-120%) scale(${s.toFixed(2)})`;
-      f.tag.style.opacity = 1;
-      f.tag.style.zIndex = Math.round(1000 - dist);
-    } else f.tag.style.opacity = 0;
+// ── confetti ──
+const cv = $('#confetti'), cx2 = cv.getContext('2d');
+let confetti = [];
+function sizeCanvas(){ cv.width = innerWidth; cv.height = innerHeight; }
+sizeCanvas(); addEventListener('resize', sizeCanvas);
+function boom(el){
+  const r = el.getBoundingClientRect();
+  const ox = r.left + r.width/2, oy = r.top + 40;
+  const cols = ['#FFEA00','#080808','#fff','#FF3333','#00A334'];
+  for (let i=0;i<70;i++){
+    confetti.push({x:ox, y:oy, vx:(Math.random()-.5)*11, vy:-4-Math.random()*7,
+      s:4+Math.random()*5, c:cols[i%cols.length], a:Math.random()*Math.PI, va:(Math.random()-.5)*.3, life:1});
   }
-  trailGeo.attributes.position.needsUpdate = true;
-
-  for (let i=ripples.length-1;i>=0;i--){
-    const r = ripples[i]; r.t += .016;
-    r.m.scale.setScalar(1 + r.t*6);
-    r.m.material.opacity = .75*(1 - r.t/1.1);
-    if (r.t > 1.1){ scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); ripples.splice(i,1); }
-  }
-
-  renderer.render(scene, camera);
-  requestAnimationFrame(tick);
 }
-tick();
+(function tickConfetti(){
+  cx2.clearRect(0,0,cv.width,cv.height);
+  confetti = confetti.filter(p => p.life > 0);
+  for (const p of confetti){
+    p.x += p.vx; p.y += p.vy; p.vy += .28; p.a += p.va; p.life -= .012;
+    cx2.save(); cx2.translate(p.x,p.y); cx2.rotate(p.a); cx2.globalAlpha = Math.max(p.life,0);
+    cx2.fillStyle = p.c; cx2.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6); cx2.restore();
+  }
+  requestAnimationFrame(tickConfetti);
+})();
+
+// ── load ──
+let corePicks = [];
+async function load(){
+  let audit = null;
+  try {
+    const r = await fetch('../mlbsim/hr_lotto_audit.json', {cache:'no-store'});
+    if (r.ok) audit = await r.json();
+  } catch(e){}
+  if (!audit || !(audit.core||[]).length){
+    $('#tdate').textContent = 'NO SLATE YET';
+    $('#core').innerHTML = '<div class="empty">No launch board yet — lineups have not posted.<br>Check back closer to first pitch. ⚾</div>';
+    document.querySelector('.field-box').style.display = 'none';
+    return;
+  }
+  $('#tdate').textContent = (audit.generated||'').slice(0,10);
+  corePicks = (audit.core||[]).slice(0,7);
+  const coreEl = $('#core');
+  corePicks.forEach((p,i) => coreEl.appendChild(card(p, i, true)));
+  const watch = (audit.watch||[]).slice(0,6);
+  if (watch.length){
+    $('#watchwrap').style.display = '';
+    watch.forEach((p,i) => $('#watch').appendChild(card(p, i, false)));
+  }
+  drawField(corePicks);
+  // animate meters in
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.meter .fill').forEach(f => { f.style.width = f.dataset.w + '%'; });
+  });
+}
+$('#replay').addEventListener('click', () => drawField(corePicks));
+load();
 </script>
 </body>
 </html>
