@@ -4,16 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GO-YARD | MorelloSims Home Run Lotto</title>
-<meta name="description" content="GO-YARD: the Morello Sims daily home run lotto. Today's launch board — who the model says is most likely to leave the yard, and why.">
-<meta property="og:title" content="GO-YARD — Daily Home Run Lotto · Morello Sims">
-<meta property="og:description" content="Today's launch board: who the model says is most likely to leave the yard, and why.">
+<meta name="description" content="GO-YARD — the Morello Sims daily home run board, ranked by matchup lift.">
+<meta property="og:title" content="GO-YARD — Daily Home Run Board · Morello Sims">
+<meta property="og:description" content="The daily home run board, ranked by matchup lift.">
 <meta property="og:url" content="https://morellosims.com/goyard/">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://morellosims.com/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@MorelloSims">
-<meta name="twitter:title" content="GO-YARD — Daily Home Run Lotto · Morello Sims">
-<meta name="twitter:description" content="Today's launch board: who the model says is most likely to leave the yard, and why.">
+<meta name="twitter:title" content="GO-YARD — Daily Home Run Board · Morello Sims">
+<meta name="twitter:description" content="The daily home run board, ranked by matchup lift.">
 <meta name="twitter:image" content="https://morellosims.com/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -156,7 +156,7 @@
   <div class="hero">
     <div>
       <h1>TODAY'S <span class="yard">LAUNCH BOARD</span></h1>
-      <div class="tagline">One sim slate. ~290 plate events a game. These are the bats the model says leave the yard today — and exactly why.</div>
+      <div class="tagline">The daily home run board, ranked by matchup lift over each hitter's usual rate.</div>
     </div>
     <div class="datechip" id="tdate">—</div>
   </div>
@@ -164,21 +164,21 @@
   <div class="field-box">
     <div class="field-head">
       <span class="t">LAUNCH MAP</span>
-      <span class="s">deeper into the seats = bigger boost vs the hitter's usual HR rate</span>
+      <span class="s">deeper into the seats = bigger lift</span>
     </div>
     <svg id="field" viewBox="0 0 1000 560" role="img" aria-label="Launch map: each ball is one pick, distance shows model boost"></svg>
     <button class="replay" id="replay">↻ RE-LAUNCH</button>
   </div>
 
-  <div class="rowhead"><h2>CORE PICKS</h2><span class="s" id="coresub">tap a card to send one</span></div>
+  <div class="rowhead"><h2>CORE PICKS</h2></div>
   <div class="grid" id="core"></div>
 
   <div id="watchwrap" class="watch" style="display:none">
-    <div class="rowhead"><h2>WATCH LIST</h2><span class="s">on the radar, one lane short of core</span></div>
+    <div class="rowhead"><h2>WATCH LIST</h2></div>
     <div class="grid" id="watch"></div>
   </div>
 
-  <div class="disclaimer">HR LOTTO IS THE FUN TAB. LONGSHOTS MISS MORE THAN THEY HIT — THAT'S WHY THEY PAY.<br>MODEL OUTPUT, NOT ADVICE. SUPPORT: MORELLOSIMS@GMAIL.COM</div>
+  <div class="disclaimer">MODEL OUTPUT, NOT BETTING ADVICE · MORELLOSIMS@GMAIL.COM</div>
 </div>
 
 <canvas id="confetti" style="position:fixed;inset:0;pointer-events:none;z-index:50"></canvas>
@@ -186,14 +186,6 @@
 <script>
 const TEAM_COLORS = {ARI:'#A71930',AZ:'#A71930',ATL:'#CE1141',BAL:'#DF4601',BOS:'#BD3039',CHC:'#0E3386',CIN:'#C6011F',CLE:'#00385D',COL:'#333366',CWS:'#27251F',DET:'#0C2340',HOU:'#002D62',KC:'#004687',LAA:'#BA0021',LAD:'#005A9C',MIA:'#00A3E0',MIL:'#0C2C56',MIN:'#002B5C',NYM:'#002D72',NYY:'#092C5C',OAK:'#003831',ATH:'#003831',PHI:'#E81828',PIT:'#27251F',SD:'#2F241D',SEA:'#0C2C56',SF:'#FD5A1E',STL:'#C41E3A',TB:'#092C5C',TEX:'#003278',TOR:'#134A8E',WSH:'#AB0003',WAS:'#AB0003'};
 const LANE_COLORS = {DAMAGE:'#a82020', SURGE:'#b06a08', PRESSURE:'#1e549e', FORM:'#1e7a3c', H2H:'#5c2d91', STACK:'#8a6d00'};
-const LANE_BLURB = {
-  DAMAGE:'raw power vs this pitcher type',
-  SURGE:'power surging above his baseline',
-  PRESSURE:'lineup pressure piles up runs',
-  FORM:'swinging it hot right now',
-  H2H:'owns this pitcher head-to-head',
-  STACK:'whole lineup smells blood'
-};
 const $ = s => document.querySelector(s);
 
 function liftOf(p){
@@ -201,14 +193,6 @@ function liftOf(p){
   return 1;
 }
 function fmtPct(x){ return (100*(x||0)).toFixed(1) + '%'; }
-
-// ── plain-english line ──
-function plainLine(p, lift){
-  const l = lift.toFixed(1);
-  const lane = (p.lane||'').toUpperCase();
-  const why = LANE_BLURB[lane] || 'the matchup breaks his way';
-  return `Model makes <b>${p.name}</b> about <b>${l}× more likely</b> than his usual to go yard tonight — ${why}.`;
-}
 
 // ── cards ──
 function heatChip(p){
@@ -243,7 +227,6 @@ function card(p, i, isCore){
       <div class="lift"><div class="x">${lift.toFixed(1)}×</div><div class="l">VS USUAL</div></div>
     </div>
     <div class="body">
-      <div class="plain">${plainLine(p, lift)}</div>
       <div class="meter today">
         <div class="lab"><span>TONIGHT'S HR CHANCE / AB</span><span>${fmtPct(p.hr_rate)}</span></div>
         <div class="bar"><div class="fill" data-w="${todayW}"></div><div class="usual" style="left:${usualX}%"></div></div>
@@ -394,7 +377,7 @@ async function load(){
   } catch(e){}
   if (!audit || !(audit.core||[]).length){
     $('#tdate').textContent = 'NO SLATE YET';
-    $('#core').innerHTML = '<div class="empty">No launch board yet — lineups have not posted.<br>Check back closer to first pitch. ⚾</div>';
+    $('#core').innerHTML = '<div class="empty">No board yet — lineups have not posted.</div>';
     document.querySelector('.field-box').style.display = 'none';
     return;
   }
