@@ -10,6 +10,7 @@ from mlb_momo import matchup_swing_to_momo, momentum_to_momi
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HTML_PATH = REPO_ROOT / "mlbsim" / "index.html"
 SIM_SCRIPT_PATH = REPO_ROOT / "scripts" / "build_mlb_sim.py"
+GATES_SCRIPT_PATH = REPO_ROOT / "scripts" / "mlb_model_gates.py"
 REFRESH_SCRIPT_PATH = REPO_ROOT / "scripts" / "refresh_atlas_2026.py"
 VERIFY_SCRIPT_PATH = REPO_ROOT / "scripts" / "verify_mlb_publish.py"
 MLB_PIPELINE_PATH = REPO_ROOT / ".github" / "workflows" / "mlb-pipeline.yml"
@@ -281,7 +282,9 @@ def check_hr_lotto_guardrails():
 
 def check_mlb_pick_gate_guardrails():
     errors = []
-    source = SIM_SCRIPT_PATH.read_text()
+    # Gate/staking config was extracted from build_mlb_sim.py into
+    # mlb_model_gates.py (V2 relaunch); scan both sources.
+    source = SIM_SCRIPT_PATH.read_text() + GATES_SCRIPT_PATH.read_text()
 
     expected_hard_caps = {
         8: -180,
