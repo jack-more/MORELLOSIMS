@@ -2153,15 +2153,26 @@ def load_locked_hr_lotto_column():
     if not generated or generated.group(1) != TODAY:
         return ""
     start_marker = '<div class="daily-col daily-center daily-hr-lotto">'
-    end_marker = '<div class="daily-col daily-side daily-hot-side">'
+    # The locked column ends where the side stack begins. The old end marker
+    # (daily-hot-side) sits INSIDE the side stack, so slicing to it dragged
+    # an unclosed <div class="daily-side-stack"> plus a duplicate picks
+    # column into every same-day rebuild, nesting the info tab inside the
+    # daily tab and killing tab switching site-wide.
+    end_marker = '<div class="daily-side-stack">'
     start = html.find(start_marker)
     if start < 0:
         return ""
     end = html.find(end_marker, start)
     if end < 0:
+        end = html.find('<div class="daily-col daily-side daily-hot-side">', start)
+    if end < 0:
         return ""
     snippet = html[start:end].rstrip()
     if "hr-name" not in snippet:
+        return ""
+    # Never ship a structurally unbalanced snippet — reselect instead.
+    if len(_re.findall(r"<div\b", snippet)) != snippet.count("</div>"):
+        print("  HR Go-Yard: locked card snippet unbalanced, reselecting")
         return ""
     snippet_lower = snippet.lower()
     if any(name in snippet_lower for name in HR_REPEAT_BLOCKLIST):
@@ -3730,7 +3741,7 @@ css_start = CSS.find("<style>")
 css_end = CSS.find("</style>") + len("</style>")
 css_block = CSS[css_start:css_end] if css_start >= 0 else ""
 css_block = re.sub(
-    r"\n/\* (DAILY_HR_GOYARD_HIERARCHY|GO_YARD_PUBLIC_COPY_FIX|GO_YARD_HR_EXPLAINER)_V\d+ \*/.*?(?=\n/\* [A-Z0-9_]+|\n</style>)",
+    r"\n/\* (DAILY_HR_GOYARD_HIERARCHY|GO_YARD_PUBLIC_COPY_FIX|GO_YARD_HR_EXPLAINER|LINES_BOARD_GRID)_V\d+ \*/.*?(?=\n/\* [A-Z0-9_]+|\n</style>)",
     "",
     css_block,
     flags=re.S,
@@ -3919,18 +3930,20 @@ if "DAILY_HR_FUN_NAV_V1" not in css_block:
     css_block = css_block.replace("</style>", DAILY_HR_FUN_NAV_CSS + "\n</style>")
 
 LINES_BOARD_CSS = """
-/* LINES_BOARD_GRID_V1 */
+/* LINES_BOARD_GRID_V2 */
+/* Scoped to .active — an unconditional #tab-lines display rule outranks the
+   .tab-content show/hide classes and pins the Lines board over other tabs. */
 @media(min-width:1000px){
-  #tab-lines{position:relative;left:50%;transform:translateX(-50%);width:96vw;max-width:1200px;
+  #tab-lines.active{position:relative;left:50%;transform:translateX(-50%);width:96vw;max-width:1200px;
     display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
   #tab-lines>.chips,#tab-lines>.slate-info{grid-column:1/-1;margin:0}
   #tab-lines>.game-card{margin-bottom:0}
 }
 @media(min-width:1640px){
-  #tab-lines{max-width:1780px;grid-template-columns:repeat(3,minmax(0,1fr))}
+  #tab-lines.active{max-width:1780px;grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 """
-if "LINES_BOARD_GRID_V1" not in css_block:
+if "LINES_BOARD_GRID_V2" not in css_block:
     css_block = css_block.replace("</style>", LINES_BOARD_CSS + "\n</style>")
 
 DAILY_HR_RESULTS_TRAY_CSS = """

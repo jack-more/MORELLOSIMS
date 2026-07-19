@@ -277,6 +277,26 @@ def check_hr_lotto_guardrails():
     if hr_rows and not all(marker in html for marker in ("POW ", "LIFT ", "RUN ")):
         errors.append("Rendered HR rows exist but do not show power/lift/context proof")
 
+    # Structural integrity: each tab must be a sibling, not nested inside the
+    # previous one. An unbalanced div in one tab silently swallows the next
+    # (the daily-tab lock-snippet bug) and kills tab switching site-wide.
+    tab_ids = re.findall(r'<div class="tab-content[^"]*" id="(tab-[a-z]+)">', html)
+    for a, b in zip(tab_ids, tab_ids[1:]):
+        seg_start = html.find(f'id="{a}"')
+        seg_end = html.find(f'id="{b}"')
+        if seg_start < 0 or seg_end < 0:
+            continue
+        # Segment: from tab A's opening <div to just BEFORE tab B's opening
+        # <div (the id attribute sits inside B's tag, so slicing at the id
+        # would count B's opener and misreport +1 on a well-formed page).
+        seg = html[html.rfind("<div", 0, seg_start):html.rfind("<div", 0, seg_end)]
+        depth = len(re.findall(r"<div\b", seg)) - seg.count("</div>")
+        if depth != 0:
+            errors.append(
+                f"Tab {a} has {depth:+d} unclosed div(s) before {b} — "
+                f"tab nesting is broken"
+            )
+
     return errors
 
 
