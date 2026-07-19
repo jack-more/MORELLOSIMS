@@ -115,7 +115,6 @@
     if (path.startsWith('/mlbsim')) return 'mlbsim';
     if (path.startsWith('/nbasim')) return 'nbasim';
     if (path.startsWith('/goyard')) return 'goyard';
-    if (path.startsWith('/fantasy')) return 'fantasy';
     // Legacy detection for old URLs / local dev
     if (path.includes('cosmos.html') || path.includes('cosmos')) return 'atlas';
     if (path.includes('mlbsim.html')) return 'mlbsim';
@@ -389,8 +388,7 @@
       { label: 'NBA',     path: '/nbasim/',  color: '#00FF55', page: 'nbasim' },
       { label: 'MLB',     path: '/mlbsim/',  color: '#FFEA00', page: 'mlbsim' },
       { label: 'ATLAS',   path: '/atlas/',   color: '#FF6B00', page: 'atlas' },
-      { label: 'GOYARD',  path: '/goyard/',  color: '#00CFFF', page: 'goyard' },
-      { label: 'FANTASY', path: '/fantasy/', color: '#B266FF', page: 'fantasy' }
+      { label: 'GOYARD',  path: '/goyard/',  color: '#00CFFF', page: 'goyard' }
     ];
 
     sites.forEach(site => {
