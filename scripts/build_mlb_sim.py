@@ -3687,8 +3687,9 @@ def render_hr_watch_tab():
 
     return f'''<div class="tab-content" id="tab-daily">
         <div class="daily-hero-line">
-            <div class="section-title">GO-YARD BOARD</div>
+            <div class="section-title">HR BOARD</div>
             <div class="section-sub">{DATE_SHORT} \u00b7 {games_with_lu} games with lineups</div>
+            <a href="/goyard/" style="margin-left:auto;align-self:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.06em;text-decoration:none;background:#080808;color:#FFEA00;border:2px solid #080808;padding:8px 14px;box-shadow:3px 3px 0 rgba(0,0,0,.35);white-space:nowrap">GO-YARD \u2192</a>
         </div>
         {no_data}
         <div class="daily-grid daily-grid-lotto">
@@ -4130,7 +4131,7 @@ html = f'''<!DOCTYPE html>
 <div class="filter-bar">
     <div class="filter-bar-inner">
         <button class="filter-btn active" data-tab="lines">Lines</button>
-        <button class="filter-btn" data-tab="daily">Go-Yard</button>
+        <button class="filter-btn" data-tab="daily">HR Board</button>
         <button class="filter-btn" data-tab="info">Info</button>
     </div>
 </div>
@@ -4234,7 +4235,7 @@ O/U Total = Home Runs + Away Runs</div>
     </button>
     <button class="nav-btn" data-tab="daily">
         <span class="nav-icon">\U0001f4a3</span>
-        <span>GO-YARD</span>
+        <span>HR BOARD</span>
     </button>
     <button class="nav-btn" data-tab="info">
         <span class="nav-icon">\u2139\ufe0f</span>
