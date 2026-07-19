@@ -3875,6 +3875,21 @@ DAILY_HR_FUN_NAV_CSS = """
 if "DAILY_HR_FUN_NAV_V1" not in css_block:
     css_block = css_block.replace("</style>", DAILY_HR_FUN_NAV_CSS + "\n</style>")
 
+LINES_BOARD_CSS = """
+/* LINES_BOARD_GRID_V1 */
+@media(min-width:1000px){
+  #tab-lines{position:relative;left:50%;transform:translateX(-50%);width:96vw;max-width:1200px;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+  #tab-lines>.chips,#tab-lines>.slate-info{grid-column:1/-1;margin:0}
+  #tab-lines>.game-card{margin-bottom:0}
+}
+@media(min-width:1640px){
+  #tab-lines{max-width:1780px;grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+"""
+if "LINES_BOARD_GRID_V1" not in css_block:
+    css_block = css_block.replace("</style>", LINES_BOARD_CSS + "\n</style>")
+
 DAILY_HR_RESULTS_TRAY_CSS = """
 /* DAILY_HR_RESULTS_TRAY_V1 */
 .hr-results-panel{margin:-8px 0 22px;background:#fff;border:2px solid #111;box-shadow:4px 4px 0 #111;overflow:hidden}
