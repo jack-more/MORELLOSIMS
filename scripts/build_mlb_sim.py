@@ -696,11 +696,19 @@ def team_key_variants(abbr):
             variants.append(value)
     return variants
 
-def lookup_game_odds(odds_map, away_abbr, home_abbr):
-    """Find a game's real-book odds across known team abbreviation variants."""
+def lookup_game_odds(odds_map, away_abbr, home_abbr, game_number=1):
+    """Find a game's real-book odds across known team abbreviation variants.
+
+    Doubleheader game 2+ only matches an explicitly game-indexed line
+    ((away, home, N)); it never falls back to the base pair, which is
+    game 1's price."""
     for away_key in team_key_variants(away_abbr):
         for home_key in team_key_variants(home_abbr):
-            game_odds = odds_map.get((away_key, home_key))
+            key = (
+                (away_key, home_key) if game_number <= 1
+                else (away_key, home_key, game_number)
+            )
+            game_odds = odds_map.get(key)
             if game_odds:
                 return game_odds
     return {}
@@ -905,6 +913,7 @@ def _fetch_action_network_odds():
         return {}
 
     result = {}
+    pair_entries = {}
     for g in data.get("games", []):
         teams = g.get("teams") or []
         if len(teams) != 2:
@@ -937,12 +946,22 @@ def _fetch_action_network_odds():
                     "home_ml": int(h_ml),
                 })
         if books:
-            result[(away, home)] = {
+            pair_entries.setdefault((away, home), []).append({
                 "away_ml": books[0]["away_ml"],
                 "home_ml": books[0]["home_ml"],
                 "book": books[0]["book"],
                 "all_books": books,
-            }
+                "start_time": g.get("start_time") or "",
+            })
+
+    # Doubleheaders: the same team pair appears twice with distinct lines.
+    # Earliest start owns the base key (game 1); later games get
+    # (away, home, N) so game 2 can never silently inherit game 1's price.
+    for pair, entries in pair_entries.items():
+        entries.sort(key=lambda e: e.get("start_time") or "")
+        for i, entry in enumerate(entries):
+            entry.pop("start_time", None)
+            result[pair if i == 0 else pair + (i + 1,)] = entry
     return result
 
 
@@ -956,6 +975,7 @@ def _fetch_espn_scoreboard_odds(date_str):
         with urllib.request.urlopen(url, timeout=12) as r:
             data = json.loads(r.read())
         result = {}
+        pair_entries = {}
         for ev in data.get('events', []):
             comp = ev.get('competitions', [{}])[0]
             ha_map = {}
@@ -974,12 +994,20 @@ def _fetch_espn_scoreboard_odds(date_str):
                 # derivation, no model fallback. If the book hasn't posted
                 # ML yet, this game is excluded — better than fake numbers.
                 if home_ml is not None and away_ml is not None:
-                    result[(away, home)] = {
+                    pair_entries.setdefault((away, home), []).append({
                         "away_ml": int(away_ml),
                         "home_ml": int(home_ml),
                         "book": (o.get('provider') or {}).get('name', 'ESPN'),
-                    }
+                        "start_time": ev.get('date') or "",
+                    })
                     break
+        # Doubleheaders: earliest start owns the base key; later games get
+        # (away, home, N) — game 2 never inherits game 1's price.
+        for pair, entries in pair_entries.items():
+            entries.sort(key=lambda e: e.get("start_time") or "")
+            for i, entry in enumerate(entries):
+                entry.pop("start_time", None)
+                result[pair if i == 0 else pair + (i + 1,)] = entry
         return result
     except Exception as e:
         print(f"  WARN: ESPN scoreboard odds failed: {e}")
@@ -1460,6 +1488,8 @@ for g in games_raw:
     venue = g.get("venue", {}).get("name", "")
     game_time_utc = g.get("gameDate", "")
     game_status = g.get("status", {})
+    game_number = int(g.get("gameNumber") or 1)
+    is_doubleheader = g.get("doubleHeader") in ("Y", "S")
 
     # Parse game time to ET
     starts_at = None
@@ -1894,7 +1924,10 @@ for g in games_raw:
     # published. If the odds source doesn't have this game, we leave the line
     # blank ("—") and exclude the pick from picks/mlb.json. Tracking a pick
     # against a fabricated price is dishonest and breaks settlement math.
-    game_odds = lookup_game_odds(real_odds, away_abbr, home_abbr)
+    game_odds = lookup_game_odds(
+        real_odds, away_abbr, home_abbr,
+        game_number if is_doubleheader else 1,
+    )
     if game_odds and game_odds.get("away_ml") and game_odds.get("home_ml"):
         away_ml = f"{game_odds['away_ml']:+d}"
         home_ml = f"{game_odds['home_ml']:+d}"
@@ -1992,6 +2025,8 @@ for g in games_raw:
         "missing_coverage_count": len(missing_coverage),
         "pick_odds": pick_odds_raw,
         "venue": venue, "time_str": time_str, "game_pk": game_pk,
+        "game_number": game_number, "is_doubleheader": is_doubleheader,
+        "starts_at_utc": game_time_utc,
         "has_started": has_started,
         "total": round(away_runs + home_runs, 1),
     })
@@ -2181,6 +2216,10 @@ def render_game(g, idx):
     ac = g["away_color"]; hc = g["home_color"]
     ar = g["away_runs"]; hr_ = g["home_runs"]
     total = ar + hr_
+    dh_tag = (
+        f'<strong>DH GAME {g.get("game_number", 1)}</strong> · '
+        if g.get("is_doubleheader") else ""
+    )
 
     # Run bar widths
     if total > 0:
@@ -2368,7 +2407,7 @@ def render_game(g, idx):
       {vector_tags}<span class="model-tag tag-arch">vs {g["away_tier"]}</span><span class="model-tag tag-arch">vs {g["home_tier"]}</span>
     </div>
   </div>
-  <div class="game-meta">{h(g["time_str"])} \u00b7 {h(g["venue"])}</div>
+  <div class="game-meta">{dh_tag}{h(g["time_str"])} \u00b7 {h(g["venue"])}</div>
   <div class="affiliate-row">
   <a href="https://kalshi.com/sign-up/?referral=88acd325-1cbe-44b0-9358-f0cf92cf9fc7" target="_blank" rel="noopener" class="aff-btn aff-kalshi">
     <span class="aff-name">KALSHI</span><span class="aff-cta">TRADE NOW</span>
@@ -3678,6 +3717,9 @@ qualified_picks = sorted(
     [g for g in games if qualifies_as_pick(g)],
     key=lambda x: (-x["conf"], -x.get("edge", 0)),
 )
+# Board order: first pitch time (the schedule API groups doubleheaders,
+# which put a 7 PM game ahead of the afternoon slate).
+games.sort(key=lambda gg: (gg.get("starts_at_utc") or "9999", gg.get("game_number") or 1))
 game_cards = "".join(render_game(g, i) for i, g in enumerate(games))
 gen_time = NOW.strftime("%Y-%m-%d %H:%M ET")
 
