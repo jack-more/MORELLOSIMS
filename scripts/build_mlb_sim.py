@@ -3464,6 +3464,7 @@ def render_hr_watch_tab():
         def audit_row(bm):
             return {
                 "name": bm.get("name"),
+                "id": bm.get("id"),
                 "team": bm.get("team"),
                 "order": bm.get("order"),
                 "opp_pitcher": bm.get("opp_pitcher"),
