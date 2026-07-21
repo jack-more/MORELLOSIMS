@@ -233,5 +233,65 @@ def main():
         print("\n  Nothing settled this run.")
 
 
+SHADOW_LEDGER = os.path.join(REPO, "reports", "shadow_mlb.json")
+
+def settle_shadow_ledger():
+    """Attach final scores to every unsettled shadow-ledger row. The ledger
+    logs ALL evaluated games (not just published picks) so the gates can be
+    calibrated against full-slate outcomes."""
+    try:
+        with open(SHADOW_LEDGER) as f:
+            ledger = json.load(f)
+    except Exception:
+        return
+    rows = ledger.get("rows") or {}
+    todo = [r for r in rows.values() if not r.get("result")]
+    if not todo:
+        return
+    print(f"\n  Shadow ledger: settling up to {len(todo)} row(s)…")
+    cache = {}
+    n = 0
+    for r in sorted(todo, key=lambda x: x["date"]):
+        d = r["date"]
+        if d not in cache:
+            try:
+                cache[d] = fetch_schedule(d)
+            except Exception as e:
+                print(f"    [WARN] schedule fetch failed for {d}: {e}")
+                cache[d] = None
+        sched = cache[d]
+        if not sched:
+            continue
+        game = None
+        for day in sched.get("dates", []):
+            for gg in day.get("games", []):
+                if gg.get("gamePk") == r.get("game_pk"):
+                    game = gg
+                    break
+        if not game:
+            continue
+        state = game.get("status", {}).get("abstractGameState", "")
+        if state != "Final":
+            continue
+        ls = game.get("linescore", {}).get("teams", {})
+        try:
+            ar = int(ls.get("away", {}).get("runs"))
+            hr = int(ls.get("home", {}).get("runs"))
+        except (TypeError, ValueError):
+            continue
+        winner = r["away"] if ar > hr else r["home"]
+        r["result"] = {
+            "away_runs": ar, "home_runs": hr,
+            "winner": winner,
+            "pick_won": winner == r.get("pick_team"),
+        }
+        n += 1
+    if n:
+        with open(SHADOW_LEDGER, "w") as f:
+            json.dump(ledger, f, separators=(",", ":"))
+        print(f"  Shadow ledger: settled {n} row(s) → {SHADOW_LEDGER}")
+
+
 if __name__ == "__main__":
     main()
+    settle_shadow_ledger()

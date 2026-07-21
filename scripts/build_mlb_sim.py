@@ -2192,6 +2192,73 @@ def qualifies_as_pick(g):
         return False
     return g.get("conf", 0) >= MIN_CONF_PICK
 
+
+# ─── Shadow ledger: every evaluated game, every gate verdict ─────────────────
+# Published picks (~3/month under v2 gates) can never calibrate the gates;
+# the full slate (~15/day) can. Settled nightly by settle_mlb.py; analyzed by
+# report_shadow.py. This is the learning loop the public record can't be.
+SHADOW_LEDGER_PATH = os.path.join(REPO_ROOT, "reports", "shadow_mlb.json")
+
+def write_shadow_ledger(games):
+    try:
+        with open(SHADOW_LEDGER_PATH) as f:
+            ledger = json.load(f)
+    except Exception:
+        ledger = {"rows": {}}
+    rows = ledger.setdefault("rows", {})
+    n_new = n_upd = n_frozen = 0
+    for g in games:
+        if not g.get("game_pk"):
+            continue
+        key = f"{TODAY}_{g['game_pk']}"
+        old = rows.get(key)
+        # Freeze the pregame read: once a game starts (or is settled), later
+        # builds must not overwrite the numbers the model actually had.
+        if old and (old.get("result") or old.get("frozen")):
+            n_frozen += 1
+            continue
+        pe = g.get("pick_price_edge")
+        rows[key] = {
+            "date": TODAY,
+            "game_pk": g.get("game_pk"),
+            "away": g.get("away_abbr"), "home": g.get("home_abbr"),
+            "away_sp": g.get("away_sp"), "home_sp": g.get("home_sp"),
+            "pick_team": g.get("pick_team"),
+            "conf": g.get("conf"),
+            "run_diff": g.get("edge"),
+            "model_prob_raw": g.get("pick_model_prob_raw"),
+            "model_prob": g.get("pick_model_prob"),
+            "odds": g.get("pick_odds"),
+            "break_even": g.get("pick_break_even"),
+            "price_edge": pe,
+            "min_price_edge": g.get("min_price_edge"),
+            "model_mode": g.get("model_mode"),
+            "vector_gate": g.get("vector_gate_status"),
+            "tto_mult_away": g.get("away_tto_mult"),
+            "tto_mult_home": g.get("home_tto_mult"),
+            "gates": {
+                "lineups": bool(g.get("has_lineups")),
+                "line_available": g.get("odds_source") != "NO_LINE" and bool(g.get("pick_odds")),
+                "coverage": bool(g.get("pick_coverage_ok")),
+                "conf_c8plus": int(g.get("conf") or 0) >= MIN_CONF_PICK,
+                "price_and_edge": not g.get("odds_too_heavy"),
+                "plausible": pe is None or pe <= MAX_PLAUSIBLE_EDGE,
+            },
+            "published": qualifies_as_pick(g),
+            "frozen": bool(g.get("has_started")),
+            "result": (old or {}).get("result"),
+        }
+        if old:
+            n_upd += 1
+        else:
+            n_new += 1
+    with open(SHADOW_LEDGER_PATH, "w") as f:
+        json.dump(ledger, f, separators=(",", ":"))
+    print(f"  Shadow ledger: +{n_new} new, {n_upd} updated, {n_frozen} frozen ({len(rows)} rows total)")
+
+write_shadow_ledger(games)
+
+
 def render_batter(b):
     mc = ms_class(b["ms"])
     mic = ms_class(b.get("momi", 50))
