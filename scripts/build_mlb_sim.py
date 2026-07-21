@@ -2308,6 +2308,7 @@ def render_game(g, idx):
 
     # Pick display — confidence-only, no edge/value clutter
     pick_html = ""
+    is_lean = False
     published_pick = published_pick_for_game(g)
     if published_pick:
         conf = int(published_pick.get("conf") or g["conf"])
@@ -2337,6 +2338,18 @@ def render_game(g, idx):
         gate_title = g.get("vector_gate_reason") or "Vector agreement gate blocked this play"
         gate_style = "background:#111;color:#FFEA00;border-color:#FFEA00"
         pick_html = f'<div class="sim-pick" style="{gate_style}" title="{h(gate_title)}">VECTOR BLOCK</div>'
+    elif g["has_lineups"] and g["conf"] >= 6 and g.get("pick_team") and g.get("pick_odds"):
+        # Untracked LEAN tier: the model favors a side at C6-C7 — visible
+        # content, never staked, never in the record.
+        is_lean = True
+        lean_title = (
+            f'Untracked lean — model favors {g["pick_team"]} at C{g["conf"]}, '
+            f'below the C8 tracked-pick threshold. Not staked, not in the record.'
+        )
+        pick_html = (
+            f'<div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" '
+            f'title="{h(lean_title)}">LEAN {h(g["pick_team"])} ({g["pick_odds"]:+d}) · C{g["conf"]}</div>'
+        )
     elif g["has_lineups"] and g["conf"] > 0:
         pick_html = '<div class="sim-pick" style="background:#333;color:#888;border-color:#555">NO PLAY</div>'
 
@@ -2420,7 +2433,7 @@ def render_game(g, idx):
     # renders as 65/35. Raw values stay in the pick record for refits.
     away_wp_display, home_wp_display = display_wp_pair(g["away_wp"], g["home_wp"])
 
-    return f'''<div class="game-card" data-conf="{g["conf"]}" data-value="{g["value"]}" data-edge="{g["edge"]}">
+    return f'''<div class="game-card" data-conf="{g["conf"]}" data-value="{g["value"]}" data-edge="{g["edge"]}" data-lean="{1 if is_lean else 0}">
   <div class="run-bar ma-premium">
   <div class="run-bar-seg" style="width:{aw}%;background:{ac}">{ar}</div>
   <div class="run-bar-seg" style="width:{hw}%;background:{hc}">{hr_}</div>
@@ -4225,6 +4238,7 @@ html = f'''<!DOCTYPE html>
         <div class="chips">
             <div class="chip active" onclick="sortGames('time', this)">Time</div>
             <div class="chip" onclick="sortGames('run_diff', this)">Run Diff</div>
+            <div class="chip" onclick="sortGames('lean', this)">Leans</div>
         </div>
         <div class="slate-info">
             <span>{DATE_SHORT} SLATE</span>
@@ -4375,6 +4389,11 @@ function sortGames(mode, el) {{
   let sorted;
   if (mode === 'run_diff') {{
     sorted = [...cards].sort((a, b) => (parseFloat(b.dataset.edge) || 0) - (parseFloat(a.dataset.edge) || 0));
+  }} else if (mode === 'lean') {{
+    sorted = [...cards].sort((a, b) =>
+      ((b.dataset.lean === '1') - (a.dataset.lean === '1'))
+      || ((parseInt(b.dataset.conf) || 0) - (parseInt(a.dataset.conf) || 0))
+      || ((parseFloat(b.dataset.edge) || 0) - (parseFloat(a.dataset.edge) || 0)));
   }} else {{
     sorted = [...originalCardOrder];
   }}
