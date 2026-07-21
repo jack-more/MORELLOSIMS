@@ -111,12 +111,17 @@
   .plain{font-size:13px; line-height:1.45; margin-bottom:12px}
   .plain b{font-weight:800}
 
-  .meter{margin-bottom:10px}
-  .meter .lab{display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.06em; margin-bottom:3px}
-  .meter .bar{height:14px; border:2px solid var(--black); background:#eee; position:relative}
-  .meter .fill{position:absolute; inset:0; width:0; background:var(--tc,#333); transition:width .8s cubic-bezier(.2,.9,.3,1)}
-  .meter .usual{position:absolute; top:-4px; bottom:-4px; width:3px; background:var(--black)}
-  .meter.today .fill{background:var(--accent); border-right:2px solid var(--black)}
+  /* Savant-style percentile sliders */
+  .sv{margin:2px 0 10px}
+  .sv-row{display:grid; grid-template-columns:104px 1fr 58px; align-items:center; gap:10px; padding:5px 0}
+  .sv-row+.sv-row{border-top:1px solid #f0eee8}
+  .sv-lab{font-family:var(--font-mono); font-size:9.5px; font-weight:700; letter-spacing:.05em; color:#444}
+  .sv-track{position:relative; height:5px; background:#e7e4dc; border-radius:3px}
+  .sv-fill{position:absolute; left:0; top:0; height:100%; border-radius:3px; width:0}
+  .sv-dot{position:absolute; top:50%; left:0; transform:translate(-50%,-50%); width:23px; height:23px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; color:#fff; font-family:var(--font-mono); font-weight:700; font-size:10.5px;
+    border:2px solid #fff; box-shadow:0 0 0 1.5px rgba(8,8,8,.6)}
+  .sv-val{font-family:var(--font-mono); font-size:10.5px; font-weight:700; text-align:right; white-space:nowrap}
 
   .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:11px}
   .chip{font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.05em; border:2px solid var(--black); padding:3px 8px; background:#fff}
@@ -192,7 +197,33 @@ function liftOf(p){
   if (p.hr_rate && p.base_hr_rate) return p.hr_rate / Math.max(p.base_hr_rate, .001);
   return 1;
 }
-function fmtPct(x){ return (100*(x||0)).toFixed(1) + '%'; }
+
+// ── savant-style percentiles vs today's full scored pool ──
+let POOL = [];
+function pctile(field, value, xform){
+  if (!POOL.length || value == null) return null;
+  const vals = POOL.map(r => xform ? xform(r) : r[field]).filter(v => typeof v === 'number' && isFinite(v));
+  if (vals.length < 20) return null;
+  const below = vals.filter(v => v < value).length;
+  const eq = vals.filter(v => v === value).length;
+  return Math.max(1, Math.min(99, Math.round(100 * (below + eq/2) / vals.length)));
+}
+function svColor(p){
+  // savant scale: blue (cold) → gray → red (elite)
+  const lerp=(a,b,t)=>Math.round(a+(b-a)*t);
+  const mix=(c1,c2,t)=>`rgb(${lerp(c1[0],c2[0],t)},${lerp(c1[1],c2[1],t)},${lerp(c1[2],c2[2],t)})`;
+  const BLUE=[50,94,168], GRAY=[168,168,164], RED=[211,31,38];
+  return p<=50 ? mix(BLUE,GRAY,p/50) : mix(GRAY,RED,(p-50)/50);
+}
+function svRow(label, pct, val){
+  if (pct == null) return '';
+  return `<div class="sv-row">
+    <div class="sv-lab">${label}</div>
+    <div class="sv-track"><div class="sv-fill" data-p="${pct}" style="background:${svColor(pct)}"></div>
+      <div class="sv-dot" data-p="${pct}" style="background:${svColor(pct)}">${pct}</div></div>
+    <div class="sv-val">${val}</div>
+  </div>`;
+}
 
 // ── cards ──
 function heatChip(p){
@@ -211,11 +242,7 @@ function card(p, i, isCore){
   const el = document.createElement('div');
   el.className = 'pick';
   el.style.setProperty('--tc', tc);
-  const todayW = Math.min(100, (p.hr_rate||0)/0.20*100);
-  const usualX = Math.min(97, (p.base_hr_rate||0)/0.20*100);
   const heat = heatChip(p);
-  const parkNote = p.park_factor && p.park_factor >= 1.04 ? `<span class="chip">PARK +${Math.round((p.park_factor-1)*100)}%</span>` :
-                   p.park_factor && p.park_factor <= 0.96 ? `<span class="chip">PARK ${Math.round((p.park_factor-1)*100)}%</span>` : '';
   const h2h = (p.h2h_pa||0) >= 6 && (p.h2h_hr||0) > 0 ? `<span class="chip">${p.h2h_hr} HR OFF HIM (${p.h2h_pa} PA)</span>` : '';
   el.innerHTML = `
     <div class="top">
@@ -227,18 +254,19 @@ function card(p, i, isCore){
       <div class="lift"><div class="x">${lift.toFixed(1)}×</div><div class="l">VS USUAL</div></div>
     </div>
     <div class="body">
-      <div class="meter today">
-        <div class="lab"><span>TONIGHT'S HR CHANCE / AB</span><span>${fmtPct(p.hr_rate)}</span></div>
-        <div class="bar"><div class="fill" data-w="${todayW}"></div><div class="usual" style="left:${usualX}%"></div></div>
-        <div class="lab" style="margin-top:2px"><span></span><span style="color:#666">▲ his usual: ${fmtPct(p.base_hr_rate)}</span></div>
+      <div class="sv">
+        ${svRow('HR CHANCE', pctile('hr_rate', p.hr_rate), (100*(p.hr_rate||0)).toFixed(1)+'%')}
+        ${svRow('MATCHUP LIFT', pctile(null, lift, r => (r.hr_rate && r.base_hr_rate) ? r.hr_rate/Math.max(r.base_hr_rate,.001) : null), lift.toFixed(1)+'×')}
+        ${svRow('RAW POWER', pctile('season_hr_rate', p.season_hr_rate), (p.season_hr||0)+' HR')}
+        ${svRow('HOT BAT', pctile('recent_power_score', p.recent_power_score), 'MOMI '+(p.momi ?? '—'))}
+        ${svRow('LINEUP PRESSURE', pctile('stack_pressure', p.stack_pressure), 'TT '+(p.team_total ?? '—'))}
+        ${svRow('PARK', pctile('park_factor', p.park_factor), (p.park_factor ? (p.park_factor>=1?'+':'')+Math.round((p.park_factor-1)*100)+'%' : '—'))}
       </div>
       <div class="chips">
         <span class="chip lane" style="background:${laneC}">${laneU||'—'} LANE</span>
         ${heat ? `<span class="chip ${heat.hot?'hot':''}">${heat.t}</span>` : ''}
-        ${p.season_hr ? `<span class="chip">${p.season_hr} HR THIS SEASON</span>` : ''}
-        ${parkNote}${h2h}
+        ${h2h}
       </div>
-      <div class="foot"><span>MOMO ${p.momo ?? '—'}${(p.momi&&p.momi!==p.momo)?(' → '+p.momi):''}</span><span>TEAM TOTAL ${p.team_total ?? '—'}</span></div>
     </div>`;
   el.addEventListener('click', () => { el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'), 500); boom(el); });
   return el;
@@ -382,6 +410,8 @@ async function load(){
     return;
   }
   $('#tdate').textContent = (audit.generated||'').slice(0,10);
+  POOL = (audit.all && audit.all.length >= 20) ? audit.all
+       : [...(audit.core||[]), ...(audit.watch||[])];
   corePicks = (audit.core||[]).slice(0,7);
   const coreEl = $('#core');
   corePicks.forEach((p,i) => coreEl.appendChild(card(p, i, true)));
@@ -391,9 +421,25 @@ async function load(){
     watch.forEach((p,i) => $('#watch').appendChild(card(p, i, false)));
   }
   drawField(corePicks);
-  // animate meters in
-  requestAnimationFrame(() => {
-    document.querySelectorAll('.meter .fill').forEach(f => { f.style.width = f.dataset.w + '%'; });
+  // Savant sliders: final values set directly (never depend on an animation
+  // firing), Web Animations API supplies the sweep-in on top.
+  const sweep = (el, frames, ms) => {
+    const a = el.animate(frames, {duration:ms, easing:'ease-out'});
+    // If the environment stalls animation timelines, cancel reveals the
+    // final inline styles; in normal browsers this is a post-finish no-op.
+    setTimeout(() => { try { a.cancel(); } catch(e){} }, ms + 250);
+  };
+  document.querySelectorAll('.sv-fill').forEach(f => {
+    f.style.width = f.dataset.p + '%';
+    sweep(f, [{width:'0%'},{width:f.dataset.p+'%'}], 700);
+  });
+  document.querySelectorAll('.sv-dot').forEach(d => {
+    d.style.left = d.dataset.p + '%';
+    sweep(d, [
+      {left:'0%', transform:'translate(-50%,-50%) scale(0)'},
+      {left:d.dataset.p+'%', transform:'translate(-50%,-50%) scale(0)', offset:.7},
+      {left:d.dataset.p+'%', transform:'translate(-50%,-50%) scale(1)'}
+    ], 950);
   });
 }
 $('#replay').addEventListener('click', () => drawField(corePicks));
