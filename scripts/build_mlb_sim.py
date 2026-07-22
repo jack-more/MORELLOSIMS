@@ -273,6 +273,47 @@ batter_profile_idx = {
     if b.get("batter") is not None
 }
 
+
+def _norm_pname(s):
+    import unicodedata
+    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+    return " ".join(s.replace(".", " ").split())
+
+
+_atlas_name_to_best = {}
+for _b in batters_atlas:
+    _nm = _norm_pname(_b.get("batter_name"))
+    if not _nm:
+        continue
+    _pa = float(_b.get("total_PA") or 0)
+    _cur = _atlas_name_to_best.get(_nm)
+    if not _cur or _pa > _cur[1]:
+        _atlas_name_to_best[_nm] = (int(_b["batter"]), _pa)
+
+
+def resolve_batter_id(feed_id, name):
+    """Guard against lineup-feed id mixups (e.g. 'Yandy Diaz' arriving with a
+    ghost id): when the feed id is unknown or near-empty in the atlas while
+    the exact name matches a well-established atlas player, use the atlas id.
+    A wrong id poisons every downstream lookup (base wOBA, HVC, MOMO)."""
+    nm = _norm_pname(name)
+    best = _atlas_name_to_best.get(nm)
+    if not best:
+        return feed_id
+    atlas_id, atlas_pa = best
+    if feed_id == atlas_id:
+        return feed_id
+    try:
+        feed_pa = float((batter_profile_idx.get(int(feed_id)) or {}).get("total_PA") or 0)
+    except (TypeError, ValueError):
+        feed_pa = 0
+    if atlas_pa >= 300 and feed_pa < 50:
+        print(f"  Lineup id fix: {name} {feed_id} -> {atlas_id} "
+              f"(atlas {atlas_pa:.0f} PA vs feed id {feed_pa:.0f} PA)")
+        return atlas_id
+    return feed_id
+
+
 CURRENT_YEAR = int(TODAY[:4])
 
 
@@ -750,7 +791,7 @@ def fetch_baseballmonster_lineups():
                 team_lineups[team]["sp_name"] = name
             elif order.isdigit():
                 team_lineups[team]["batters"].append({
-                    "id": mlb_id,
+                    "id": resolve_batter_id(mlb_id, name),
                     "fullName": name,
                     "order": int(order),
                     "primaryPosition": {"abbreviation": row[7].strip() if len(row) > 7 and row[7].strip() else "?"},
@@ -814,14 +855,23 @@ def fetch_rotowire_lineups():
 
         def resolve_id(name):
             if not name: return None
+            # Accent-normalized exact match against the atlas (highest-PA
+            # holder of the name). The old path missed "Yandy Diaz" vs the
+            # atlas's "Yandy Díaz", then last-name-matched to the FIRST
+            # " diaz" in dict order — Jonathan Diaz, 16 career PA — and the
+            # ghost id poisoned every downstream stat.
+            best = _atlas_name_to_best.get(_norm_pname(name))
+            if best:
+                return best[0]
             key = name.lower().strip()
             if key in name_to_mlb_id:
                 return name_to_mlb_id[key]
-            last = key.split()[-1] if key else ""
-            for k, v in name_to_mlb_id.items():
-                if k.endswith(" " + last):
-                    return v
-            return None
+            last = _norm_pname(name).split()[-1] if name.strip() else ""
+            matches = {v for k, v in name_to_mlb_id.items()
+                       if _norm_pname(k).endswith(" " + last)}
+            if len(matches) == 1:
+                return matches.pop()
+            return None  # ambiguous last name — better no id than a wrong one
 
         def build_lineup(batters):
             lineup = []
@@ -3822,7 +3872,7 @@ css_start = CSS.find("<style>")
 css_end = CSS.find("</style>") + len("</style>")
 css_block = CSS[css_start:css_end] if css_start >= 0 else ""
 css_block = re.sub(
-    r"\n/\* (DAILY_HR_GOYARD_HIERARCHY|GO_YARD_PUBLIC_COPY_FIX|GO_YARD_HR_EXPLAINER|LINES_BOARD_GRID)_V\d+ \*/.*?(?=\n/\* [A-Z0-9_]+|\n</style>)",
+    r"\n/\* (DAILY_HR_GOYARD_HIERARCHY|GO_YARD_PUBLIC_COPY_FIX|GO_YARD_HR_EXPLAINER|LINES_BOARD_GRID|LINES_AVANT)_V\d+ \*/.*?(?=\n/\* [A-Z0-9_]+|\n</style>)",
     "",
     css_block,
     flags=re.S,
@@ -4027,6 +4077,30 @@ LINES_BOARD_CSS = """
 if "LINES_BOARD_GRID_V2" not in css_block:
     css_block = css_block.replace("</style>", LINES_BOARD_CSS + "\n</style>")
 
+LINES_AVANT_CSS = """
+/* LINES_AVANT_V2 */
+/* Editorial zine touches: micro-rotated cards, ghost slate numerals
+   bleeding off the card top, stamped pick badges, bold slate strip. */
+@media(min-width:1000px){
+  #tab-lines{counter-reset:game}
+  #tab-lines>.game-card{counter-increment:game;position:relative;
+    transform:rotate(.45deg);transition:transform .18s ease, box-shadow .18s ease}
+  #tab-lines>.game-card:nth-child(odd){transform:rotate(-.45deg)}
+  #tab-lines>.game-card:hover{transform:rotate(0) translate(-2px,-2px);box-shadow:10px 10px 0 var(--color-black)}
+  #tab-lines>.game-card::after{content:counter(game,decimal-leading-zero);
+    position:absolute;top:-16px;right:10px;font-family:'Anton',sans-serif;font-size:96px;line-height:1;
+    color:transparent;-webkit-text-stroke:2px rgba(8,8,8,.13);pointer-events:none;z-index:4}
+}
+.sim-pick{transform:rotate(-1.2deg);box-shadow:2px 2px 0 var(--color-black)}
+a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+#tab-lines .slate-info{border-top:3px solid var(--color-black);border-bottom:3px solid var(--color-black);
+  padding:8px 2px;margin:4px 0 16px}
+#tab-lines .slate-info span:first-child{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:1.5px;color:var(--color-black)}
+#tab-lines .slate-info span:last-child{background:var(--color-black);color:var(--color-accent);padding:3px 10px;font-weight:700}
+"""
+if "LINES_AVANT_V2" not in css_block:
+    css_block = css_block.replace("</style>", LINES_AVANT_CSS + "\n</style>")
+
 DAILY_HR_RESULTS_TRAY_CSS = """
 /* DAILY_HR_RESULTS_TRAY_V1 */
 .hr-results-panel{margin:-8px 0 22px;background:#fff;border:2px solid #111;box-shadow:4px 4px 0 #111;overflow:hidden}
@@ -4225,7 +4299,7 @@ html = f'''<!DOCTYPE html>
 <div class="filter-bar">
     <div class="filter-bar-inner">
         <button class="filter-btn active" data-tab="lines">Lines</button>
-        <button class="filter-btn" data-tab="daily">HR Board</button>
+        <a class="filter-btn" href="/goyard/">Go-Yard ↗</a>
         <button class="filter-btn" data-tab="info">Info</button>
     </div>
 </div>
@@ -4328,10 +4402,10 @@ O/U Total = Home Runs + Away Runs</div>
         <span class="nav-icon">\U0001f4ca</span>
         <span>LINES</span>
     </button>
-    <button class="nav-btn" data-tab="daily">
+    <a class="nav-btn" href="/goyard/" style="text-decoration:none">
         <span class="nav-icon">\U0001f4a3</span>
-        <span>HR BOARD</span>
-    </button>
+        <span>GO-YARD</span>
+    </a>
     <button class="nav-btn" data-tab="info">
         <span class="nav-icon">\u2139\ufe0f</span>
         <span>INFO</span>
@@ -4357,10 +4431,16 @@ function switchTab(target) {{
   window.scrollTo(0, 0);
 }}
 document.querySelectorAll('.nav-btn').forEach(tab => {{
-  tab.addEventListener('click', () => switchTab(tab.getAttribute('data-tab')));
+  tab.addEventListener('click', () => {{
+    const t = tab.getAttribute('data-tab');
+    if (t) switchTab(t);  // link-styled buttons (Go-Yard) navigate instead
+  }});
 }});
 document.querySelectorAll('.filter-btn').forEach(tab => {{
-  tab.addEventListener('click', () => switchTab(tab.getAttribute('data-tab')));
+  tab.addEventListener('click', () => {{
+    const t = tab.getAttribute('data-tab');
+    if (t) switchTab(t);
+  }});
 }});
 
 // LINEUP TOGGLE
