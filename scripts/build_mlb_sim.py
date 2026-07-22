@@ -4061,20 +4061,23 @@ if "DAILY_HR_FUN_NAV_V1" not in css_block:
     css_block = css_block.replace("</style>", DAILY_HR_FUN_NAV_CSS + "\n</style>")
 
 LINES_BOARD_CSS = """
-/* LINES_BOARD_GRID_V2 */
+/* LINES_BOARD_GRID_V3 */
 /* Scoped to .active — an unconditional #tab-lines display rule outranks the
-   .tab-content show/hide classes and pins the Lines board over other tabs. */
+   .tab-content show/hide classes and pins the Lines board over other tabs.
+   EVERY non-card child must span the full row: sortGames re-appends only
+   .game-card nodes, so anything else (gen-badge) drifts ahead of the cards
+   and would otherwise squat in the first grid cell, blanking that slot. */
 @media(min-width:1000px){
   #tab-lines.active{position:relative;left:50%;transform:translateX(-50%);width:96vw;max-width:1200px;
     display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
-  #tab-lines>.chips,#tab-lines>.slate-info{grid-column:1/-1;margin:0}
+  #tab-lines.active>:not(.game-card){grid-column:1/-1;margin-top:0;margin-bottom:0}
   #tab-lines>.game-card{margin-bottom:0}
 }
 @media(min-width:1640px){
   #tab-lines.active{max-width:1780px;grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 """
-if "LINES_BOARD_GRID_V2" not in css_block:
+if "LINES_BOARD_GRID_V3" not in css_block:
     css_block = css_block.replace("</style>", LINES_BOARD_CSS + "\n</style>")
 
 LINES_AVANT_CSS = """
