@@ -2071,6 +2071,7 @@
         <div class="subbrand">pitcher type vs vector creature</div>
       </div>
       <div class="controls">
+        <span class="control" style="pointer-events:none;font-size:10px;letter-spacing:.08em;opacity:.75;border:1px dashed currentColor;">DRAG ORBIT · SCROLL ZOOM · WASD+QE FLY · SHIFT BOOST</span>
         <input id="search" class="control" type="search" placeholder="Search pitcher...">
         <select id="year-filter" class="control" aria-label="Season filter"></select>
         <select id="role-filter" class="control" aria-label="Role filter">
@@ -4192,11 +4193,29 @@
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       controls = new OrbitControls(camera, renderer.domElement);
+      window.__cam = camera;
       controls.enableDamping = true;
       controls.target.set(0.2, 0.8, 0);
-      controls.minDistance = 4;
-      controls.maxDistance = 16;
-      controls.enablePan = false;
+      controls.minDistance = 1.2;
+      controls.maxDistance = 42;
+      controls.enablePan = true;
+      controls.panSpeed = 0.9;
+      // Idle drift makes it feel like a world; first touch hands over control.
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.45;
+      renderer.domElement.addEventListener('pointerdown', () => { controls.autoRotate = false; }, { once: true });
+
+      // WASD / arrows fly, Q down E up, Shift = boost. Moves camera AND
+      // target together so orbiting keeps working wherever you fly.
+      window.__flyKeys = {};
+      window.addEventListener('keydown', e => {
+        if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+        window.__flyKeys[e.key.toLowerCase()] = true;
+        if (['w','a','s','d','q','e','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) {
+          controls.autoRotate = false;
+        }
+      });
+      window.addEventListener('keyup', e => { window.__flyKeys[e.key.toLowerCase()] = false; });
 
       if (RoomEnvironment && THREE.PMREMGenerator) {
         try {
@@ -5289,6 +5308,26 @@
 
     function animate() {
       requestAnimationFrame(animate);
+      if (controls && camera && window.__flyKeys) {
+        const k = window.__flyKeys;
+        const boost = (k['shift'] ? 2.6 : 1.0);
+        const speed = 0.055 * boost * Math.max(0.35, camera.position.distanceTo(controls.target) / 8);
+        const fwd = new THREE.Vector3();
+        camera.getWorldDirection(fwd);
+        const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize();
+        const move = new THREE.Vector3();
+        if (k['w'] || k['arrowup']) move.add(fwd);
+        if (k['s'] || k['arrowdown']) move.sub(fwd);
+        if (k['d'] || k['arrowright']) move.add(right);
+        if (k['a'] || k['arrowleft']) move.sub(right);
+        if (k['e']) move.y += 1;
+        if (k['q']) move.y -= 1;
+        if (move.lengthSq() > 0) {
+          move.normalize().multiplyScalar(speed);
+          camera.position.add(move);
+          controls.target.add(move);
+        }
+      }
       if (controls) controls.update();
       if (shapeGroup) shapeGroup.rotation.y += 0.004;
       if (auraAnimated.length > 260) auraAnimated = auraAnimated.filter(n => n.mesh.parent);
