@@ -85,7 +85,7 @@ jobs:
             echo "No atlas changes to commit"
           else
             git commit -m "Atlas refresh — $(TZ=America/New_York date +'%b %d %I:%M %p ET')"
-            git push
+            git push || { git fetch origin && git rebase -X theirs origin/main && git push; }
           fi
 
   generate-picks:
@@ -159,7 +159,7 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "MLB SIM — $(TZ=America/New_York date +'%b %d %I:%M %p ET') — ${PICKS}"
-            git push
+            git push || { git fetch origin && git rebase -X theirs origin/main && git push; }
           fi
 
   settle-picks:
@@ -216,7 +216,7 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Settle MLB — $(TZ=America/New_York date +'%b %d %I:%M %p ET') — ${PICKS}"
-            git push
+            git push || { git fetch origin && git rebase -X theirs origin/main && git push; }
           fi
 
   alert-on-failure:
