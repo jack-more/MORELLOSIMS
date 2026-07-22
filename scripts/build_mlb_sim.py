@@ -83,15 +83,46 @@ def model_version_for_date(date_str):
 def load_season_record():
     """Use the same baseline + picks contract as the homepage dispatch."""
     try:
-        from render_dispatch import aggregate as dispatch_aggregate, official_picks, load_baselines
-
-        baseline = load_baselines().get("mlb", {})
-        picks = []
-        if os.path.exists(MLB_PICKS_PATH):
-            with open(MLB_PICKS_PATH) as f:
-                picks = json.load(f)
-        agg = dispatch_aggregate(official_picks(picks, "mlb"), baseline=baseline)
-        return f'{agg["wins"]}-{agg["losses"]}', f'{agg["roi"]:+.1f}%', agg.get("streak") or "-"
+        # VECTOR-era card: era picks only (model_era.json start_date), no
+        # pre-era baseline. The all-time ledger stays in picks/mlb.json.
+        era = load_model_era() or {}
+        era_start = era.get("start_date") or "0000-00-00"
+        wins = losses = 0
+        risked = pl = 0.0
+        settled_for_streak = []
+        with open(MLB_PICKS_PATH) as f:
+            picks = json.load(f)
+        for p in picks:
+            if (p.get("date") or "") < era_start:
+                continue
+            try:
+                conf = int(p.get("conf") or 0)
+            except (TypeError, ValueError):
+                conf = 0
+            if conf < MLB_TRACKED_MIN_CONF:
+                continue
+            status = p.get("status")
+            if status not in ("win", "loss", "push"):
+                continue
+            wins += 1 if status == "win" else 0
+            losses += 1 if status == "loss" else 0
+            risked += p.get("units") or 0
+            pl += p.get("pl") or 0
+            if status in ("win", "loss"):
+                settled_for_streak.append(p)
+        settled_for_streak.sort(key=lambda p: p.get("date", ""), reverse=True)
+        streak = 0
+        streak_type = ""
+        if settled_for_streak:
+            streak_type = settled_for_streak[0].get("status", "")
+            for p in settled_for_streak:
+                if p.get("status") == streak_type:
+                    streak += 1
+                else:
+                    break
+        streak_label = f'{"W" if streak_type == "win" else "L"}{streak}' if streak else "-"
+        roi = (pl / risked * 100) if risked else 0
+        return f"{wins}-{losses}", f'{"+" if roi >= 0 else ""}{roi:.1f}%', streak_label
     except Exception as _e:
         print(f"  WARN tracked picks card contract: {_e}; using local fallback")
 
@@ -144,6 +175,14 @@ def load_season_record():
 
 SEASON_RECORD, SEASON_ROI_VALUE, SEASON_STREAK = load_season_record()
 SEASON_ROI = f"{SEASON_ROI_VALUE} ROI"
+
+try:
+    from datetime import datetime as _dt
+    ERA_SINCE = _dt.strptime(
+        (MODEL_ERA or {}).get("start_date", ""), "%Y-%m-%d"
+    ).strftime("SINCE %b %d").upper()
+except Exception:
+    ERA_SINCE = ""
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
 ET = timezone(timedelta(hours=-4))
@@ -4300,7 +4339,7 @@ html = f'''<!DOCTYPE html>
   <div style="background:#0a0a0a;border:2px solid #FFEA00;border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 #FFEA00;">
     <div style="display:grid;grid-template-columns:1.35fr 1fr 0.8fr;align-items:center;font-family:'JetBrains Mono',monospace;gap:16px;">
       <div style="text-align:left;min-width:0;">
-        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">TRACKED</div>
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">VECTOR MODEL</div>
         <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{SEASON_RECORD}</div>
       </div>
       <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 16px;min-width:0;">
@@ -4314,7 +4353,7 @@ html = f'''<!DOCTYPE html>
     </div>
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid #2a2a2a;display:flex;justify-content:space-between;gap:12px;align-items:center;font-family:'JetBrains Mono',monospace;">
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
-        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;letter-spacing:0.5px;text-align:right;">C:8+ <span style="color:#888;">PRICE GATES</span></div>
+        <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;letter-spacing:0.5px;text-align:right;">C:8+ <span style="color:#888;">PRICE GATES · {ERA_SINCE}</span></div>
     </div>
   </div>
 </div>
