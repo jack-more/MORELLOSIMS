@@ -73,7 +73,7 @@ def render_record_card() -> str:
   <div style="background:#0a0a0a;border:2px solid #00FF55;border-radius:6px;padding:16px 22px;box-shadow:5px 5px 0 #00FF55;">
     <div style="display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;gap:18px;">
       <div style="text-align:left;flex:1;">
-        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">SEASON</div>
+        <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">TEMPO MODEL</div>
         <div style="font-size:30px;color:#00FF55;font-weight:700;line-height:1;margin-top:4px;font-family:'Anton',sans-serif;letter-spacing:1px;">{wins}-{losses}</div>
       </div>
       <div style="text-align:center;border-left:1px solid #2a2a2a;border-right:1px solid #2a2a2a;padding:2px 22px;flex:1;">

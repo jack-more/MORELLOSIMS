@@ -257,6 +257,8 @@ def render_sport_block(picks, sport, hero_color, baseline=None, era=None, archiv
             hero_title = f'{sport_upper} SIM · {era_label}: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
         else:
             hero_title = f'{sport_upper} SIM · {era_label}: 0-0 — FRESH SLATE'
+    elif sport == "nba":
+        hero_title = f'NBA SIM · TEMPO MODEL: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
     else:
         hero_title = f'{sport_upper} SIM: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
     css_class = "post-nba-picks" if sport == "nba" else "post-mlb-picks"
@@ -281,10 +283,19 @@ def render_sport_block(picks, sport, hero_color, baseline=None, era=None, archiv
         date_range = '—'
 
     if era and archive:
+        # Era succession strip: the running model up front, the retired one
+        # kept visible. Display only — the full ledger below keeps every row.
+        v1 = era.get("v1_archive") or {}
+        v1_span = ""
+        if v1.get("start_date") and v1.get("end_date"):
+            v1_span = f' · {short_date(v1["start_date"])}–{short_date(v1["end_date"])}'
         archive_line = (
-            f'<span class="mono" style="font-size:11px; color:#777;">'
-            f'v1 archive: {archive["wins"]}-{archive["losses"]} ({archive["roi"]:+.1f}% ROI) — '
-            f'full ledger below, nothing deleted.</span><br>'
+            '<span class="dispatch-era-strip mono">'
+            f'<b>{esc(era.get("label") or "VECTOR MODEL")}</b> ACTIVE SINCE {short_date(era["start_date"])}'
+            ' &nbsp;·&nbsp; '
+            f'OLD MODEL RETIRED: {archive["wins"]}-{archive["losses"]} '
+            f'({archive["roi"]:+.1f}% ROI){v1_span} — full ledger below, nothing deleted.'
+            '</span><br>'
         )
     else:
         archive_line = ""

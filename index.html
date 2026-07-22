@@ -200,13 +200,24 @@
         }
         @media (min-width: 768px) {
             .dashboard-grid {
-                grid-template-columns: 1fr 1fr 1fr;
+                grid-template-columns: 1fr 1fr;
             }
         }
-        /* Atlas goes last on desktop grid */
-        .card-atlas { order: 3; }
-        .card-nba { order: 1; }
-        .card-mlb { order: 2; }
+        /* Row 1: the two sims. Row 2: GO-YARD then ATLAS. */
+        .card-mlb { order: 1; }
+        .card-nba { order: 2; }
+        .card-goyard { order: 3; }
+        .card-atlas { order: 4; }
+        .dashboard-grid .card.card-goyard {
+            background: #FFEA00;
+            color: #0a0a0a;
+            border: 3px solid #0a0a0a;
+        }
+        .dashboard-grid .card.card-goyard .card-title { color: #0a0a0a; }
+        .dashboard-grid .card.card-goyard .card-meta { color: rgba(0,0,0,0.55); }
+        .card-goyard:hover { transform: translate(-2px,-2px); }
+        .card-goyard .card-title { color: #0a0a0a; }
+        .card-goyard .card-meta { color: rgba(0,0,0,0.55); }
         .card-atlas {
             background: #c8cccf;
             color: #1e2124;
@@ -1226,11 +1237,24 @@
         .dispatch-lbl {
             display: block;
             font-family: var(--font-mono);
-            font-size: 8px;
-            color: #555;
+            font-size: 9px;
+            color: #777;
             letter-spacing: 2px;
-            margin-top: 2px;
+            margin-top: 3px;
         }
+        .dispatch-val { font-size: 24px; }
+        .dispatch-stat { padding: 12px 8px 10px; background: rgba(255,255,255,0.05); }
+        .dispatch-era-strip {
+            display: inline-block;
+            background: #0a0a0a;
+            border: 1px solid #FFEA00;
+            color: #ccc;
+            padding: 6px 12px;
+            font-size: 10px;
+            letter-spacing: .06em;
+            margin: 4px 0 10px;
+        }
+        .dispatch-era-strip b { color: #FFEA00; }
         .streak-dots {
             display: flex;
             align-items: center;
@@ -1966,6 +1990,25 @@
 
 	        <div class="dashboard-grid" id="dashboards">
 
+                        <article class="card card-goyard">
+                <div class="card-header">
+                    <h2 class="card-title anton">GO-YARD</h2>
+                    <p class="card-meta mono">DAILY HOME RUN BOARD &middot; LAUNCH GRID &middot; SAVANT SLIDERS</p>
+                </div>
+                <div class="data-preview mono" style="border-color:rgba(0,0,0,0.15);">
+                    <div class="data-row" style="border-bottom-color:rgba(0,0,0,0.12);color:#111;">
+                        <div style="font-weight:bold;">LAUNCH GRID</div>
+                        <div class="stat-val" style="color:#333;">HR chance &times; matchup boost</div>
+                        <div class="mlb-badge" style="background:#0a0a0a;color:#FFEA00">DAILY</div>
+                    </div>
+                    <div class="data-row" style="border-bottom-color:rgba(0,0,0,0.12);color:#111;">
+                        <div style="font-weight:bold;">SAVANT SLIDERS</div>
+                        <div class="stat-val" style="color:#333;">ranked vs 300+ bats</div>
+                        <div class="mlb-badge" style="background:#0a0a0a;color:#fff">FREE</div>
+                    </div>
+                </div>
+                <a href="/goyard/" class="btn-action mono" style="background:#0a0a0a;color:#FFEA00;border-color:#0a0a0a;">ENTER GO-YARD &rarr;</a>
+            </article>
             <article class="card card-atlas">
                 <div class="card-header">
                     <h2 class="card-title anton" style="color:#1e2124;">MLB ATLAS</h2>
@@ -1998,6 +2041,7 @@
                     <div class="home-stat-bubble"><span class="bubble-label">ROI</span><span class="bubble-value">+9.0%</span></div>
                 </div>
                 <div class="card-header">
+                    <div class="model-era-tag mono"><span class="era-chip" style="background:#00FF55;color:#0a0a0a;">TEMPO MODEL</span> trailing-10 heat &middot; pace-adjusted</div>
                     <h2 class="card-title bebas">NBA SIM</h2>
                     <p class="card-meta mono">DAILY MATCHUP SIMULATIONS &times; SPREAD ANALYSIS &times; SCHEME DETECTION</p>
                 </div>
@@ -2033,10 +2077,10 @@
                     <div class="home-stat-bubble"><span class="bubble-label">ROI</span><span class="bubble-value">+89.5%</span></div>
                 </div>
                 <div class="card-header">
-                    <div class="model-era-tag mono"><span class="era-chip">MODEL V2</span> 0-0 &middot; fresh slate since the break</div>
+                    <div class="model-era-tag mono"><span class="era-chip">VECTOR MODEL</span> live since Jul 16 &middot; old model retired</div>
                     <h2 class="card-title anton">MLB SIM</h2>
-                    <p class="card-meta mono">C:8+ MONEYLINE BOARD &middot; |ODDS|&lt;340 &middot; LIVE DISPATCH</p>
-                    <a href="#dispatch-log" class="v1-ledger-link mono">v1 ledger: 201-153 (-0.3%) &mdash; every pick tracked, wins and losses</a>
+                    <p class="card-meta mono">C:8+ MONEYLINE BOARD &middot; -160 PRICE CAP &middot; LIVE DISPATCH</p>
+                    <a href="#dispatch-log" class="v1-ledger-link mono">old model retired: 159-134-7 (-3.3%) &mdash; full ledger in the dispatch, nothing deleted</a>
                 </div>
                 <div class="data-preview mono">
                     <div class="data-row">
@@ -2064,28 +2108,7 @@
 	                <a href="/mlbsim/" class="btn-action btn-mlb">OPEN DASHBOARD &rarr;</a>
 	            </article>
 
-            <article class="card card-goyard">
-                <div class="card-header">
-                    <h2 class="card-title anton">GO-YARD</h2>
-                    <p class="card-meta mono">DAILY HR LOTTO &times; 3D WATER WORLD &times; HOME RUN PRESSURE</p>
-                </div>
-                <div class="data-preview mono">
-                    <div class="data-row">
-                        <div style="font-weight:bold;">Daily HR Lotto</div>
-                        <div class="stat-val">Explore today's home-run picks</div>
-                    </div>
-                    <div class="data-row">
-                        <div style="font-weight:bold;">3D World</div>
-                        <div class="stat-val">One island per pick</div>
-                    </div>
-                    <div class="data-row" style="border-bottom:none;">
-                        <div style="font-weight:bold;">Model-Driven</div>
-                        <div class="stat-val">HR pressure &times; matchup</div>
-                    </div>
-                </div>
-                <a href="/goyard/" class="btn-action btn-goyard mono">ENTER GO-YARD WORLD &rarr;</a>
-            </article>
-	        </div>
+            </div>
 
 	        <div class="blog-section" id="dispatch-log">
 	        <div class="log-divider" style="margin-top:0; border-top:none; padding-top:0;">
@@ -2108,7 +2131,7 @@
                             <span class="blog-date">MAY 4 — JUN 13, 2026</span>
                         </div>
                     </div>
-                    <h3 class="blog-title bebas">NBA SIM: 118-90 RECORD (+9% ROI)</h3>
+                    <h3 class="blog-title bebas">NBA SIM · TEMPO MODEL: 118-90 RECORD (+9% ROI)</h3>
                     <div class="blog-hero-stats">
                         <div class="blog-hero-stat stat-record">
                             <span class="stat-value">118-90</span>
@@ -2394,7 +2417,7 @@
                         </div>
                     </div>
                     <p class="blog-preview">
-                        <span class="mono" style="font-size:11px; color:#777;">v1 archive: 203-155 (-0.3% ROI) — full ledger below, nothing deleted.</span><br>3 picks across 2 settled. Auto-rendered from <code>picks/mlb.json</code>.
+                        <span class="dispatch-era-strip mono"><b>VECTOR MODEL</b> ACTIVE SINCE JUL 16 &nbsp;·&nbsp; OLD MODEL RETIRED: 203-155 (-0.3% ROI) · MAY 1–JUL 15 — full ledger below, nothing deleted.</span><br>3 picks across 2 settled. Auto-rendered from <code>picks/mlb.json</code>.
                     </p>
                 </summary>
                 <div class="blog-card-body">
