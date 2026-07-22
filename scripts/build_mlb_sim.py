@@ -184,6 +184,28 @@ try:
 except Exception:
     ERA_SINCE = ""
 
+# Archived v1 line — display only, the model is retired. Ledger stays
+# append-only in picks/mlb.json.
+V1_ARCHIVE_LINE = ""
+_v1 = (MODEL_ERA or {}).get("v1_archive") or {}
+if _v1.get("tracked_record"):
+    try:
+        _s = _dt.strptime(_v1.get("start_date", ""), "%Y-%m-%d").strftime("%b %d").upper()
+        _e = _dt.strptime(_v1.get("end_date", ""), "%Y-%m-%d").strftime("%b %d").upper()
+        _span = f" · {_s}–{_e}"
+    except Exception:
+        _span = ""
+    _roi = _v1.get("tracked_roi_pct")
+    _roi_s = f" · {_roi:+.1f}% ROI" if _roi is not None else ""
+    V1_ARCHIVE_LINE = (
+        '<div style="margin-top:8px;display:flex;justify-content:space-between;gap:12px;'
+        "align-items:center;font-family:'JetBrains Mono',monospace;\">"
+        '<div style="font-size:9px;color:#555;letter-spacing:2px;font-weight:700;">OLD MODEL · RETIRED</div>'
+        f'<div style="font-size:10px;color:#777;font-weight:700;letter-spacing:0.5px;text-align:right;">'
+        f'{_v1["tracked_record"]}{_roi_s}{_span}</div>'
+        "</div>"
+    )
+
 MLB_API = "https://statsapi.mlb.com/api/v1"
 ET = timezone(timedelta(hours=-4))
 NOW = datetime.now(ET)
@@ -4366,6 +4388,7 @@ html = f'''<!DOCTYPE html>
         <div style="font-size:9px;color:#888;letter-spacing:2px;font-weight:700;">FILTER</div>
         <div style="font-size:11px;color:#fff;font-weight:700;line-height:1.3;letter-spacing:0.5px;text-align:right;">C:8+ <span style="color:#888;">PRICE GATES · {ERA_SINCE}</span></div>
     </div>
+    {V1_ARCHIVE_LINE}
   </div>
 </div>
 
