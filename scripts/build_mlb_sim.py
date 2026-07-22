@@ -2388,7 +2388,28 @@ def render_game(g, idx):
         gate_title = g.get("vector_gate_reason") or "Vector agreement gate blocked this play"
         gate_style = "background:#111;color:#FFEA00;border-color:#FFEA00"
         pick_html = f'<div class="sim-pick" style="{gate_style}" title="{h(gate_title)}">VECTOR BLOCK</div>'
-    elif g["has_lineups"] and g["conf"] >= 6 and g.get("pick_team") and g.get("pick_odds"):
+    elif g["has_lineups"] and int(g.get("conf") or 0) >= MIN_CONF_PICK and g.get("pick_team") and g.get("pick_odds"):
+        # C8+ that cleared price/edge but failed a publish gate — usually
+        # thin projected-lineup coverage on morning builds, re-evaluated as
+        # lineups confirm. Labeling these "LEAN" reads like tier inversion;
+        # name the gate instead.
+        if not g.get("pick_coverage_ok"):
+            why = "LINEUP COVERAGE"
+            wtitle = (
+                f'{g.get("missing_coverage_count", "?")} lineup spot(s) lack atlas coverage. '
+                'Tracked C8+ picks require full coverage; re-evaluated when lineups confirm.'
+            )
+        elif g.get("has_started"):
+            why = "STARTED UNPOSTED"
+            wtitle = "First pitch passed before the model qualified it; tracked picks must post pregame."
+        else:
+            why = "PUBLISH GATE"
+            wtitle = "Held by a publish gate."
+        pick_html = (
+            f'<div class="sim-pick" style="background:#fff;color:#111;border-color:#111" '
+            f'title="{h(wtitle)}">C{g["conf"]} HELD · {why}</div>'
+        )
+    elif g["has_lineups"] and 6 <= int(g.get("conf") or 0) <= 7 and g.get("pick_team") and g.get("pick_odds"):
         # Untracked LEAN tier: the model favors a side at C6-C7 — visible
         # content, never staked, never in the record.
         is_lean = True
