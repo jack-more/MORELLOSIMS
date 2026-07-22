@@ -2306,6 +2306,14 @@ def write_shadow_ledger(games):
         if old and (old.get("result") or old.get("frozen")):
             n_frozen += 1
             continue
+        if old and g.get("has_started"):
+            # The game started since the previous build: freeze the LAST
+            # PREGAME read. A projection recomputed mid-game is not a
+            # prediction — writing it here poisoned the learning loop
+            # (WSH@COL 2026-07-22 logged a 5.8 run_diff computed in-game).
+            old["frozen"] = True
+            n_frozen += 1
+            continue
         pe = g.get("pick_price_edge")
         rows[key] = {
             "date": TODAY,
@@ -2335,6 +2343,9 @@ def write_shadow_ledger(games):
             },
             "published": qualifies_as_pick(g),
             "frozen": bool(g.get("has_started")),
+            # First-ever sighting of an already-started game: numbers were
+            # computed live — analysis must exclude or flag these.
+            "captured_live": bool(g.get("has_started")) or None,
             "result": (old or {}).get("result"),
         }
         if old:
