@@ -1764,8 +1764,14 @@ for g in games_raw:
                     vs_woba = trust * vs_woba + (1 - trust) * base_w
                     h_rate = trust * h_rate + (1 - trust) * base_h
                     bb_rate = trust * bb_rate + (1 - trust) * base_bb
-                    hr_rate = trust * hr_rate + (1 - trust) * base_hr
                     tb_rate = trust * tb_rate + (1 - trust) * base_tb
+
+                # HRs are ~10x rarer than hits — the 50-PA ramp that works
+                # for wOBA lets 2-HR-in-9-PA cluster flukes claim 7x lifts
+                # (the Marte-vs-Melton board stack). HR always blends on its
+                # own 200-PA ramp so matchup HR rates need real samples.
+                trust_hr = min(1.0, total_pa / 200.0)
+                hr_rate = trust_hr * hr_rate + (1 - trust_hr) * base_hr
 
                 vs_woba = max(0.050, min(0.600, vs_woba))
             else:
