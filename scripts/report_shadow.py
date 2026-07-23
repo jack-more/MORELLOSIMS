@@ -97,5 +97,34 @@ def main():
             print(f"    >= {cut:<5} win% {100*w/len(b):5.1f}  net {pl:+9.1f}u  (n={len(b)})")
 
 
+def hr_board():
+    """HR board hit rates vs claims (reports/hr_board_ledger.json)."""
+    path = os.path.join(REPO, "reports", "hr_board_ledger.json")
+    try:
+        with open(path) as f:
+            rows = [r for r in json.load(f)["rows"].values() if r.get("result")]
+    except Exception:
+        return
+    if not rows:
+        return
+    print("\nHR BOARD (graded rows):")
+    for tier in ("core", "watch"):
+        t = [r for r in rows if r.get("tier") == tier and not r.get("captured_live")]
+        if not t:
+            continue
+        hit = sum(1 for r in t if r["result"]["homered"])
+        # implied per-game prob from the per-AB rate over ~3.9 AB
+        imp = sum(1 - (1 - min(r.get("hr_rate") or 0, .5)) ** 3.9 for r in t) / len(t)
+        print(f"  {tier:5s}: {hit}/{len(t)} homered ({100*hit/len(t):.0f}%)  "
+              f"board-implied {100*imp:.0f}%")
+    lanes = {}
+    for r in rows:
+        lanes.setdefault(r.get("lane") or "?", []).append(r)
+    for lane, lr in sorted(lanes.items()):
+        hit = sum(1 for r in lr if r["result"]["homered"])
+        print(f"    lane {lane:10s} {hit}/{len(lr)}")
+
+
 if __name__ == "__main__":
     main()
+    hr_board()

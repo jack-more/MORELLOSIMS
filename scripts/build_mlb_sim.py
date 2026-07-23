@@ -293,6 +293,19 @@ def wp_to_ml(prob):
 # ─── Park Factors (runs, 100 = neutral) ────────────────────────────────────
 # Source: FanGraphs 5-year rolling park factors for runs scored.
 # >100 = hitter-friendly, <100 = pitcher-friendly.
+# HR-specific park factors — distinct from the run factor above (Coors
+# inflates runs via gaps/altitude far more than HRs; Fenway suppresses HRs
+# while inflating runs). Static v1 table; applied to hitter HR rates only.
+PARK_HR_FACTOR = {
+    "CIN": 1.22, "NYY": 1.18, "LAD": 1.12, "PHI": 1.12, "CWS": 1.10,
+    "MIL": 1.09, "COL": 1.08, "TEX": 1.07, "BAL": 1.06, "ATL": 1.05,
+    "TOR": 1.04, "HOU": 1.04, "LAA": 1.03, "CHC": 1.02, "AZ": 1.01,
+    "MIN": 1.00, "WSH": 1.00, "CLE": 0.98, "NYM": 0.96, "SD": 0.95,
+    "BOS": 0.95, "TB": 0.95, "DET": 0.94, "SEA": 0.93, "STL": 0.92,
+    "KC": 0.92, "ATH": 0.95, "OAK": 0.95, "MIA": 0.90, "PIT": 0.89,
+    "SF": 0.85,
+}
+
 PARK_FACTOR = {
     "COL": 1.14, "BOS": 1.06, "CIN": 1.05, "TEX": 1.04, "ATL": 1.03,
     "AZ": 1.03, "PHI": 1.02, "CHC": 1.02, "MIN": 1.02, "MIL": 1.01,
@@ -1727,6 +1740,15 @@ for g in games_raw:
             season_hr_rate = season_hr / season_pa if season_pa > 0 else 0.0
             direct_h2h = opp_h2h.get(int(pid), {}) if pid is not None else {}
 
+            # Contact-quality anchor: barrels predict HRs far better than HR
+            # counts do. When the atlas has real batted-ball data, blend a
+            # barrel-implied HR rate (~55% of barrels leave the yard) into
+            # the batter's baseline before any matchup math.
+            _batted = float(profile.get("season_batted_2026") or 0)
+            if _batted >= 60 and season_pa > 0:
+                _xhr = (float(profile.get("season_barrels_2026") or 0) * 0.55) / season_pa
+                base_hr = 0.5 * base_hr + 0.5 * _xhr
+
             # GMM-weighted lookup across ALL pitcher clusters
             # This thickens the dataset by using 2nd/3rd DNA clusterings
             w_woba = 0; w_h = 0; w_bb = 0; w_hr = 0; w_tb = 0
@@ -1942,6 +1964,7 @@ for g in games_raw:
         # Fill opp info for daily tab
         away_matchups = all_batter_matchups[-len(away_lineup_raw)-len(home_lineup_raw):-len(home_lineup_raw)]
         home_matchups = all_batter_matchups[-len(home_lineup_raw):]
+        phr = PARK_HR_FACTOR.get(home_abbr, 1.00)
         for bm in away_matchups:
             bm["opp_pitcher"] = home_sp_name
             bm["opp_team"] = home_abbr
@@ -1958,6 +1981,15 @@ for g in games_raw:
             bm["park_factor"] = pf
             bm["team_total"] = home_runs
             bm["opp_bp_delta"] = home_bp_delta
+        # HR-specific park environment scales both sides' HR projections
+        for bm in away_matchups + home_matchups:
+            bm["park_hr_factor"] = phr
+            bm["game_pk"] = game_pk
+            bm["game_started"] = has_started
+            if bm.get("hr_rate"):
+                bm["hr_rate"] = round(bm["hr_rate"] * phr, 4)
+                bm["proj_hr"] = round((bm.get("proj_hr") or 0) * phr, 3)
+                bm["hr_lift"] = round(bm["hr_rate"] - (bm.get("base_hr_rate") or 0), 4)
     else:
         away_batters = []
         home_batters = []
@@ -3685,6 +3717,50 @@ def render_hr_watch_tab():
         display_ids.add(bm.get("id"))
     core_hr = display_pool[:HR_CORE_MAX_ROWS]
     longshot_damage = display_pool[HR_CORE_MAX_ROWS:HR_CORE_MAX_ROWS + HR_LONGSHOT_MAX_ROWS]
+
+    # ── HR board results ledger: what we claimed, frozen pregame, graded
+    # nightly by settle_mlb. "Get better at predicting these" starts with
+    # measuring what the board actually hits.
+    HR_LEDGER_PATH = os.path.join(REPO_ROOT, "reports", "hr_board_ledger.json")
+    try:
+        try:
+            with open(HR_LEDGER_PATH) as _f:
+                _hrled = json.load(_f)
+        except Exception:
+            _hrled = {"rows": {}}
+        _hrows = _hrled.setdefault("rows", {})
+        _n_new = _n_frozen = 0
+        for _tier, _pool in (("core", core_hr), ("watch", longshot_damage)):
+            for bm in _pool:
+                if not bm.get("id"):
+                    continue
+                _key = f"{TODAY}_{bm['id']}"
+                _old = _hrows.get(_key)
+                if _old and (_old.get("result") or _old.get("frozen")):
+                    _n_frozen += 1
+                    continue
+                if _old and bm.get("game_started"):
+                    _old["frozen"] = True
+                    _n_frozen += 1
+                    continue
+                _hrows[_key] = {
+                    "date": TODAY, "batter": bm.get("id"), "name": bm.get("name"),
+                    "team": bm.get("team"), "opp_pitcher": bm.get("opp_pitcher"),
+                    "game_pk": bm.get("game_pk"), "tier": _tier,
+                    "lane": hr_lane_label(bm),
+                    "hr_rate": bm.get("hr_rate"), "base_hr_rate": bm.get("base_hr_rate"),
+                    "park_hr_factor": bm.get("park_hr_factor"),
+                    "momo": bm.get("ms"), "momi": bm.get("momi"),
+                    "frozen": bool(bm.get("game_started")),
+                    "captured_live": bool(bm.get("game_started")) or None,
+                    "result": (_old or {}).get("result"),
+                }
+                _n_new += 1
+        with open(HR_LEDGER_PATH, "w") as _f:
+            json.dump(_hrled, _f, separators=(",", ":"))
+        print(f"  HR board ledger: {_n_new} upserted, {_n_frozen} frozen ({len(_hrows)} rows)")
+    except Exception as _e:
+        print(f"  WARN: HR board ledger write failed: {_e}")
     core_ids = {bm.get("id") for bm in core_hr}
 
     # Default-on: the GO-YARD card (post_daily_cards.py) needs a fresh audit

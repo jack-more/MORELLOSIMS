@@ -292,6 +292,58 @@ def settle_shadow_ledger():
         print(f"  Shadow ledger: settled {n} row(s) → {SHADOW_LEDGER}")
 
 
+HR_LEDGER = os.path.join(REPO, "reports", "hr_board_ledger.json")
+
+def settle_hr_board_ledger():
+    """Grade the HR board: did each listed bat actually homer that day?"""
+    try:
+        with open(HR_LEDGER) as f:
+            ledger = json.load(f)
+    except Exception:
+        return
+    rows = ledger.get("rows") or {}
+    todo = [r for r in rows.values() if not r.get("result")]
+    if not todo:
+        return
+    print(f"\n  HR board ledger: grading up to {len(todo)} row(s)…")
+    box_cache = {}
+    n = 0
+    for r in sorted(todo, key=lambda x: x["date"]):
+        pk = r.get("game_pk")
+        if not pk:
+            continue
+        if pk not in box_cache:
+            try:
+                url = f"https://statsapi.mlb.com/api/v1/game/{pk}/boxscore"
+                with urllib.request.urlopen(url, timeout=20) as resp:
+                    box_cache[pk] = json.loads(resp.read())
+            except Exception:
+                box_cache[pk] = None
+        box = box_cache[pk]
+        if not box:
+            continue
+        found = None
+        for side in ("away", "home"):
+            pl = (box.get("teams", {}).get(side, {}).get("players", {})
+                  .get(f"ID{r['batter']}"))
+            if pl:
+                bat = (pl.get("stats", {}) or {}).get("batting", {}) or {}
+                # allStarStatus etc aside — batting stats only exist post-game
+                if bat:
+                    found = {"hr": int(bat.get("homeRuns") or 0),
+                             "pa": int(bat.get("plateAppearances") or 0),
+                             "homered": int(bat.get("homeRuns") or 0) > 0}
+                break
+        if found and found["pa"] > 0:
+            r["result"] = found
+            n += 1
+    if n:
+        with open(HR_LEDGER, "w") as f:
+            json.dump(ledger, f, separators=(",", ":"))
+        print(f"  HR board ledger: graded {n} row(s)")
+
+
 if __name__ == "__main__":
     main()
     settle_shadow_ledger()
+    settle_hr_board_ledger()

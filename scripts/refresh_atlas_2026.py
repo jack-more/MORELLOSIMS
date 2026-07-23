@@ -1246,6 +1246,17 @@ def compute_hitter_seasons(df, name_map):
     pa_df["hit_type"] = pa_df["events"].apply(event_to_hit_type)
     print(f"  Plate appearances: {len(pa_df)}")
 
+    # Batted-ball power physics per batter (all pitches, not just PA-enders):
+    # barrels and hard-hit are the stable HR predictors — outcomes (HR
+    # counts) are noisy, contact quality is not.
+    bb_df = df[df["launch_speed"].notna()].copy()
+    bb_df["is_hard"] = bb_df["launch_speed"] >= 95
+    bb_df["is_barrel"] = (bb_df["launch_speed"] >= 98) & (bb_df["launch_angle"].between(18, 34))
+    power = {
+        int(bid): (int(g["is_barrel"].sum()), int(g["is_hard"].sum()), int(len(g)))
+        for bid, g in bb_df.groupby("batter")
+    }
+
     records = []
     for bid, group in pa_df.groupby("batter"):
         events = group["hit_type"].tolist()
@@ -1257,6 +1268,7 @@ def compute_hitter_seasons(df, name_map):
         k = events.count("strikeout")
         h = singles + doubles + triples + hr
         woba = compute_woba(events)
+        barrels, hard, batted = power.get(int(bid), (0, 0, 0))
 
         records.append({
             "batter": int(bid),
@@ -1267,6 +1279,9 @@ def compute_hitter_seasons(df, name_map):
             "season_BB_2026": float(bb),
             "season_K_2026": float(k),
             "season_wOBA_2026": float(woba) if woba is not None else 0.0,
+            "season_barrels_2026": float(barrels),
+            "season_hardhit_2026": float(hard),
+            "season_batted_2026": float(batted),
         })
 
     print(f"  Generated {len(records)} hitter-season records for 2026")
@@ -1302,6 +1317,7 @@ def merge_batters(new_records, name_map):
     SEASON_FIELDS = (
         "season_PA_2026", "season_H_2026", "season_HR_2026",
         "season_BB_2026", "season_K_2026", "season_wOBA_2026",
+        "season_barrels_2026", "season_hardhit_2026", "season_batted_2026",
     )
 
     n_updated = 0
