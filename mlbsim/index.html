@@ -11544,6 +11544,43 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 
 
 
+/* Scoped to .active — an unconditional #tab-lines display rule outranks the
+   .tab-content show/hide classes and pins the Lines board over other tabs.
+   EVERY non-card child must span the full row: sortGames re-appends only
+   .game-card nodes, so anything else (gen-badge) drifts ahead of the cards
+   and would otherwise squat in the first grid cell, blanking that slot. */
+@media(min-width:1000px){
+  #tab-lines.active{position:relative;left:50%;transform:translateX(-50%);width:96vw;max-width:1200px;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+  #tab-lines.active>:not(.game-card){grid-column:1/-1;margin-top:0;margin-bottom:0}
+  #tab-lines>.game-card{margin-bottom:0}
+}
+@media(min-width:1640px){
+  #tab-lines.active{max-width:1780px;grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+
+/* Editorial zine touches: micro-rotated cards, ghost slate numerals
+   bleeding off the card top, stamped pick badges, bold slate strip. */
+@media(min-width:1000px){
+  #tab-lines{counter-reset:game}
+  #tab-lines>.game-card{counter-increment:game;position:relative;
+    transform:rotate(.45deg);transition:transform .18s ease, box-shadow .18s ease}
+  #tab-lines>.game-card:nth-child(odd){transform:rotate(-.45deg)}
+  #tab-lines>.game-card:hover{transform:rotate(0) translate(-2px,-2px);box-shadow:10px 10px 0 var(--color-black)}
+  #tab-lines>.game-card::after{content:counter(game,decimal-leading-zero);
+    position:absolute;top:-16px;right:10px;font-family:'Anton',sans-serif;font-size:96px;line-height:1;
+    color:transparent;-webkit-text-stroke:2px rgba(8,8,8,.13);pointer-events:none;z-index:4}
+}
+.sim-pick{transform:rotate(-1.2deg);box-shadow:2px 2px 0 var(--color-black)}
+a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+#tab-lines .slate-info{border-top:3px solid var(--color-black);border-bottom:3px solid var(--color-black);
+  padding:8px 2px;margin:4px 0 16px}
+#tab-lines .slate-info span:first-child{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:1.5px;color:var(--color-black)}
+#tab-lines .slate-info span:last-child{background:var(--color-black);color:var(--color-accent);padding:3px 10px;font-weight:700}
+
+
+
 /* LINES_BOARD_GRID_V3 */
 /* Scoped to .active — an unconditional #tab-lines display rule outranks the
    .tab-content show/hide classes and pins the Lines board over other tabs.
@@ -11734,29 +11771,29 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
             <span>AUG 27 SLATE</span>
             <span>7 GAMES</span>
         </div>
-        <div class="game-card" data-conf="6" data-value="6" data-edge="0.8" data-lean="1">
+        <div class="game-card" data-conf="6" data-value="6" data-edge="1.0" data-lean="1">
   <div class="run-bar ma-premium">
   <div class="run-bar-seg" style="width:52%;background:#333366">10.5</div>
-  <div class="run-bar-seg" style="width:48%;background:#AB0003">9.7</div>
+  <div class="run-bar-seg" style="width:48%;background:#AB0003">9.5</div>
 </div>
   <div class="card-header">
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/115.svg" alt="COL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">COL</div>
     <div class="team-record">52-81</div>
-    <div class="team-ml">+121</div>
+    <div class="team-ml">+125</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
-    <div class="spread">52.1% — 47.9%</div>
-    <div class="ou-line">O/U 20.2</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors COL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN COL (+121) · C6</div>
+    <div class="spread">53.1% — 46.9%</div>
+    <div class="ou-line">O/U 20.0</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors COL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN COL (+125) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/120.svg" alt="WSH" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">WSH</div>
     <div class="team-record">62-73</div>
-    <div class="team-ml">-100</div>
+    <div class="team-ml">-140</div>
   </div>
 </div>
   
@@ -11776,13 +11813,13 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="model-breakdown">
     <div class="model-row">
       <span class="model-label">xwOBA</span>
-      <span class="model-val">COL .312</span>
+      <span class="model-val">COL .325</span>
       <div class="model-bar-mini">
         <div class="model-bar-away" style="width:49%;background:#333366"></div>
         <div class="model-bar-home" style="width:51%;background:#AB0003"></div>
       </div>
-      <span class="model-val">WSH .319</span>
-      <span class="model-edge-sm">WSH +.007</span>
+      <span class="model-val">WSH .333</span>
+      <span class="model-edge-sm">WSH +.008</span>
     </div>
     <div class="model-row">
       <span class="model-label">TIER</span>
@@ -11793,10 +11830,10 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </div>
     <div class="model-row model-formula-row ma-premium">
       <span class="model-label">MODEL</span>
-      <span class="model-formula">BaseRuns+Vector xwOBA×Tier×BP×Park(1.00) → <strong>COL 10.5 — WSH 9.7</strong> | Pyth WP</span>
+      <span class="model-formula">BaseRuns+Vector xwOBA×Tier×BP×Park(1.00) → <strong>COL 10.5 — WSH 9.5</strong> | Pyth WP</span>
     </div>
     <div class="model-row model-tags">
-      <span class="model-tag tag-arch" style="background:#FFEA00;color:#080808;border-color:#080808">VECTOR 45D</span><span class="model-tag tag-arch" title="Vector run adjustment">COL +0.0 / WSH +0.1</span><span class="model-tag tag-arch">vs T4_Fringe</span><span class="model-tag tag-arch">vs T4_Fringe</span>
+      <span class="model-tag tag-arch" style="background:#FFEA00;color:#080808;border-color:#080808">VECTOR 45D</span><span class="model-tag tag-arch" title="Vector run adjustment">COL +0.2 / WSH +0.3</span><span class="model-tag tag-arch">vs T4_Fringe</span><span class="model-tag tag-arch">vs T4_Fringe</span>
     </div>
   </div>
   <div class="game-meta">1:05 PM ET · Nationals Park</div>
@@ -11827,7 +11864,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="batter-detail">
       <span class="batter-stats">LF</span>
       <span class="batter-pa">154PA</span>
-      <span class="batter-range">+1.46 R</span>
+      <span class="batter-range">+1.47 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>76</span>
@@ -11863,76 +11900,13 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">3</span>
-    <span class="batter-name">T.J. Rumfield</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">1B</span>
-      <span class="batter-pa">148PA</span>
-      <span class="batter-range">+0.81 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>51</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>49</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.354</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.278</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">4</span>
-    <span class="batter-name">Hunter Goodman</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">C</span>
-      <span class="batter-pa">145PA</span>
-      <span class="batter-range">+1.50 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-favorable"><span>MOMO</span>83</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.358</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.382</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">5</span>
-    <span class="batter-name">Mickey Moniak</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">LF</span>
-      <span class="batter-pa">146PA</span>
-      <span class="batter-range">+0.92 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>51</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>51</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.331</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.281</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">6</span>
     <span class="batter-name">Willi Castro</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">2B</span>
       <span class="batter-pa">128PA</span>
-      <span class="batter-range">+1.43 R</span>
+      <span class="batter-range">+1.54 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>81</span>
@@ -11946,35 +11920,35 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">7</span>
-    <span class="batter-name">Zac Veen</span>
+    <span class="batter-order">4</span>
+    <span class="batter-name">TJ Rumfield</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">LF</span>
-      <span class="batter-pa">12PA</span>
-      <span class="batter-range">+0.51 R</span>
+      <span class="batter-stats">1B</span>
+      <span class="batter-pa">148PA</span>
+      <span class="batter-range">+0.78 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>54</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>54</span>
+      <span class="batter-metric ms-neutral"><span>MOMO</span>51</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>49</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.251</span>
+    <span class="woba-base"><span>WOBA</span>.354</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.285</span>
+    <span class="woba-vs cold"><span>ARCH</span>.278</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">8</span>
+    <span class="batter-order">5</span>
     <span class="batter-name">Connor Norby</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">2B</span>
       <span class="batter-pa">79PA</span>
-      <span class="batter-range">+0.42 R</span>
+      <span class="batter-range">+0.43 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>39</span>
@@ -11988,14 +11962,35 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">9</span>
+    <span class="batter-order">6</span>
+    <span class="batter-name">Troy Johnston</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">RF</span>
+      <span class="batter-pa">118PA</span>
+      <span class="batter-range">+1.10 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-neutral"><span>MOMO</span>64</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>73</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.326</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.325</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">7</span>
     <span class="batter-name">Brett Sullivan</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">C</span>
       <span class="batter-pa">54PA</span>
-      <span class="batter-range">+0.40 R</span>
+      <span class="batter-range">+0.42 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>37</span>
@@ -12007,6 +12002,48 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="woba-dna">🧬</span>
     <span class="woba-vs cold"><span>ARCH</span>.206</span>
   </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">8</span>
+    <span class="batter-name">Zac Veen</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">LF</span>
+      <span class="batter-pa">12PA</span>
+      <span class="batter-range">+0.50 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-neutral"><span>MOMO</span>54</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>54</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.251</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs hot"><span>ARCH</span>.285</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">9</span>
+    <span class="batter-name">Ezequiel Tovar</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">SS</span>
+      <span class="batter-pa">137PA</span>
+      <span class="batter-range">+0.98 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-neutral"><span>MOMO</span>67</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>74</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.297</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs hot"><span>ARCH</span>.335</span>
+  </div>
 </div>
   </div>
   <div class="lineup-col">
@@ -12014,76 +12051,13 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">1</span>
-    <span class="batter-name">Dylan Crews</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">RF</span>
-      <span class="batter-pa">116PA</span>
-      <span class="batter-range">+0.76 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>47</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.287</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.262</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">2</span>
-    <span class="batter-name">Abimelec Ortiz</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">1B</span>
-      <span class="batter-pa">19PA</span>
-      <span class="batter-range">+0.97 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-favorable"><span>MOMO</span>70</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>70</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.306</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.342</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">3</span>
-    <span class="batter-name">Jose Tena</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">DH</span>
-      <span class="batter-pa">122PA</span>
-      <span class="batter-range">+0.73 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>48</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>47</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.306</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.268</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">4</span>
     <span class="batter-name">CJ Abrams</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">SS</span>
       <span class="batter-pa">219PA</span>
-      <span class="batter-range">+1.13 R</span>
+      <span class="batter-range">+1.22 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>77</span>
@@ -12097,35 +12071,56 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">5</span>
-    <span class="batter-name">Keibert Ruiz</span>
+    <span class="batter-order">2</span>
+    <span class="batter-name">Dylan Crews</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">C</span>
+      <span class="batter-stats">RF</span>
       <span class="batter-pa">116PA</span>
-      <span class="batter-range">+1.05 R</span>
+      <span class="batter-range">+0.74 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>65</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>76</span>
+      <span class="batter-metric ms-tough"><span>MOMO</span>47</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.304</span>
+    <span class="woba-base"><span>WOBA</span>.287</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.327</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.262</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">6</span>
+    <span class="batter-order">3</span>
+    <span class="batter-name">Andrés Chaparro</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">1B</span>
+      <span class="batter-pa">14PA</span>
+      <span class="batter-range">+0.53 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-neutral"><span>MOMO</span>65</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>75</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.332</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.328</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">4</span>
     <span class="batter-name">Daylen Lile</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">LF</span>
       <span class="batter-pa">186PA</span>
-      <span class="batter-range">+1.38 R</span>
+      <span class="batter-range">+1.47 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>88</span>
@@ -12139,24 +12134,66 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">7</span>
-    <span class="batter-name">Nasim Nunez</span>
+    <span class="batter-order">5</span>
+    <span class="batter-name">Brady House</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">2B</span>
-      <span class="batter-pa">125PA</span>
-      <span class="batter-range">+0.79 R</span>
+      <span class="batter-stats">3B</span>
+      <span class="batter-pa">88PA</span>
+      <span class="batter-range">+0.64 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>48</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>48</span>
+      <span class="batter-metric ms-tough"><span>MOMO</span>44</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>42</span>
     </span>
   </div>
   <div class="batter-woba">
     <span class="woba-base"><span>WOBA</span>.281</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.264</span>
+    <span class="woba-vs cold"><span>ARCH</span>.246</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">6</span>
+    <span class="batter-name">Keibert Ruiz</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">C</span>
+      <span class="batter-pa">116PA</span>
+      <span class="batter-range">+1.02 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-neutral"><span>MOMO</span>65</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>76</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.304</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.327</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">7</span>
+    <span class="batter-name">Jacob Young</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">CF</span>
+      <span class="batter-pa">145PA</span>
+      <span class="batter-range">+0.67 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-tough"><span>MOMO</span>47</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>47</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.304</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs cold"><span>ARCH</span>.269</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
@@ -12167,7 +12204,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="batter-detail">
       <span class="batter-stats">3B</span>
       <span class="batter-pa">96PA</span>
-      <span class="batter-range">+0.94 R</span>
+      <span class="batter-range">+0.93 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>60</span>
@@ -12182,50 +12219,50 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">9</span>
-    <span class="batter-name">Jacob Young</span>
+    <span class="batter-name">Nasim Nuñez</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">CF</span>
-      <span class="batter-pa">145PA</span>
-      <span class="batter-range">+0.64 R</span>
+      <span class="batter-stats">2B</span>
+      <span class="batter-pa">125PA</span>
+      <span class="batter-range">+0.72 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>47</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>47</span>
+      <span class="batter-metric ms-tough"><span>MOMO</span>48</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>48</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.304</span>
+    <span class="woba-base"><span>WOBA</span>.281</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.269</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.264</span>
   </div>
 </div>
   </div>
 </div>
-</div><div class="game-card" data-conf="3" data-value="3" data-edge="0.2" data-lean="0">
+</div><div class="game-card" data-conf="6" data-value="6" data-edge="2.6" data-lean="1">
   <div class="run-bar ma-premium">
-  <div class="run-bar-seg" style="width:49%;background:#DF4601">5.1</div>
-  <div class="run-bar-seg" style="width:51%;background:#C41E3A">5.3</div>
+  <div class="run-bar-seg" style="width:60%;background:#DF4601">8.0</div>
+  <div class="run-bar-seg" style="width:40%;background:#C41E3A">5.4</div>
 </div>
   <div class="card-header">
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/110.svg" alt="BAL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">BAL</div>
     <div class="team-record">65-68</div>
-    <div class="team-ml">-108</div>
+    <div class="team-ml">-125</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
-    <div class="spread">46.7% — 53.3%</div>
-    <div class="ou-line">O/U 10.4</div>
-    <div class="sim-pick" style="background:#333;color:#888;border-color:#555">NO PLAY</div>
+    <div class="spread">65.0% — 35.0%</div>
+    <div class="ou-line">O/U 13.4</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors BAL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN BAL (-125) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/138.svg" alt="STL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">STL</div>
     <div class="team-record">66-68</div>
-    <div class="team-ml">-101</div>
+    <div class="team-ml">+112</div>
   </div>
 </div>
   
@@ -12237,35 +12274,35 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </div>
   <div class="sp-vs">VS</div>
   <div class="sp-side">
-      <div class="sp-name">Cooper Hjerpe</div>
-      <span class="arch-badge">No 2026/25 Sample</span>
+      <div class="sp-name">Gordon Graceffo</div>
+      <span class="arch-badge">Kitchen Sink</span>
       <div class="sp-stats">RHP</div>
     </div>
 </div>
   <div class="model-breakdown">
     <div class="model-row">
-      <span class="model-label">wOBA</span>
-      <span class="model-val">BAL .331</span>
+      <span class="model-label">xwOBA</span>
+      <span class="model-val">BAL .323</span>
       <div class="model-bar-mini">
-        <div class="model-bar-away" style="width:57%;background:#DF4601"></div>
-        <div class="model-bar-home" style="width:43%;background:#C41E3A"></div>
+        <div class="model-bar-away" style="width:51%;background:#DF4601"></div>
+        <div class="model-bar-home" style="width:49%;background:#C41E3A"></div>
       </div>
-      <span class="model-val">STL .249</span>
-      <span class="model-edge-sm">BAL +.082</span>
+      <span class="model-val">STL .307</span>
+      <span class="model-edge-sm">BAL +.016</span>
     </div>
     <div class="model-row">
       <span class="model-label">TIER</span>
       <span class="model-val">T2_Core (0.95×)</span>
       <div class="model-mid-spacer"></div>
-      <span class="model-val">T3_Standard (1.00×)</span>
+      <span class="model-val">T4_Fringe (1.10×)</span>
       <span class="model-edge-sm"></span>
     </div>
     <div class="model-row model-formula-row ma-premium">
       <span class="model-label">MODEL</span>
-      <span class="model-formula">BaseRuns×Tier×Park(0.98) → <strong>BAL 5.1 — STL 5.3</strong> | Pyth WP</span>
+      <span class="model-formula">BaseRuns+Vector xwOBA×Tier×BP×Park(0.98) → <strong>BAL 8.0 — STL 5.4</strong> | Pyth WP</span>
     </div>
     <div class="model-row model-tags">
-      <span class="model-tag tag-arch">vs T2_Core</span><span class="model-tag tag-arch">vs T3_Standard</span>
+      <span class="model-tag tag-arch" style="background:#FFEA00;color:#080808;border-color:#080808">VECTOR 45D</span><span class="model-tag tag-arch" title="Vector run adjustment">BAL +0.1 / STL -0.1</span><span class="model-tag tag-arch">vs T2_Core</span><span class="model-tag tag-arch">vs T4_Fringe</span>
     </div>
   </div>
   <div class="game-meta">2:15 PM ET · Busch Stadium</div>
@@ -12295,92 +12332,134 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">2B</span>
-      <span class="batter-pa">25PA</span>
-      <span class="batter-range">+0.60 R</span>
+      <span class="batter-pa">163PA</span>
+      <span class="batter-range">+0.99 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>67</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>65</span>
+      <span class="batter-metric ms-favorable"><span>MOMO</span>84</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>82</span>
     </span>
   </div>
   <div class="batter-woba">
     <span class="woba-base"><span>WOBA</span>.304</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.334</span>
+    <span class="woba-vs hot"><span>ARCH</span>.383</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">2</span>
-    <span class="batter-name">Peter Alonso</span>
+    <span class="batter-name">Pete Alonso</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">1B</span>
-      <span class="batter-pa">18PA</span>
-      <span class="batter-range">+0.67 R</span>
+      <span class="batter-pa">237PA</span>
+      <span class="batter-range">+1.27 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-favorable"><span>MOMO</span>70</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>92</span>
+      <span class="batter-metric ms-elite"><span>MOMO</span>86</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
     </span>
   </div>
   <div class="batter-woba">
     <span class="woba-base"><span>WOBA</span>.373</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.342</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.392</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">3</span>
-    <span class="batter-name">Tyler O'Neill</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">RF</span>
-      <span class="batter-pa">9PA</span>
-      <span class="batter-range">+0.58 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>61</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>61</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.332</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.315</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">4</span>
-    <span class="batter-name">Coby Mayo</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">3B</span>
-      <span class="batter-pa">11PA</span>
-      <span class="batter-range">+0.68 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-favorable"><span>MOMO</span>70</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>73</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.299</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.341</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">5</span>
     <span class="batter-name">Gunnar Henderson</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">SS</span>
-      <span class="batter-pa">20PA</span>
-      <span class="batter-range">+0.70 R</span>
+      <span class="batter-pa">250PA</span>
+      <span class="batter-range">+1.00 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-favorable"><span>MOMO</span>81</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>84</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.341</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs hot"><span>ARCH</span>.375</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">4</span>
+    <span class="batter-name">Samuel Basallo</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">C</span>
+      <span class="batter-pa">121PA</span>
+      <span class="batter-range">+0.38 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-tough"><span>MOMO</span>36</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>34</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.302</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs cold"><span>ARCH</span>.2</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">5</span>
+    <span class="batter-name">Christian Encarnacion-Strand</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">3B</span>
+      <span class="batter-pa">47PA</span>
+      <span class="batter-range">+0.15 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-tough"><span>MOMO</span>38</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>42</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.293</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs cold"><span>ARCH</span>.212</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">6</span>
+    <span class="batter-name">Dylan Beavers</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">RF</span>
+      <span class="batter-pa">126PA</span>
+      <span class="batter-range">+0.89 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-favorable"><span>MOMO</span>77</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>96</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.324</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs hot"><span>ARCH</span>.366</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">7</span>
+    <span class="batter-name">Coby Mayo</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">3B</span>
+      <span class="batter-pa">119PA</span>
+      <span class="batter-range">+0.99 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>83</span>
@@ -12388,93 +12467,51 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.341</span>
+    <span class="woba-base"><span>WOBA</span>.299</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.381</span>
+    <span class="woba-vs hot"><span>ARCH</span>.383</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">6</span>
-    <span class="batter-name">Christian Encarnacion-Strand</span>
+    <span class="batter-order">8</span>
+    <span class="batter-name">Colton Cowser</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">3B</span>
-      <span class="batter-pa">8PA</span>
-      <span class="batter-range">+0.58 R</span>
+      <span class="batter-stats">CF</span>
+      <span class="batter-pa">142PA</span>
+      <span class="batter-range">+0.68 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>61</span>
+      <span class="batter-metric ms-neutral"><span>MOMO</span>55</span>
       <span class="batter-metric ms-neutral"><span>MOMI</span>65</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.293</span>
+    <span class="woba-base"><span>WOBA</span>.305</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.314</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.295</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">7</span>
+    <span class="batter-order">9</span>
     <span class="batter-name">Leody Taveras</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">CF</span>
-      <span class="batter-pa">11PA</span>
-      <span class="batter-range">+0.56 R</span>
+      <span class="batter-pa">122PA</span>
+      <span class="batter-range">+0.51 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>68</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>74</span>
+      <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>52</span>
     </span>
   </div>
   <div class="batter-woba">
     <span class="woba-base"><span>WOBA</span>.286</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.338</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">8</span>
-    <span class="batter-name">Christian Franklin</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">CF</span>
-      <span class="batter-pa">0PA</span>
-      <span class="batter-range">+0.29 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>56</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>56</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.3</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.3</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">9</span>
-    <span class="batter-name">Carlos Narvaez</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">C</span>
-      <span class="batter-pa">14PA</span>
-      <span class="batter-range">+0.47 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>61</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>61</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.276</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.311</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.261</span>
   </div>
 </div>
   </div>
@@ -12483,34 +12520,34 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">1</span>
-    <span class="batter-name">JJ Wetherholt</span>
+    <span class="batter-name">José Fermín</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">2B</span>
-      <span class="batter-pa">88PA</span>
-      <span class="batter-range">+0.40 R</span>
+      <span class="batter-stats">LF</span>
+      <span class="batter-pa">69PA</span>
+      <span class="batter-range">+0.59 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>32</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>51</span>
+      <span class="batter-metric ms-tough"><span>MOMO</span>36</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>38</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.325</span>
+    <span class="woba-base"><span>WOBA</span>.303</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.153</span>
+    <span class="woba-vs cold"><span>ARCH</span>.199</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">2</span>
-    <span class="batter-name">Ivan Herrera</span>
+    <span class="batter-name">Iván Herrera</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">DH</span>
       <span class="batter-pa">102PA</span>
-      <span class="batter-range">+0.39 R</span>
+      <span class="batter-range">+0.42 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>33</span>
@@ -12552,7 +12589,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="batter-detail">
       <span class="batter-stats">1B</span>
       <span class="batter-pa">96PA</span>
-      <span class="batter-range">+0.97 R</span>
+      <span class="batter-range">+0.95 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>62</span>
@@ -12567,13 +12604,13 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">5</span>
-    <span class="batter-name">Joshua Baez</span>
+    <span class="batter-name">Joshua Báez</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">LF</span>
       <span class="batter-pa">0PA</span>
-      <span class="batter-range">+0.54 R</span>
+      <span class="batter-range">+0.52 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>52</span>
@@ -12594,7 +12631,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="batter-detail">
       <span class="batter-stats">3B</span>
       <span class="batter-pa">32PA</span>
-      <span class="batter-range">+0.52 R</span>
+      <span class="batter-range">+0.51 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>44</span>
@@ -12609,55 +12646,55 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">7</span>
-    <span class="batter-name">Jose Fermin</span>
+    <span class="batter-name">Ramón Urías</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">LF</span>
-      <span class="batter-pa">69PA</span>
-      <span class="batter-range">+0.51 R</span>
+      <span class="batter-stats">3B</span>
+      <span class="batter-pa">36PA</span>
+      <span class="batter-range">+0.00 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>36</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>38</span>
+      <span class="batter-metric ms-elite"><span>MOMO</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.303</span>
+    <span class="woba-base"><span>WOBA</span>.316</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.199</span>
+    <span class="woba-vs hot"><span>ARCH</span>.6</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">8</span>
-    <span class="batter-name">Bryan Torres</span>
+    <span class="batter-name">Nathan Church</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">LF</span>
-      <span class="batter-pa">16PA</span>
-      <span class="batter-range">+0.22 R</span>
+      <span class="batter-stats">CF</span>
+      <span class="batter-pa">34PA</span>
+      <span class="batter-range">+0.85 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>36</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>49</span>
+      <span class="batter-metric ms-neutral"><span>MOMO</span>67</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>84</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.292</span>
+    <span class="woba-base"><span>WOBA</span>.283</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.198</span>
+    <span class="woba-vs hot"><span>ARCH</span>.336</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">9</span>
-    <span class="batter-name">Pedro Pages</span>
+    <span class="batter-name">Pedro Pagés</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">C</span>
       <span class="batter-pa">62PA</span>
-      <span class="batter-range">+0.35 R</span>
+      <span class="batter-range">+0.34 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>37</span>
@@ -12682,19 +12719,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/117.svg" alt="HOU" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">HOU</div>
     <div class="team-record">66-67</div>
-    <div class="team-ml">+110</div>
+    <div class="team-ml">+138</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">37.9% — 62.1%</div>
     <div class="ou-line">O/U 17.0</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors NYY at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN NYY (-118) · C6</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors NYY at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN NYY (-158) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/147.svg" alt="NYY" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">NYY</div>
     <div class="team-record">75-57</div>
-    <div class="team-ml">-118</div>
+    <div class="team-ml">-158</div>
   </div>
 </div>
   
@@ -12719,8 +12756,8 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
         <div class="model-bar-away" style="width:49%;background:#002D62"></div>
         <div class="model-bar-home" style="width:51%;background:#092C5C"></div>
       </div>
-      <span class="model-val">NYY .317</span>
-      <span class="model-edge-sm">NYY +.008</span>
+      <span class="model-val">NYY .319</span>
+      <span class="model-edge-sm">NYY +.01</span>
     </div>
     <div class="model-row">
       <span class="model-label">TIER</span>
@@ -13141,7 +13178,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div>
   </div>
 </div>
-</div><div class="game-card" data-conf="9" data-value="9" data-edge="2.2" data-lean="0">
+</div><div class="game-card" data-conf="6" data-value="6" data-edge="2.2" data-lean="1">
   <div class="run-bar ma-premium">
   <div class="run-bar-seg" style="width:58%;background:#004687">8.3</div>
   <div class="run-bar-seg" style="width:42%;background:#134A8E">6.1</div>
@@ -13151,19 +13188,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/118.svg" alt="KC" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">KC</div>
     <div class="team-record">59-75</div>
-    <div class="team-ml">+136</div>
+    <div class="team-ml">-108</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">62.2% — 37.8%</div>
     <div class="ou-line">O/U 14.4</div>
-    <div class="sim-pick"><span class="pick-type-label">ML</span> KC ML <span class="mc-conf-num" style="color:#00FF55" title="Confidence">C:9</span></div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors KC at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN KC (-108) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/141.svg" alt="TOR" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">TOR</div>
     <div class="team-record">65-69</div>
-    <div class="team-ml">-149</div>
+    <div class="team-ml">-104</div>
   </div>
 </div>
   
@@ -13183,12 +13220,12 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="model-breakdown">
     <div class="model-row">
       <span class="model-label">xwOBA</span>
-      <span class="model-val">KC .321</span>
+      <span class="model-val">KC .319</span>
       <div class="model-bar-mini">
         <div class="model-bar-away" style="width:53%;background:#004687"></div>
         <div class="model-bar-home" style="width:47%;background:#134A8E"></div>
       </div>
-      <span class="model-val">TOR .287</span>
+      <span class="model-val">TOR .285</span>
       <span class="model-edge-sm">KC +.034</span>
     </div>
     <div class="model-row">
@@ -13620,19 +13657,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/158.svg" alt="MIL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">MIL</div>
     <div class="team-record">82-51</div>
-    <div class="team-ml">-152</div>
+    <div class="team-ml">-193</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">65.0% — 35.0%</div>
     <div class="ou-line">O/U 16.9</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors MIL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN MIL (-152) · C6</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors MIL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN MIL (-193) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/121.svg" alt="NYM" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">NYM</div>
     <div class="team-record">60-73</div>
-    <div class="team-ml">+141</div>
+    <div class="team-ml">+171</div>
   </div>
 </div>
   
@@ -14079,29 +14116,29 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div>
   </div>
 </div>
-</div><div class="game-card" data-conf="0" data-value="0" data-edge="3.8" data-lean="0">
+</div><div class="game-card" data-conf="6" data-value="6" data-edge="3.9" data-lean="1">
   <div class="run-bar ma-premium">
-  <div class="run-bar-seg" style="width:38%;background:#005A9C">5.7</div>
-  <div class="run-bar-seg" style="width:62%;background:#CE1141">9.5</div>
+  <div class="run-bar-seg" style="width:37%;background:#005A9C">5.7</div>
+  <div class="run-bar-seg" style="width:63%;background:#CE1141">9.6</div>
 </div>
   <div class="card-header">
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/119.svg" alt="LAD" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">LAD</div>
     <div class="team-record">80-53</div>
-    <div class="team-ml">-121</div>
+    <div class="team-ml">+107</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">35.0% — 65.0%</div>
-    <div class="ou-line">O/U 15.2</div>
-    <div class="sim-pick" style="background:#111;color:#FFEA00;border-color:#FFEA00" title="vec +0.00217 &gt;= +0.00000; xwoba -0.00849 &gt;= +0.00000">VECTOR BLOCK</div>
+    <div class="ou-line">O/U 15.3</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors ATL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN ATL (-123) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/144.svg" alt="ATL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">ATL</div>
     <div class="team-record">78-55</div>
-    <div class="team-ml">+110</div>
+    <div class="team-ml">-123</div>
   </div>
 </div>
   
@@ -14121,13 +14158,13 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="model-breakdown">
     <div class="model-row">
       <span class="model-label">xwOBA</span>
-      <span class="model-val">LAD .312</span>
+      <span class="model-val">LAD .313</span>
       <div class="model-bar-mini">
-        <div class="model-bar-away" style="width:51%;background:#005A9C"></div>
-        <div class="model-bar-home" style="width:49%;background:#CE1141"></div>
+        <div class="model-bar-away" style="width:50%;background:#005A9C"></div>
+        <div class="model-bar-home" style="width:50%;background:#CE1141"></div>
       </div>
-      <span class="model-val">ATL .303</span>
-      <span class="model-edge-sm">LAD +.009</span>
+      <span class="model-val">ATL .307</span>
+      <span class="model-edge-sm">LAD +.006</span>
     </div>
     <div class="model-row">
       <span class="model-label">TIER</span>
@@ -14138,7 +14175,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </div>
     <div class="model-row model-formula-row ma-premium">
       <span class="model-label">MODEL</span>
-      <span class="model-formula">BaseRuns+Vector xwOBA×Tier×BP×Park(1.03) → <strong>LAD 5.7 — ATL 9.5</strong> | Pyth WP</span>
+      <span class="model-formula">BaseRuns+Vector xwOBA×Tier×BP×Park(1.03) → <strong>LAD 5.7 — ATL 9.6</strong> | Pyth WP</span>
     </div>
     <div class="model-row model-tags">
       <span class="model-tag tag-arch" style="background:#FFEA00;color:#080808;border-color:#080808">VECTOR 45D</span><span class="model-tag tag-arch" title="Vector run adjustment">LAD -0.2 / ATL -0.7</span><span class="model-tag tag-arch">vs T2_Core</span><span class="model-tag tag-arch">vs T1_Apex</span>
@@ -14548,7 +14585,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div>
   </div>
 </div>
-</div><div class="game-card" data-conf="9" data-value="9" data-edge="2.2" data-lean="0">
+</div><div class="game-card" data-conf="6" data-value="6" data-edge="2.2" data-lean="1">
   <div class="run-bar ma-premium">
   <div class="run-bar-seg" style="width:56%;background:#A71930">10.3</div>
   <div class="run-bar-seg" style="width:44%;background:#FD5A1E">8.1</div>
@@ -14558,19 +14595,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/109.svg" alt="AZ" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">AZ</div>
     <div class="team-record">71-63</div>
-    <div class="team-ml">—</div>
+    <div class="team-ml">-107</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">59.3% — 40.7%</div>
     <div class="ou-line">O/U 18.4</div>
-    <div class="sim-pick" style="background:#FFA500;color:#000;border-color:#000">NO LINE — book has not posted ML</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors AZ at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN AZ (-107) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/137.svg" alt="SF" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">SF</div>
     <div class="team-record">54-79</div>
-    <div class="team-ml">—</div>
+    <div class="team-ml">-105</div>
   </div>
 </div>
   
@@ -15018,7 +15055,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div>
 </div>
-        <div class="gen-badge">Generated 2026-08-27 01:57 ET · Powered by ATLAS Pitcher DNA</div>
+        <div class="gen-badge">Generated 2026-08-27 13:05 ET · Powered by ATLAS Pitcher DNA</div>
     </div>
 
     <!-- DAILY TAB -->
@@ -15759,13 +15796,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
                     <div class="bucket-copy">Official moneyline board, separate from HR edges.</div>
                     <div class="criteria-row"><span>C:8+ board</span> <span>ROI price gates</span> <span>posted picks persist</span></div>
                 </div>
-                        <div class="picks-container ma-premium"><div class="pick-row ma-premium">
-  <div class="pick-rank">1</div>
-  <div class="pick-info">
-    <div class="pick-label gp-pick-strong">KC ML <span class="mc-conf-num" style="color:#00FF55">C:9</span></div>
-    <div class="pick-matchup">KC @ TOR</div>
-  </div>
-</div></div>
+                        <div class="picks-container ma-premium"></div>
                     </div>
                 </div>
                 <div class="daily-col daily-side daily-hot-side">
@@ -15797,20 +15828,20 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="trend-row">
   <div class="trend-rank">3</div>
   <div class="trend-info">
-    <div class="trend-name">🟢 Peter Alonso</div>
-    <div class="trend-meta">4/5 hit games &middot; L7 .429 &middot; MOMO 70 &middot; MOMI 92 &middot; BAL vs Cooper Hjerpe (STL)</div>
-  </div>
-  <div class="trend-right">
-    <div class="trend-ms ms-favorable">70</div>
-  </div>
-</div><div class="trend-row">
-  <div class="trend-rank">4</div>
-  <div class="trend-info">
     <div class="trend-name">🔥 Bryce Eldridge</div>
     <div class="trend-meta">4/5 hit games &middot; L7 .32 &middot; MOMO 75 &middot; MOMI 94 &middot; SF vs Jose Cabrera (AZ) &middot; wOBA +.022</div>
   </div>
   <div class="trend-right">
     <div class="trend-ms ms-favorable">75</div>
+  </div>
+</div><div class="trend-row">
+  <div class="trend-rank">4</div>
+  <div class="trend-info">
+    <div class="trend-name">🟢 Dylan Beavers</div>
+    <div class="trend-meta">4/5 hit games &middot; L7 .381 &middot; MOMO 77 &middot; MOMI 96 &middot; BAL vs Gordon Graceffo (STL) &middot; wOBA +.042</div>
+  </div>
+  <div class="trend-right">
+    <div class="trend-ms ms-favorable">77</div>
   </div>
 </div><div class="trend-row">
   <div class="trend-rank">5</div>
@@ -15979,6 +16010,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
           <td class="hr-col-rank">8</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
+          <td class="hr-col-hitter"><strong>Pete Alonso</strong><span>BAL &middot; #2</span></td>
+          <td class="hr-col-match">Gordon Graceffo<span>STL</span></td>
+          <td><span class="hr-board-lane lane-power">HR Profile</span></td>
+          <td>9.4%</td>
+          <td>56</td>
+          <td class="hr-col-sur">106</td>
+          <td class="hr-col-stack">6.0</td>
+          <td class="hr-col-park">0.98x</td>
+          <td class="hr-col-total">8.0</td>
+          <td class="hr-col-h2h">0</td>
+        </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
+          <td class="hr-col-rank">9</td>
+          <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Shohei Ohtani</strong><span>LAD &middot; #1</span></td>
           <td class="hr-col-match">Chris Sale<span>ATL</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
@@ -15990,30 +16034,17 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td class="hr-col-total">5.8</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">9</td>
-          <td><span class="hr-status-pill status-watch">WATCH</span></td>
-          <td class="hr-col-hitter"><strong>Hunter Goodman</strong><span>COL &middot; #4</span></td>
-          <td class="hr-col-match">Jake Irvin<span>WSH</span></td>
-          <td><span class="hr-board-lane lane-power">HR Profile</span></td>
-          <td>9.1%</td>
-          <td>53</td>
-          <td class="hr-col-sur">122</td>
-          <td class="hr-col-stack">9.0</td>
-          <td class="hr-col-park">1.00x</td>
-          <td class="hr-col-total">10.5</td>
-          <td class="hr-col-h2h">1/8</td>
-        </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
           <td class="hr-col-rank">10</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
-          <td class="hr-col-hitter"><strong>Daylen Lile</strong><span>WSH &middot; #6</span></td>
+          <td class="hr-col-hitter"><strong>Daylen Lile</strong><span>WSH &middot; #4</span></td>
           <td class="hr-col-match">Gabriel Hughes<span>COL</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>9.0%</td>
-          <td>51</td>
-          <td class="hr-col-sur">115</td>
-          <td class="hr-col-stack">13.5</td>
+          <td>53</td>
+          <td class="hr-col-sur">108</td>
+          <td class="hr-col-stack">7.7</td>
           <td class="hr-col-park">1.00x</td>
-          <td class="hr-col-total">9.6</td>
+          <td class="hr-col-total">9.1</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="SURGE" data-hr-status="watch">
           <td class="hr-col-rank">11</td>
@@ -16044,15 +16075,15 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
           <td class="hr-col-rank">13</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
-          <td class="hr-col-hitter"><strong>CJ Abrams</strong><span>WSH &middot; #4</span></td>
+          <td class="hr-col-hitter"><strong>CJ Abrams</strong><span>WSH &middot; #1</span></td>
           <td class="hr-col-match">Gabriel Hughes<span>COL</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>7.9%</td>
-          <td>46</td>
-          <td class="hr-col-sur">105</td>
-          <td class="hr-col-stack">15.0</td>
+          <td>49</td>
+          <td class="hr-col-sur">98</td>
+          <td class="hr-col-stack">9.3</td>
           <td class="hr-col-park">1.00x</td>
-          <td class="hr-col-total">9.6</td>
+          <td class="hr-col-total">9.1</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
           <td class="hr-col-rank">14</td>
