@@ -15355,6 +15355,43 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 
 
 
+/* Scoped to .active — an unconditional #tab-lines display rule outranks the
+   .tab-content show/hide classes and pins the Lines board over other tabs.
+   EVERY non-card child must span the full row: sortGames re-appends only
+   .game-card nodes, so anything else (gen-badge) drifts ahead of the cards
+   and would otherwise squat in the first grid cell, blanking that slot. */
+@media(min-width:1000px){
+  #tab-lines.active{position:relative;left:50%;transform:translateX(-50%);width:96vw;max-width:1200px;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+  #tab-lines.active>:not(.game-card){grid-column:1/-1;margin-top:0;margin-bottom:0}
+  #tab-lines>.game-card{margin-bottom:0}
+}
+@media(min-width:1640px){
+  #tab-lines.active{max-width:1780px;grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+
+/* Editorial zine touches: micro-rotated cards, ghost slate numerals
+   bleeding off the card top, stamped pick badges, bold slate strip. */
+@media(min-width:1000px){
+  #tab-lines{counter-reset:game}
+  #tab-lines>.game-card{counter-increment:game;position:relative;
+    transform:rotate(.45deg);transition:transform .18s ease, box-shadow .18s ease}
+  #tab-lines>.game-card:nth-child(odd){transform:rotate(-.45deg)}
+  #tab-lines>.game-card:hover{transform:rotate(0) translate(-2px,-2px);box-shadow:10px 10px 0 var(--color-black)}
+  #tab-lines>.game-card::after{content:counter(game,decimal-leading-zero);
+    position:absolute;top:-16px;right:10px;font-family:'Anton',sans-serif;font-size:96px;line-height:1;
+    color:transparent;-webkit-text-stroke:2px rgba(8,8,8,.13);pointer-events:none;z-index:4}
+}
+.sim-pick{transform:rotate(-1.2deg);box-shadow:2px 2px 0 var(--color-black)}
+a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+#tab-lines .slate-info{border-top:3px solid var(--color-black);border-bottom:3px solid var(--color-black);
+  padding:8px 2px;margin:4px 0 16px}
+#tab-lines .slate-info span:first-child{font-family:'Anton',sans-serif;font-size:19px;letter-spacing:1.5px;color:var(--color-black)}
+#tab-lines .slate-info span:last-child{background:var(--color-black);color:var(--color-accent);padding:3px 10px;font-weight:700}
+
+
+
 /* LINES_BOARD_GRID_V3 */
 /* Scoped to .active — an unconditional #tab-lines display rule outranks the
    .tab-content show/hide classes and pins the Lines board over other tabs.
@@ -15554,7 +15591,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/142.svg" alt="MIN" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">MIN</div>
-    <div class="team-record">69-76</div>
+    <div class="team-record">69-77</div>
     <div class="team-ml">+108</div>
   </div>
   <div class="card-center ma-premium">
@@ -15566,7 +15603,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/116.svg" alt="DET" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">DET</div>
-    <div class="team-record">66-79</div>
+    <div class="team-record">67-79</div>
     <div class="team-ml">-126</div>
   </div>
 </div>
@@ -15747,7 +15784,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>72</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>72</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>71</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16492,8 +16529,8 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/138.svg" alt="STL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">STL</div>
-    <div class="team-record">72-74</div>
-    <div class="team-ml">-121</div>
+    <div class="team-record">72-75</div>
+    <div class="team-ml">-119</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
@@ -16504,7 +16541,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/137.svg" alt="SF" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">SF</div>
-    <div class="team-record">61-85</div>
+    <div class="team-record">62-85</div>
     <div class="team-ml">+101</div>
   </div>
 </div>
@@ -16643,7 +16680,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>75</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>87</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>86</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16664,7 +16701,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>72</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>85</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>84</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16685,7 +16722,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>76</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>75</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>77</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16836,7 +16873,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>67</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>68</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>74</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16857,7 +16894,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>74</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>74</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>75</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16878,7 +16915,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>41</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>44</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>55</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16899,7 +16936,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>34</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>39</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>44</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16941,7 +16978,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>65</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>83</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>82</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -16961,7 +16998,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/120.svg" alt="WSH" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">WSH</div>
-    <div class="team-record">67-80</div>
+    <div class="team-record">67-81</div>
     <div class="team-ml">+162</div>
   </div>
   <div class="card-center ma-premium">
@@ -16973,8 +17010,8 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/135.svg" alt="SD" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">SD</div>
-    <div class="team-record">77-68</div>
-    <div class="team-ml">-195</div>
+    <div class="team-record">78-68</div>
+    <div class="team-ml">-190</div>
   </div>
 </div>
   
@@ -17091,7 +17128,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>63</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>73</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>71</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17175,7 +17212,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>74</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>85</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>84</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17217,7 +17254,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>58</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>65</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17263,7 +17300,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>58</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17284,7 +17321,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>72</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>84</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>82</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17305,7 +17342,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>52</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17326,7 +17363,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>62</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>60</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17347,7 +17384,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>39</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>48</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>47</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17389,7 +17426,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>93</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>92</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17430,7 +17467,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/140.svg" alt="TEX" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">TEX</div>
-    <div class="team-record">72-73</div>
+    <div class="team-record">72-74</div>
     <div class="team-ml">+131</div>
   </div>
   <div class="card-center ma-premium">
@@ -17442,7 +17479,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/136.svg" alt="SEA" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">SEA</div>
-    <div class="team-record">67-78</div>
+    <div class="team-record">68-78</div>
     <div class="team-ml">-155</div>
   </div>
 </div>
@@ -17581,7 +17618,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>57</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>54</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>53</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17623,7 +17660,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>55</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>54</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17665,7 +17702,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>57</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17774,7 +17811,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>58</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>56</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17795,7 +17832,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>87</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>87</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>86</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17816,7 +17853,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>56</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>55</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -17987,7 +18024,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>78</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>91</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>92</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18008,7 +18045,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>82</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>90</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>97</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18029,7 +18066,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>78</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>82</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>76</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18050,7 +18087,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>57</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>57</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18071,7 +18108,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>54</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18092,7 +18129,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>98</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>98</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18113,7 +18150,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>38</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>38</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>36</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18134,7 +18171,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>66</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>70</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>66</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18155,7 +18192,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>55</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>70</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18180,7 +18217,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>58</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>56</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18201,7 +18238,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>85</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>88</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18222,7 +18259,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>78</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>87</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>82</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18264,7 +18301,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>90</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>98</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>97</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18285,7 +18322,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>39</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>44</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>39</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18306,7 +18343,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>50</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>50</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>45</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18327,7 +18364,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>51</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>46</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>54</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18348,7 +18385,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>38</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>38</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>36</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18375,13 +18412,13 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="proj-label">WIN PROB</div>
     <div class="spread">35.0% — 65.0%</div>
     <div class="ou-line">O/U 16.2</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors PHI at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN PHI (-155) · C6</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors PHI at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN PHI (-154) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/143.svg" alt="PHI" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">PHI</div>
     <div class="team-record">81-64</div>
-    <div class="team-ml">-155</div>
+    <div class="team-ml">-154</div>
   </div>
 </div>
   
@@ -18456,7 +18493,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>56</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>51</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>56</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18477,7 +18514,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>92</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>92</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>96</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18498,7 +18535,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>83</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>94</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18519,7 +18556,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>82</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>81</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>84</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18540,7 +18577,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>60</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>71</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>77</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18561,7 +18598,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>90</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>94</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18582,7 +18619,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>45</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>55</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18603,7 +18640,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>56</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>55</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>65</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18649,7 +18686,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>91</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>97</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18670,7 +18707,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>61</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18733,7 +18770,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>64</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18754,7 +18791,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>80</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>80</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>87</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18775,7 +18812,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>62</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>60</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18796,7 +18833,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>57</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>57</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>52</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18817,7 +18854,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>64</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>66</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18838,7 +18875,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/121.svg" alt="NYM" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">NYM</div>
     <div class="team-record">67-78</div>
-    <div class="team-ml">+105</div>
+    <div class="team-ml">+106</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
@@ -18850,7 +18887,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/146.svg" alt="MIA" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">MIA</div>
     <div class="team-record">72-74</div>
-    <div class="team-ml">-125</div>
+    <div class="team-ml">-128</div>
   </div>
 </div>
   
@@ -18925,7 +18962,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>72</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>80</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>71</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18967,7 +19004,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>72</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>89</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -18988,7 +19025,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>78</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>82</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>77</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19009,7 +19046,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>96</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>98</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19030,7 +19067,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>74</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>75</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>81</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19072,7 +19109,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>45</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>66</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>71</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19093,7 +19130,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>46</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>44</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19118,7 +19155,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>90</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>92</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>90</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19139,7 +19176,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>62</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19181,7 +19218,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>52</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>65</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>70</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19223,7 +19260,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>74</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19265,7 +19302,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>42</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>40</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>42</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19286,7 +19323,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>61</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>61</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19307,19 +19344,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/108.svg" alt="LAA" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">LAA</div>
     <div class="team-record">55-90</div>
-    <div class="team-ml">+180</div>
+    <div class="team-ml">+184</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">35.0% — 65.0%</div>
     <div class="ou-line">O/U 16.3</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors BOS at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN BOS (-218) · C6</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors BOS at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN BOS (-224) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/111.svg" alt="BOS" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">BOS</div>
     <div class="team-record">80-66</div>
-    <div class="team-ml">-218</div>
+    <div class="team-ml">-224</div>
   </div>
 </div>
   
@@ -19394,7 +19431,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>77</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>84</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19436,7 +19473,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>99</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>94</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19478,7 +19515,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>34</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>39</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>32</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19520,7 +19557,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>53</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>53</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>52</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19541,7 +19578,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>34</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>32</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>42</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19562,7 +19599,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>32</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>32</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>31</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19629,7 +19666,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>90</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>94</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>90</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19671,7 +19708,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>51</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>55</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19713,7 +19750,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>45</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>41</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>45</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19734,7 +19771,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>75</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>82</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>75</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19776,19 +19813,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/115.svg" alt="COL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">COL</div>
     <div class="team-record">55-89</div>
-    <div class="team-ml">+200</div>
+    <div class="team-ml">+208</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">52.8% — 47.2%</div>
     <div class="ou-line">O/U 18.9</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors COL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN COL (+200) · C6</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors COL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN COL (+208) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/147.svg" alt="NYY" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">NYY</div>
     <div class="team-record">82-62</div>
-    <div class="team-ml">-250</div>
+    <div class="team-ml">-258</div>
   </div>
 </div>
   
@@ -19863,7 +19900,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>72</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>91</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>83</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19905,7 +19942,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>76</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19926,7 +19963,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>76</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>75</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>76</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -19989,7 +20026,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>51</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>47</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20077,7 +20114,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>73</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>83</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20119,7 +20156,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>50</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>60</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20140,7 +20177,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>57</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>66</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20161,7 +20198,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>48</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>46</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20182,7 +20219,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>61</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>61</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20353,7 +20390,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>71</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>88</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>80</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20374,7 +20411,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>53</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>48</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20416,7 +20453,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>60</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20437,7 +20474,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>62</span>
-      <span class="batter-metric ms-favorable"><span>MOMI</span>72</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>76</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20458,7 +20495,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>68</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>69</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>68</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20479,7 +20516,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>61</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>67</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20500,7 +20537,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>48</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>43</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>47</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20525,7 +20562,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>56</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>63</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20567,7 +20604,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>68</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>67</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>68</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20609,7 +20646,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>68</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>68</span>
+      <span class="batter-metric ms-favorable"><span>MOMI</span>75</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20651,7 +20688,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>62</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>59</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -20693,7 +20730,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>56</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>58</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>56</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21173,7 +21210,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div>
   </div>
 </div>
-</div><div class="game-card" data-conf="0" data-value="0" data-edge="1.9" data-lean="0">
+</div><div class="game-card" data-conf="8" data-value="8" data-edge="1.9" data-lean="0">
   <div class="run-bar ma-premium">
   <div class="run-bar-seg" style="width:55%;background:#27251F">9.9</div>
   <div class="run-bar-seg" style="width:45%;background:#27251F">8.0</div>
@@ -21183,19 +21220,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/134.svg" alt="PIT" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">PIT</div>
     <div class="team-record">72-73</div>
-    <div class="team-ml">+115</div>
+    <div class="team-ml">+110</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">58.1% — 41.9%</div>
     <div class="ou-line">O/U 17.9</div>
-    <div class="sim-pick" style="background:#111;color:#FFEA00;border-color:#FFEA00" title="vec +0.00609 &gt;= +0.00000; xwoba -0.00211 &gt;= +0.00000">VECTOR BLOCK</div>
+    <div class="sim-pick" style="background:#fff;color:#111;border-color:#111" title="First pitch passed before the model qualified it; tracked picks must post pregame.">C8 HELD · STARTED UNPOSTED</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/145.svg" alt="CWS" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">CWS</div>
     <div class="team-record">75-69</div>
-    <div class="team-ml">-135</div>
+    <div class="team-ml">-131</div>
   </div>
 </div>
   
@@ -21270,7 +21307,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>64</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>67</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21291,7 +21328,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>83</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>89</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21333,7 +21370,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>54</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>56</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21396,7 +21433,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>62</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>62</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21589,7 +21626,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>87</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>96</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21631,7 +21668,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>45</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>47</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>45</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21652,19 +21689,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/112.svg" alt="CHC" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">CHC</div>
     <div class="team-record">81-65</div>
-    <div class="team-ml">+110</div>
+    <div class="team-ml">+114</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
     <div class="spread">35.0% — 65.0%</div>
     <div class="ou-line">O/U 12.0</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors MIL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN MIL (-130) · C6</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors MIL at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN MIL (-135) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/158.svg" alt="MIL" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">MIL</div>
     <div class="team-record">90-56</div>
-    <div class="team-ml">-130</div>
+    <div class="team-ml">-135</div>
   </div>
 </div>
   
@@ -21907,7 +21944,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>45</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>48</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>45</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -21974,7 +22011,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>50</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>57</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>51</span>
     </span>
   </div>
   <div class="batter-woba">
@@ -22111,29 +22148,29 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div>
   </div>
 </div>
-</div><div class="game-card" data-conf="6" data-value="6" data-edge="0.9" data-lean="1">
+</div><div class="game-card" data-conf="6" data-value="6" data-edge="4.1" data-lean="1">
   <div class="run-bar ma-premium">
-  <div class="run-bar-seg" style="width:47%;background:#C6011F">7.3</div>
-  <div class="run-bar-seg" style="width:53%;background:#005A9C">8.2</div>
+  <div class="run-bar-seg" style="width:35%;background:#C6011F">5.0</div>
+  <div class="run-bar-seg" style="width:65%;background:#005A9C">9.1</div>
 </div>
   <div class="card-header">
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/113.svg" alt="CIN" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">CIN</div>
     <div class="team-record">69-76</div>
-    <div class="team-ml">+231</div>
+    <div class="team-ml">+230</div>
   </div>
   <div class="card-center ma-premium">
     <div class="proj-label">WIN PROB</div>
-    <div class="spread">43.2% — 56.8%</div>
-    <div class="ou-line">O/U 15.5</div>
-    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors LAD at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN LAD (-293) · C6</div>
+    <div class="spread">35.0% — 65.0%</div>
+    <div class="ou-line">O/U 14.1</div>
+    <div class="sim-pick" style="background:#efe6b8;color:#111;border-color:#111" title="Untracked lean — model favors LAD at C6, below the C8 tracked-pick threshold. Not staked, not in the record.">LEAN LAD (-285) · C6</div>
   </div>
   <div class="team-block">
     <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/119.svg" alt="LAD" style="width:100%;height:100%;object-fit:contain"></div>
     <div class="team-abbr">LAD</div>
     <div class="team-record">88-57</div>
-    <div class="team-ml">-293</div>
+    <div class="team-ml">-285</div>
   </div>
 </div>
   
@@ -22153,13 +22190,13 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="model-breakdown">
     <div class="model-row">
       <span class="model-label">xwOBA</span>
-      <span class="model-val">CIN .302</span>
+      <span class="model-val">CIN .289</span>
       <div class="model-bar-mini">
         <div class="model-bar-away" style="width:48%;background:#C6011F"></div>
         <div class="model-bar-home" style="width:52%;background:#005A9C"></div>
       </div>
-      <span class="model-val">LAD .324</span>
-      <span class="model-edge-sm">LAD +.022</span>
+      <span class="model-val">LAD .314</span>
+      <span class="model-edge-sm">LAD +.025</span>
     </div>
     <div class="model-row">
       <span class="model-label">TIER</span>
@@ -22170,10 +22207,10 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     </div>
     <div class="model-row model-formula-row ma-premium">
       <span class="model-label">MODEL</span>
-      <span class="model-formula">BaseRuns+Vector xwOBA×Tier×BP×Park(0.97) → <strong>CIN 7.3 — LAD 8.2</strong> | Pyth WP</span>
+      <span class="model-formula">BaseRuns+Vector xwOBA×Tier×BP×Park(0.97) → <strong>CIN 5.0 — LAD 9.1</strong> | Pyth WP</span>
     </div>
     <div class="model-row model-tags">
-      <span class="model-tag tag-arch" style="background:#FFEA00;color:#080808;border-color:#080808">VECTOR 45D</span><span class="model-tag tag-arch" title="Vector run adjustment">CIN -0.6 / LAD -0.1</span><span class="model-tag tag-arch">vs T4_Fringe</span><span class="model-tag tag-arch">vs T1_Apex</span>
+      <span class="model-tag tag-arch" style="background:#FFEA00;color:#080808;border-color:#080808">VECTOR 45D</span><span class="model-tag tag-arch" title="Vector run adjustment">CIN +0.1 / LAD -0.7</span><span class="model-tag tag-arch">vs T4_Fringe</span><span class="model-tag tag-arch">vs T1_Apex</span>
     </div>
   </div>
   <div class="game-meta">10:10 PM ET · UNIQLO Field at Dodger Stadium</div>
@@ -22198,23 +22235,23 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">1</span>
-    <span class="batter-name">Hector Rodriguez</span>
+    <span class="batter-name">Carlos Jorge</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">RF</span>
-      <span class="batter-pa">4PA</span>
-      <span class="batter-range">+0.78 R</span>
+      <span class="batter-stats">CF</span>
+      <span class="batter-pa">0PA</span>
+      <span class="batter-range">+0.67 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-favorable"><span>MOMO</span>75</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>85</span>
+      <span class="batter-metric ms-neutral"><span>MOMO</span>60</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>60</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.34</span>
+    <span class="woba-base"><span>WOBA</span>.31</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.359</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.31</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
@@ -22225,7 +22262,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="batter-detail">
       <span class="batter-stats">SS</span>
       <span class="batter-pa">62PA</span>
-      <span class="batter-range">+0.95 R</span>
+      <span class="batter-range">+0.94 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-neutral"><span>MOMO</span>56</span>
@@ -22246,7 +22283,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="batter-detail">
       <span class="batter-stats">1B</span>
       <span class="batter-pa">50PA</span>
-      <span class="batter-range">+1.66 R</span>
+      <span class="batter-range">+1.57 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-elite"><span>MOMO</span>94</span>
@@ -22267,7 +22304,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <span class="batter-detail">
       <span class="batter-stats">LF</span>
       <span class="batter-pa">44PA</span>
-      <span class="batter-range">+1.14 R</span>
+      <span class="batter-range">+1.06 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>70</span>
@@ -22282,107 +22319,107 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">5</span>
-    <span class="batter-name">Eugenio Suarez</span>
+    <span class="batter-name">Héctor Rodríguez</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">DH</span>
-      <span class="batter-pa">62PA</span>
-      <span class="batter-range">+1.66 R</span>
+      <span class="batter-stats">RF</span>
+      <span class="batter-pa">4PA</span>
+      <span class="batter-range">+0.76 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-elite"><span>MOMO</span>99</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
+      <span class="batter-metric ms-favorable"><span>MOMO</span>75</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>85</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.343</span>
+    <span class="woba-base"><span>WOBA</span>.34</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.473</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.359</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">6</span>
-    <span class="batter-name">Tyler Stephenson</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">C</span>
-      <span class="batter-pa">42PA</span>
-      <span class="batter-range">+1.38 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-elite"><span>MOMO</span>88</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>91</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.336</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.399</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">7</span>
-    <span class="batter-name">Dane Myers</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">CF</span>
-      <span class="batter-pa">22PA</span>
-      <span class="batter-range">+0.29 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>53</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.308</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.24</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">8</span>
-    <span class="batter-name">Matt McLain</span>
+    <span class="batter-name">Juan Brito</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">2B</span>
-      <span class="batter-pa">51PA</span>
-      <span class="batter-range">+0.54 R</span>
+      <span class="batter-pa">3PA</span>
+      <span class="batter-range">+0.36 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>40</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>43</span>
+      <span class="batter-metric ms-tough"><span>MOMO</span>47</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>52</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.296</span>
+    <span class="woba-base"><span>WOBA</span>.243</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.225</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.253</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">9</span>
-    <span class="batter-name">Jose Trevino</span>
+    <span class="batter-order">7</span>
+    <span class="batter-name">Will Banfield</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">C</span>
-      <span class="batter-pa">28PA</span>
-      <span class="batter-range">+1.03 R</span>
+      <span class="batter-pa">0PA</span>
+      <span class="batter-range">+0.00 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-elite"><span>MOMO</span>97</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>96</span>
+      <span class="batter-metric ms-tough"><span>MOMO</span>40</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>40</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.285</span>
+    <span class="woba-base"><span>WOBA</span>.069</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.425</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.069</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">8</span>
+    <span class="batter-name">TJ Friedl</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">CF</span>
+      <span class="batter-pa">53PA</span>
+      <span class="batter-range">+0.45 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-tough"><span>MOMO</span>43</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>43</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.313</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs cold"><span>ARCH</span>.243</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">9</span>
+    <span class="batter-name">Ke'Bryan Hayes</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">3B</span>
+      <span class="batter-pa">38PA</span>
+      <span class="batter-range">+0.46 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-tough"><span>MOMO</span>46</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>46</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.283</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.258</span>
   </div>
 </div>
   </div>
@@ -22391,48 +22428,69 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
     <div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">1</span>
-    <span class="batter-name">Shohei (H) Ohtani</span>
+    <span class="batter-name">Tommy Edman</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">TWP</span>
-      <span class="batter-pa">248PA</span>
-      <span class="batter-range">+1.61 R</span>
+      <span class="batter-stats">2B</span>
+      <span class="batter-pa">122PA</span>
+      <span class="batter-range">+0.81 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-elite"><span>MOMO</span>99</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMO</span>87</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>90</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.413</span>
+    <span class="woba-base"><span>WOBA</span>.327</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.458</span>
+    <span class="woba-vs hot"><span>ARCH</span>.395</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">2</span>
-    <span class="batter-name">Freddie Freeman</span>
+    <span class="batter-name">Will Smith</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">1B</span>
-      <span class="batter-pa">249PA</span>
-      <span class="batter-range">+0.93 R</span>
+      <span class="batter-stats">C</span>
+      <span class="batter-pa">120PA</span>
+      <span class="batter-range">+1.73 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-neutral"><span>MOMO</span>68</span>
-      <span class="batter-metric ms-neutral"><span>MOMI</span>68</span>
+      <span class="batter-metric ms-elite"><span>MOMO</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>95</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.402</span>
+    <span class="woba-base"><span>WOBA</span>.356</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.338</span>
+    <span class="woba-vs hot"><span>ARCH</span>.51</span>
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
     <span class="batter-order">3</span>
+    <span class="batter-name">Mookie Betts</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">SS</span>
+      <span class="batter-pa">215PA</span>
+      <span class="batter-range">+1.11 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-favorable"><span>MOMO</span>82</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.368</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.377</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">4</span>
     <span class="batter-name">Max Muncy</span>
   </div>
   <div class="batter-bottom">
@@ -22453,77 +22511,14 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">4</span>
-    <span class="batter-name">Mookie Betts</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">SS</span>
-      <span class="batter-pa">215PA</span>
-      <span class="batter-range">+1.09 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-favorable"><span>MOMO</span>82</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>93</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.368</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs neutral"><span>ARCH</span>.377</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
     <span class="batter-order">5</span>
-    <span class="batter-name">Kyle Tucker</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">RF</span>
-      <span class="batter-pa">226PA</span>
-      <span class="batter-range">+0.72 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>49</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>49</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.355</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.271</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">6</span>
-    <span class="batter-name">Tommy Edman</span>
-  </div>
-  <div class="batter-bottom">
-    <span class="batter-detail">
-      <span class="batter-stats">2B</span>
-      <span class="batter-pa">122PA</span>
-      <span class="batter-range">+0.75 R</span>
-    </span>
-    <span class="batter-metrics">
-      <span class="batter-metric ms-elite"><span>MOMO</span>87</span>
-      <span class="batter-metric ms-elite"><span>MOMI</span>90</span>
-    </span>
-  </div>
-  <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.327</span>
-    <span class="woba-dna">🧬</span>
-    <span class="woba-vs hot"><span>ARCH</span>.395</span>
-  </div>
-</div><div class="batter-row">
-  <div class="batter-top">
-    <span class="batter-order">7</span>
-    <span class="batter-name">Teoscar Hernandez</span>
+    <span class="batter-name">Teoscar Hernández</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">LF</span>
       <span class="batter-pa">190PA</span>
-      <span class="batter-range">+0.41 R</span>
+      <span class="batter-range">+0.36 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-tough"><span>MOMO</span>44</span>
@@ -22537,14 +22532,35 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">8</span>
+    <span class="batter-order">6</span>
+    <span class="batter-name">Kyle Tucker</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">RF</span>
+      <span class="batter-pa">226PA</span>
+      <span class="batter-range">+0.71 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-tough"><span>MOMO</span>49</span>
+      <span class="batter-metric ms-tough"><span>MOMI</span>49</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.355</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs cold"><span>ARCH</span>.271</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">7</span>
     <span class="batter-name">Hunter Feduccia</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
       <span class="batter-stats">C</span>
       <span class="batter-pa">87PA</span>
-      <span class="batter-range">+0.96 R</span>
+      <span class="batter-range">+1.02 R</span>
     </span>
     <span class="batter-metrics">
       <span class="batter-metric ms-favorable"><span>MOMO</span>73</span>
@@ -22558,30 +22574,51 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   </div>
 </div><div class="batter-row">
   <div class="batter-top">
-    <span class="batter-order">9</span>
-    <span class="batter-name">Alex Call</span>
+    <span class="batter-order">8</span>
+    <span class="batter-name">Alex Freeland</span>
   </div>
   <div class="batter-bottom">
     <span class="batter-detail">
-      <span class="batter-stats">LF</span>
-      <span class="batter-pa">64PA</span>
-      <span class="batter-range">+0.00 R</span>
+      <span class="batter-stats">2B</span>
+      <span class="batter-pa">99PA</span>
+      <span class="batter-range">+1.58 R</span>
     </span>
     <span class="batter-metrics">
-      <span class="batter-metric ms-tough"><span>MOMO</span>28</span>
-      <span class="batter-metric ms-tough"><span>MOMI</span>28</span>
+      <span class="batter-metric ms-elite"><span>MOMO</span>99</span>
+      <span class="batter-metric ms-elite"><span>MOMI</span>99</span>
     </span>
   </div>
   <div class="batter-woba">
-    <span class="woba-base"><span>WOBA</span>.336</span>
+    <span class="woba-base"><span>WOBA</span>.272</span>
     <span class="woba-dna">🧬</span>
-    <span class="woba-vs cold"><span>ARCH</span>.103</span>
+    <span class="woba-vs hot"><span>ARCH</span>.488</span>
+  </div>
+</div><div class="batter-row">
+  <div class="batter-top">
+    <span class="batter-order">9</span>
+    <span class="batter-name">Enrique Hernández</span>
+  </div>
+  <div class="batter-bottom">
+    <span class="batter-detail">
+      <span class="batter-stats">3B</span>
+      <span class="batter-pa">32PA</span>
+      <span class="batter-range">+0.41 R</span>
+    </span>
+    <span class="batter-metrics">
+      <span class="batter-metric ms-neutral"><span>MOMO</span>64</span>
+      <span class="batter-metric ms-neutral"><span>MOMI</span>64</span>
+    </span>
+  </div>
+  <div class="batter-woba">
+    <span class="woba-base"><span>WOBA</span>.31</span>
+    <span class="woba-dna">🧬</span>
+    <span class="woba-vs neutral"><span>ARCH</span>.324</span>
   </div>
 </div>
   </div>
 </div>
 </div>
-        <div class="gen-badge">Generated 2026-09-09 17:34 ET · Powered by ATLAS Pitcher DNA</div>
+        <div class="gen-badge">Generated 2026-09-09 19:52 ET · Powered by ATLAS Pitcher DNA</div>
     </div>
 
     <!-- DAILY TAB -->
@@ -23337,7 +23374,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
   <div class="trend-rank">1</div>
   <div class="trend-info">
     <div class="trend-name">🔥🔥 Nathan Church</div>
-    <div class="trend-meta">9G streak &middot; L7 .292 &middot; MOMO 64 &middot; MOMI 92 &middot; STL vs Blade Tidwell (SF) &middot; wOBA +.043</div>
+    <div class="trend-meta">9G streak &middot; L7 .28 &middot; MOMO 64 &middot; MOMI 92 &middot; STL vs Blade Tidwell (SF) &middot; wOBA +.043</div>
   </div>
   <div class="trend-right">
     <div class="trend-ms ms-neutral">64</div>
@@ -23345,8 +23382,8 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="trend-row">
   <div class="trend-rank">2</div>
   <div class="trend-info">
-    <div class="trend-name">🔥🔥 TJ Rumfield</div>
-    <div class="trend-meta">12G streak &middot; L7 .48 &middot; MOMO 76 &middot; MOMI 99 &middot; COL vs Will Warren (NYY)</div>
+    <div class="trend-name">🔥 Bryce Eldridge</div>
+    <div class="trend-meta">6G streak &middot; L7 .333 &middot; MOMO 76 &middot; MOMI 99 &middot; SF vs Andre Pallante (STL) &middot; wOBA +.017</div>
   </div>
   <div class="trend-right">
     <div class="trend-ms ms-favorable">76</div>
@@ -23354,20 +23391,20 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="trend-row">
   <div class="trend-rank">3</div>
   <div class="trend-info">
-    <div class="trend-name">🔥 Bryce Eldridge</div>
-    <div class="trend-meta">6G streak &middot; L7 .304 &middot; MOMO 76 &middot; MOMI 99 &middot; SF vs Andre Pallante (STL) &middot; wOBA +.017</div>
+    <div class="trend-name">🔥🔥 Iván Herrera</div>
+    <div class="trend-meta">7G streak &middot; L7 .375 &middot; MOMO 80 &middot; MOMI 99 &middot; STL vs Blade Tidwell (SF) &middot; wOBA +.023</div>
   </div>
   <div class="trend-right">
-    <div class="trend-ms ms-favorable">76</div>
+    <div class="trend-ms ms-favorable">80</div>
   </div>
 </div><div class="trend-row">
   <div class="trend-rank">4</div>
   <div class="trend-info">
-    <div class="trend-name">🔥🔥 Iván Herrera</div>
-    <div class="trend-meta">7G streak &middot; L7 .387 &middot; MOMO 80 &middot; MOMI 99 &middot; STL vs Blade Tidwell (SF) &middot; wOBA +.023</div>
+    <div class="trend-name">🔥 Bo Bichette</div>
+    <div class="trend-meta">4/5 hit games &middot; L7 .346 &middot; MOMO 72 &middot; MOMI 93 &middot; NYM vs Janson Junk (MIA) &middot; wOBA +.008</div>
   </div>
   <div class="trend-right">
-    <div class="trend-ms ms-favorable">80</div>
+    <div class="trend-ms ms-favorable">72</div>
   </div>
 </div><div class="trend-row">
   <div class="trend-rank">5</div>
@@ -23390,26 +23427,26 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="trend-row">
   <div class="trend-rank">7</div>
   <div class="trend-info">
-    <div class="trend-name">🟢 Cody Bellinger</div>
-    <div class="trend-meta">4/5 hit games &middot; L7 .355 &middot; MOMO 73 &middot; MOMI 93 &middot; NYY vs Tomoyuki Sugano (COL)</div>
+    <div class="trend-name">🟢 Yandy Díaz</div>
+    <div class="trend-meta">4/5 hit games &middot; L7 .393 &middot; MOMO 81 &middot; MOMI 99 &middot; TB vs Reynaldo López (ATL) &middot; wOBA +.007</div>
   </div>
   <div class="trend-right">
-    <div class="trend-ms ms-favorable">73</div>
+    <div class="trend-ms ms-favorable">81</div>
   </div>
 </div><div class="trend-row">
   <div class="trend-rank">8</div>
   <div class="trend-info">
-    <div class="trend-name">🟢 Jake McCarthy</div>
-    <div class="trend-meta">4/5 hit games &middot; L7 .333 &middot; MOMO 72 &middot; MOMI 91 &middot; COL vs Will Warren (NYY) &middot; wOBA +.016</div>
+    <div class="trend-name">🔥 James McCann</div>
+    <div class="trend-meta">5G streak &middot; L7 .3 &middot; MOMO 82 &middot; MOMI 99 &middot; AZ vs Daniel Lynch IV (KC) &middot; wOBA +.058</div>
   </div>
   <div class="trend-right">
-    <div class="trend-ms ms-favorable">72</div>
+    <div class="trend-ms ms-favorable">82</div>
   </div>
 </div><div class="trend-row">
   <div class="trend-rank">9</div>
   <div class="trend-info">
-    <div class="trend-name">🟢 Brandon Lowe</div>
-    <div class="trend-meta">5/7 hit games &middot; L7 .385 &middot; MOMO 83 &middot; MOMI 99 &middot; PIT vs Davis Martin (CWS) &middot; wOBA +.033</div>
+    <div class="trend-name">🔥 Jakob Marsee</div>
+    <div class="trend-meta">4/5 hit games &middot; L7 .429 &middot; MOMO 83 &middot; MOMI 99 &middot; MIA vs Robert Stock (NYM) &middot; wOBA +.068</div>
   </div>
   <div class="trend-right">
     <div class="trend-ms ms-favorable">83</div>
@@ -23417,11 +23454,11 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
 </div><div class="trend-row">
   <div class="trend-rank">10</div>
   <div class="trend-info">
-    <div class="trend-name">🟢 Yandy Díaz</div>
-    <div class="trend-meta">4/5 hit games &middot; L7 .4 &middot; MOMO 81 &middot; MOMI 99 &middot; TB vs Reynaldo López (ATL) &middot; wOBA +.007</div>
+    <div class="trend-name">🔥 Randy Arozarena</div>
+    <div class="trend-meta">4/5 hit games &middot; L7 .28 &middot; MOMO 85 &middot; MOMI 99 &middot; SEA vs Cody Bradford (TEX) &middot; wOBA +.036</div>
   </div>
   <div class="trend-right">
-    <div class="trend-ms ms-favorable">81</div>
+    <div class="trend-ms ms-elite">85</div>
   </div>
 </div></div>
                     </div>
@@ -23450,7 +23487,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>16.1%</td>
           <td>100</td>
-          <td class="hr-col-sur">160</td>
+          <td class="hr-col-sur">159</td>
           <td class="hr-col-stack">22.2</td>
           <td class="hr-col-park">1.02x</td>
           <td class="hr-col-total">11.4</td>
@@ -23463,7 +23500,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>14.9%</td>
           <td>92</td>
-          <td class="hr-col-sur">116</td>
+          <td class="hr-col-sur">114</td>
           <td class="hr-col-stack">4.6</td>
           <td class="hr-col-park">1.03x</td>
           <td class="hr-col-total">7.2</td>
@@ -23476,7 +23513,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>12.4%</td>
           <td>70</td>
-          <td class="hr-col-sur">138</td>
+          <td class="hr-col-sur">143</td>
           <td class="hr-col-stack">27.5</td>
           <td class="hr-col-park">1.02x</td>
           <td class="hr-col-total">11.4</td>
@@ -23489,7 +23526,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>11.7%</td>
           <td>68</td>
-          <td class="hr-col-sur">117</td>
+          <td class="hr-col-sur">115</td>
           <td class="hr-col-stack">12.8</td>
           <td class="hr-col-park">1.01x</td>
           <td class="hr-col-total">10.1</td>
@@ -23510,19 +23547,6 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
         </tr><tr class="hr-board-row lotto" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="lotto">
           <td class="hr-col-rank">6</td>
           <td><span class="hr-status-pill status-lotto">CARD</span></td>
-          <td class="hr-col-hitter"><strong>Shohei Ohtani</strong><span>LAD &middot; #1</span></td>
-          <td class="hr-col-match">Rhett Lowder<span>CIN</span></td>
-          <td><span class="hr-board-lane lane-power">HR Profile</span></td>
-          <td>10.0%</td>
-          <td>63</td>
-          <td class="hr-col-sur">114</td>
-          <td class="hr-col-stack">13.3</td>
-          <td class="hr-col-park">0.97x</td>
-          <td class="hr-col-total">8.2</td>
-          <td class="hr-col-h2h">0</td>
-        </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">7</td>
-          <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Kody Clemens</strong><span>MIN &middot; #3</span></td>
           <td class="hr-col-match">Keider Montero<span>DET</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
@@ -23534,7 +23558,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td class="hr-col-total">7.7</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="SURGE" data-hr-status="watch">
-          <td class="hr-col-rank">8</td>
+          <td class="hr-col-rank">7</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Sam Antonacci</strong><span>CWS &middot; #1</span></td>
           <td class="hr-col-match">Lake Bachar<span>PIT</span></td>
@@ -23547,7 +23571,7 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td class="hr-col-total">8.1</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">9</td>
+          <td class="hr-col-rank">8</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Esmerlyn Valdez</strong><span>PIT &middot; #6</span></td>
           <td class="hr-col-match">Davis Martin<span>CWS</span></td>
@@ -23560,59 +23584,59 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td class="hr-col-total">10.5</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">10</td>
+          <td class="hr-col-rank">9</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Ben Rice</strong><span>NYY &middot; #1</span></td>
           <td class="hr-col-match">Tomoyuki Sugano<span>COL</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>9.3%</td>
           <td>59</td>
-          <td class="hr-col-sur">123</td>
+          <td class="hr-col-sur">122</td>
           <td class="hr-col-stack">11.0</td>
           <td class="hr-col-park">1.01x</td>
           <td class="hr-col-total">9.5</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">11</td>
+          <td class="hr-col-rank">10</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Mickey Moniak</strong><span>COL &middot; #5</span></td>
           <td class="hr-col-match">Will Warren<span>NYY</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>9.3%</td>
           <td>52</td>
-          <td class="hr-col-sur">108</td>
+          <td class="hr-col-sur">107</td>
           <td class="hr-col-stack">16.4</td>
           <td class="hr-col-park">1.01x</td>
           <td class="hr-col-total">10.1</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">12</td>
+          <td class="hr-col-rank">11</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Aaron Judge</strong><span>NYY &middot; #3</span></td>
           <td class="hr-col-match">Tomoyuki Sugano<span>COL</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>9.0%</td>
           <td>54</td>
-          <td class="hr-col-sur">127</td>
+          <td class="hr-col-sur">126</td>
           <td class="hr-col-stack">11.5</td>
           <td class="hr-col-park">1.01x</td>
           <td class="hr-col-total">9.5</td>
           <td class="hr-col-h2h">3/10</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">13</td>
+          <td class="hr-col-rank">12</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>James Wood</strong><span>WSH &middot; #1</span></td>
           <td class="hr-col-match">Walker Buehler<span>SD</span></td>
           <td><span class="hr-board-lane lane-power">HR Profile</span></td>
           <td>8.5%</td>
           <td>54</td>
-          <td class="hr-col-sur">139</td>
+          <td class="hr-col-sur">141</td>
           <td class="hr-col-stack">27.3</td>
           <td class="hr-col-park">0.97x</td>
           <td class="hr-col-total">10.0</td>
           <td class="hr-col-h2h">0</td>
         </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
-          <td class="hr-col-rank">14</td>
+          <td class="hr-col-rank">13</td>
           <td><span class="hr-status-pill status-watch">WATCH</span></td>
           <td class="hr-col-hitter"><strong>Bryce Harper</strong><span>PHI &middot; #3</span></td>
           <td class="hr-col-match">Hunter Brown<span>HOU</span></td>
@@ -23623,6 +23647,19 @@ a.filter-btn,a.nav-btn{text-decoration:none;display:inline-flex;align-items:cent
           <td class="hr-col-stack">33.4</td>
           <td class="hr-col-park">1.02x</td>
           <td class="hr-col-total">11.4</td>
+          <td class="hr-col-h2h">0</td>
+        </tr><tr class="hr-board-row watch" data-hr-card="1" data-hr-lane="DAMAGE" data-hr-status="watch">
+          <td class="hr-col-rank">14</td>
+          <td><span class="hr-status-pill status-watch">WATCH</span></td>
+          <td class="hr-col-hitter"><strong>Pete Crow-Armstrong</strong><span>CHC &middot; #1</span></td>
+          <td class="hr-col-match">Logan Henderson<span>MIL</span></td>
+          <td><span class="hr-board-lane lane-power">HR Profile</span></td>
+          <td>8.2%</td>
+          <td>50</td>
+          <td class="hr-col-sur">82</td>
+          <td class="hr-col-stack">1.8</td>
+          <td class="hr-col-park">1.01x</td>
+          <td class="hr-col-total">4.4</td>
           <td class="hr-col-h2h">0</td>
         </tr></tbody>
           </table>
