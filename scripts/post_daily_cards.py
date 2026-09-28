@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_cards_v2 as cards
 import render_series_card
+import render_series_sheets
 from post_social_daily import post_to_x
 from pathlib import Path
 
@@ -123,7 +124,9 @@ def main():
                      and p["status"] == "pending" and int(p.get("conf") or 0) >= 8]
     if today_pending and st.get("slate_date") != TODAY:
         try:
-            path = cards.render_slate(TODAY)
+            os.makedirs(SERIES_OUT, exist_ok=True)
+            path = os.path.join(SERIES_OUT, f"checklist-{TODAY}.png")
+            render_series_sheets.checklist(TODAY).save(path)
             n = len(today_pending)
             if send_photo(path, f"📋 THE BOARD · {n} play{'s' if n != 1 else ''} today.\n"
                                 f"Receipts drop here the moment lineups confirm."):

@@ -43,6 +43,17 @@ def team_ref(abbr):
     return city.upper(), t["team"].upper(), t
 
 
+def final_str(pick):
+    """Stored result is away-home (verified against every settled ML pick);
+    label it so a loss never reads like a win."""
+    r = str(pick.get("result") or "")
+    try:
+        a, h = r.split("-")
+        return f"{pick['away']} {int(a)} – {pick['home']} {int(h)}"
+    except (ValueError, KeyError):
+        return r
+
+
 def s(v):
     return int(round(v * S))
 
@@ -278,7 +289,7 @@ def render(pick, settled=False):
         pl = pick.get("pl") or 0
         st = pick["status"]
         l1 = {"win": "CASHED", "loss": "LOSS", "push": "PUSH"}[st]
-        l2 = f"FINAL {pick.get('result') or ''} · {'+' if pl > 0 else ''}{pl:g} $PP"
+        l2 = f"{final_str(pick)} · {'+' if pl > 0 else ''}{pl:g} $PP"
         stamp(img, (mx - s(26), my + int(R * 0.40)), l1, l2, WIN if st == "win" else LOSS if st == "loss" else INK)
 
     out = img.convert("RGB")
