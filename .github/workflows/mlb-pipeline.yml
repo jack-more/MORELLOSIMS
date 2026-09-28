@@ -107,7 +107,7 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install requests pillow pybaseball numpy pandas qrcode
+        run: pip install requests requests-oauthlib pillow pybaseball numpy pandas qrcode
 
       - name: Pull latest (in case atlas job pushed)
         run: git pull origin main
@@ -136,10 +136,14 @@ jobs:
       # Rolling card poster: every run posts anything new (settled results,
       # today's board, receipts for freshly qualified picks). Dedup state
       # lives in mlbsim/posted_cards.json, committed below.
-      - name: Post v2 cards to Telegram
+      - name: Post series cards to Telegram + X
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
         run: python3 scripts/post_daily_cards.py
 
       # NOTE: index.html rendering is owned by render-dispatch.yml (Dispatch Bot).

@@ -43,6 +43,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from send_telegram_cards import send_photo as tg_send_photo  # noqa: E402
 import render_pnl_card  # noqa: E402
+import render_series_card  # noqa: E402
 
 PICKS_MLB = ROOT / "picks" / "mlb.json"
 PICKS_NBA = ROOT / "picks" / "nba.json"
@@ -98,7 +99,7 @@ def units_of(pick: dict, key: str) -> float:
 
 
 def fmt_units(value: float) -> str:
-    return f"{value:+.1f}u".replace(".0u", "u")
+    return f"{value:+.1f}".replace(".0", "") + " $PP"
 
 
 def truncate_caption(text: str, limit: int = 280) -> str:
@@ -219,11 +220,12 @@ def _x_requests_session(creds: dict[str, str]):
         return None
 
 
-def post_to_x(text: str, image: Path, dry_run: bool) -> bool:
+def post_to_x(text: str, images, dry_run: bool) -> bool:
+    images = [images] if isinstance(images, Path) else list(images)[:4]
     creds = x_creds()
     if dry_run:
         status = "creds present" if creds else "creds ABSENT"
-        log(f"  [dry] X (@MorelloSims, {status}): would upload {image.name} and tweet:\n"
+        log(f"  [dry] X (@MorelloSims, {status}): would upload {', '.join(i.name for i in images)} and tweet:\n"
             + "\n".join(f"        {line}" for line in text.splitlines()))
         return True
     if not creds:
@@ -235,18 +237,20 @@ def post_to_x(text: str, image: Path, dry_run: bool) -> bool:
     auth = _x_requests_session(creds)
     try:
         # 1. media upload (v1.1 simple upload, multipart — no body params signed)
-        with image.open("rb") as fh:
-            files = {"media": (image.name, fh, "image/png")}
-            if auth is not None:
-                r = requests.post(X_MEDIA_URL, files=files, auth=auth, timeout=60)
-            else:
-                headers = {"Authorization": _oauth1_header("POST", X_MEDIA_URL, {}, creds)}
-                r = requests.post(X_MEDIA_URL, files=files, headers=headers, timeout=60)
-        r.raise_for_status()
-        media_id = str(r.json()["media_id"])
+        media_ids = []
+        for image in images:
+            with image.open("rb") as fh:
+                files = {"media": (image.name, fh, "image/png")}
+                if auth is not None:
+                    r = requests.post(X_MEDIA_URL, files=files, auth=auth, timeout=60)
+                else:
+                    headers = {"Authorization": _oauth1_header("POST", X_MEDIA_URL, {}, creds)}
+                    r = requests.post(X_MEDIA_URL, files=files, headers=headers, timeout=60)
+            r.raise_for_status()
+            media_ids.append(str(r.json()["media_id"]))
 
         # 2. tweet (v2, JSON body — only oauth params signed)
-        payload = {"text": text, "media": {"media_ids": [media_id]}}
+        payload = {"text": text, "media": {"media_ids": media_ids}}
         if auth is not None:
             r = requests.post(X_TWEET_URL, json=payload, auth=auth, timeout=30)
         else:
@@ -287,6 +291,35 @@ def post_to_telegram(caption: str, image: Path, dry_run: bool) -> bool:
         return False
 
 
+# ---------------------------------------------------------------- series cards
+
+def series_cards(picks: list[dict], settled: bool) -> list[Path]:
+    """Render the numbered series card for each pick, strongest first, max 4
+    (one X post carries up to 4 images)."""
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = []
+    for p in sorted(picks, key=lambda p: (-conf_of(p), p.get("id", "")))[:4]:
+        path = OUT_DIR / f"series-{'settled-' if settled else ''}{p['id']}.png"
+        render_series_card.render(p, settled).save(path)
+        log(f"  rendered {path}")
+        out.append(path)
+    return out
+
+
+def post_cards_to_telegram(caption: str, cards: list[Path], dry_run: bool) -> None:
+    for i, card in enumerate(cards):
+        post_to_telegram(caption if i == 0 else card.stem.split("-mlb-")[-1].replace("-ml", " ML"), card, dry_run)
+
+
+def since_label(era: dict) -> str:
+    return "Since " + datetime.strptime(era["start_date"], "%Y-%m-%d").strftime("%b %-d")
+
+
+def odds_str(p: dict) -> str:
+    o = str(p.get("odds") or "")
+    return o if o.startswith(("+", "-")) or not o else f"+{o}"
+
+
 # ---------------------------------------------------------------- picks mode
 
 def mode_picks(date: str, dry_run: bool) -> int:
@@ -298,49 +331,33 @@ def mode_picks(date: str, dry_run: bool) -> int:
         log(f"No published picks for {date}; nothing to post. Exiting clean.")
         return 0
 
-    # Render the MLB card by reusing the existing renderer (subprocess keeps
-    # its argparse interface as the single entry point).
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    card = OUT_DIR / f"mlb-social-card-{date}.png"
-    if mlb_today:
-        cmd = [sys.executable, str(SCRIPTS / "render_mlb_social_card.py"),
-               "--kind", "picks", "--out", str(card)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            log(f"Card render failed:\n{result.stderr.strip()}")
-            return 1
-        log(f"  rendered {card}")
-    else:
-        log("  no MLB picks today — skipping card render (NBA-only tease)")
-        card = None
+    cards = series_cards(mlb_today, settled=False) if mlb_today else []
 
-    # Caption: tease the top pick only. The full card details stay on-site.
     era = load_era()
-    header = str(era.get("label") or era_short(era)) if era else "MLB SIM"
-    lines = [f"{header} · {pretty_date(date)}"]
+    lines = [f"MLB · {pretty_date(date)}"]
     if mlb_today:
         top = max(mlb_today, key=conf_of)
         n = len(mlb_today)
-        lines.append(f"{n} pick{'s' if n != 1 else ''} live · C{conf_of(top)}: {top.get('pick_text', '')}")
+        lines.append(f"{n} pick{'s' if n != 1 else ''} logged before first pitch")
+        lines.append(f"Top play: {top.get('pick_text', '')} {odds_str(top)} · C{conf_of(top)}")
     if nba_today:
         n = len(nba_today)
         lines.append(f"+ {n} NBA play{'s' if n != 1 else ''} on the board")
     if era:
-        wins, losses, _pl, settled_n = era_record(mlb, era)
-        if settled_n:
-            lines.append(f"{era_short(era)} record {wins}-{losses} since the break")
-        else:
-            lines.append(f"{era_short(era)} record 0-0 — fresh slate, every pick tracked")
+        wins, losses, pl, settled_n = era_record(mlb, era)
+        lines.append(f"{since_label(era)}: {wins}-{losses} ({fmt_units(pl)})" if settled_n
+                     else "Fresh ledger: 0-0, every pick tracked")
     else:
         record, _pl = season_record(mlb)
         lines.append(f"Season {record} · every pick tracked in public")
-    lines.append(f"Full card → {SITE}")
+    lines.append(f"Every pick → {SITE}")
     caption = truncate_caption("\n".join(lines))
 
     log(f"Picks post for {date} ({len(mlb_today)} MLB / {len(nba_today)} NBA):")
-    if card is not None:
-        post_to_telegram(caption, card, dry_run)
-        post_to_x(caption, card, dry_run)
+    if cards:
+        # X gets each pick individually as it qualifies (post_daily_cards.py);
+        # the morning teaser stays on Telegram to avoid double-posting cards.
+        post_cards_to_telegram(caption, cards, dry_run)
     else:
         log("  no card to attach — skipping social post (text-only posts not enabled)")
     return 0
@@ -395,24 +412,9 @@ def mode_recap(date: str, dry_run: bool) -> int:
     # belongs to the era (a pre-era recap stays plain "Yesterday").
     day_in_era = bool(era) and all(in_era(p, era) for p in settled)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    card = OUT_DIR / f"mlb-pnl-card-{date}.png"
-    date_label = datetime.strptime(date, "%Y-%m-%d").strftime("%b %d, %Y").upper()
-    render_pnl_card.render(
-        card,
-        date_label=date_label,
-        rows=recap_rows(settled),
-        record=day_record,
-        headline="PERFECT CARD" if perfect else "SETTLED IN PUBLIC",
-        subline="MLB SWEEP" if perfect else "MLB RESULTS",
-        net_label=fmt_units(day_pl),
-        footer_center=f"{len(settled)} PICKS / {wins} WINS / {fmt_units(day_pl)}",
-        kicker=f"{era.get('label') or era_short(era)} RESULTS" if day_in_era else "MLB SIM RESULTS",
-        site_label=f"{SITE}/mlbsim",
-    )
-    log(f"  rendered {card}")
+    cards = series_cards(settled, settled=True)
 
-    day_prefix = f"{era_short(era)} yesterday" if day_in_era else "Yesterday"
+    day_prefix = "Yesterday"
     lines = [
         f"{day_prefix}: {day_record}, {fmt_units(day_pl)}"
         + (" — clean sweep" if perfect else ""),
@@ -420,10 +422,10 @@ def mode_recap(date: str, dry_run: bool) -> int:
     if era:
         e_wins, e_losses, e_pl, e_n = era_record(mlb, era)
         if e_n:
-            lines.append(f"{era_short(era)} since the break: {e_wins}-{e_losses} ({fmt_units(e_pl)})"
-                         " · wins AND losses, all settled in public")
+            lines.append(f"{since_label(era)}: {e_wins}-{e_losses} ({fmt_units(e_pl)})"
+                         " · wins and losses, settled in public")
         else:
-            lines.append(f"{era_short(era)} record 0-0 — fresh slate, every pick tracked")
+            lines.append("Fresh ledger: 0-0, every pick tracked")
     else:
         season, season_pl = season_record(mlb)
         lines.append(f"Season {season} ({fmt_units(season_pl)}) · wins AND losses, all settled in public")
@@ -431,8 +433,8 @@ def mode_recap(date: str, dry_run: bool) -> int:
     caption = truncate_caption("\n".join(lines))
 
     log(f"Recap post for {date} ({day_record}, {fmt_units(day_pl)}):")
-    post_to_telegram(caption, card, dry_run)
-    post_to_x(caption, card, dry_run)
+    post_cards_to_telegram(caption, cards, dry_run)
+    post_to_x(caption, cards, dry_run)
     return 0
 
 

@@ -19,6 +19,18 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_cards_v2 as cards
+import render_series_card
+from post_social_daily import post_to_x
+from pathlib import Path
+
+SERIES_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "posters", "v2")
+
+
+def series_card(p, settled):
+    os.makedirs(SERIES_OUT, exist_ok=True)
+    path = os.path.join(SERIES_OUT, f"series-{'settled-' if settled else ''}{p['id']}.png")
+    render_series_card.render(p, settled).save(path)
+    return path
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 STATE_FILE = os.path.join(REPO, "mlbsim", "posted_cards.json")
@@ -95,7 +107,7 @@ def main():
                and p["id"] not in st["settled"]]
     for p in sorted(settled, key=lambda p: p["date"]):
         try:
-            path = cards.render_receipt(p, settled=True)
+            path = series_card(p, settled=True)
         except Exception as e:
             print(f"  WARN render settled {p['id']}: {e}")
             continue
@@ -136,10 +148,18 @@ def main():
         if p["id"] in st["receipts"]:
             continue
         try:
-            path = cards.render_receipt(p, settled=False)
+            path = series_card(p, settled=False)
         except Exception as e:
             print(f"  WARN render receipt {p['id']}: {e}")
             continue
+        # X gets every pick as it qualifies: the timestamped pre-game proof.
+        if p["id"] not in st.setdefault("x_receipts", []):
+            xcap = (f"{p['pick_text']} {p['odds'] if str(p['odds']).startswith(('+', '-')) else '+' + str(p['odds'])}"
+                    f" · C{p.get('conf')}\n"
+                    f"Logged {NOW_ET}, before first pitch. Sim: {p.get('sim_projection') or ''}\n"
+                    f"Every pick → morellosims.com")
+            if post_to_x(xcap, Path(path), dry_run=False) :
+                st["x_receipts"].append(p["id"])
         cap = (f"🚨 NEW PICK — posted {NOW_ET}\n"
                f"{p['pick_text']} ({p['odds']}) · C{p.get('conf')} · risk {p.get('units')} $PP\n"
                f"SIM {p.get('sim_projection') or ''}")
