@@ -35,6 +35,47 @@ LOSS = (176, 32, 30)
 TEAMS = json.load(open(os.path.join(REPO, "data", "reference", "mlb_teams_2026.json")))["teams"]
 
 
+COLORS = json.load(open(os.path.join(REPO, "data", "reference", "mlb_team_colors_espn.json")))["teams"]
+PLATES = os.path.join(REPO, "posters", "assets", "plates", "mlb")
+
+
+def _hex(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _lum(c):
+    def ch(v):
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = c
+    return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+
+
+def _contrast(a, b):
+    la, lb = sorted((_lum(a), _lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def _mix(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def palette(abbr):
+    """Card inks from the team's own colours (ESPN snapshot): primary prints
+    the quadrants, alternate prints the diamond. Text and plate ink are
+    chosen for contrast, never guessed."""
+    c = COLORS.get(abbr) or COLORS.get({"AZ": "ARI", "ARI": "AZ", "ATH": "OAK", "WSH": "WSH"}.get(abbr, ""), {})
+    if not c:
+        raise SystemExit(f"{abbr} not in data/reference/mlb_team_colors_espn.json")
+    P, A = _hex(c["color"]), _hex(c["alt"])
+    if _lum(A) > 0.8 or _contrast(A, P) < 1.6:        # white/near-primary alt: use a pale tint
+        A = _mix(P, CREAM, 0.74)
+    on_P = CREAM if _contrast(CREAM, P) >= _contrast(INK, P) else INK
+    ink_A = max((P, INK, CREAM), key=lambda k: _contrast(k, A))
+    return {"P": P, "A": A, "on_P": on_P, "ink_A": ink_A, "shadow": _mix(A, INK, 0.14)}
+
+
 def team_ref(abbr):
     t = TEAMS.get(abbr) or TEAMS.get({"AZ": "ARI", "ARI": "AZ", "OAK": "ATH", "WAS": "WSH"}.get(abbr, ""), {})
     if not t:
@@ -126,8 +167,8 @@ def paper_grain(img, amount=7, seed=7):
 
 # ── glyphs ─────────────────────────────────────────────────────────────────
 
-def baseball(d, cx, cy, r):
-    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=RED)
+def baseball(d, cx, cy, r, color=RED):
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
     for side in (-1, 1):
         # seam: arc of a larger circle offset sideways
         R = r * 1.05
@@ -148,17 +189,17 @@ def baseball(d, cx, cy, r):
                         py + sgn * L * math.sin(ang + 0.5 * sgn * side)), fill=CREAM, width=s(3))
 
 
-def corner_index(odds, sport_label="MLB"):
+def corner_index(odds, sport_label="MLB", color=RED):
     """Playing-card index: ball + price + sport. Returned as its own layer so
     it can be rotated 180 for the opposite corner."""
     w, h = s(210), s(262)
     layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    baseball(d, w // 2, s(68), s(62))
+    baseball(d, w // 2, s(68), s(62), color)
     of = fit_font(d, odds, "cond", s(96), w - s(10), min_size=s(56))
-    d.text(((w - text_w(d, odds, of)) / 2, s(130)), odds, font=of, fill=RED)
+    d.text(((w - text_w(d, odds, of)) / 2, s(130)), odds, font=of, fill=color)
     lf = F("mono_b", 22)
-    d.text(((w - text_w(d, sport_label, lf)) / 2, s(232)), sport_label, font=lf, fill=RED)
+    d.text(((w - text_w(d, sport_label, lf)) / 2, s(232)), sport_label, font=lf, fill=color)
     return layer
 
 
@@ -205,6 +246,8 @@ def render(pick, settled=False):
     odds = str(pick.get("odds") or "")
     if odds and not odds.startswith(("+", "-")):
         odds = "+" + odds
+    pal = palette(side)
+    P, A, on_P = pal["P"], pal["A"], pal["on_P"]
 
     img = Image.new("RGBA", (W, H), BG + (255,))
     cx0, cy0, cx1, cy1 = s(44), s(44), W - s(44), H - s(44)       # card stock
@@ -222,32 +265,54 @@ def render(pick, settled=False):
     # vermilion quadrants, clipped to the rounded frame
     quad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     qd = ImageDraw.Draw(quad)
-    qd.rectangle((mx, fy0, fx1, my), fill=RED)
-    qd.rectangle((fx0, my, mx, fy1), fill=RED)
+    qd.rectangle((mx, fy0, fx1, my), fill=P)
+    qd.rectangle((fx0, my, mx, fy1), fill=P)
     clip = Image.new("L", (W, H), 0)
     ImageDraw.Draw(clip).rounded_rectangle((fx0, fy0, fx1, fy1), radius=s(40), fill=255)
     quad.putalpha(Image.composite(quad.getchannel("A"), Image.new("L", (W, H), 0), clip))
     img.alpha_composite(quad)
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle((fx0, fy0, fx1, fy1), radius=s(40), outline=RED, width=s(3))
-    d.line((mx, fy0, mx, fy1), fill=RED, width=s(3))
+    d.rounded_rectangle((fx0, fy0, fx1, fy1), radius=s(40), outline=P, width=s(3))
+    d.line((mx, fy0, mx, fy1), fill=P, width=s(3))
 
-    # yellow diamond with a hair of misregistration under the ink
+    # diamond in the team's second ink, a hair of misregistration under it
     dia = [(mx, my - R), (mx + R, my), (mx, my + R), (mx - R, my)]
-    d.polygon([(x + s(3), y + s(2)) for x, y in dia], fill=(232, 186, 30))
-    d.polygon(dia, fill=YELLOW)
+    d.polygon([(x + s(3), y + s(2)) for x, y in dia], fill=pal["shadow"])
+    d.polygon(dia, fill=A)
+    is_settled = settled and pick.get("status") in ("win", "loss", "push")
+
+    # the home park, engraved, printed in the diamond's ink; logo becomes a badge
+    plate_path = os.path.join(PLATES, f"{pick['home']}.png")
+    has_plate = os.path.exists(plate_path)
+    if has_plate:
+        mask = Image.open(plate_path).convert("L")
+        pw = int(R * 1.62)
+        mask = mask.resize((pw, int(mask.height * pw / mask.width)), Image.LANCZOS)
+        layer = Image.new("RGBA", (W, H), pal["ink_A"] + (0,))
+        px, py = mx - mask.width // 2, my - mask.height // 2 + s(18)
+        full = Image.new("L", (W, H), 0)
+        full.paste(mask, (px, py))
+        clipd = Image.new("L", (W, H), 0)
+        ImageDraw.Draw(clipd).polygon([(mx, my - R + s(10)), (mx + R - s(10), my), (mx, my + R - s(10)), (mx - R + s(10), my)], fill=255)
+        layer.putalpha(Image.composite(full, Image.new("L", (W, H), 0), clipd))
+        img.alpha_composite(layer)
+        d = ImageDraw.Draw(img)
 
     logo = team_logo(side, 500)
-    if logo:
+    if logo and has_plate:
         logo = logo.resize((logo.width * S, logo.height * S), Image.LANCZOS)
-        is_settled = settled and pick.get("status") in ("win", "loss", "push")
+        badge = keyline_mark(logo, int(R * 0.40), line=8)
+        img.alpha_composite(badge, (mx - badge.width // 2, my - R - badge.height // 2 + s(40)))
+        d = ImageDraw.Draw(img)
+    elif logo:
+        logo = logo.resize((logo.width * S, logo.height * S), Image.LANCZOS)
         mark = keyline_mark(logo, int(R * (0.78 if is_settled else 0.98)))
         lift = int(R * 0.16) if is_settled else -s(6)
         img.alpha_composite(mark, (mx - mark.width // 2, my - mark.height // 2 - lift))
         d = ImageDraw.Draw(img)
 
     # corner indices — price lives where the suit would
-    idx = corner_index(odds)
+    idx = corner_index(odds, color=P)
     img.alpha_composite(idx, (fx0 + s(14), fy0 + s(18)))
     img.alpha_composite(idx.rotate(180), (fx1 - s(14) - idx.width, fy1 - s(18) - idx.height))
     d = ImageDraw.Draw(img)
@@ -255,22 +320,22 @@ def render(pick, settled=False):
     # top-right: maker's mark
     tx = fx1 - s(40)
     for i, (t, f, c) in enumerate([
-        ("MORELLO SIMS", F("black", 40), CREAM),
-        (f"{year} MLB SERIES", F("mono_b", 22), CREAM),
+        ("MORELLO SIMS", F("black", 40), on_P),
+        (f"{year} MLB SERIES", F("mono_b", 22), on_P),
     ]):
         d.text((tx - text_w(d, t, f), fy0 + s(40) + i * s(58)), t, font=f, fill=c)
     when = datetime.strptime(pick["date"], "%Y-%m-%d").strftime("%b %-d").upper()
     wt = f"{when} · {pick.get('game_time') or ''}".strip(" ·")
-    d.text((tx - text_w(d, wt, F("mono_b", 22)), fy0 + s(128)), wt, font=F("mono_b", 22), fill=INK)
+    d.text((tx - text_w(d, wt, F("mono_b", 22)), fy0 + s(128)), wt, font=F("mono_b", 22), fill=on_P)
 
     # bottom-left: the name + the numbers, in the card-back voice
     lx = fx0 + s(44)
     city, name, _ = team_ref(side)
     edge = lambda y: (mx - R) + (y - my) - s(24)            # diamond's lower-left edge
     cf = fit_font(d, city, "cond", s(52), edge(my + s(250)) - lx, min_size=s(30))
-    d.text((lx, my + s(232)), city, font=cf, fill=INK)
+    d.text((lx, my + s(232)), city, font=cf, fill=on_P)
     nf = fit_font(d, name, "cond", s(112), max(edge(my + s(300)) - lx, s(260)), min_size=s(58))
-    d.text((lx, my + s(284)), name, font=nf, fill=INK)
+    d.text((lx, my + s(284)), name, font=nf, fill=on_P)
     pa, pr, ha, hr = (pick.get("sim_projection") or "").replace(" - ", " ").split()[:4] or ("", "", "", "")
     lines = [
         f"Sim: {pa} {pr} – {ha} {hr}",
@@ -279,7 +344,7 @@ def render(pick, settled=False):
     ]
     bf = F("cond_sb", 38)
     for i, t in enumerate(lines):
-        d.text((lx, my + s(430) + i * s(46)), t, font=fit_font(d, t, "cond_sb", s(38), mx - lx - s(20), min_size=s(26)), fill=INK)
+        d.text((lx, my + s(430) + i * s(46)), t, font=fit_font(d, t, "cond_sb", s(38), mx - lx - s(20), min_size=s(26)), fill=on_P)
 
     # set number along the diamond's lower-right edge
     ex, ey = (mx + R * 0.5 + s(30), my + R * 0.5 + s(30))
