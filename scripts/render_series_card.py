@@ -18,7 +18,7 @@ from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFilter
 
-from render_cards_v2 import REPO, TEAM_NAMES, font, text_w, fit_font, team_logo
+from render_cards_v2 import REPO, font, text_w, fit_font, team_logo
 
 S = 2                      # supersample; final card is 1080x1350
 W, H = 1080 * S, 1350 * S
@@ -31,16 +31,16 @@ INK = (28, 24, 22)
 WIN = (20, 128, 70)
 LOSS = (176, 32, 30)
 
-CITY = {
-    "ARI": "ARIZONA", "AZ": "ARIZONA", "ATL": "ATLANTA", "BAL": "BALTIMORE", "BOS": "BOSTON",
-    "CHC": "CHICAGO", "CIN": "CINCINNATI", "CLE": "CLEVELAND", "COL": "COLORADO",
-    "CWS": "CHICAGO", "DET": "DETROIT", "HOU": "HOUSTON", "KC": "KANSAS CITY",
-    "LAA": "LOS ANGELES", "LAD": "LOS ANGELES", "MIA": "MIAMI", "MIL": "MILWAUKEE",
-    "MIN": "MINNESOTA", "NYM": "NEW YORK", "NYY": "NEW YORK", "OAK": "OAKLAND",
-    "ATH": "ATHLETICS", "PHI": "PHILADELPHIA", "PIT": "PITTSBURGH", "SD": "SAN DIEGO",
-    "SEA": "SEATTLE", "SF": "SAN FRANCISCO", "STL": "ST. LOUIS", "TB": "TAMPA BAY",
-    "TEX": "TEXAS", "TOR": "TORONTO", "WSH": "WASHINGTON", "WAS": "WASHINGTON",
-}
+# Team identity comes from the MLB Stats API snapshot, never a hand-typed table.
+TEAMS = json.load(open(os.path.join(REPO, "data", "reference", "mlb_teams_2026.json")))["teams"]
+
+
+def team_ref(abbr):
+    t = TEAMS.get(abbr) or TEAMS.get({"AZ": "ARI", "ARI": "AZ", "OAK": "ATH", "WAS": "WSH"}.get(abbr, ""), {})
+    if not t:
+        raise SystemExit(f"{abbr} not in data/reference/mlb_teams_2026.json; refresh the snapshot")
+    city = t["franchise"] if t["franchise"] != t["team"] else t["location"]
+    return city.upper(), t["team"].upper(), t
 
 
 def s(v):
@@ -254,8 +254,7 @@ def render(pick, settled=False):
 
     # bottom-left: the name + the numbers, in the card-back voice
     lx = fx0 + s(44)
-    city = CITY.get(side, side)
-    name = TEAM_NAMES.get(side, side)
+    city, name, _ = team_ref(side)
     edge = lambda y: (mx - R) + (y - my) - s(24)            # diamond's lower-left edge
     cf = fit_font(d, city, "cond", s(52), edge(my + s(250)) - lx, min_size=s(30))
     d.text((lx, my + s(232)), city, font=cf, fill=INK)
@@ -264,7 +263,7 @@ def render(pick, settled=False):
     pa, pr, ha, hr = (pick.get("sim_projection") or "").replace(" - ", " ").split()[:4] or ("", "", "", "")
     lines = [
         f"Sim: {pa} {pr} – {ha} {hr}",
-        f"Moneyline {odds} {at} {CITY.get(opp, opp).title()}",
+        f"Moneyline {odds} {at} {team_ref(opp)[0].title()}",
         f"C{pick.get('conf')} confidence · {pick.get('units')} $PP",
     ]
     bf = F("cond_sb", 38)
