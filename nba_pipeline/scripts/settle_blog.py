@@ -43,7 +43,7 @@ def patch_results_table(html, picks):
         side = p["side"]
         result = p["result"]
 
-        if not result:
+        if result not in RESULT_STYLES:  # pending or void (V)
             continue
 
         style = RESULT_STYLES[result]
@@ -251,7 +251,7 @@ def patch_pick_cards(html, picks):
 
     for p in picks:
         pick_type = p.get("pick_type", p.get("type", "spread"))
-        if not p["result"] or pick_type == "prop":
+        if p["result"] not in ("W", "L", "P") or pick_type == "prop":
             continue  # Only add final score to game line cards
 
         matchup = p["matchup"]
@@ -375,7 +375,7 @@ def patch_day_summaries(html, picks):
     skipped = defaultdict(int)
 
     for p in picks:
-        if not p.get("result"):
+        if p.get("result") not in ("W", "L", "P"):
             continue
         date = p["date"]
         label = date_to_label(date)

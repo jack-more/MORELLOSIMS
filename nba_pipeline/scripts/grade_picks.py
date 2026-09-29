@@ -2,14 +2,19 @@
 """
 grade_picks.py — CSV-based pick tracker with auto-grading.
 
-Reads picks from data/picks.csv, fetches scores from ESPN's public API
-(works from GitHub Actions IPs), grades ungraded picks W/L/P, updates
-the CSV in-place.
+Reads picks from data/picks.csv, fetches final scores (ESPN first, nba_sim.db
+`games` table when ESPN is unreachable), grades pending picks W/L/P and
+updates the CSV in place. A pick whose capture time is missing or not before
+tip-off is voided (result "V", with a reason) instead of graded. Rows are
+never deleted.
 
 Usage:
   python scripts/grade_picks.py                          # Grade pending picks
   python scripts/grade_picks.py --add "2026-02-26,OKC @ LAL,LAL +3.5,spread,50"
   python scripts/grade_picks.py --summary                # Just print record
+  python scripts/grade_picks.py --check-stale [--days 3] # Guardrail: exit 1 if
+                                                         # any pick is still pending
+                                                         # more than N days after its date
 """
 
 import csv
@@ -29,7 +34,12 @@ LINE_SNAPSHOTS = os.path.join(PROJECT_ROOT, "data", "line_snapshots.csv")
 sys.path.insert(0, PROJECT_ROOT)
 from config import STARTING_BANKROLL
 from collectors.games_espn import fetch_scores_for_grading, score_key
-CSV_FIELDS = ["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score", "closing_line", "closing_odds"]
+from utils.ledger import (
+    CSV_FIELDS, VOID, SETTLED, read_rows, write_rows, capture_check,
+    compute_profit, row_odds,
+)
+
+STALE_PENDING_DAYS = 3
 
 
 # ── CSV I/O ──────────────────────────────────────────────────────────
@@ -39,46 +49,34 @@ def read_picks():
     if not os.path.exists(PICKS_CSV):
         print(f"No picks file at {PICKS_CSV}")
         return []
-    with open(PICKS_CSV, newline="") as f:
-        reader = csv.DictReader(f)
-        rows = []
-        for row in reader:
-            row["risk"] = row.get("risk", "0").strip()
-            row["result"] = row.get("result", "").strip()
-            row["profit"] = row.get("profit", "").strip()
-            row["odds"] = row.get("odds", "").strip()
-            row["home_score"] = row.get("home_score", "").strip()
-            row["away_score"] = row.get("away_score", "").strip()
-            rows.append(row)
-        return rows
+    return read_rows(PICKS_CSV)
 
 
 def write_picks(picks):
     """Write picks back to CSV."""
-    os.makedirs(os.path.dirname(PICKS_CSV), exist_ok=True)
-    with open(PICKS_CSV, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore", lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(picks)
+    write_rows(PICKS_CSV, picks)
 
 
 def add_pick(raw_str):
-    """Append a pick from CLI string: 'date,matchup,side,type,risk'"""
+    """Append a pick from CLI string: 'date,matchup,side,type,risk'.
+
+    The capture time is now; grading voids it if that is not before tip.
+    """
     parts = [p.strip() for p in raw_str.split(",")]
     if len(parts) < 5:
         print("Format: date,matchup,side,type,risk")
         print('Example: "2026-02-26,OKC @ LAL,LAL +3.5,spread,50"')
         sys.exit(1)
 
-    new_pick = {
+    new_pick = {k: "" for k in CSV_FIELDS}
+    new_pick.update({
         "date": parts[0],
         "matchup": parts[1],
         "side": parts[2],
         "type": parts[3],
         "risk": parts[4],
-        "result": "",
-        "profit": "",
-    }
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+    })
 
     picks = read_picks()
     picks.append(new_pick)
@@ -86,124 +84,63 @@ def add_pick(raw_str):
     print(f"Added: {new_pick['date']} | {new_pick['matchup']} | {new_pick['side']} | risk {new_pick['risk']}")
 
 
-
-# ── Score Fetching (delegated to collectors.games_espn) ──────────────
-
-
 # ── Grading Logic ────────────────────────────────────────────────────
 
 def parse_side(side_str):
-    """Parse 'CLE -16.0' or 'BOS +4.5' into (team, line_value, direction).
-
-    Returns (team_abbr, line_float, 'home_spread'|'away_spread') or None.
-    """
+    """Parse 'CLE -16.0' or 'BOS +4.5' into (team_abbr, line_float) or None."""
     m = re.match(r"([A-Z]{2,3})\s+([+-]?[\d.]+)", side_str.strip())
     if not m:
         return None
-    team = m.group(1)
-    line = float(m.group(2))
-    return team, line
+    return m.group(1), float(m.group(2))
 
 
-def compute_profit(result, risk_amount, odds=-110):
-    """Compute profit based on result and American odds.
-
-    American odds:
-      -110: risk $110 to win $100 → profit = risk * (100/110)
-      +150: risk $100 to win $150 → profit = risk * (150/100)
-    """
-    if result == "W":
-        if odds > 0:
-            # Underdog: +150 means risk $100 to win $150
-            return round(risk_amount * (odds / 100), 2)
-        else:
-            # Favorite: -110 means risk $110 to win $100
-            return round(risk_amount * (100 / abs(odds)), 2)
-    elif result == "L":
-        return round(-risk_amount, 2)
-    else:
-        return 0.0
+def _game_for(pick, scores):
+    """Date-keyed lookup only: a matchup-only fallback grades rematches wrong
+    (it graded 03-19 DET @ WAS against 03-17 and 03-27 MIA @ CLE against 03-25)."""
+    return scores.get(score_key(pick.get("date"), pick.get("matchup")))
 
 
 def grade_spread(matchup, side_str, scores, pick_date=None):
-    """Grade a spread pick. Returns (result, profit_amount) or None."""
-    # NBA teams play 3-4x per season — must key by (date, matchup) to avoid
-    # mis-grading a Mar pick against the Apr rematch.
+    """Grade a spread pick. Returns 'W' | 'L' | 'P' or None."""
     game = scores.get(score_key(pick_date, matchup)) if pick_date else None
     if game is None:
-        # Legacy fallback: try matchup-only (only safe when scores has no
-        # rematches in window). Useful for very recent backfills.
-        game = scores.get(matchup)
-    if game is None:
         return None
-
     parsed = parse_side(side_str)
     if parsed is None:
         return None
 
     team, line = parsed
-    home_score = game["home_score"]
-    away_score = game["away_score"]
-    home_abbr = game["home_abbr"]
-    away_abbr = game["away_abbr"]
-    actual_margin = home_score - away_score
-
-    if team == home_abbr:
-        # Picked home team: margin from home perspective + line
-        # HOU -8.5: actual_margin=10 → 10+(-8.5)=1.5 → covers (won by more than 8.5)
-        # HOU -8.5: actual_margin=5  → 5+(-8.5)=-3.5 → doesn't cover
+    actual_margin = game["home_score"] - game["away_score"]
+    if team == game["home_abbr"]:
         cover_margin = actual_margin + line
-    elif team == away_abbr:
-        # Picked away team: flip margin to away perspective + line
-        # GSW +15: actual_margin=7 (home won by 7) → -7+15=8 → covers (lost by less than 15)
-        # GSW +15: actual_margin=20 → -20+15=-5 → doesn't cover
+    elif team == game["away_abbr"]:
         cover_margin = -actual_margin + line
     else:
         return None
 
     if cover_margin > 0:
         return "W"
-    elif cover_margin == 0:
+    if cover_margin == 0:
         return "P"
-    else:
-        return "L"
+    return "L"
 
 
 def grade_ml(matchup, side_str, scores, pick_date=None):
-    """Grade a moneyline pick. Side is like 'GSW ML' or 'BOS ML'."""
+    """Grade a moneyline pick. Side is like 'GSW ML'."""
     game = scores.get(score_key(pick_date, matchup)) if pick_date else None
     if game is None:
-        game = scores.get(matchup)
-    if game is None:
         return None
-
-    # Parse "GSW ML" → team = "GSW"
     m = re.match(r"([A-Z]{2,3})\s+ML", side_str.strip())
     if not m:
         return None
 
     team = m.group(1)
-    home_score = game["home_score"]
-    away_score = game["away_score"]
-    home_abbr = game["home_abbr"]
-    away_abbr = game["away_abbr"]
-
-    if team == home_abbr:
-        if home_score > away_score:
-            return "W"
-        elif home_score == away_score:
-            return "P"
-        else:
-            return "L"
-    elif team == away_abbr:
-        if away_score > home_score:
-            return "W"
-        elif away_score == home_score:
-            return "P"
-        else:
-            return "L"
-    else:
-        return None
+    hs, as_ = game["home_score"], game["away_score"]
+    if team == game["home_abbr"]:
+        return "W" if hs > as_ else ("P" if hs == as_ else "L")
+    if team == game["away_abbr"]:
+        return "W" if as_ > hs else ("P" if hs == as_ else "L")
+    return None
 
 
 # ── Closing lines (for CLV) ──────────────────────────────────────────
@@ -252,13 +189,12 @@ def attach_closing_line(pick, closing):
 # ── Main ─────────────────────────────────────────────────────────────
 
 def grade_all():
-    """Grade all pending picks from CSV using local DB scores."""
+    """Grade all pending picks from CSV."""
     picks = read_picks()
     if not picks:
         print("No picks in CSV")
         return
 
-    # Count pending
     pending = [p for p in picks if not p["result"]]
     if not pending:
         print("All picks already graded")
@@ -266,28 +202,22 @@ def grade_all():
         return
 
     print(f"\n{len(pending)} pending picks to grade\n")
-
-    # Auto-compute lookback: go back far enough to cover oldest pending pick
-    oldest_date = min(p["date"] for p in pending)
-    days_needed = (datetime.now(timezone.utc) - datetime.strptime(oldest_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)).days + 2
-    days_needed = max(days_needed, 3)  # Minimum 3 days
-    print(f"Oldest pending: {oldest_date} → fetching {days_needed} days of scores")
-
-    # Fetch scores
-    scores = fetch_scores_for_grading(days=days_needed)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dates = sorted({p["date"] for p in pending if p["date"] <= today})
+    print(f"Fetching scores for {len(dates)} slate date(s): {', '.join(dates)}")
+    scores = fetch_scores_for_grading(dates=dates)
     closing = load_closing_snapshots()
 
-    # Grade each pending pick
     graded = 0
     for pick in picks:
         if pick["result"]:
-            continue  # Already graded
+            continue
         attach_closing_line(pick, closing)
 
         matchup = pick["matchup"]
         side = pick["side"]
-        pick_type = pick.get("type", "spread")
-        risk = float(pick.get("risk", 0) or 0)
+        pick_type = pick.get("type") or "spread"
+        risk = float(pick.get("risk") or 0)
 
         if pick_type == "spread":
             result = grade_spread(matchup, side, scores, pick_date=pick.get("date"))
@@ -300,44 +230,62 @@ def grade_all():
             print(f"  PENDING: {pick['date']} | {matchup} | {side}")
             continue
 
-        # Use actual ML odds for moneyline picks, standard -110 for spreads
-        pick_odds = -110
-        if pick_type == "ml" and pick.get("odds"):
-            try:
-                pick_odds = int(pick["odds"])
-            except (ValueError, TypeError):
-                pass
-        profit = compute_profit(result, risk, odds=pick_odds)
+        game = _game_for(pick, scores)
+        pick["home_score"] = str(game["home_score"])
+        pick["away_score"] = str(game["away_score"])
+        if game.get("tip_utc") and not pick.get("tip_at"):
+            pick["tip_at"] = game["tip_utc"]
+
+        void_reason = capture_check(pick, game.get("tip_utc"))
+        if void_reason:
+            would = compute_profit(result, risk, odds=row_odds(pick))
+            pick["result"] = VOID
+            pick["profit"] = "0"
+            pick["void_reason"] = f"{void_reason}; would have graded {result} {would:+.2f}"
+            graded += 1
+            print(f"  V VOID: {matchup} | {side} | {pick['void_reason']}")
+            continue
+
+        profit = compute_profit(result, risk, odds=row_odds(pick))
         pick["result"] = result
         pick["profit"] = str(profit)
-        # Store game scores for settlement blog patching — same date+matchup keying
-        game = scores.get(score_key(pick.get("date"), matchup)) or scores.get(matchup)
-        if game:
-            pick["home_score"] = str(game["home_score"])
-            pick["away_score"] = str(game["away_score"])
         graded += 1
-
         marker = {"W": "+", "L": "-", "P": "="}[result]
-        print(f"  {marker} {result}: {matchup} | {side} | {profit:+.2f} $PP")
+        print(f"  {marker} {result}: {matchup} | {side} | {profit:+.2f} $PP "
+              f"[{game['away_abbr']} {game['away_score']} @ {game['home_abbr']} {game['home_score']}, {game.get('source')}]")
 
-    # Write updated CSV
     write_picks(picks)
     print(f"\nGraded {graded} picks")
-
     print_summary(picks)
 
 
+def check_stale(days=STALE_PENDING_DAYS):
+    """Guardrail: exit 1 if any pick is still pending > `days` after its date."""
+    picks = read_picks()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    stale = [p for p in picks if not p["result"] and p["date"] < cutoff]
+    if stale:
+        for p in stale:
+            print(f"::error::NBA pick still pending {days}+ days after its date: "
+                  f"{p['date']} {p['matchup']} {p['side']}")
+        sys.exit(1)
+    print(f"Stale-pending guardrail OK: no pick pending more than {days} days")
+
+
 def print_summary(picks):
-    """Print running record and bankroll."""
+    """Print running record and bankroll; write settlement_results.json."""
     record = {"W": 0, "L": 0, "P": 0}
     total_profit = 0.0
     pending = 0
+    voided = 0
 
     for p in picks:
         r = p.get("result", "").strip()
-        if r in ("W", "L", "P"):
+        if r in SETTLED:
             record[r] += 1
             total_profit += float(p.get("profit", 0) or 0)
+        elif r == VOID:
+            voided += 1
         else:
             pending += 1
 
@@ -349,10 +297,10 @@ def print_summary(picks):
     print(f"  BANKROLL: {STARTING_BANKROLL:.0f} -> {bankroll:.0f} $PP")
     if pending:
         print(f"  PENDING:  {pending} picks")
+    if voided:
+        print(f"  VOID:     {voided} picks (kept, not counted)")
     print(f"{'='*50}")
 
-    # Also write settlement JSON for blog integration
-    import json
     results_list = []
     for p in picks:
         r = p.get("result", "").strip()
@@ -366,17 +314,19 @@ def print_summary(picks):
                 "result": r,
                 "profit": float(p.get("profit", 0) or 0),
             }
-            # Include game scores if available
             if p.get("home_score"):
                 entry["home_score"] = int(p["home_score"])
             if p.get("away_score"):
                 entry["away_score"] = int(p["away_score"])
+            if r == VOID:
+                entry["void_reason"] = p.get("void_reason", "")
             results_list.append(entry)
 
     settlement = {
         "graded_at": datetime.now(timezone.utc).isoformat(),
         "picks": results_list,
         "pending_count": pending,
+        "void_count": voided,
         "record": record,
         "total_profit": round(total_profit, 2),
         "starting_bankroll": STARTING_BANKROLL,
@@ -396,18 +346,24 @@ def main():
         if sys.argv[1] == "--add" and len(sys.argv) > 2:
             add_pick(sys.argv[2])
             return
-        elif sys.argv[1] == "--summary":
+        if sys.argv[1] == "--summary":
             picks = read_picks()
             if picks:
                 print_summary(picks)
             return
-        else:
-            print(f"Unknown flag: {sys.argv[1]}")
-            print("Usage:")
-            print('  python scripts/grade_picks.py                  # Grade pending')
-            print('  python scripts/grade_picks.py --add "..."      # Add a pick')
-            print('  python scripts/grade_picks.py --summary        # Print record')
-            sys.exit(1)
+        if sys.argv[1] == "--check-stale":
+            days = STALE_PENDING_DAYS
+            if "--days" in sys.argv:
+                days = int(sys.argv[sys.argv.index("--days") + 1])
+            check_stale(days)
+            return
+        print(f"Unknown flag: {sys.argv[1]}")
+        print("Usage:")
+        print('  python scripts/grade_picks.py                  # Grade pending')
+        print('  python scripts/grade_picks.py --add "..."      # Add a pick')
+        print('  python scripts/grade_picks.py --summary        # Print record')
+        print('  python scripts/grade_picks.py --check-stale    # Pending >3 days guardrail')
+        sys.exit(1)
 
     grade_all()
 

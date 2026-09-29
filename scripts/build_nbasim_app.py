@@ -9,6 +9,7 @@ near the top of the page.
 from __future__ import annotations
 
 import re
+import sys
 import json
 from pathlib import Path
 
@@ -162,9 +163,28 @@ def strip_trailing_whitespace(html: str) -> str:
     return "\n".join(line.rstrip() for line in html.splitlines()) + ending
 
 
+def refresh_record_only() -> None:
+    """Re-render only the record card inside the published /nbasim/ page.
+
+    The grade job has no nba_pipeline/index.html (it is generated, untracked,
+    only in the update-lines job), so settlement refreshes the card in place.
+    """
+    if not TARGET.exists():
+        print(f"No published dashboard at {TARGET.relative_to(ROOT)}; nothing to refresh")
+        return
+    html = install_record_card(TARGET.read_text())
+    TARGET.write_text(strip_trailing_whitespace(html))
+    print(f"Refreshed NBA record card: {TARGET.relative_to(ROOT)}")
+
+
 def main() -> None:
+    if "--record-only" in sys.argv:
+        refresh_record_only()
+        return
     if not SOURCE.exists():
-        raise FileNotFoundError(f"Missing source dashboard: {SOURCE}")
+        print(f"Missing source dashboard {SOURCE.relative_to(ROOT)}; refreshing the record card only")
+        refresh_record_only()
+        return
 
     html = SOURCE.read_text()
     html = inject_morello_shell(html)
