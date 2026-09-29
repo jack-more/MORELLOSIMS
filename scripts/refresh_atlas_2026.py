@@ -19,6 +19,7 @@ Usage:
   (defaults: season start through today)
 """
 
+import gzip
 import json
 import os
 import sys
@@ -148,14 +149,31 @@ PITCH_FAMILY_MINIMUMS = {
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+# Atlas files that outgrew GitHub's 100 MB per-file cap are stored gzipped.
+# Callers keep using the plain .json name; storage is transparent.
+GZIPPED_ATLAS = {"hitter_vs_pitcher.json"}
+
+
 def load_atlas(filename):
     path = os.path.join(ATLAS_DIR, filename)
+    if os.path.exists(path + ".gz"):
+        with gzip.open(path + ".gz", "rt") as f:
+            return json.load(f)
     with open(path, "r") as f:
         return json.load(f)
 
 
 def save_atlas(filename, data):
     path = os.path.join(ATLAS_DIR, filename)
+    if filename in GZIPPED_ATLAS:
+        raw = json.dumps(data, separators=(",", ":")).encode()
+        # mtime=0 keeps the bytes deterministic so unchanged data doesn't churn a commit
+        with open(path + ".gz", "wb") as fh, gzip.GzipFile(fileobj=fh, mode="wb", mtime=0, filename="") as gz:
+            gz.write(raw)
+        if os.path.exists(path):
+            os.remove(path)
+        print(f"  Saved {path}.gz ({os.path.getsize(path + '.gz'):,} bytes gz, {len(raw):,} raw)")
+        return
     with open(path, "w") as f:
         json.dump(data, f, separators=(",", ":"))
     print(f"  Saved {path} ({os.path.getsize(path):,} bytes)")

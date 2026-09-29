@@ -1435,7 +1435,7 @@ def sp_role_tto_mult(sp_id):
 # ─── Fetch schedule ──────────────────────────────────────────────────────────
 print(f"\nFetching schedule for {TODAY}...")
 sched = fetch(f"{MLB_API}/schedule?sportId=1&date={TODAY}&hydrate=probablePitcher,lineups,linescore,team,venue")
-games_raw = sched.get("dates", [{}])[0].get("games", []) if sched else []
+games_raw = ((sched or {}).get("dates") or [{}])[0].get("games", [])  # off days return dates: []
 print(f"  Games: {len(games_raw)}")
 
 
