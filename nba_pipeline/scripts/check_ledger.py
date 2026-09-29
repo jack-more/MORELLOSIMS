@@ -7,7 +7,8 @@ Fails (exit 1) when:
   * a settled row in HEAD changed its result, stake or profit (no restating
     after the fact; pending -> settled/void is the only allowed transition);
   * a counted row (W/L/P or pending) has no
-    captured_at, or was captured at/after tip-off;
+    captured_at, or was captured at/after tip-off (unless its void_reason
+    starts "REINSTATED (owner decision" — kept in by the owner, evidence kept);
   * a stake differs from the stake in the pick_log.json capture record;
   * a settled row's profit is not what its stake and result imply;
   * a void row has no void_reason.
@@ -99,7 +100,10 @@ def main():
             continue
         if res and res not in SETTLED:
             errors.append(f"unknown result {res!r}: {k}")
-        reason = capture_check(r)
+        # Owner-reinstated rows (2026-09-29): logged after tip, counted by the
+        # owner's decision; the original evidence stays in void_reason.
+        reinstated = (r.get("void_reason") or "").startswith("REINSTATED (owner decision")
+        reason = None if reinstated else capture_check(r)
         if reason:
             errors.append(f"counted row fails capture rule ({reason}): {k}")
         lg = logs.get((r["date"], r["matchup"], r["side"]))
