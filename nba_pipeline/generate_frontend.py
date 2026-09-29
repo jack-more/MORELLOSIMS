@@ -660,6 +660,68 @@ ARCHETYPE_DESCRIPTIONS = {
 # Odds API team map removed — Odds API has been removed from the pipeline.
 
 
+# NBA.com gameId prefix -> ESPN-style season type (1 pre, 2 regular, 3 post, 5 play-in)
+_NBA_GAMEID_SEASON_TYPE = {"001": 1, "002": 2, "004": 3, "005": 5}
+_COUNTED_SEASON_TYPES = {2, 3, 5}
+_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+
+
+def slate_date_iso(slate_date):
+    """'MAY 6' / 'May 6' / '2026-05-06' -> '2026-05-06' (year nearest today)."""
+    if not slate_date:
+        return None
+    if slate_date[:1].isdigit():
+        return slate_date[:10]
+    try:
+        mon, day = slate_date.strip().upper().split()[:2]
+        month = _MONTHS.index(mon[:3]) + 1
+        day = int(day)
+    except (ValueError, IndexError):
+        return None
+    today = datetime.now(timezone.utc).date()
+    best = None
+    for year in (today.year - 1, today.year, today.year + 1):
+        try:
+            cand = today.replace(year=year, month=month, day=day)
+        except ValueError:
+            continue
+        if best is None or abs((cand - today).days) < abs((best - today).days):
+            best = cand
+    return best.isoformat() if best else None
+
+
+def fetch_slate_schedule(slate_iso):
+    """{(home, away): {"season_type", "tip_utc"}} for the slate date.
+
+    ESPN scoreboard for the slate date, filled in by NBA.com's live
+    scoreboard (gameId prefix). Games neither source knows keep
+    season_type None; capture_picks.py never tracks those.
+    """
+    sched = {}
+    if slate_iso:
+        try:
+            from collectors.games_espn import fetch_espn_events
+            events = fetch_espn_events(datetime.strptime(slate_iso, "%Y-%m-%d")) or []
+        except Exception as e:  # noqa: BLE001 — schedule is best-effort
+            logger.warning("Slate schedule: ESPN failed: %s", e)
+            events = []
+        for e in events:
+            sched[(e["home_abbr"], e["away_abbr"])] = {"season_type": e["season_type"], "tip_utc": e["tip_utc"]}
+    from zoneinfo import ZoneInfo
+    et = ZoneInfo("America/New_York")
+    for pair, g in fetch_nba_schedule().items():
+        if g.get("utc") and slate_iso and g["utc"].astimezone(et).strftime("%Y-%m-%d") != slate_iso:
+            continue  # NBA.com "today" can lag/lead the slate date
+        cur = sched.setdefault(pair, {"season_type": None, "tip_utc": None})
+        if cur["season_type"] is None:
+            cur["season_type"] = g.get("season_type")
+        if cur["tip_utc"] is None and g.get("utc"):
+            cur["tip_utc"] = g["utc"].astimezone(timezone.utc).isoformat()
+    logger.info("Slate schedule %s: %d games (%s)", slate_iso, len(sched),
+                ", ".join(f"{a}@{h}:{v['season_type']}" for (h, a), v in sched.items()))
+    return sched
+
+
 def fetch_nba_schedule():
     """Fetch today's NBA schedule from NBA.com for game times and statuses.
 
@@ -693,6 +755,8 @@ def fetch_nba_schedule():
                     "utc": dt,
                     "status": status,
                     "status_text": status_text.strip(),
+                    # NBA gameId prefix: 001 preseason, 002 regular, 004 playoffs, 005 play-in
+                    "season_type": _NBA_GAMEID_SEASON_TYPE.get(str(game.get("gameId", ""))[:3]),
                 }
             except (KeyError, ValueError, TypeError, IndexError):
                 pass
@@ -1046,6 +1110,11 @@ _B2B_SCHEDULE = {
     ("2026-04-10", "LAL"), ("2026-04-10", "MIA"), ("2026-04-10", "NYK"),
     ("2026-04-10", "PHI"), ("2026-04-10", "TOR"), ("2026-04-10", "WAS"),
 }
+# The static table answers only for the 2025-26 season window; every other
+# date uses the live schedule (ESPN scoreboard, then nba_sim.db games).
+_B2B_STATIC_FIRST, _B2B_STATIC_LAST = "2025-10-01", "2026-06-30"
+_PLAYED_ON_CACHE: dict = {}
+_SLATE_DATE_ISO = None  # set by get_matchups() once the slate date is known
 
 # Archetype groups for usage redistribution
 _SCORING_ARCHETYPES = {
@@ -1602,8 +1671,17 @@ def is_back_to_back(team_tricode, game_date=None):
     Returns True if the team played yesterday (back-to-back).
     """
     if game_date is None:
-        game_date = datetime.now().strftime("%Y-%m-%d")
-    return (game_date, team_tricode) in _B2B_SCHEDULE
+        game_date = _SLATE_DATE_ISO or datetime.now().strftime("%Y-%m-%d")
+    if _B2B_STATIC_FIRST <= game_date <= _B2B_STATIC_LAST:
+        # 2025-26: the precomputed NBA.com schedule (unchanged behaviour)
+        return (game_date, team_tricode) in _B2B_SCHEDULE
+    # Any other season: did the team play (non-preseason) the day before?
+    prev = (datetime.strptime(game_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    if prev not in _PLAYED_ON_CACHE:
+        from collectors.games_espn import teams_played_on
+        _PLAYED_ON_CACHE[prev] = teams_played_on(prev) or set()
+        logger.info("B2B: %d teams played on %s (live schedule)", len(_PLAYED_ON_CACHE[prev]), prev)
+    return team_tricode in _PLAYED_ON_CACHE[prev]
 
 
 def _get_full_roster(team_abbr):
@@ -3159,19 +3237,12 @@ def get_matchups():
         slate_date = api_slate_date
         logger.info("Matchups: using %d games from Odds API (%s)", len(matchup_pairs), slate_date)
     else:
-        matchup_pairs = [
-            ("WAS", "IND"),
-            ("MEM", "UTA"),
-            ("CHA", "CLE"),
-            ("ATL", "MIA"),
-            ("MIN", "DAL"),
-            ("NOP", "MIL"),
-            ("OKC", "BKN"),
-            ("LAL", "LAC"),
-            ("POR", "DEN"),
-        ]
-        slate_date = "FEB 20"
-        logger.info("Matchups: using hardcoded fallback slate (%d games)", len(matchup_pairs))
+        # No slate source had games (offseason, or scrapers down): publish an
+        # empty slate for today rather than a stale hard-coded FEB 20 slate.
+        matchup_pairs = []
+        _now = datetime.now()
+        slate_date = f"{_MONTHS[_now.month - 1]} {_now.day}"
+        logger.info("Matchups: no games from RotoWire or Odds API — empty slate (%s)", slate_date)
 
     # ── STEP 0: Filter out games that have already started ──
     game_times_for_filter = rw_game_times if matchup_pairs == rw_pairs else {}
@@ -3208,6 +3279,19 @@ def get_matchups():
                     logger.info("Rollover: BM shows same games as today — no tomorrow slate yet")
         except (requests.RequestException, KeyError, ValueError) as e:
             logger.warning("Rollover: Basketball Monster fallback failed: %s", e)
+
+    # ── Season type + tip times: never price preseason games ──
+    global _SLATE_DATE_ISO
+    slate_iso = slate_date_iso(slate_date)
+    _SLATE_DATE_ISO = slate_iso
+    slate_schedule = fetch_slate_schedule(slate_iso) if matchup_pairs else {}
+    preseason = [p for p in matchup_pairs
+                 if slate_schedule.get(p, {}).get("season_type") not in (None, *_COUNTED_SEASON_TYPES)]
+    if preseason:
+        logger.info("Matchups: dropping %d non-regular-season games: %s", len(preseason),
+                    ", ".join(f"{a}@{h}" for h, a in preseason))
+        matchup_pairs = [p for p in matchup_pairs if p not in preseason]
+        real_lines = {k: v for k, v in real_lines.items() if k not in preseason}
 
     # ── Supplement: merge Basketball Reference injury data ──
     bref_out = scrape_bref_injuries()
@@ -3413,10 +3497,14 @@ def get_matchups():
     daily_snapshot = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "slate_date": slate_date,
+        "slate_date_iso": slate_iso,
         "games": [],
     }
     for m in matchups:
+        sched = slate_schedule.get((m["home_abbr"], m["away_abbr"]), {})
         daily_snapshot["games"].append({
+            "season_type": sched.get("season_type"),
+            "tip_at": sched.get("tip_utc"),
             "matchup": f"{m['away_abbr']} @ {m['home_abbr']}",
             "home": m["home_abbr"],
             "away": m["away_abbr"],
@@ -3447,9 +3535,11 @@ def get_matchups():
     _snap_path = os.path.join("data", "line_snapshots.csv")
     _snap_fields = ["date", "matchup", "ts_utc", "book_spread_home", "book_total", "home_ml", "away_ml"]
     _snap_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Keyed by ISO date: picks.csv dates are ISO, so a "MAY 6" key never
+    # matched and closing_line stayed null on every pick (audit N7).
     _snap_rows = [
         {
-            "date": slate_date,
+            "date": slate_iso or slate_date,
             "matchup": g["matchup"],
             "ts_utc": _snap_ts,
             "book_spread_home": g["book_spread"] if g["book_spread"] is not None else "",

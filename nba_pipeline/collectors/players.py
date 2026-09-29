@@ -40,91 +40,115 @@ class PlayerCollector(BaseCollector):
         logger.info(f"Saved {len(df)} teams")
         return df
 
-    def collect_rosters(self, season: str):
-        """Collect rosters for all teams. ~30 API calls."""
+    def collect_rosters(self, season: str, passes: int = 2, timeout: int = 20):
+        """Collect rosters for all teams. ~30 API calls.
+
+        Timeout-tolerant: each team is saved as soon as it is fetched (a step
+        timeout keeps everything fetched so far), teams that fail are retried
+        in a second pass, and a team whose fetch fails keeps its cached
+        roster instead of being wiped. Returns the team_ids that failed.
+        """
         teams_df = read_query("SELECT team_id FROM teams", self.db_path)
+        pending = [int(t) for t in teams_df["team_id"]]
+        saved = 0
+        for pass_no in range(1, passes + 1):
+            failed = []
+            for team_id in pending:
+                try:
+                    players, assignments = self._fetch_team_roster(team_id, season, timeout)
+                except Exception as e:
+                    logger.error(f"  Failed to get roster for team {team_id} (pass {pass_no}): {e}")
+                    failed.append(team_id)
+                    continue
+                if not assignments:
+                    continue
+                self._save_team_roster(team_id, season, players, assignments)
+                saved += len(assignments)
+            pending = failed
+            if not pending:
+                break
+        logger.info(f"Saved {saved} roster assignments for {season}; "
+                    f"{len(pending)} team(s) kept cached rosters: {pending}")
+        return pending
+
+    def _save_team_roster(self, team_id: int, season: str, players: list, assignments: list):
+        """Replace one team's roster for a season; upsert its players."""
+        players_df = pd.DataFrame(players).drop_duplicates(subset=["player_id"])
+        ids = ",".join(str(int(i)) for i in players_df["player_id"])
+        try:
+            execute(f"DELETE FROM players WHERE player_id IN ({ids})", self.db_path)
+        except Exception:
+            pass  # players table not created yet
+        self._save(players_df, "players")
+        execute(
+            "DELETE FROM roster_assignments WHERE season_id = ? AND team_id = ?",
+            self.db_path, [season, team_id],
+        )
+        self._save(pd.DataFrame(assignments), "roster_assignments")
+
+    def _fetch_team_roster(self, team_id: int, season: str, timeout: int):
+        """One team's roster -> (players rows, roster_assignments rows). Raises on failure."""
+        dfs = self._call_endpoint(
+            CommonTeamRoster,
+            team_id=team_id,
+            season=season,
+            timeout=timeout,
+        )
+        roster = dfs[0]
+        if roster.empty:
+            return [], []
+
         all_players = []
         all_assignments = []
+        for _, p in roster.iterrows():
+            player_id = int(p["PLAYER_ID"])
 
-        for _, row in teams_df.iterrows():
-            team_id = int(row["team_id"])
-            try:
-                dfs = self._call_endpoint(
-                    CommonTeamRoster,
-                    team_id=team_id,
-                    season=season,
-                )
-                roster = dfs[0]
-                if roster.empty:
-                    continue
+            # Parse height to inches
+            height_inches = None
+            if pd.notna(p.get("HEIGHT")) and p["HEIGHT"]:
+                parts = str(p["HEIGHT"]).split("-")
+                if len(parts) == 2:
+                    try:
+                        height_inches = int(parts[0]) * 12 + int(parts[1])
+                    except ValueError:
+                        pass
 
-                for _, p in roster.iterrows():
-                    player_id = int(p["PLAYER_ID"])
+            weight = None
+            if pd.notna(p.get("WEIGHT")) and p["WEIGHT"]:
+                try:
+                    weight = int(p["WEIGHT"])
+                except ValueError:
+                    pass
 
-                    # Parse height to inches
-                    height_inches = None
-                    if pd.notna(p.get("HEIGHT")) and p["HEIGHT"]:
-                        parts = str(p["HEIGHT"]).split("-")
-                        if len(parts) == 2:
-                            try:
-                                height_inches = int(parts[0]) * 12 + int(parts[1])
-                            except ValueError:
-                                pass
+            exp = None
+            if pd.notna(p.get("EXP")) and p["EXP"] != "R":
+                try:
+                    exp = int(p["EXP"])
+                except ValueError:
+                    pass
+            elif p.get("EXP") == "R":
+                exp = 0
 
-                    weight = None
-                    if pd.notna(p.get("WEIGHT")) and p["WEIGHT"]:
-                        try:
-                            weight = int(p["WEIGHT"])
-                        except ValueError:
-                            pass
+            all_players.append({
+                "player_id": player_id,
+                "full_name": p.get("PLAYER", ""),
+                "position": p.get("POSITION", ""),
+                "height_inches": height_inches,
+                "weight_lbs": weight,
+                "birth_date": p.get("BIRTH_DATE", ""),
+                "experience": exp,
+                "is_active": 1,
+            })
+            all_assignments.append({
+                "player_id": player_id,
+                "team_id": team_id,
+                "season_id": season,
+                "jersey_number": str(p.get("NUM", "")),
+                "listed_position": p.get("POSITION", ""),
+            })
 
-                    exp = None
-                    if pd.notna(p.get("EXP")) and p["EXP"] != "R":
-                        try:
-                            exp = int(p["EXP"])
-                        except ValueError:
-                            pass
-                    elif p.get("EXP") == "R":
-                        exp = 0
-
-                    all_players.append({
-                        "player_id": player_id,
-                        "full_name": p.get("PLAYER", ""),
-                        "position": p.get("POSITION", ""),
-                        "height_inches": height_inches,
-                        "weight_lbs": weight,
-                        "birth_date": p.get("BIRTH_DATE", ""),
-                        "experience": exp,
-                        "is_active": 1,
-                    })
-
-                    all_assignments.append({
-                        "player_id": player_id,
-                        "team_id": team_id,
-                        "season_id": season,
-                        "jersey_number": str(p.get("NUM", "")),
-                        "listed_position": p.get("POSITION", ""),
-                    })
-
-                logger.info(f"  Roster for team {team_id}: {len(roster)} players")
-            except Exception as e:
-                logger.error(f"  Failed to get roster for team {team_id}: {e}")
-
-        if all_players:
-            players_df = pd.DataFrame(all_players).drop_duplicates(subset=["player_id"])
-            self._save(players_df, "players", if_exists="replace")
-            logger.info(f"Saved {len(players_df)} players")
-
-        if all_assignments:
-            assignments_df = pd.DataFrame(all_assignments)
-            # Clear existing for this season first
-
-            execute(
-                "DELETE FROM roster_assignments WHERE season_id = ?",
-                self.db_path, [season]
-            )
-            self._save(assignments_df, "roster_assignments")
-            logger.info(f"Saved {len(assignments_df)} roster assignments for {season}")
+        logger.info(f"  Roster for team {team_id}: {len(roster)} players")
+        return all_players, all_assignments
 
     def collect_player_season_stats(self, season: str):
         """Collect per-game and advanced player stats for a season. ~4 API calls."""

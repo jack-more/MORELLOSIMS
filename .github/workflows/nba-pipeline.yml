@@ -100,18 +100,23 @@ jobs:
           import sys, os, logging
           sys.path.insert(0, os.getcwd())
           logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-          from config import DB_PATH
+          from config import DB_PATH, CURRENT_SEASON
           from collectors.players import PlayerCollector
+          print(f'Season: {CURRENT_SEASON}')
           pc = PlayerCollector(DB_PATH)
           pc.collect_teams()
-          try: pc.collect_rosters('2025-26')
+          try: pc.collect_rosters(CURRENT_SEASON)
           except Exception as e: print(f'Roster refresh failed (using cached): {e}')
-          try: pc.collect_player_season_stats('2025-26')
+          try: pc.collect_player_season_stats(CURRENT_SEASON)
           except Exception as e: print(f'Player stats refresh failed (using cached): {e}')
-          try: pc.collect_team_season_stats('2025-26')
+          try: pc.collect_team_season_stats(CURRENT_SEASON)
           except Exception as e: print(f'Team stats refresh failed (using cached): {e}')
           print('=== Rosters + season stats step complete ===')
           "
+
+      - name: Seed new-season priors from last season (idempotent)
+        working-directory: nba_pipeline
+        run: python scripts/seed_season.py
 
       - name: Check data freshness
         working-directory: nba_pipeline
@@ -175,6 +180,10 @@ jobs:
         working-directory: nba_pipeline
         run: python scripts/inject_pick.py ${{ inputs.inject_pick }}
 
+      - name: Ledger integrity (nothing deleted, stakes frozen, captured before tip)
+        working-directory: nba_pipeline
+        run: python scripts/check_ledger.py
+
       - name: Generate blog entry
         working-directory: nba_pipeline
         run: python scripts/generate_blog_entry.py
@@ -203,6 +212,9 @@ jobs:
           if [ -f nba_pipeline/data/pick_log.json ]; then git add nba_pipeline/data/pick_log.json; fi
           if [ -f nba_pipeline/data/blog_snippet.html ]; then git add nba_pipeline/data/blog_snippet.html; fi
           if [ -f nba_pipeline/data/daily_picks.json ]; then git add nba_pipeline/data/daily_picks.json; fi
+          # Closing-line history for CLV: without committing it, every run's
+          # snapshots were lost and grading never saw a closing line.
+          if [ -f nba_pipeline/data/line_snapshots.csv ]; then git add nba_pipeline/data/line_snapshots.csv; fi
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
@@ -259,6 +271,10 @@ jobs:
         working-directory: nba_pipeline
         run: python scripts/capture_picks.py
 
+      - name: Ledger integrity (nothing deleted, stakes frozen, captured before tip)
+        working-directory: nba_pipeline
+        run: python scripts/check_ledger.py
+
       - name: Generate blog entry
         continue-on-error: true
         working-directory: nba_pipeline
@@ -288,6 +304,9 @@ jobs:
           if [ -f nba_pipeline/data/pick_log.json ]; then git add nba_pipeline/data/pick_log.json; fi
           if [ -f nba_pipeline/data/blog_snippet.html ]; then git add nba_pipeline/data/blog_snippet.html; fi
           if [ -f nba_pipeline/data/daily_picks.json ]; then git add nba_pipeline/data/daily_picks.json; fi
+          # Closing-line history for CLV: without committing it, every run's
+          # snapshots were lost and grading never saw a closing line.
+          if [ -f nba_pipeline/data/line_snapshots.csv ]; then git add nba_pipeline/data/line_snapshots.csv; fi
 
           if git diff --cached --quiet; then
             echo "No trend changes to commit"
@@ -315,15 +334,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r nba_pipeline/requirements.txt
 
+      # Scores: ESPN first (header rotation), nba_sim.db `games` when ESPN 403s.
       - name: Grade picks
         working-directory: nba_pipeline
         run: python scripts/grade_picks.py
 
+      - name: Ledger integrity (nothing deleted, stakes frozen, captured before tip)
+        working-directory: nba_pipeline
+        run: python scripts/check_ledger.py
+
       - name: Sync NBA picks to contract format (picks/nba.json)
         run: python3 nba_pipeline/scripts/sync_to_picks_json.py
 
+      # nba_pipeline/index.html only exists in update-lines; refresh the card in place.
       - name: Refresh public NBA dashboard record
-        run: python3 scripts/build_nbasim_app.py
+        run: python3 scripts/build_nbasim_app.py --record-only
 
       - name: Commit settlement
         run: |
@@ -344,3 +369,8 @@ jobs:
           git commit -m "NBA settle — ${DATE}"
           git pull --rebase origin main || true
           git push
+
+      # After the commit so partial settlements still land; then fail loudly.
+      - name: Guardrail — no pick pending more than 3 days after its date
+        working-directory: nba_pipeline
+        run: python scripts/grade_picks.py --check-stale --days 3

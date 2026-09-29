@@ -1,11 +1,32 @@
 import os
+from datetime import date, datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def season_for_date(d: date) -> str:
+    """NBA season string for a calendar date.
+
+    October through June belong to the season that starts in October
+    (2026-10-20 -> "2026-27", 2027-06-10 -> "2026-27"). July through
+    September stay on the season that just ended, so the offseason keeps
+    last season's data until the new season's preseason month begins.
+    """
+    start = d.year if d.month >= 10 else d.year - 1
+    return f"{start}-{(start + 1) % 100:02d}"
+
+
+def previous_season(season: str) -> str:
+    start = int(season[:4]) - 1
+    return f"{start}-{(start + 1) % 100:02d}"
+
+
+# NBA_SEASON overrides the date rule (backfills, tests). Otherwise the season
+# follows the current US Eastern-ish date (UTC is fine: the flip is Oct 1).
+CURRENT_SEASON = os.getenv("NBA_SEASON") or season_for_date(datetime.now(timezone.utc).date())
 # Seasons to collect (most recent first)
-SEASONS = ["2025-26", "2024-25"]
-CURRENT_SEASON = SEASONS[0]  # "2025-26" — update SEASONS[0] to roll over
+SEASONS = [CURRENT_SEASON, previous_season(CURRENT_SEASON)]
 SEASON_TYPES = ["Regular Season"]
 LEAGUE_ID = "00"
 

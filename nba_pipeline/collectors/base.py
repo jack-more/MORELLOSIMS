@@ -40,15 +40,22 @@ class BaseCollector:
         Rate-limited wrapper around any nba_api endpoint class.
         Returns list of DataFrames from get_data_frames().
         """
-        # Inject browser headers — use shorter timeout so retries fit within
-        # CI step limits (3 retries × 30s = 90s vs old 3 × 120s = 360s)
-        params.setdefault("headers", NBA_HEADERS)
+        # Short timeout so retries fit within CI step limits. Alternate header
+        # sets between attempts: stats.nba.com has hung on NBA_HEADERS from
+        # some networks while answering nba_api's built-in headers in <1s
+        # (checked 2026-09-29), and vice versa from Actions runners.
+        caller_headers = params.pop("headers", None)
+        header_cycle = [caller_headers] if caller_headers is not None else [NBA_HEADERS, None]
         params.setdefault("timeout", 30)
 
         for attempt in range(self.max_retries):
             self.rate_limiter.wait()
             try:
-                endpoint = endpoint_class(**params)
+                call = dict(params)
+                headers = header_cycle[attempt % len(header_cycle)]
+                if headers is not None:
+                    call["headers"] = headers
+                endpoint = endpoint_class(**call)
                 dfs = endpoint.get_data_frames()
                 return dfs
             except Exception as e:
