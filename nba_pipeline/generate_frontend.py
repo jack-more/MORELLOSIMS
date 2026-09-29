@@ -933,7 +933,14 @@ _MOJI_CONSTANTS = {
     "NRTG_RECENT_WEIGHT": 0.30,  # trailing 10-game NRtg (up from 0.25 — momentum matters)
     "SYN_WEIGHT":   0.20,   # lineup synergy share in final blend (SYN v2, unproven — modifier only)
     "SYN_SCALE":    0.15,   # (home_syn - away_syn) × SCALE = spread points
-    "HCA":          1.8,    # base home court advantage (most arenas — modern NBA)
+    "HCA":          1.8,    # SIM tab (interactive court sim) only — not used by the pick model
+    # Pick model: home court added once after the blend, measured from
+    # nba_sim.db regular-season home margins: 2024-25 +1.69 (n=1225),
+    # 2025-26 +1.67 (n=1135). Re-measure: python scripts/measure_hca.py
+    "HCA_MEASURED": 1.68,
+    # Back-to-back penalties, applied once after the blend at full size.
+    # nba_sim.db OLS with team strength + HCA (2024-25 / 2025-26): home B2B
+    # -2.68 / -2.59, road B2B -3.58 / -1.24 — consistent with 2.0 / 2.5.
     "B2B_HOME":     2.0,    # home back-to-back penalty (less severe — still at home)
     "B2B_ROAD":     2.5,    # road back-to-back penalty (travel + fatigue)
     "USAGE_DECAY":      0.995,  # MOJO multiplier per 1% extra usage (efficiency tax)
@@ -2629,9 +2636,10 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     2. Project minutes for available players
     3. Compute lineup quality rating
     4. Compute adjusted MOJOs (MOJI) with archetype-aware usage redistribution
-    5. Compare home net rating + HCA vs away net rating (with B2B penalties)
+    5. Compare home net rating vs away net rating (injury attrition)
     6. Compute lineup synergy adjusted by opponent coaching scheme
-    7. Blend 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN
+    7. Blend 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN,
+       then add home court (measured) and back-to-back penalties once
 
     Returns (spread, total, breakdown).
     """
@@ -2686,29 +2694,29 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     home_nrtg_attrition = home_mojo_drop * K["NRTG_MOJO_ATTRITION"]
     away_nrtg_attrition = away_mojo_drop * K["NRTG_MOJO_ATTRITION"]
 
-    team_hca = TEAM_HCA.get(home_abbr, K["HCA"])
-    home_adj_nrtg = h_net + team_hca - home_nrtg_attrition
+    # Home court and back-to-backs are situational, not team-strength terms:
+    # they are added ONCE, at full size, after the 40/10/30/20 blend (below).
+    # They used to sit inside the season and L10 NRtg terms, which carry 0.40
+    # of the blend, so a 1.8 HCA acted as 0.72 and the picks leaned road
+    # (2026-09-29 audit N5; backtest in the commit message).
+    home_adj_nrtg = h_net - home_nrtg_attrition
     away_adj_nrtg = a_net - away_nrtg_attrition
-
-    if home_b2b:
-        home_adj_nrtg -= K["B2B_HOME"]
-        logger.debug("B2B: %s is on a home back-to-back (-%s)", home_abbr, K['B2B_HOME'])
-    if away_b2b:
-        away_adj_nrtg -= K["B2B_ROAD"]
-        logger.debug("B2B: %s is on a road back-to-back (-%s)", away_abbr, K['B2B_ROAD'])
-
     season_nrtg_diff = home_adj_nrtg - away_adj_nrtg
 
     # ── Trailing 10-game NRtg (captures momentum / hot teams) ──
     home_recent_nrtg = get_trailing_nrtg(home_tid, n_games=10)
     away_recent_nrtg = get_trailing_nrtg(away_tid, n_games=10)
-    home_adj_recent = home_recent_nrtg + team_hca - home_nrtg_attrition
+    home_adj_recent = home_recent_nrtg - home_nrtg_attrition
     away_adj_recent = away_recent_nrtg - away_nrtg_attrition
-    if home_b2b:
-        home_adj_recent -= K["B2B_HOME"]
-    if away_b2b:
-        away_adj_recent -= K["B2B_ROAD"]
     recent_nrtg_diff = home_adj_recent - away_adj_recent
+
+    situational_pts = K["HCA_MEASURED"]
+    if home_b2b:
+        situational_pts -= K["B2B_HOME"]
+        logger.debug("B2B: %s is on a home back-to-back (-%s)", home_abbr, K['B2B_HOME'])
+    if away_b2b:
+        situational_pts += K["B2B_ROAD"]
+        logger.debug("B2B: %s is on a road back-to-back (-%s)", away_abbr, K['B2B_ROAD'])
 
     logger.debug("NRtg: %s season=%+.1f recent10=%+.1f | %s season=%+.1f recent10=%+.1f",
                  home_abbr, h_net, home_recent_nrtg, away_abbr, a_net, away_recent_nrtg)
@@ -2792,6 +2800,8 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
                  K["NRTG_SEASON_WEIGHT"] * season_nrtg_diff +
                  K["NRTG_RECENT_WEIGHT"] * recent_nrtg_diff +
                  K["SYN_WEIGHT"] * synergy_as_points)
+    # Home court + back-to-backs, once, after the blend.
+    raw_power += situational_pts
 
     proj_spread = -raw_power
     proj_spread = round(proj_spread * 2) / 2  # round to nearest 0.5
@@ -2829,6 +2839,8 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
         "syn_pts": round(synergy_as_points, 1),
         "home_b2b": home_b2b,
         "away_b2b": away_b2b,
+        "hca_pts": round(K["HCA_MEASURED"], 2),
+        "situational_pts": round(situational_pts, 2),
         "home_out": len(home_out_ids),
         "away_out": len(away_out_ids),
         "home_out_unmatched": home_out_unmatched,
@@ -5706,6 +5718,8 @@ def render_matchup_card(m, idx, team_map):
     home_lq = bd.get("home_lineup_q", 0)
     away_lq = bd.get("away_lineup_q", 0)
     raw_power_val = bd.get("raw_power", 0)
+    hca_pts = bd.get("hca_pts", _MOJI_CONSTANTS["HCA_MEASURED"])
+    situational_pts = bd.get("situational_pts", hca_pts)
 
     # B2B badge HTML — ▼ arrow = fatigue penalty (weaker), not a spread line
     b2b_badges = ""
@@ -5810,10 +5824,10 @@ def render_matchup_card(m, idx, team_map):
             </div>
             <div class="moji-row moji-model-row ma-premium">
                 <span class="moji-label">MODEL</span>
-                <span class="moji-model-formula">40% MOJI ({moji_weighted:+.1f}) + 10% NRtg ({0.10 * nrtg_diff:+.1f}) + 30% L10 ({0.30 * recent_nrtg_diff:+.1f}) + 20% SYN ({syn_weighted:+.1f}) = <strong>PROJ {ha if proj_spread_val <= 0 else aa} {(-abs(proj_spread_val)):+.1f}</strong></span>
+                <span class="moji-model-formula">40% MOJI ({moji_weighted:+.1f}) + 10% NRtg ({0.10 * nrtg_diff:+.1f}) + 30% L10 ({0.30 * recent_nrtg_diff:+.1f}) + 20% SYN ({syn_weighted:+.1f}) + HCA/B2B ({situational_pts:+.1f}) = <strong>PROJ {ha if proj_spread_val <= 0 else aa} {(-abs(proj_spread_val)):+.1f}</strong></span>
             </div>
             <div class="moji-row moji-tags">
-                <span class="hca-badge">HCA \u25B2{TEAM_HCA.get(ha, 1.8):.1f} {ha}</span>
+                <span class="hca-badge">HCA \u25B2{hca_pts:.1f} {ha}</span>
                 {b2b_badges}
                 {out_badges}
             </div>
@@ -6400,9 +6414,9 @@ def render_info_page():
                 <div class="formula-row"><span>Step 3</span><span>Compute lineup quality rating</span></div>
                 <div class="formula-row"><span>Step 4</span><span>Compute adjusted MOJI with archetype-aware usage redistribution</span></div>
                 <div class="formula-row"><span>Step 5</span><span>Apply stocks penalty for missing defensive players</span></div>
-                <div class="formula-row"><span>Step 6</span><span>Compute adjusted NRtg: season-long + trailing 10-game (HCA [1.8 base, 3.8 DEN, 3.5 BOS], B2B −2.0/−2.5)</span></div>
+                <div class="formula-row"><span>Step 6</span><span>Compute adjusted NRtg: season-long + trailing 10-game</span></div>
                 <div class="formula-row"><span>Step 7</span><span>Compute lineup synergy adjusted by opponent defensive scheme</span></div>
-                <div class="formula-row"><span>Step 8</span><span>Blend: 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN = raw power</span></div>
+                <div class="formula-row"><span>Step 8</span><span>Blend: 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN, then + HCA 1.7, B2B −2.0 home / −2.5 road = raw power</span></div>
                 <div class="formula-row"><span>Step 9</span><span>Proj. Spread = −(raw power), rounded to 0.5</span></div>
             </div>
             <div class="info-formula" style="margin-top:12px">
