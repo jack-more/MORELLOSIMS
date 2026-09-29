@@ -17,11 +17,13 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from render_cards_v2 import text_w, fit_font, team_logo
 from render_series_card import (
-    REPO, S, W, H, BG, CREAM, RED, YELLOW, INK, WIN, LOSS,
+    REPO, S, W, H, BG, CREAM, INK, WIN, LOSS, palette,
     s, F, load_picks, team_ref, keyline_mark, paper_grain, baseball, final_str,
 )
 
 MUTED = (120, 108, 96)
+BLUE = (18, 56, 214)        # house blue (brand guide): sheets + card back
+BLUE_DEEP = (12, 38, 150)
 
 
 def era_start():
@@ -53,13 +55,13 @@ def stock():
 def header(img, frame, kicker, title, right):
     fx0, fy0, fx1, fy1 = frame
     band = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(band).rectangle((fx0, fy0, fx1, fy0 + s(250)), fill=RED)
+    ImageDraw.Draw(band).rectangle((fx0, fy0, fx1, fy0 + s(250)), fill=BLUE)
     clip = Image.new("L", (W, H), 0)
     ImageDraw.Draw(clip).rounded_rectangle(frame, radius=s(40), fill=255)
     band.putalpha(Image.composite(band.getchannel("A"), Image.new("L", (W, H), 0), clip))
     img.alpha_composite(band)
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle(frame, radius=s(40), outline=RED, width=s(3))
+    d.rounded_rectangle(frame, radius=s(40), outline=BLUE, width=s(3))
     baseball(d, fx0 + s(96), fy0 + s(124), s(62))
     # cream ball on red: redraw the ball body in cream with red seams
     d.ellipse((fx0 + s(34), fy0 + s(62), fx0 + s(158), fy0 + s(186)), fill=CREAM)
@@ -67,7 +69,7 @@ def header(img, frame, kicker, title, right):
     x = fx0 + s(190)
     d.text((x, fy0 + s(42)), kicker, font=F("mono_b", 22), fill=CREAM)
     tf = fit_font(d, title, "cond", s(112), fx1 - s(40) - x, min_size=s(60))
-    d.text((x, fy0 + s(74)), title, font=tf, fill=INK)
+    d.text((x, fy0 + s(74)), title, font=tf, fill=CREAM)
     rf = F("mono_b", 22)
     d.text((fx1 - s(40) - text_w(d, right, rf), fy0 + s(42)), right, font=rf, fill=CREAM)
     return fy0 + s(250)
@@ -80,14 +82,14 @@ def baseball_seams(d, cx, cy, r):
         pts = [(ox + R * math.cos(math.radians(180 + t if side > 0 else t)),
                 cy + R * math.sin(math.radians(180 + t if side > 0 else t))) for t in range(-38, 39, 2)]
         pts = [p for p in pts if (p[0] - cx) ** 2 + (p[1] - cy) ** 2 < (r * 0.94) ** 2]
-        d.line(pts, fill=RED, width=s(3))
+        d.line(pts, fill=BLUE, width=s(3))
 
 
 def footer(img, frame, left, right):
     fx0, fy0, fx1, fy1 = frame
     d = ImageDraw.Draw(img)
     y = fy1 - s(92)
-    d.line((fx0 + s(40), y, fx1 - s(40), y), fill=RED, width=s(3))
+    d.line((fx0 + s(40), y, fx1 - s(40), y), fill=BLUE, width=s(3))
     f = F("black", 30)
     d.text((fx0 + s(40), y + s(28)), left, font=f, fill=INK)
     mf = F("mono_b", 20)
@@ -157,8 +159,9 @@ def checklist(date, sport="mlb"):
         of = F("cond", 72)
         ow = text_w(d, o, of) + s(40)
         ox1 = fx1 - s(40)
-        d.rounded_rectangle((ox1 - ow, y + row_h / 2 - s(46), ox1, y + row_h / 2 + s(46)), radius=s(12), fill=YELLOW)
-        d.text((ox1 - ow + s(20), y + row_h / 2 - s(44)), o, font=of, fill=INK)
+        pal = palette(side)
+        d.rounded_rectangle((ox1 - ow, y + row_h / 2 - s(46), ox1, y + row_h / 2 + s(46)), radius=s(12), fill=pal["P"])
+        d.text((ox1 - ow + s(20), y + row_h / 2 - s(44)), o, font=of, fill=pal["on_P"])
         if st in ("win", "loss", "push"):
             fin = final_str(p)
             ff = F("mono_b", 20)
@@ -209,13 +212,14 @@ def record():
     mx = (fx0 + fx1) // 2
     my = top + s(300)
     R = s(250)
-    d.polygon([(mx, my - R), (mx + R, my), (mx, my + R), (mx - R, my)], fill=YELLOW)
+    d.polygon([(mx + s(4), my - R + s(3)), (mx + R + s(4), my + s(3)), (mx + s(4), my + R + s(3)), (mx - R + s(4), my + s(3))], fill=BLUE_DEEP)
+    d.polygon([(mx, my - R), (mx + R, my), (mx, my + R), (mx - R, my)], fill=BLUE)
     rec = f"{w}-{l}" + (f"-{pu}" if pu else "")
     rf = fit_font(d, rec, "cond", s(210), int(R * 1.3), min_size=s(90))
     bb = d.textbbox((0, 0), rec, font=rf)
-    d.text((mx - (bb[2] - bb[0]) / 2 - bb[0], my - (bb[3] - bb[1]) / 2 - bb[1] - s(14)), rec, font=rf, fill=INK)
+    d.text((mx - (bb[2] - bb[0]) / 2 - bb[0], my - (bb[3] - bb[1]) / 2 - bb[1] - s(14)), rec, font=rf, fill=CREAM)
     lab = f"{len(rows)} CARDS SETTLED"
-    d.text((mx - text_w(d, lab, F("mono_b", 22)) / 2, my + s(96)), lab, font=F("mono_b", 22), fill=INK)
+    d.text((mx - text_w(d, lab, F("mono_b", 22)) / 2, my + s(96)), lab, font=F("mono_b", 22), fill=CREAM)
 
     y = my + R + s(60)
     cells = [(f"{pl:+,.0f}", "NET $PP", WIN if pl >= 0 else LOSS),
