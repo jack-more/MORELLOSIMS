@@ -15,6 +15,16 @@ from db.connection import read_query, execute, save_dataframe
 logger = logging.getLogger(__name__)
 
 
+def _norm_name(name: str) -> str:
+    """'Nikola Jokić' / 'Jaren Jackson Jr.' -> 'nikola jokic' / 'jaren jackson'."""
+    import re
+    import unicodedata
+    s = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    s = re.sub(r"[.'\-]", " ", s)
+    words = [w for w in s.split() if w not in {"jr", "sr", "ii", "iii", "iv"}]
+    return " ".join(words)
+
+
 class PlayerCollector(BaseCollector):
 
     def collect_teams(self):
@@ -51,25 +61,108 @@ class PlayerCollector(BaseCollector):
         teams_df = read_query("SELECT team_id FROM teams", self.db_path)
         pending = [int(t) for t in teams_df["team_id"]]
         saved = 0
+        blocked = False
         for pass_no in range(1, passes + 1):
             failed = []
-            for team_id in pending:
+            for i, team_id in enumerate(pending):
+                if blocked:
+                    failed.append(team_id)
+                    continue
                 try:
                     players, assignments = self._fetch_team_roster(team_id, season, timeout)
                 except Exception as e:
                     logger.error(f"  Failed to get roster for team {team_id} (pass {pass_no}): {e}")
                     failed.append(team_id)
+                    # stats.nba.com blocks datacenter IPs (GitHub Actions): the
+                    # first teams all time out, so stop paying ~60s per team.
+                    if saved == 0 and len(failed) >= self.ROSTER_BREAKER and len(failed) == i + 1:
+                        logger.warning(f"  stats.nba.com unreachable ({len(failed)} straight roster "
+                                       f"failures) — skipping it, using ESPN rosters")
+                        blocked = True
                     continue
                 if not assignments:
                     continue
                 self._save_team_roster(team_id, season, players, assignments)
                 saved += len(assignments)
             pending = failed
-            if not pending:
+            if not pending or blocked:
                 break
-        logger.info(f"Saved {saved} roster assignments for {season}; "
+        if pending:
+            pending = self.collect_rosters_espn(season, pending)
+        logger.info(f"Saved {saved} roster assignments for {season} from stats.nba.com; "
                     f"{len(pending)} team(s) kept cached rosters: {pending}")
         return pending
+
+    ROSTER_BREAKER = 3
+
+    def collect_rosters_espn(self, season: str, team_ids: list[int]) -> list[int]:
+        """Roster fallback from ESPN (reachable from Actions runners).
+
+        Replaces only roster_assignments for each team. ESPN athletes are
+        matched to existing NBA player_ids by normalized name; players we have
+        no NBA id for (new signings/rookies) are logged and left out, since
+        the model has no values for them anyway. Returns team_ids still failed.
+        """
+        from datetime import date
+        from collectors.games_espn import espn_get_json, _normalize_abbr
+        from config import season_for_date
+
+        # ESPN only serves TODAY's rosters. Jul-Sep they belong to the coming
+        # season while CURRENT_SEASON is still the finished one; writing them
+        # there would overwrite last season's history (and its seeded priors).
+        today = date.today()
+        if season != season_for_date(today) or today.month in (7, 8, 9):
+            logger.info(f"  ESPN roster fallback skipped: current rosters are not {season}'s")
+            return team_ids
+        base = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams"
+        listing = espn_get_json(base)
+        if not listing:
+            logger.error("  ESPN roster fallback: team list unavailable")
+            return team_ids
+        espn_teams = {
+            _normalize_abbr(x["team"]["abbreviation"]): x["team"]["id"]
+            for x in listing["sports"][0]["leagues"][0]["teams"]
+        }
+        teams = read_query("SELECT team_id, abbreviation FROM teams", self.db_path)
+        abbr_of = {int(r.team_id): r.abbreviation for r in teams.itertuples()}
+        by_name = {}
+        for r in read_query("SELECT player_id, full_name FROM players", self.db_path).itertuples():
+            by_name.setdefault(_norm_name(r.full_name), int(r.player_id))
+
+        still_failed, unmatched, saved = [], [], 0
+        for team_id in team_ids:
+            espn_id = espn_teams.get(abbr_of.get(team_id))
+            data = espn_get_json(f"{base}/{espn_id}/roster") if espn_id else None
+            if not data or not data.get("athletes"):
+                still_failed.append(team_id)
+                continue
+            rows = []
+            for a in data["athletes"]:
+                pid = by_name.get(_norm_name(a.get("fullName", "")))
+                if pid is None:
+                    unmatched.append(f"{abbr_of.get(team_id)}:{a.get('fullName')}")
+                    continue
+                rows.append({
+                    "player_id": pid, "team_id": team_id, "season_id": season,
+                    "jersey_number": str(a.get("jersey") or ""),
+                    "listed_position": (a.get("position") or {}).get("abbreviation", ""),
+                })
+            if not rows:
+                still_failed.append(team_id)
+                continue
+            execute("DELETE FROM roster_assignments WHERE season_id = ? AND team_id = ?",
+                    self.db_path, [season, team_id])
+            # a traded player must not stay on his old team for this season
+            ids = ",".join(str(r["player_id"]) for r in rows)
+            execute(f"DELETE FROM roster_assignments WHERE season_id = ? AND player_id IN ({ids})",
+                    self.db_path, [season])
+            self._save(pd.DataFrame(rows).drop_duplicates(subset=["player_id"]), "roster_assignments")
+            saved += len(rows)
+        logger.info(f"  ESPN roster fallback: {saved} assignments for {len(team_ids) - len(still_failed)} "
+                    f"team(s); {len(unmatched)} players with no NBA id yet")
+        if unmatched:
+            logger.info(f"  unmatched (new to the league or name variant): {', '.join(unmatched[:40])}")
+        return still_failed
 
     def _save_team_roster(self, team_id: int, season: str, players: list, assignments: list):
         """Replace one team's roster for a season; upsert its players."""
