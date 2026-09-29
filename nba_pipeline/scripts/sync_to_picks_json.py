@@ -35,15 +35,9 @@ DAILY = DATA / "daily_picks.json"
 UNIT_SIZE_DEFAULT = 50  # used when CSV row has no `risk` value
 MIN_TRACKED_CONF = 8
 
-
-def stake_for_conf(conf: int) -> int:
-    if conf >= 10:
-        return 100
-    if conf >= 8:
-        return 50
-    if conf >= 5:
-        return 30
-    return 20
+# Stakes are frozen at capture: `units` is the CSV `risk` written by
+# capture_picks.py / inject_pick.py. It is never recomputed from confidence
+# (0ff9928b recomputed it and restated settled C10 picks at 100; reverted).
 
 
 def profit_for_status(status: str, risk: int, odds: int | None) -> float:
@@ -85,16 +79,17 @@ def parse_side(s: str) -> tuple[str, float | None, str]:
     return side_team, line, s
 
 
-def normalize_slate_date(raw: str) -> str:
+def normalize_slate_date(raw: str, captured_at: str = "") -> str:
     """pick_log entries can have slate_date='MAR 2' or '2026-03-02'.
-    Always return YYYY-MM-DD or '' if unparseable."""
+    Always return YYYY-MM-DD or '' if unparseable. Year comes from the
+    capture timestamp (not today's year, which breaks every January)."""
     if not raw:
         return ""
     if "-" in raw and len(raw) >= 10:
         return raw[:10]
     for fmt in ("%b %d", "%B %d"):
         try:
-            year = datetime.now().year
+            year = int(captured_at[:4]) if captured_at[:4].isdigit() else datetime.now().year
             dt = datetime.strptime(f"{raw} {year}", f"{fmt} %Y")
             return dt.strftime("%Y-%m-%d")
         except ValueError:
@@ -108,7 +103,7 @@ def make_id(date: str, away: str, home: str, bet_type: str, side: str) -> str:
 
 
 def status_from_result(r: str) -> str:
-    return {"W": "win", "L": "loss", "P": "push"}.get(r, "pending")
+    return {"W": "win", "L": "loss", "P": "push", "V": "void"}.get(r, "pending")
 
 
 def build_pick_log_index(pick_log: list) -> dict:
@@ -116,7 +111,7 @@ def build_pick_log_index(pick_log: list) -> dict:
     Allows looking up confidence/edge/sim_spread for picks listed in the CSV."""
     idx = {}
     for p in pick_log:
-        date = normalize_slate_date(p.get("slate_date", ""))
+        date = normalize_slate_date(p.get("slate_date", ""), p.get("captured_at", ""))
         key = (date, p.get("matchup", "").strip(), p.get("side", "").strip())
         idx[key] = p
     return idx
@@ -170,13 +165,17 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     if conf < MIN_TRACKED_CONF:
         return None
 
-    risk = stake_for_conf(conf)
-
     result_letter = (row.get("result") or "").strip()
     status = status_from_result(result_letter)
     if status == "pending":
         result = None
         pl = None
+    elif status == "void":
+        # Kept in the ledger, never counted: pl stays null.
+        pl = None
+        hs = (row.get("home_score") or "").strip()
+        as_ = (row.get("away_score") or "").strip()
+        result = f"{hs}-{as_}" if hs and as_ else None
     else:
         pl = profit_for_status(status, risk, odds)
         hs = (row.get("home_score") or "").strip()
@@ -220,6 +219,8 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
         "status": status,
         "result": result,
         "pl": pl,
+        "captured_at": (row.get("captured_at") or "").strip() or None,
+        "void_reason": (row.get("void_reason") or "").strip() or None,
     }
 
 
@@ -278,10 +279,11 @@ def main():
     pending = sum(1 for p in contract if p["status"] == "pending")
     wins = sum(1 for p in contract if p["status"] == "win")
     losses = sum(1 for p in contract if p["status"] == "loss")
+    voided = sum(1 for p in contract if p["status"] == "void")
     pl = sum((p.get("pl") or 0) for p in contract if p["status"] in ("win", "loss"))
 
     print(f"[sync] Wrote {PICKS_OUT}")
-    print(f"  Total: {len(contract)} picks ({settled} settled, {pending} pending)")
+    print(f"  Total: {len(contract)} picks ({settled} settled, {pending} pending, {voided} void)")
     print(f"  Settled record: {wins}-{losses}, P/L {pl:+.2f}")
 
 

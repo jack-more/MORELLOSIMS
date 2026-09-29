@@ -35,7 +35,7 @@ Append-only — settled picks should never have their `result`/`pl` mutated.
   "units":         50,                               // $PP risked (NBA/MLB: C10=100)
   "sim_projection": "NYK -9.5",                      // model's spread/total projection
   "sim_edge":      7.0,                              // edge in points (spread) or % (ML)
-  "status":        "win",                            // "pending" | "win" | "loss" | "push"
+  "status":        "win",                            // "pending" | "win" | "loss" | "push" | "void" (NBA: kept, never counted; see void_reason)
   "result":        "108-105",                        // final score, null if pending
   "pl":            50,                               // $PP gained/lost, null if pending
   "settled_at":    "2026-05-01"                      // ISO date, null if pending

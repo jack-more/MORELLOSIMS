@@ -22,6 +22,11 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import DB_PATH
 from db.connection import execute, read_query
+from utils.ledger import append_rows, parse_ts
+
+# Mirrors collectors.games_espn.COUNTED_SEASON_TYPES (ESPN: 2 regular,
+# 3 postseason, 5 play-in). Preseason (1) is never captured.
+COUNTED_SEASON_TYPES = {2, 3, 5}
 
 
 PICKS_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "picks.csv")
@@ -87,8 +92,11 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
         print(f"[capture] Blank slate: no games in daily_picks.json ({raw_slate_date}).")
         return []
 
-    # Normalize date to YYYY-MM-DD format (daily_picks.json uses "MAR 4" format)
-    if raw_slate_date and not raw_slate_date[0].isdigit():
+    # Normalize date to YYYY-MM-DD format (daily_picks.json uses "MAR 4" format;
+    # newer snapshots also carry slate_date_iso)
+    if snapshot.get("slate_date_iso"):
+        slate_date = snapshot["slate_date_iso"]
+    elif raw_slate_date and not raw_slate_date[0].isdigit():
         try:
             dt = datetime.strptime(raw_slate_date, "%b %d")
             slate_date = dt.replace(year=datetime.now().year).strftime("%Y-%m-%d")
@@ -130,6 +138,18 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
 
         # Skip games without real sportsbook lines
         if g["book_spread"] is None:
+            continue
+
+        # Only regular season / postseason / play-in games are ever tracked.
+        # Unknown season type (schedule sources unreachable) fails closed.
+        if g.get("season_type") not in COUNTED_SEASON_TYPES:
+            print(f"  SKIP (season type {g.get('season_type')!r}, not regular/post): {g['matchup']}")
+            continue
+
+        # Never capture at or after tip-off.
+        tip = parse_ts(g.get("tip_at"))
+        if tip is not None and datetime.now(timezone.utc) >= tip:
+            print(f"  SKIP (tipped {g.get('tip_at')}): {g['matchup']}")
             continue
 
         # Filter: only actionable picks (strong edge)
@@ -194,10 +214,13 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
             "book_total": g["book_total"],
             "raw_edge": g["raw_edge"],
             "captured_at": now,
+            "tip_at": g.get("tip_at"),
+            "season_type": g.get("season_type"),
             "conf_label": g["conf_label"],
             "ml_odds": ml_odds,
         }
         picks.append(pick)
+        already.add((matchup, pick_type))  # one pick per game per type, even if the slate repeats a game
         print(f"  PICK [C{c10}]: {matchup} → {pick_text} | conf={conf:.0f} ({c10}/10) | edge={edge:+.1f} | {risk} $PP")
 
     if not picks:
@@ -208,15 +231,15 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
         print(f"\n[capture] DRY RUN — {len(picks)} picks would be logged.")
         return picks
 
-    # ── Write to CSV ──
-    csv_exists = os.path.exists(PICKS_CSV)
-    with open(PICKS_CSV, "a", newline="") as f:
-        writer = csv.writer(f)
-        if not csv_exists:
-            writer.writerow(["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score"])
-        for p in picks:
-            odds_val = p.get("ml_odds") or ""
-            writer.writerow([p["slate_date"], p["matchup"], p["side"], p["pick_type"], p["risk"], "", "", odds_val, "", ""])
+    # ── Write to CSV (stake frozen here; captured_at/tip_at gate counting) ──
+    append_rows(PICKS_CSV, [
+        {
+            "date": p["slate_date"], "matchup": p["matchup"], "side": p["side"],
+            "type": p["pick_type"], "risk": p["risk"], "odds": p.get("ml_odds") or "",
+            "captured_at": p["captured_at"], "tip_at": p.get("tip_at") or "",
+        }
+        for p in picks
+    ])
 
     print(f"[capture] Appended {len(picks)} picks to {PICKS_CSV}")
 

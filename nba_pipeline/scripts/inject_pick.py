@@ -2,8 +2,9 @@
 """
 inject_pick.py — Manually inject a pick into the tracker.
 
-For picks outside the 8+ auto-capture threshold. Supports both
-pre-game (pending) and post-game (auto-grades via ESPN) injection.
+For picks outside the 8+ auto-capture threshold. A pick injected before
+tip-off is pending and graded later. A pick injected after tip-off is
+recorded with result "V" (void) and a reason: it never counts.
 
 Usage:
   # Pre-game (pending, will be graded later):
@@ -31,6 +32,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import STARTING_BANKROLL
 from collectors.games_espn import fetch_single_game_score
+from utils.ledger import VOID, append_rows, capture_check
 
 PICKS_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "picks.csv")
 
@@ -173,13 +175,25 @@ def inject(matchup, side_text, risk=50, date_str=None, ml_odds=None, force=False
     else:
         print(f"  [ESPN] No score found — will grade later via pipeline")
 
-    # Append to CSV
-    csv_exists = os.path.exists(PICKS_CSV)
-    with open(PICKS_CSV, "a", newline="") as f:
-        writer = csv.writer(f, lineterminator="\n")
-        if not csv_exists:
-            writer.writerow(["date", "matchup", "side", "type", "risk", "result", "profit", "odds", "home_score", "away_score"])
-        writer.writerow([date_str, matchup, side, pick_type, risk, result, profit, odds_val, home_score, away_score])
+    # A pick counts only if it was captured before tip-off. A pick injected
+    # after tip is recorded (never dropped) but voided, not graded.
+    captured_at = datetime.now(timezone.utc).isoformat()
+    tip_at = (score_data or {}).get("tip_utc") or ""
+    row = {
+        "date": date_str, "matchup": matchup, "side": side, "type": pick_type,
+        "risk": risk, "result": result, "profit": profit, "odds": odds_val,
+        "home_score": home_score, "away_score": away_score,
+        "captured_at": captured_at, "tip_at": tip_at,
+    }
+    void_reason = capture_check(row, tip_at or None)
+    if (score_data or {}).get("status") == "final" and not void_reason:
+        void_reason = "injected after the game was final"
+    if void_reason:
+        graded = f"; would have graded {result} {profit}" if result else ""
+        row.update(result=VOID, profit="0", void_reason=f"{void_reason}{graded}")
+        print(f"  [void] {row['void_reason']}")
+
+    append_rows(PICKS_CSV, [row])
 
     print(f"[inject] Added to {PICKS_CSV}")
     return True
