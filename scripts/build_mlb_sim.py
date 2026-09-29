@@ -488,14 +488,23 @@ for key, records in hvc_by_key.items():
         total_triples += r.get("triples", 0) * YEAR_WEIGHT.get(yr, 0.5)
         total_tb += (r.get("singles", 0) + r.get("doubles", 0)*2 + r.get("triples", 0)*3 + r["HR"]*4) * YEAR_WEIGHT.get(yr, 0.5)
     if total_w > 0:
+        # Counts are year-weighted but PA is stored raw (the trust ramps in
+        # process_lineup need real sample size). Rescale the weighted counts
+        # to the raw-PA base so count/PA equals the year-weighted RATE.
+        # Before 2026-09-29 the unscaled counts were divided by raw PA, so
+        # every 2026 event counted 1.5x per PA: rates rose ~1.25x and team
+        # runs ~1.47x as the 2026 sample grew (slate totals 9.0 in April ->
+        # 16.0 in September vs ~9.1 actual). The run-diff confidence ladder
+        # was set on 2026-04-14, before that drift, so it is left unchanged.
+        k = total_pa_raw / total_w
         hvc_idx[key] = {
             "batter": key[0], "cluster": key[1],
             "game_year": max(r["game_year"] for r in records),
             "PA": total_pa_raw,
             "wOBA": total_wpa / total_w,
-            "H": total_h, "BB": total_bb, "HR": total_hr,
-            "singles": total_singles, "doubles": total_doubles,
-            "triples": total_triples,
+            "H": total_h * k, "BB": total_bb * k, "HR": total_hr * k,
+            "singles": total_singles * k, "doubles": total_doubles * k,
+            "triples": total_triples * k,
         }
 
 # Also keep fallback for batters only in older years (pre-2025)
@@ -1248,21 +1257,67 @@ _TEAM_BULLPEN = _bullpen_data.get("teams", {})
 print(f"  Bullpen: {len(_TEAM_BULLPEN)} teams loaded (league avg {_LEAGUE_RP_RUNS_PER_IP:.3f} R/IP, SP avg {_LEAGUE_SP_IP:.2f} IP/start)")
 
 
-def bullpen_run_delta(opp_team_id, sp_id):
+# ─── Postseason usage ─────────────────────────────────────────────────────────
+# Measured on the 2025 postseason (47 games, MLB Stats API boxscores, pulled
+# 2026-09-29): the 80 true starters (GS/G >= 0.8) went 4.81 IP per start vs
+# 5.50 in their own regular seasons, and October depth barely tracks
+# regular-season depth (OLS slope 0.20) — the manager's hook, not the arm,
+# sets the exit. Each team's top-5 regular-season relievers (by relief IP)
+# threw 49.9% of its postseason bullpen innings; rotation arms in relief and
+# the rest of the pen took the other half. So October pen quality is a
+# 50/50 blend of top-5 and whole-pen rates, NOT top-5 only.
+POSTSEASON_GAME_TYPES = {"F", "D", "L", "W"}
+PS_SP_IP_MEAN = 4.81
+PS_SP_IP_SLOPE = 0.20
+RS_SP_IP_REF = 5.50
+PS_TOP_RELIEVER_SHARE = 0.50
+
+
+def expected_sp_ip(sp_id, postseason=False):
+    sp_avg_ip = _sp_innings.get(str(sp_id), {}).get("avg_ip_per_start") or _LEAGUE_SP_IP
+    if postseason:
+        # Fit on true starters only; never project an opener or converted
+        # reliever deeper in October than his own regular season (that would
+        # undo the TTO role-conversion penalty in sp_role_tto_mult).
+        return min(sp_avg_ip, max(1.0, PS_SP_IP_MEAN + PS_SP_IP_SLOPE * (sp_avg_ip - RS_SP_IP_REF)))
+    return sp_avg_ip
+
+
+def bullpen_runs_per_ip(bp, postseason=False):
+    rate = bp.get("rp_runs_per_ip")
+    top = [r for r in bp.get("top_relievers") or [] if r.get("runs_per_ip") is not None and r.get("ip")]
+    if rate is None or not postseason or not top:
+        return rate
+    top_rate = sum(r["runs_per_ip"] * r["ip"] for r in top) / sum(r["ip"] for r in top)
+    return PS_TOP_RELIEVER_SHARE * top_rate + (1 - PS_TOP_RELIEVER_SHARE) * rate
+
+
+# October reference: every pen leans on its best arms, so a pen is judged
+# against the league's blended rate, not the regular-season average.
+_ps_rates = [(bullpen_runs_per_ip(bp, True), bp.get("rp_ip") or 0) for bp in _TEAM_BULLPEN.values()
+             if bp.get("rp_runs_per_ip") is not None]
+_LEAGUE_RP_RUNS_PER_IP_PS = (
+    sum(r * w for r, w in _ps_rates) / sum(w for _, w in _ps_rates)
+    if _ps_rates and sum(w for _, w in _ps_rates) else _LEAGUE_RP_RUNS_PER_IP
+)
+
+
+def bullpen_run_delta(opp_team_id, sp_id, postseason=False):
     """Run-delta to ADD to the batting team's projection.
     Positive = opposing bullpen is below league average → batting team scores more.
     Negative = opposing bullpen is suppressive → batting team scores less.
 
       bp_ip       = max(0, 9 - sp_avg_ip_per_start)   # exposure to bullpen
       run_delta   = bp_ip * (opp_bp_runs_per_ip - league_avg)
+
+    Postseason: shorter starts and a top-heavy pen (see POSTSEASON_* above).
     """
     opp_bp = _TEAM_BULLPEN.get(str(opp_team_id))
     if not opp_bp or opp_bp.get("rp_runs_per_ip") is None:
         return 0.0
-    sp_data = _sp_innings.get(str(sp_id), {})
-    sp_avg_ip = sp_data.get("avg_ip_per_start") or _LEAGUE_SP_IP
-    bp_ip = max(0.0, 9.0 - sp_avg_ip)
-    delta = bp_ip * (opp_bp["rp_runs_per_ip"] - _LEAGUE_RP_RUNS_PER_IP)
+    bp_ip = max(0.0, 9.0 - expected_sp_ip(sp_id, postseason))
+    league = _LEAGUE_RP_RUNS_PER_IP_PS if postseason else _LEAGUE_RP_RUNS_PER_IP
+    delta = bp_ip * (bullpen_runs_per_ip(opp_bp, postseason) - league)
     return round(delta, 2)
 
 
@@ -1339,13 +1394,12 @@ def _expected_tto2plus_share(bf):
     return max(0.0, bf - 9.0) / bf if bf > 0 else 0.0
 
 
-def sp_role_tto_mult(sp_id):
+def sp_role_tto_mult(sp_id, postseason=False):
     """Multiplier (>= 1.0) on the batting team's runs vs this starter.
     Returns (multiplier, audit_meta)."""
     if not sp_id:
         return 1.0, {}
-    sp_data = _sp_innings.get(str(sp_id), {})
-    sp_avg_ip = sp_data.get("avg_ip_per_start") or _LEAGUE_SP_IP
+    sp_avg_ip = expected_sp_ip(sp_id, postseason)
     exp_bf = sp_avg_ip * BF_PER_IP
     exp_share = _expected_tto2plus_share(exp_bf)
 
@@ -1614,6 +1668,7 @@ for g in games_raw:
     game_status = g.get("status", {})
     game_number = int(g.get("gameNumber") or 1)
     is_doubleheader = g.get("doubleHeader") in ("Y", "S")
+    is_postseason = g.get("gameType") in POSTSEASON_GAME_TYPES
 
     # Parse game time to ET
     starts_at = None
@@ -1713,8 +1768,8 @@ for g in games_raw:
 
     # TTO/role-transition multipliers (same convention as tier mults: the
     # AWAY SP's multiplier scales the HOME team's runs, and vice versa).
-    away_tto_mult, away_tto_meta = sp_role_tto_mult(away_sp_id)
-    home_tto_mult, home_tto_meta = sp_role_tto_mult(home_sp_id)
+    away_tto_mult, away_tto_meta = sp_role_tto_mult(away_sp_id, is_postseason)
+    home_tto_mult, home_tto_meta = sp_role_tto_mult(home_sp_id, is_postseason)
 
     def process_lineup(lineup_raw, opp_gmm_proba, team_abbr, opp_h2h=None):
         """Process a lineup using GMM-weighted multi-cluster matching.
@@ -1953,8 +2008,8 @@ for g in games_raw:
         # batting team scores MORE late.
         away_id = TEAMS.get(away_abbr, {}).get("id", 0)
         home_id = TEAMS.get(home_abbr, {}).get("id", 0)
-        away_bp_delta = bullpen_run_delta(opp_team_id=home_id, sp_id=home_sp_id)
-        home_bp_delta = bullpen_run_delta(opp_team_id=away_id, sp_id=away_sp_id)
+        away_bp_delta = bullpen_run_delta(opp_team_id=home_id, sp_id=home_sp_id, postseason=is_postseason)
+        home_bp_delta = bullpen_run_delta(opp_team_id=away_id, sp_id=away_sp_id, postseason=is_postseason)
 
         # Apply park factor (home team's park affects BOTH sides)
         pf = PARK_FACTOR.get(home_abbr, 1.00)
@@ -2256,10 +2311,9 @@ def published_today_by_game():
     return _PUBLISHED_TODAY_BY_GAME
 
 def published_pick_for_game(g):
-    pick = published_today_by_game().get((g.get("away_abbr"), g.get("home_abbr")))
-    if pick and published_pick_is_model_stale(pick, g):
-        return None
-    return pick
+    # Published picks are locked (see the picks/mlb.json upsert): the game
+    # card shows what was posted even if later lineups/lines move the model.
+    return published_today_by_game().get((g.get("away_abbr"), g.get("home_abbr")))
 
 def is_published_pick(g):
     pick = published_pick_for_game(g)
@@ -3936,8 +3990,6 @@ def render_hr_watch_tab():
     for p in published_today:
         key = (p.get("away"), p.get("home"), p.get("side"))
         g = games_by_matchup.get((p.get("away"), p.get("home")))
-        if g and published_pick_is_model_stale(p, g):
-            continue
         seen.add(key)
         rows.append({
             "pick_text": p.get("pick_text") or f'{p.get("side", "")} ML',
@@ -4029,6 +4081,28 @@ def render_hr_watch_tab():
         {hr_deep_board_html}
     </div>'''
 
+
+# ─── Run-environment guardrail ──────────────────────────────────────────────
+# The 2026 year-weight bug (fixed 2026-09-29) inflated projected slate totals
+# from ~9 in April to ~16 in September while real games averaged ~9, and no
+# check noticed for five months. A full slate whose mean projected total
+# leaves a plausible MLB run environment means the rate pipeline is broken:
+# stop before anything is published.
+SLATE_TOTAL_MIN, SLATE_TOTAL_MAX, SLATE_TOTAL_MIN_GAMES = 7.5, 11.0, 4
+_proj_totals = [
+    (g.get("away_runs") or 0) + (g.get("home_runs") or 0)
+    for g in games
+    if g.get("has_lineups") and (g.get("away_runs") or 0) > 0 and (g.get("home_runs") or 0) > 0
+]
+if _proj_totals:
+    _slate_mean_total = sum(_proj_totals) / len(_proj_totals)
+    print(f"  Slate mean projected total: {_slate_mean_total:.2f} over {len(_proj_totals)} games with lineups")
+    if not SLATE_TOTAL_MIN <= _slate_mean_total <= SLATE_TOTAL_MAX:
+        _msg = (f"slate mean projected total {_slate_mean_total:.2f} is outside "
+                f"[{SLATE_TOTAL_MIN}, {SLATE_TOTAL_MAX}] — run projections are miscalibrated")
+        if len(_proj_totals) >= SLATE_TOTAL_MIN_GAMES:
+            raise SystemExit(f"FATAL: {_msg}")
+        print(f"  WARN: {_msg} (only {len(_proj_totals)} games; not failing)")
 
 # ─── Assemble full page ──────────────────────────────────────────────────────
 qualified_picks = sorted(
@@ -4914,45 +4988,48 @@ def current_game_for_pick(p):
     return games_by_matchup.get((p.get("away"), p.get("home")))
 
 
-model_stale_pending_ids = [
-    pick_id
-    for pick_id, pick in by_id.items()
+# Published picks are locked. Once a pick is in picks/mlb.json it was on the
+# site and, the same run, posted to X/Telegram — pulling it later made the
+# page, the posted card and the public tracker disagree, and the record
+# quietly dropped 22 VECTOR-era picks (8-14; 15 of them already posted to
+# Telegram) through 2026-09-28. Price-edge pruning also deleted exactly the
+# picks the market moved TOWARD (the edge vs the new price shrinks), i.e.
+# our best closing-line value. So: never delete a pending published pick,
+# never reprice it. Instead record what the current gates say, so the
+# owner can measure whether a later publish time would filter better.
+pending_today = [
+    pick
+    for pick in by_id.values()
     if pick.get("sport") == "mlb"
     and pick.get("date") == TODAY
     and pick.get("bet_type") == "ml"
     and pick.get("status") == "pending"
     and is_unstarted_today_pick(pick)
-    and published_pick_is_model_stale(pick, current_game_for_pick(pick))
 ]
-for pick_id in model_stale_pending_ids:
-    del by_id[pick_id]
-if model_stale_pending_ids:
-    print(f"  Pruned {len(model_stale_pending_ids)} model-stale pending MLB picks before first pitch")
-
-if not odds_feed_has_lines:
-    print("  WARN: odds feed returned zero real-book lines; preserving pending MLB picks")
-else:
-    stale_pending_ids = [
-        pick_id
-        for pick_id, pick in by_id.items()
-        if pick.get("sport") == "mlb"
-        and pick.get("date") == TODAY
-        and pick.get("bet_type") == "ml"
-        and pick.get("status") == "pending"
-        and is_unstarted_today_pick(pick)
-        and pick_id not in qualified_ids
-    ]
-    for pick_id in stale_pending_ids:
-        del by_id[pick_id]
-    if stale_pending_ids:
-        print(f"  Pruned {len(stale_pending_ids)} stale pending MLB picks before first pitch")
+n_would_drop = 0
+for pick in pending_today:
+    reason = None
+    if published_pick_is_model_stale(pick, current_game_for_pick(pick)):
+        reason = "model_stale"
+    elif odds_feed_has_lines and pick["id"] not in qualified_ids:
+        reason = "gates_no_longer_pass"
+    pick["gates_now"] = {"qualifies": reason is None, "reason": reason, "checked_at": NOW.isoformat()}
+    n_would_drop += reason is not None
+if n_would_drop:
+    print(f"  Kept {n_would_drop} locked published MLB picks the current gates would no longer take")
 
 for g in writeable_picks:
     pick_team = g["pick_team"]
     pick_ml = g["away_ml"] if pick_team == g["away_abbr"] else g["home_ml"]
     pick_id = pick_id_for_game(g)
-    if pick_id in by_id and by_id[pick_id]["status"] != "pending":
-        continue  # Never mutate settled picks; renderer reads what's there.
+    if pick_id in by_id:
+        # Locked at first publish: odds, conf, stake and projection are what
+        # was posted. Only the latest line is tracked, so closing-line value
+        # (settle_mlb.attach_closing_odds) measures against the posted price.
+        if by_id[pick_id]["status"] == "pending":
+            by_id[pick_id]["last_odds"] = pick_ml
+            by_id[pick_id]["last_odds_at"] = NOW.isoformat()
+        continue
     by_id[pick_id] = {
         "id": pick_id,
         "sport": "mlb",
@@ -4964,6 +5041,7 @@ for g in writeable_picks:
         "side": pick_team,
         "line": None,
         "odds": pick_ml,
+        "published_at": NOW.isoformat(),
         "pick_text": f'{pick_team} ML',
         "conf": g["conf"],
         "units": stake_for_conf(g["conf"]),

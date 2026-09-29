@@ -333,14 +333,18 @@ def check_mlb_pick_gate_guardrails():
         ("pick_break_even", "MLB price gate must store sportsbook break-even"),
         ("pick_price_edge", "MLB price gate must store model-vs-market price edge"),
         ("pick_price_edge < min_price_edge", "MLB price gate must block only when edge misses the margin"),
-        ("unstarted_game_pks", "Pregame pending stale-pick pruning must stay enabled"),
-        ("odds_feed_has_lines", "Pregame pending pruning must be disabled when every odds source is down"),
-        ("preserving pending MLB picks", "Odds outage path must preserve pending MLB picks"),
-        ("pick_id not in qualified_ids", "Pending picks must be removable when current gates say no play"),
+        ("odds_feed_has_lines", "Gate re-checks must not flag picks when every odds source is down"),
+        ('pick["gates_now"]', "Locked published picks must record what the current gates say"),
+        ('"published_at": NOW.isoformat()', "Published picks must stamp their first publish time"),
+        ('by_id[pick_id]["last_odds"] = pick_ml', "Published picks must keep posted odds and track the latest line separately"),
     ]
     for marker, message in required_markers:
         if marker not in source:
             errors.append(f"{message}: missing `{marker}`")
+    # Published picks are locked (2026-09-29): deleting pending picks dropped
+    # 22 posted VECTOR picks (8-14) from the public record.
+    if re.search(r"del\s+by_id\[", SIM_SCRIPT_PATH.read_text()):
+        errors.append("build_mlb_sim.py must never delete published picks from picks/mlb.json")
 
     return errors
 
@@ -383,10 +387,35 @@ def check_publish_freshness_guardrails():
     return errors
 
 
+def check_wp_calibration_guardrails():
+    """The WP curve is a public pick rule. A missing/malformed file means the
+    build silently ran on identity (raw Pythagorean WP) — fail. A stale file
+    is kept on purpose (see mlb_model_gates.py) but must be visible every run."""
+    errors, warnings = [], []
+    from mlb_model_gates import WP_CALIBRATION_STATUS, load_wp_calibration
+
+    load_wp_calibration()
+    state = WP_CALIBRATION_STATUS["state"]
+    if state in ("missing", "malformed"):
+        errors.append(f"WP calibration curve is {state}: picks would publish on raw WP (identity)")
+    elif state == "stale":
+        msg = (f"WP calibration curve fitted {WP_CALIBRATION_STATUS['fitted_at']} is "
+               f"{WP_CALIBRATION_STATUS['age_days']:.0f}d old; frozen curve kept, refit overdue")
+        warnings.append(msg)
+        print(f"::warning title=MLB WP calibration stale::{msg}")
+    gates = GATES_SCRIPT_PATH.read_text()
+    if 'WP_CALIBRATION_STATUS["state"] = "stale"' not in gates:
+        errors.append("Stale WP calibration must keep the frozen curve, not fall back to identity")
+    return errors, warnings
+
+
 def main():
     errors = check_formula_guardrails()
+    cal_errors, cal_warnings = check_wp_calibration_guardrails()
+    errors.extend(cal_errors)
     page_errors, warnings = check_generated_page()
     errors.extend(page_errors)
+    warnings.extend(cal_warnings)
     errors.extend(check_hr_lotto_guardrails())
     errors.extend(check_mlb_pick_gate_guardrails())
     errors.extend(check_atlas_refresh_guardrails())

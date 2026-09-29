@@ -25,7 +25,7 @@ from mlb_model_gates import (
 
 def test_calibration_monotonic():
     curve = load_wp_calibration()
-    assert curve, f"expected a fresh fitted curve at {WP_CALIBRATION_PATH}"
+    assert curve, f"expected a fitted curve at {WP_CALIBRATION_PATH}"
     grid = [0.30 + i * 0.005 for i in range(121)]  # 0.30 .. 0.90
     cal = [calibrate_win_prob(p, curve) for p in grid]
     for i in range(1, len(cal)):
@@ -39,6 +39,20 @@ def test_calibration_monotonic():
     assert c75 < 0.62, f"calibrated(0.75)={c75:.4f} should sit near ~0.55, not near raw"
     print(f"  ok  calibration monotonic; calibrated(0.62)={calibrate_win_prob(0.62, curve):.4f}, "
           f"calibrated(0.75)={c75:.4f}, calibrated(0.82)={calibrate_win_prob(0.82, curve):.4f}")
+
+
+def test_stale_calibration_keeps_frozen_curve():
+    # 2026-09-13: a >60d-old curve used to fall back to identity, which
+    # silently reopened the 67-82% raw-WP band to C10 picks mid-era.
+    from datetime import datetime, timezone
+    from mlb_model_gates import WP_CALIBRATION_STATUS
+    far_future = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    curve = load_wp_calibration(now=far_future)
+    assert curve, "stale curve must still be returned"
+    assert WP_CALIBRATION_STATUS["state"] == "stale"
+    assert calibrate_win_prob(0.75, curve) < 0.62
+    load_wp_calibration()  # reset status for later tests
+    print("  ok  stale curve kept (fail closed), status flagged")
 
 
 def test_calibration_identity_fallback():
@@ -84,6 +98,7 @@ def test_display_cap():
 
 if __name__ == "__main__":
     test_calibration_monotonic()
+    test_stale_calibration_keeps_frozen_curve()
     test_calibration_identity_fallback()
     test_price_ceiling_caps_to_c7()
     test_flat_staking()

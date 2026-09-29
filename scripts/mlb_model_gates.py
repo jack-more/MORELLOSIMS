@@ -116,7 +116,14 @@ def confidence_cap_from_market_edge(price_edge, pick_odds=None):
 # so MIN_MODEL_EDGE_BY_CONF and the 0.18 plausibility window operate on
 # honest probabilities.
 WP_CALIBRATION_PATH = os.path.join(REPO_ROOT, "reports", "wp_calibration.json")
+# Past this age the curve is overdue for its scheduled refit. It is NOT
+# dropped: falling back to identity silently changed the public pick rules
+# mid-era on 2026-09-13 (raw 67-82% WPs passed the edge gates again, the
+# exact band the curve was fitted to suppress). Stale → keep the frozen
+# curve, warn every build, and fail the model-gates test until someone
+# refits with evidence. Rules change once, on purpose.
 WP_CALIBRATION_MAX_AGE_DAYS = 60
+WP_CALIBRATION_STATUS = {"state": "unloaded", "age_days": None, "fitted_at": None}
 
 # Displayed win% honesty cap: the model has never demonstrated real >65%
 # skill, so the rendered WIN PROB is clamped to 65/35. Display only — raw
@@ -128,8 +135,10 @@ def load_wp_calibration(path=WP_CALIBRATION_PATH, max_age_days=WP_CALIBRATION_MA
     """Load the fitted calibration curve.
 
     Returns a list of [raw_p, calibrated_p] points sorted by raw_p, or None
-    (→ identity calibration) if the file is missing, malformed, or stale.
+    (→ identity calibration) only if the file is missing or malformed. A
+    stale curve is still returned; WP_CALIBRATION_STATUS["state"] says so.
     """
+    WP_CALIBRATION_STATUS.update(state="missing", age_days=None, fitted_at=None)
     try:
         with open(path) as f:
             data = json.load(f)
@@ -140,8 +149,10 @@ def load_wp_calibration(path=WP_CALIBRATION_PATH, max_age_days=WP_CALIBRATION_MA
         )
         if len(curve) < 2:
             print(f"  WARN: wp_calibration.json has <2 curve points; using identity")
+            WP_CALIBRATION_STATUS["state"] = "malformed"
             return None
         fitted_at = data.get("fitted_at")
+        WP_CALIBRATION_STATUS.update(state="fresh", fitted_at=fitted_at)
         if fitted_at and max_age_days:
             try:
                 ts = datetime.fromisoformat(str(fitted_at).replace("Z", "+00:00"))
@@ -149,20 +160,24 @@ def load_wp_calibration(path=WP_CALIBRATION_PATH, max_age_days=WP_CALIBRATION_MA
                     ts = ts.replace(tzinfo=timezone.utc)
                 now = now or datetime.now(timezone.utc)
                 age_days = (now - ts).total_seconds() / 86400
+                WP_CALIBRATION_STATUS["age_days"] = round(age_days, 1)
                 if age_days > max_age_days:
+                    WP_CALIBRATION_STATUS["state"] = "stale"
                     print(
                         f"  WARN: wp_calibration.json is {age_days:.0f}d old "
-                        f"(>{max_age_days}d); using identity — rerun fit_wp_calibration.py"
+                        f"(>{max_age_days}d); KEEPING the frozen curve so pick rules "
+                        f"don't change silently — refit is overdue (fit_wp_calibration.py)"
                     )
-                    return None
             except (ValueError, TypeError):
                 pass
         return curve
     except FileNotFoundError:
         print("  WARN: reports/wp_calibration.json missing; using identity calibration")
+        WP_CALIBRATION_STATUS["state"] = "missing"
         return None
     except Exception as e:
         print(f"  WARN: could not load wp calibration ({e}); using identity")
+        WP_CALIBRATION_STATUS["state"] = "malformed"
         return None
 
 
