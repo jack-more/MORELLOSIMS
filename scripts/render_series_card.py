@@ -65,7 +65,7 @@ def palette(abbr):
     """Card inks from the team's own colours (ESPN snapshot): primary prints
     the quadrants, alternate prints the diamond. Text and plate ink are
     chosen for contrast, never guessed."""
-    c = COLORS.get(abbr) or COLORS.get({"AZ": "ARI", "ARI": "AZ", "ATH": "OAK", "WSH": "WSH"}.get(abbr, ""), {})
+    c = COLORS.get(abbr) or COLORS.get({"AZ": "ARI", "ARI": "AZ", "CWS": "CHW", "CHW": "CWS", "ATH": "OAK", "WSH": "WSH"}.get(abbr, ""), {})
     if not c:
         raise SystemExit(f"{abbr} not in data/reference/mlb_team_colors_espn.json")
     P, A = _hex(c["color"]), _hex(c["alt"])
@@ -77,7 +77,7 @@ def palette(abbr):
 
 
 def team_ref(abbr):
-    t = TEAMS.get(abbr) or TEAMS.get({"AZ": "ARI", "ARI": "AZ", "OAK": "ATH", "WAS": "WSH"}.get(abbr, ""), {})
+    t = TEAMS.get(abbr) or TEAMS.get({"AZ": "ARI", "ARI": "AZ", "CHW": "CWS", "OAK": "ATH", "WAS": "WSH"}.get(abbr, ""), {})
     if not t:
         raise SystemExit(f"{abbr} not in data/reference/mlb_teams_2026.json; refresh the snapshot")
     city = t["franchise"] if t["franchise"] != t["team"] else t["location"]
