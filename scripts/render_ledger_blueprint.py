@@ -72,10 +72,20 @@ def data(sport):
         notes = [f"PREVIOUS MODEL {md(old[0]['date'])}–{md(old[-1]['date'])}: {rec(ow, ol, opu)}, {100 * opl / ork:+.1f}%. RETIRED.",
                  f"APRIL, LOGGED BY HAND BEFORE TRACKING: {rec(b['wins'], b['losses'])}."]
     elif sport == "nba":
-        rows = settled(json.load(open(os.path.join(REPO, "picks", "nba.json"))))
-        b = base["nba"]
-        notes = [f"{md(b['since'])} – APR 30, LOGGED BY HAND BEFORE TRACKING: {rec(b['wins'], b['losses'])}, "
-                 f"{100 * b['pl'] / b['risked']:+.1f}%."]
+        # every individually logged NBA pick (the auto-tracked picks/nba.json rows are a subset)
+        import csv
+        rows = []
+        for x in csv.DictReader(open(os.path.join(REPO, "nba_pipeline", "data", "picks.csv"))):
+            st = {"W": "win", "L": "loss", "P": "push"}.get(x["result"])
+            if not st:
+                continue                      # unsettled
+            rows.append({"date": x["date"], "id": x["date"] + x["side"], "side": x["side"].split()[0],
+                         "pick_text": x["side"], "bet_type": x["type"], "odds": x["odds"] or None,
+                         "status": st, "pl": float(x["profit"] or 0), "units": float(x["risk"] or 0)})
+        rows.sort(key=lambda p: (p["date"], p["id"]))
+        from datetime import timedelta
+        before = (datetime.strptime(rows[0]["date"], "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        notes = [f"OCT 22 – {md(before)} WAS LOGGED AS SEASON TOTALS, NOT PICK BY PICK."]
     else:
         rows = []
     return rows, notes
@@ -165,9 +175,18 @@ class LedgerCard:
         # every pick a mark on the axis: filled = win, open = loss
         ay = y1 - s(30)
         d.line((x0, ay, x1, ay), fill=WHITE, width=s(2))
-        r = s(6)
+        gap = (x1 - x0 - s(16)) / max(len(rows), 1)
+        r = max(S, min(s(6), int(gap * 0.36)))
+        dense = len(rows) > 60
         for i, p in enumerate(rows, 1):
             x = X(i)
+            if dense:                          # barcode: wins tick up, losses tick down
+                h = s(12)
+                if p["status"] == "win":
+                    d.line((x, ay, x, ay - h), fill=WHITE, width=max(S, int(gap * 0.5)))
+                elif p["status"] == "loss":
+                    d.line((x, ay, x, ay + h), fill=WHITE, width=max(S, int(gap * 0.5)))
+                continue
             if p["status"] == "win":
                 d.rectangle((x - r, ay - r, x + r, ay + r), fill=WHITE)
             elif p["status"] == "loss":
@@ -177,6 +196,11 @@ class LedgerCard:
         d.text((x0, ay + s(12)), md(rows[0]["date"]), font=lab_f, fill=WHITE)
         end = md(rows[-1]["date"])
         d.text((x1 - text_w(d, end, lab_f), ay + s(12)), end, font=lab_f, fill=WHITE)
+        if dense:
+            key = "WINS UP · LOSSES DOWN"
+            d.text(((x0 + x1) / 2 - text_w(d, key, lab_f) / 2, ay + s(16)), key, font=lab_f, fill=WHITE)
+            self.plot_callouts(run, X, Y)
+            return
         # legend drawn as shapes (the mono face has no box glyphs)
         kw = s(12) + s(8) + text_w(d, "WIN", lab_f) + s(28) + s(12) + s(8) + text_w(d, "LOSS", lab_f)
         kx, ky = (x0 + x1) / 2 - kw / 2, ay + s(15)
@@ -186,6 +210,9 @@ class LedgerCard:
         d.rectangle((kx, ky, kx + s(12), ky + s(12)), fill=BLUE, outline=WHITE, width=s(2))
         kx += s(20); d.text((kx, ay + s(12)), "LOSS", font=lab_f, fill=WHITE)
 
+        self.plot_callouts(run, X, Y)
+
+    def plot_callouts(self, run, X, Y):
         # dimension callouts: peak and current, leader lines like the fence marks
         ip = max(range(len(run)), key=lambda i: run[i])
         self.callout(X(ip), Y(run[ip]), f"{run[ip]:+,.0f}", "PEAK", up=True)
@@ -220,10 +247,13 @@ class LedgerCard:
             col = WHITE if p["status"] == "win" else WHITE + (130,)
             tag = {"win": "W", "loss": "L", "push": "P"}[p["status"]]
             # spreads show the line (the -110 is just juice); moneylines show the price
-            bet = p.get("pick_text") if p.get("bet_type") == "spread" else f"{p['side']} {odds_s(p)}"
+            if p.get("bet_type") == "spread":
+                bet = p.get("pick_text")
+            else:
+                bet = f"{p['side']} {odds_s(p)}" if p.get("odds") else f"{p['side']} ML"
             words.append((f"{md(p['date'])} {bet} {tag}. ", col))
         size = 40
-        while size > 22 and not self.flow(words, F("cond_sb", size), dry=True):
+        while size > 12 and not self.flow(words, F("cond_sb", size), dry=True):
             size -= 2
         self.flow(words, F("cond_sb", size))
 
@@ -257,7 +287,7 @@ class LedgerCard:
         bf = F("cond", 150)
         bx = CX1 - text_w(d, big, bf)
         d.text((bx, s(Y_FOOT + 4)), big, font=bf, fill=WHITE)
-        sub = f"NET $PP · {rk:,} RISKED · {100 * pl / rk:+.1f}% ROI" if rk else "NET $PP · FLAT 50 PER PICK"
+        sub = f"NET $PP · {rk:,.0f} RISKED · {100 * pl / rk:+.1f}% ROI" if rk else "NET $PP · FLAT 50 PER PICK"
         sf = F("mono_b", 18)
         d.text((CX1 - text_w(d, sub, sf), s(Y_FOOT + 180)), sub, font=sf, fill=WHITE)
         # footnote: other records, never blended into the headline
