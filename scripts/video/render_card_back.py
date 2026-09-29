@@ -22,6 +22,12 @@ So the bars are consistent with the two stored numbers, but their shape is
 an assumption (NB is the usual over-dispersed model for MLB run scoring),
 not a model output. Seeded draws make every render identical.
 
+Per-hitter matchup colour (stored model output, via mlbsim/lineup_scores/,
+written by scripts/export_lineup_scores.py): each hitter's name sits on a
+highlighter chip coloured by his MOMO vs today's opposing starter, scaled
+within the game across both lineups (best = light green, worst = red). No
+scores file -> plain white wall, no legend.
+
 Sourced facts (sim_reference.py, MLB Stats API snapshots in data/reference/):
   fence distances  /api/v1/venues/{id}?hydrate=location,fieldInfo
   lineups          /api/v1/schedule?...&hydrate=lineups,probablePitcher + /api/v1/game/{pk}/boxscore
@@ -48,6 +54,7 @@ sys.path.insert(0, HERE)
 from render_cards_v2 import REPO, font, text_w, fit_font  # noqa: E402
 from render_series_card import load_picks, team_ref, BG, CREAM, YELLOW  # noqa: E402
 import sim_reference as ref  # noqa: E402
+from export_lineup_scores import INK, load_scores, scale_game  # noqa: E402
 
 S = 2
 W, H = 1080 * S, 1350 * S
@@ -233,6 +240,8 @@ Y_RULE1 = 236
 FIELD_BOX = (136, 248, 944, 716)
 Y_RULE2 = 726
 WALL_BOX = (136, 744, 944, 998)
+WALL_BOX_KEYED = (136, 776, 944, 1000)      # room for the matchup legend above the wall
+Y_LEGEND = 744
 Y_RULE3 = 1014
 SIM_Y = 1030
 
@@ -259,6 +268,7 @@ class CardBack:
         self.year = pick["date"][:4]
         self.venue = ref.venue_for_team(pick["home"])
         self.lu = ref.lineups(pick)
+        self.scale = self._matchup_scale()
         self.sim = SimDist(pick)
         self._field_geometry()
         self.base = self._base()
@@ -301,6 +311,22 @@ class CardBack:
         d.text((CX1 - text_w(d, no, nf), s(Y_HEAD + 18)), no, font=nf, fill=WHITE)
         for y in (Y_RULE1, Y_RULE2, Y_RULE3):
             d.line((CX0, s(y), CX1, s(y)), fill=WHITE, width=s(2))
+
+        # matchup legend above the lineup wall (only when per-hitter scores exist)
+        if self.scale:
+            from export_lineup_scores import ramp
+            lf = F("mono_b", 16)
+            d.text((CX0, s(Y_LEGEND)), "MATCHUP TODAY", font=lf, fill=WHITE)
+            n, cw, ch, g = 7, s(20), s(13), s(4)
+            xr = CX1 - text_w(d, "WORST", lf)
+            d.text((xr, s(Y_LEGEND)), "WORST", font=lf, fill=WHITE)
+            x = xr - s(12) - (n * cw + (n - 1) * g)
+            cy = s(Y_LEGEND) + s(3)
+            for i in range(n):
+                d.rounded_rectangle((x, cy, x + cw, cy + ch), radius=s(2), fill=ramp(1 - i / (n - 1)) + (255,))
+                x += cw + g
+            xb = xr - s(12) - (n * cw + (n - 1) * g) - s(12) - text_w(d, "BEST", lf)
+            d.text((xb, s(Y_LEGEND)), "BEST", font=lf, fill=WHITE)
 
         # field captions: park + scale bar in the empty lower corners of the fan
         bx0, by0, bx1, by1 = [s(v) for v in FIELD_BOX]
@@ -429,47 +455,83 @@ class CardBack:
             d.text((x - tw / 2 - bb[0], y - (bb[3] + bb[1]) / 2), val, font=lf, fill=WHITE)
 
     # ── lineup wall ──
+    def _matchup_scale(self):
+        """{hitter id: colour/rank} from the stored per-hitter scores, or None."""
+        scores = load_scores(self.pick)
+        if not scores:
+            print(f"  card back: no mlbsim/lineup_scores for {self.pick['id']}; "
+                  "run scripts/export_lineup_scores.py to colour the lineup")
+            return None
+        scale = scale_game(scores)
+        ids = {r["id"] for sd in ("away", "home") for r in self.lu[sd]["lineup"]}
+        if ids != set(scale):
+            raise SystemExit(f"{self.pick['id']}: lineup_scores hitters {sorted(set(scale) ^ ids)} "
+                             "differ from the lineup snapshot; re-export the scores")
+        return scale
+
     def _wall(self):
-        """Both lineups as one justified wall: TEAM label, then NAME POS. NAME POS. ... SP NAME."""
+        """Both lineups as one justified wall: TEAM label, then NAME POS. NAME POS. ... SP NAME.
+
+        With matchup scores each hitter's name sits on a chip in his matchup
+        colour. Spacing rules: the gap inside a name is a plain word space (it
+        may wrap, and the chip splits with it); a position is glued to the name
+        it follows; only the gaps between entries stretch to justify a line."""
+        sc = self.scale
+        # parts: (text, colour, key, join) where join is how the part attaches to the
+        # one before it: "unit" (stretchable, may wrap), "name" (word space, may wrap),
+        # "glue" (word space, never wraps)
         paras = []
         for sd in ("away", "home"):
             t = self.lu[sd]
             abbr = self.pick[sd]
             city, name, _ = team_ref(abbr)
             label_col = YELLOW if abbr == self.pick["side"] else WHITE
-            toks = [(w, label_col) for w in name.split()]
+            parts = [(w, label_col, None, "unit" if i == 0 else "name") for i, w in enumerate(name.split())]
             for r in t["lineup"]:
-                nm = r["name"].upper().rstrip(".")
-                words = nm.split()
-                toks += [(w, WHITE) for w in words[:-1]]
-                toks.append((words[-1], WHITE))
-                toks.append((f"{r['pos']}.", WHITE + (150,)))
+                key = r["id"] if sc else None
+                col = INK if sc else WHITE
+                ws = r["name"].upper().rstrip(".").split()
+                parts += [(w, col, key, "unit" if i == 0 else ("name" if sc else "unit")) for i, w in enumerate(ws)]
+                parts.append((f"{r['pos']}.", WHITE + (150,), None, "glue" if sc else "unit"))
             if t["sp"].get("name"):
-                toks.append(("SP", WHITE + (150,)))
                 sp = t["sp"]["name"].upper().rstrip(".").split()
-                toks += [(w, WHITE) for w in sp[:-1]] + [(sp[-1] + ".", WHITE)]
-            paras.append(toks)
+                parts.append(("SP", WHITE + (150,), None, "unit"))
+                sp[-1] += "."
+                parts += [(w, WHITE, None, "name") for w in sp]
+            paras.append(parts)
 
-        bx0, by0, bx1, by1 = [s(v) for v in WALL_BOX]
+        bx0, by0, bx1, by1 = [s(v) for v in (WALL_BOX_KEYED if sc else WALL_BOX)]
         dummy = ImageDraw.Draw(Image.new("L", (1, 1)))
+        pad = s(4) if sc else 0                                  # chip overhang each side
+        inner = (bx1 - bx0) - 2 * pad
 
         def layout(size):
             f = font("cond", size)
             sp = text_w(dummy, "  ", f) / 2 * 1.05
-            lh = size * 1.02
-            lines, y = [], 0
-            for pi, toks in enumerate(paras):
+            gaps = {"unit": sp + 2 * pad, "name": sp, "glue": sp + pad}
+            lh = size * (1.12 if sc else 1.02)
+            lines = []
+            for pi, parts in enumerate(paras):
+                atoms = []                                       # glue-joined runs never split
+                for p in parts:
+                    w = text_w(dummy, p[0], f)
+                    if p[3] == "glue" and atoms:
+                        atoms[-1]["parts"].append((p, w))
+                    else:
+                        atoms.append({"join": p[3], "parts": [(p, w)]})
+                for a in atoms:
+                    a["w"] = sum(w for _, w in a["parts"]) + gaps["glue"] * (len(a["parts"]) - 1)
                 cur, cw = [], 0
-                for tok in toks:
-                    w = text_w(dummy, tok[0], f)
-                    if cur and cw + sp + w > bx1 - bx0:
+                for a in atoms:
+                    g = gaps[a["join"]] if cur else 0
+                    if cur and cw + g + a["w"] > inner:
                         lines.append((cur, False, pi))
-                        cur, cw = [], 0
-                    cur.append((tok, w))
-                    cw += (sp if len(cur) > 1 else 0) + w
+                        cur, cw, g = [], 0, 0
+                    cur.append(a)
+                    cw += g + a["w"]
                 lines.append((cur, True, pi))
             height = len(lines) * lh + (len(paras) - 1) * lh * 0.35
-            return f, sp, lh, lines, height
+            return f, gaps, lh, lines, height
 
         lo, hi = s(16), s(60)
         while hi - lo > 1:
@@ -478,25 +540,60 @@ class CardBack:
                 lo = mid
             else:
                 hi = mid
-        f, sp, lh, lines, height = layout(lo)
+        f, gaps, lh, lines, height = layout(lo)
         img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
-        words = []
+        asc = d.textbbox((0, 0), "H", font=f)
+        cap = asc[3] - asc[1]
+        ct, cb = s(5), s(5)                                     # chip above / below the cap height
+        placed = []                                             # (x, y, w, part)
         y = by0 + ((by1 - by0) - height) / 2
         prev_p = 0
-        asc = d.textbbox((0, 0), "H", font=f)
-        for toks, last, pi in lines:
+        for atoms, last, pi in lines:
             if pi != prev_p:
                 y += lh * 0.35
                 prev_p = pi
-            total = sum(w for _, w in toks)
-            gap = sp if last or len(toks) < 2 else ((bx1 - bx0) - total) / (len(toks) - 1)
-            x = bx0
-            for (txt, col), w in toks:
-                d.text((x, y - asc[1]), txt, font=f, fill=col)
-                words.append((x, y, x + w, y + (asc[3] - asc[1])))
-                x += w + gap
+            base = sum(a["w"] for a in atoms) + sum(gaps[a["join"]] for a in atoms[1:])
+            n_stretch = sum(1 for a in atoms[1:] if a["join"] == "unit")
+            extra = 0 if last or not n_stretch else (inner - base) / n_stretch
+            x = bx0 + pad
+            for i, a in enumerate(atoms):
+                if i:
+                    x += gaps[a["join"]] + (extra if a["join"] == "unit" else 0)
+                for j, (p, w) in enumerate(a["parts"]):
+                    if j:
+                        x += gaps["glue"]
+                    placed.append((x, y, w, p))
+                    x += w
             y += lh
+
+        # one chip per run of the same hitter's words on a line
+        chips = []
+        for x, y, w, p in placed:
+            key = p[2]
+            if key is None:
+                continue
+            if chips and chips[-1][0] == key and chips[-1][2] == y:
+                chips[-1][3] = x + w
+            else:
+                chips.append([key, x, y, x + w])
+        chip_at = {}
+        for key, x0, y0, x1 in chips:
+            box = (x0 - pad, y0 - ct, x1 + pad, y0 + cap + cb)
+            d.rounded_rectangle(box, radius=s(3), fill=sc[key]["rgb"] + (255,))
+            chip_at[(key, y0)] = box
+
+        words = []
+        for x, y, w, (txt, col, key, _) in placed:
+            d.text((x, y - asc[1]), txt, font=f, fill=col)
+            if key is not None:
+                bx = chip_at[(key, y)]
+                # reveal the chip from its left edge to this word: names sweep on
+                # like a highlighter pass during the parse. Exact chip rows, so a
+                # reveal never bleeds into the next line's chips.
+                words.append((bx[0], bx[1], x + w + (pad if x + w + pad >= bx[2] - 1 else 0), bx[3]))
+            else:
+                words.append((x - s(2), y - s(4), x + w + s(2), y + cap + s(6)))
         return img, words
 
     def _draw_wall(self, img, t):
@@ -508,15 +605,15 @@ class CardBack:
         n = int(len(self.wall_words) * t)
         m = Image.new("L", (W, H), 0)
         md = ImageDraw.Draw(m)
-        for (x0, y0, x1, y1) in self.wall_words[:n]:
-            md.rectangle((x0 - s(2), y0 - s(4), x1 + s(2), y1 + s(6)), fill=255)
+        for box in self.wall_words[:n]:                     # reveal boxes, already padded
+            md.rectangle(box, fill=255)
         layer = self.wall.copy()
         layer.putalpha(Image.composite(layer.getchannel("A"), Image.new("L", (W, H), 0), m))
         img.alpha_composite(layer)
         # cursor block on the next word
         if n < len(self.wall_words):
             x0, y0, x1, y1 = self.wall_words[n]
-            ImageDraw.Draw(img).rectangle((x0, y0 - s(2), x0 + s(12), y1 + s(2)), fill=YELLOW)
+            ImageDraw.Draw(img).rectangle((x0 + s(2), y0 + s(2), x0 + s(14), y1 - s(4)), fill=YELLOW)
 
     # ── sim block ──
     def _draw_sim(self, img, frac, lock):

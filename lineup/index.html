@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MORELLO SIMS · Lineup</title>
+<meta name="description" content="Both starting lineups coloured by the sim's matchup score against today's starter.">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #161412;
+  --cream: #F3ECDC;
+  --blue: #1238D6;
+  --blue-deep: #0E2DB0;
+  --white: #F7F5EE;
+  --dim: rgba(247, 245, 238, .6);
+  --faint: rgba(247, 245, 238, .16);
+  --yellow: #F6CE30;
+  --ink: #0A1648;
+  --font-display: 'Anton', sans-serif;
+  --font-header: 'Bebas Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-body: 'Inter', sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--white); }
+body { font-family: var(--font-body); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+button { font: inherit; color: inherit; }
+
+.top { display: flex; justify-content: space-between; align-items: center; max-width: 1040px;
+  margin: 0 auto; padding: 14px 16px 0; font: 700 11px/1 var(--font-mono); letter-spacing: .08em; }
+.top a { color: var(--dim); text-decoration: none; }
+.top a:hover { color: var(--white); }
+
+.layout { max-width: 1040px; margin: 0 auto; padding: 12px 16px 40px; display: grid; gap: 20px; }
+
+/* ── the card ─────────────────────────────────────────── */
+.card { background: var(--cream); border-radius: 26px; padding: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.55);
+  max-width: 560px; width: 100%; margin: 0 auto; }
+.print { position: relative; border-radius: 18px; background-color: var(--blue); padding: 18px 16px 16px;
+  background-image:
+    linear-gradient(rgba(247,245,238,.13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(247,245,238,.13) 1px, transparent 1px),
+    linear-gradient(rgba(247,245,238,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(247,245,238,.055) 1px, transparent 1px);
+  background-size: 32px 32px, 32px 32px, 8px 8px, 8px 8px; background-position: -1px -1px; }
+.print::before { content: ""; position: absolute; inset: 6px; border: 1.5px solid var(--white); border-radius: 13px;
+  pointer-events: none; }
+.print > * { position: relative; }
+
+.head { display: flex; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1.5px solid var(--white); }
+.brand { font: 400 24px/1 var(--font-display); letter-spacing: .02em; }
+.meta, .series { font: 700 10px/1.3 var(--font-mono); letter-spacing: .02em; white-space: nowrap; }
+.meta { margin-top: 8px; }
+.series { text-align: right; }
+.setno { font: 400 34px/1 var(--font-header); margin-top: 4px; }
+
+.field { display: block; width: 100%; height: auto; margin: 6px 0 2px; }
+.field text { fill: var(--white); }
+.rule { border-top: 1.5px solid var(--white); }
+
+.legend { display: flex; justify-content: space-between; align-items: center; margin: 10px 0 8px;
+  font: 700 10px/1 var(--font-mono); letter-spacing: .06em; }
+.ramp { display: flex; align-items: center; gap: 6px; }
+.ramp i { display: inline-block; width: 11px; height: 8px; border-radius: 2px; }
+.ramp span { margin: 0 3px; }
+
+.wall { font: 400 16.5px/1.78 var(--font-header); letter-spacing: .015em; text-align: left; word-spacing: .06em;
+  hyphens: none; padding-bottom: 12px; }
+.wall p { margin: 0 0 6px; }
+.u { white-space: nowrap; }
+.team { color: var(--white); }
+.team.pick { color: var(--yellow); }
+.pos { color: var(--dim); }
+.chip { position: relative; border: 0; margin: 0; padding: 1px 3px 0; border-radius: 3px; background: var(--c); color: var(--ink);
+  font: inherit; letter-spacing: inherit; cursor: pointer; line-height: 1.12; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 0 0 0 var(--white); transition: box-shadow .12s, transform .12s; }
+.chip:focus-visible, .chip.on { outline: none; box-shadow: 0 0 0 2px var(--white); }
+.chip::after { content: ""; position: absolute; inset: -7px -3px; }   /* bigger tap target, same look */
+@media (hover: hover) { .chip:hover { box-shadow: 0 0 0 2px var(--white); } }
+
+.sim { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; padding-top: 10px; border-top: 1.5px solid var(--white); }
+.lbl { display: flex; justify-content: space-between; font: 700 9.5px/1 var(--font-mono); letter-spacing: .05em; gap: 6px; }
+.key { display: inline-flex; align-items: center; gap: 4px; }
+.key i { width: 8px; height: 8px; display: inline-block; }
+.hist { display: block; width: 100%; height: auto; margin-top: 4px; }
+.wp { font: 400 44px/1 var(--font-display); margin: 12px 0 8px; letter-spacing: .01em; }
+.bar { display: flex; height: 8px; border: 1.5px solid var(--white); }
+.bar b { background: var(--yellow); }
+.ends { display: flex; justify-content: space-between; font: 700 9px/1 var(--font-mono); margin-top: 5px; }
+
+.sources { max-width: 560px; margin: 0 auto; font: 400 10.5px/1.55 var(--font-mono); color: rgba(247,245,238,.55); }
+.sources summary { cursor: pointer; letter-spacing: .08em; font-weight: 700; color: rgba(247,245,238,.7); }
+.sources p { margin: 6px 0; }
+.sources code { color: rgba(247,245,238,.8); }
+
+/* ── preview: bottom sheet on phones, side panel on desktop ── */
+.scrim { position: fixed; inset: 0; background: rgba(8,8,10,.55); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-height: 86vh; overflow-y: auto;
+  background: var(--blue-deep); border-top: 1.5px solid var(--white); border-radius: 18px 18px 0 0;
+  padding: 10px 16px calc(22px + env(safe-area-inset-bottom)); transform: translateY(105%);
+  transition: transform .24s cubic-bezier(.2,.8,.2,1); overscroll-behavior: contain; }
+.sheet.open { transform: none; }
+.grab { width: 38px; height: 4px; border-radius: 2px; background: var(--faint); margin: 0 auto 8px; }
+.x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border: 1.5px solid var(--faint);
+  border-radius: 50%; background: transparent; cursor: pointer; font: 700 15px/1 var(--font-mono); }
+
+.p-head { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: end; padding-right: 36px; }
+.shot { width: 72px; height: 72px; border-radius: 10px; background: rgba(247,245,238,.1) center/cover no-repeat;
+  border: 1.5px solid var(--white); object-fit: cover; }
+.p-name { font: 400 30px/.95 var(--font-header); letter-spacing: .01em; }
+.p-sub { font: 700 10.5px/1.4 var(--font-mono); color: var(--dim); margin-top: 4px; letter-spacing: .03em; }
+.score { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; }
+.score .n { background: var(--c); color: var(--ink); font: 400 34px/1 var(--font-display); padding: 6px 10px 5px; border-radius: 6px; min-width: 64px; text-align: center; }
+.score .t { font: 700 10.5px/1.45 var(--font-mono); letter-spacing: .04em; }
+.score .t b { display: block; font-size: 13px; }
+
+.sec { border-top: 1px solid var(--faint); margin-top: 14px; padding-top: 10px; }
+.sec h3 { margin: 0 0 8px; font: 700 10px/1.2 var(--font-mono); letter-spacing: .08em; color: var(--dim); display: flex; justify-content: space-between; gap: 8px; }
+.sec h3 span { color: var(--white); }
+.vs { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; }
+.vs .shot { width: 40px; height: 40px; border-radius: 7px; }
+.h2h { font: 400 22px/1 var(--font-header); letter-spacing: .02em; }
+.h2h small { display: block; font: 700 10px/1.4 var(--font-mono); color: var(--dim); letter-spacing: .03em; margin-top: 3px; }
+.kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kv div { font: 700 9.5px/1.3 var(--font-mono); color: var(--dim); letter-spacing: .04em; }
+.kv b { display: block; font: 400 21px/1.05 var(--font-header); color: var(--white); letter-spacing: .02em; }
+.comp { display: grid; grid-template-columns: 86px 1fr 44px; gap: 8px; align-items: center; font: 700 10px/1 var(--font-mono); margin: 6px 0; }
+.comp .track { position: relative; height: 10px; border-left: 0; }
+.comp .track::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; border-left: 1px solid var(--dim); }
+.comp .track i { position: absolute; top: 0; height: 10px; }
+.comp .v { text-align: right; }
+.mix { display: flex; height: 10px; margin: 2px 0 6px; border: 1px solid var(--faint); }
+.mix i { height: 100%; border-right: 1px solid var(--blue-deep); background: var(--white); }
+.mixk { font: 700 9.5px/1.5 var(--font-mono); color: var(--dim); letter-spacing: .03em; }
+.note { font: 400 10px/1.5 var(--font-mono); color: rgba(247,245,238,.5); margin-top: 8px; }
+
+.err { max-width: 560px; margin: 40px auto; font: 700 12px/1.5 var(--font-mono); color: var(--dim); }
+
+@media (min-width: 520px) { .wall { font-size: 19px; } .print { padding: 22px 22px 18px; } }
+@media (min-width: 960px) {
+  .layout { grid-template-columns: minmax(0, 560px) 380px; justify-content: center; align-items: start; }
+  .sources { grid-column: 1; }
+  .scrim { display: none; }
+  .sheet { position: sticky; top: 16px; grid-column: 2; grid-row: 1; transform: none; max-height: calc(100vh - 32px);
+    border: 1.5px solid var(--white); border-radius: 18px; padding: 16px; transition: none; }
+  .grab, .x { display: none; }
+  .p-head { padding-right: 0; }
+}
+</style>
+</head>
+<body>
+<nav class="top"><a href="/mlbsim/">← MLB SIM</a><a href="/">MORELLO SIMS</a></nav>
+<main class="layout" id="app">
+  <div class="err" id="status">LOADING…</div>
+</main>
+<div class="scrim" id="scrim"></div>
+
+<script>
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const f3 = v => v == null ? "—" : (v < 0 ? "-" : "") + Math.abs(v).toFixed(3).replace(/^0/, "");
+  const pts = v => { const x = v * 1000; return Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "−") + Math.abs(x).toFixed(1); };
+  const pct = v => v == null ? "—" : (v * 100).toFixed(1) + "%";
+  const hand = {L: "L", R: "R", S: "S"};
+
+  const pickId = new URLSearchParams(location.search).get("pick") || "";
+  if (!/^[\w-]+$/.test(pickId)) { $("#status").textContent = "NO PICK SELECTED."; return; }
+
+  fetch(`data/${encodeURIComponent(pickId)}.json`, {cache: "no-cache"})
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(render)
+    .catch(() => { $("#status").textContent = "NO LINEUP DATA FOR THIS PICK."; });
+
+  // ── field, same geometry as scripts/video/render_card_back.py ──
+  const ANG = {leftLine: -45, left: -30, leftCenter: -15, center: 0, rightCenter: 15, right: 30, rightLine: 45};
+  const polar = (a, d) => [d * Math.sin(a * Math.PI / 180), d * Math.cos(a * Math.PI / 180)];
+  function fence(fi) {
+    const k = Object.keys(ANG).filter(n => fi[n] != null).map(n => [ANG[n], +fi[n]]);
+    const out = [];
+    for (let i = 0; i < k.length - 1; i++) {
+      const [a0] = k[i], [a1] = k[i + 1];
+      const p0 = k[Math.max(i - 1, 0)][1], p1 = k[i][1], p2 = k[i + 1][1], p3 = k[Math.min(i + 2, k.length - 1)][1];
+      const n = Math.max(2, Math.floor((a1 - a0) / 0.5));
+      for (let j = 0; j < n; j++) {
+        const t = j / n;
+        out.push([a0 + (a1 - a0) * t, 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3)]);
+      }
+    }
+    out.push(k[k.length - 1]);
+    return {knots: k, curve: out};
+  }
+  function fieldSVG(v) {
+    const W = 808, H = 468, {knots, curve} = fence(v.fieldInfo);
+    const ft = curve.map(([a, d]) => polar(a, d));
+    const spanX = Math.max(...ft.map(p => Math.abs(p[0]))) * 2, maxY = Math.max(...ft.map(p => p[1]));
+    const sc = Math.min((H - 40 - 24) / maxY, (W - 120) / spanX);
+    const hx = W / 2, hy = H - 24;
+    const P = (x, y) => [hx + x * sc, hy - y * sc];
+    const path = arr => arr.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+    const interp = a => { for (let i = 0; i < curve.length - 1; i++) if (a <= curve[i + 1][0]) { const [a0, d0] = curve[i], [a1, d1] = curve[i + 1]; return d0 + (d1 - d0) * (a - a0) / (a1 - a0 || 1); } return curve[curve.length - 1][1]; };
+    let s = `<svg class="field" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(v.name)} drawn to scale">`;
+    for (const r of [200, 300]) {
+      const ring = [];
+      for (let a = -45; a <= 45.01; a += 0.5) if (r < interp(a) - 8) ring.push(P(...polar(a, r)));
+      if (ring.length > 2) {
+        s += `<path d="${path(ring)}" fill="none" stroke="rgba(247,245,238,.35)" stroke-width="1" stroke-dasharray="4 6"/>`;
+        const [x, y] = P(...polar(-41, r));
+        s += `<text x="${x + 4}" y="${y - 8}" font-family="JetBrains Mono" font-weight="700" font-size="13" opacity=".7">${r}</text>`;
+      }
+    }
+    const lf = knots[0], rf = knots[knots.length - 1];
+    s += `<path d="${path([P(0, 0), P(...polar(lf[0], lf[1]))])}" stroke="#F7F5EE" stroke-width="2.5" fill="none"/>`;
+    s += `<path d="${path([P(0, 0), P(...polar(rf[0], rf[1]))])}" stroke="#F7F5EE" stroke-width="2.5" fill="none"/>`;
+    s += `<path d="${path(ft.map(p => P(...p)))}" stroke="#F7F5EE" stroke-width="4" fill="none" stroke-linejoin="round"/>`;
+    const b = 90 / Math.SQRT2;
+    s += `<path d="${path([P(0, 0), P(b, b), P(0, 2 * b), P(-b, b), P(0, 0)])}" stroke="#F7F5EE" stroke-width="2.5" fill="none"/>`;
+    const arc = [];
+    for (let a = -72; a <= 72.1; a += 2) { const [x, y] = polar(a, 95); arc.push(P(x, y + 60.5)); }
+    s += `<path d="${path(arc)}" stroke="rgba(247,245,238,.75)" stroke-width="1.8" fill="none"/>`;
+    const [mx, my] = P(0, 60.5);
+    s += `<circle cx="${mx}" cy="${my}" r="${9 * sc}" stroke="#F7F5EE" stroke-width="1.8" fill="none"/>`;
+    s += `<path d="M${hx - 6} ${hy - 6}H${hx + 6}V${hy}L${hx} ${hy + 6}L${hx - 6} ${hy}Z" fill="#F7F5EE"/>`;
+    for (const [a, d] of knots) {
+      const [t0x, t0y] = P(...polar(a, d - 7 / sc)), [t1x, t1y] = P(...polar(a, d + 7 / sc));
+      const [lx, ly] = P(...polar(a, d + 26 / sc));
+      s += `<line x1="${t0x}" y1="${t0y}" x2="${t1x}" y2="${t1y}" stroke="#F7F5EE" stroke-width="2.5"/>`;
+      s += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" font-family="Bebas Neue" font-size="34">${Math.round(d)}</text>`;
+    }
+    s += `<text x="0" y="${H - 38}" font-family="Bebas Neue" font-size="32">${esc(v.name.toUpperCase())}</text>`;
+    s += `<text x="0" y="${H - 12}" font-family="JetBrains Mono" font-weight="700" font-size="16">${esc(((v.city || "") + ", " + (v.state || "")).toUpperCase())}</text>`;
+    const L = 100 * sc, sx1 = W, sx0 = W - L, y = H - 34;
+    s += `<path d="M${sx0} ${y}H${sx1}M${sx0} ${y - 8}V${y + 8}M${sx0 + L / 2} ${y - 8}V${y + 8}M${sx1} ${y - 8}V${y + 8}" stroke="#F7F5EE" stroke-width="2.5"/>`;
+    s += `<text x="${sx0}" y="${y + 26}" text-anchor="middle" font-family="JetBrains Mono" font-weight="700" font-size="16">0</text>`;
+    s += `<text x="${sx1}" y="${y + 26}" text-anchor="end" font-family="JetBrains Mono" font-weight="700" font-size="16">100 FT</text>`;
+    return s + "</svg>";
+  }
+
+  // ── run distribution (derived, see data sources) ──
+  function histSVG(sim) {
+    const W = 300, H = 104, base = 82, top = 14, n = sim.pmf_side.length, bw = W / (n + 1);
+    const peak = Math.max(...sim.pmf_side, ...sim.pmf_opp);
+    const step = arr => { let d = `M0 ${base}`; arr.forEach((p, i) => { const y = base - p / peak * (base - top); d += `L${i * bw} ${y}L${(i + 1) * bw} ${y}`; }); return d + `L${n * bw} ${base}`; };
+    let s = `<svg class="hist" viewBox="-4 -12 ${W + 12} ${H + 12}" aria-hidden="true">`;
+    s += `<path d="${step(sim.pmf_side)}Z" fill="#F6CE30"/>`;
+    s += `<path d="${step(sim.pmf_opp)}" fill="none" stroke="#F7F5EE" stroke-width="1.8"/>`;
+    s += `<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="#F7F5EE" stroke-width="1.5"/>`;
+    for (let v = 0; v <= 30; v += 5) { const x = (v + .5) * bw; s += `<text x="${x}" y="${base + 16}" text-anchor="middle" font-family="JetBrains Mono" font-weight="700" font-size="10" fill="#F7F5EE">${v}</text>`; }
+    for (const [mu, col] of [[sim.mu_opp, "#F7F5EE"], [sim.mu_side, "#F6CE30"]]) {
+      const x = (mu + .5) * bw;
+      s += `<line x1="${x}" y1="${top - 4}" x2="${x}" y2="${base}" stroke="${col}" stroke-width="1.5" stroke-dasharray="3 4"/>`;
+      s += `<text x="${x}" y="${top - 8}" text-anchor="middle" font-family="Bebas Neue" font-size="17" fill="${col}">${mu}</text>`;
+    }
+    return s + "</svg>";
+  }
+
+  function wallHTML(d) {
+    let h = "";
+    for (const s of ["away", "home"]) {
+      const t = d.sides[s];
+      h += `<p><span class="team${t.is_pick ? " pick" : ""}">${esc(t.club.toUpperCase())}</span> `;
+      h += t.hitters.map(p =>
+        `<span class="u"><button class="chip" style="--c:${p.score.color}" data-side="${s}" data-id="${p.id}" aria-label="${esc(p.name)}, matchup ${p.score.momo}, rank ${p.score.rank} of ${p.score.of}">${esc(p.name.toUpperCase().replace(/\.$/, ""))}</button> <span class="pos">${esc(p.pos)}.</span></span>`
+      ).join(" ");
+      h += ` <span class="u"><span class="pos">SP</span> ${esc(t.sp.name.toUpperCase())}.</span></p>`;
+    }
+    return h;
+  }
+
+  const COMP = [["pitch_family", "PITCH MIX"], ["velocity", "VELO"], ["movement", "MOVEMENT"], ["location", "LOCATION"], ["handedness", "PLATOON"], ["recent_form", "30-DAY FORM"]];
+  const FAM = {four_seam: "4S", sinker: "SI", cutter: "FC", slider: "SL", curve: "CU", changeup: "CH", splitter: "FS", knuckle: "KN", other: "OT"};
+
+  function sheetHTML(d, s, p) {
+    const opp = s === "away" ? "home" : "away", sp = d.sides[opp].sp, team = d.sides[s];
+    const a = p.archetype, v = p.vector, x = p.h2h;
+    const spLast = sp.name.split(" ").slice(-1)[0].toUpperCase();
+    let h = `<div class="grab"></div><button class="x" aria-label="Close">✕</button>`;
+    h += `<div class="p-head"><img class="shot" src="${p.headshot}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div><div class="p-name">${esc(p.name.toUpperCase())}</div>
+      <div class="p-sub">${esc(team.abbr)} · #${p.order} · ${esc(p.pos)} · BATS ${esc(hand[p.bats] || "—")}</div></div></div>`;
+    h += `<div class="score" style="--c:${p.score.color}"><div class="n">${p.score.momo}</div>
+      <div class="t"><b>MOMO · #${p.score.rank} OF ${p.score.of}</b>MATCHUP VS ${esc(spLast)} TODAY</div></div>`;
+
+    // head to head, before first pitch
+    const line = x.pa ? `${x.h}-FOR-${x.ab}` : "FIRST MEETING";
+    const bits = x.pa ? [x.avg != null ? f3(x.avg) + " AVG" : null, `${x.hr} HR`, `${x.bb} BB`, `${x.k} K`, `${x.pa} PA`].filter(Boolean).join(" · ") + " · CAREER, BEFORE TODAY" : "NO CAREER PA BEFORE TODAY";
+    h += `<div class="sec"><h3>VS ${esc(sp.name.toUpperCase())} <span>${esc(hand[sp.throws] || "")}HP</span></h3>
+      <div class="vs"><img class="shot" src="${sp.headshot}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="h2h">${line}<small>${bits}</small></div></div></div>`;
+
+    // archetype layer: the stored per-hitter output (drives MOMO and base runs)
+    h += `<div class="sec"><h3>PITCHER DNA <span>STORED</span></h3><div class="kv">
+      <div>BASELINE wOBA<b>${f3(a.base_woba)}</b></div>
+      <div>VS ${esc(spLast)} DNA<b>${f3(a.arch_woba)}</b></div>
+      <div>SAMPLE<b>${a.arch_pa} PA</b></div>
+      <div>RUN VALUE<b>+${a.run_contrib.toFixed(2)} R</b></div>
+      <div>HR / PA<b>${pct(a.hr_rate)}</b></div>
+      <div>BASE HR / PA<b>${pct(a.base_hr_rate)}</b></div></div></div>`;
+
+    // vector layer: recomputed per hitter
+    if (v) {
+      const mx = Math.max(0.004, ...COMP.map(([k]) => Math.abs(v.components[k] * v.weights[k])));
+      h += `<div class="sec"><h3>VECTOR 45D <span>xwOBA ${f3(v.baseline_xwoba)} → ${f3(v.projected_xwoba)}</span></h3>`;
+      for (const [k, lab] of COMP) {
+        const w = v.components[k] * v.weights[k], pctw = Math.abs(w) / mx * 50;
+        const col = w >= 0 ? "#7EF5A0" : "#FF5448";
+        h += `<div class="comp"><span>${lab}</span><span class="track"><i style="background:${col};${w >= 0 ? `left:50%` : `right:50%`};width:${pctw.toFixed(1)}%"></i></span><span class="v">${pts(w)}</span></div>`;
+      }
+      h += `<div class="comp"><span>NET</span><span></span><span class="v">${pts(v.matchup_delta)}</span></div>`;
+      const mix = sp.vector && sp.vector.pitch_mix;
+      if (mix) {
+        const fams = Object.entries(mix).filter(([, x]) => x > 0).sort((a, b) => b[1] - a[1]);
+        h += `<div class="note" style="margin-top:10px">${esc(spLast)} MIX, LAST ${sp.vector.sample.games} GAMES</div>
+          <div class="mix">${fams.map(([k, x], i) => `<i style="width:${(x * 100).toFixed(1)}%;opacity:${(1 - i * 0.13).toFixed(2)}"></i>`).join("")}</div>
+          <div class="mixk">${fams.map(([k, x]) => `${FAM[k] || k} ${Math.round(x * 100)}%`).join(" · ")}</div>`;
+      }
+      h += `<div class="note">xwOBA points × 1000, weighted. ${v.sample_pa} PA in the window.</div></div>`;
+    }
+    return h;
+  }
+
+  function render(d) {
+    const pk = d.pick, sim = d.sim;
+    const when = new Date(pk.date + "T12:00:00").toLocaleDateString("en-US", {month: "short", day: "numeric"}).toUpperCase();
+    document.title = `${pk.away} @ ${pk.home} · Lineup · MORELLO SIMS`;
+    const ramp = d.scale.ramp.map(r => `<i style="background:${r.color}"></i>`).join("");
+    const odds = String(pk.odds || "");
+    const app = $("#app");
+    app.innerHTML = `
+    <article class="card"><div class="print">
+      <header class="head">
+        <div><div class="brand">MORELLO SIMS</div><div class="meta">${esc(pk.away)} @ ${esc(pk.home)} · ${when} · ${esc(pk.game_time || "")}</div></div>
+        <div class="series">${esc(pk.date.slice(0, 4))} MLB SERIES<div class="setno">No. ${d.set_no}</div></div>
+      </header>
+      ${fieldSVG(d.venue)}
+      <div class="rule"></div>
+      <div class="legend"><span>MATCHUP TODAY</span><span class="ramp"><span>BEST</span>${ramp}<span>WORST</span></span></div>
+      <div class="wall" id="wall">${wallHTML(d)}</div>
+      <section class="sim">
+        <div><div class="lbl"><span>SIM RUNS</span><span><span class="key" style="color:var(--yellow)"><i style="background:var(--yellow)"></i>${esc(sim.side)}</span>&nbsp; <span class="key"><i style="border:1.5px solid var(--white)"></i>${esc(sim.opp)}</span></span></div>${histSVG(sim)}</div>
+        <div><div class="lbl"><span>${esc(sim.side)} WIN PROB</span><span>ML ${esc(odds.startsWith("-") || odds.startsWith("+") ? odds : "+" + odds)}</span></div>
+          <div class="wp">${sim.wp.toFixed(1)}%</div>
+          <div class="bar"><b style="width:${sim.wp}%"></b></div>
+          <div class="ends"><span style="color:var(--yellow)">${esc(sim.side)}</span><span>C${pk.conf}</span><span>${esc(sim.opp)}</span></div></div>
+      </section>
+    </div></article>
+    <aside class="sheet" id="sheet" role="dialog" aria-label="Hitter preview" aria-modal="false"></aside>
+    <details class="sources"><summary>SOURCES</summary>
+      <p>MOMO, pitcher-DNA wOBA, run value, HR rate: stored. The pipeline board committed ${esc(new Date(d.sources.stored.archetype.committed_at).toLocaleTimeString("en-US", {hour: "numeric", minute: "2-digit", timeZone: "America/New_York"}))} ET, before first pitch (<code>${esc(d.sources.stored.archetype.commit.slice(0, 8))}</code>).</p>
+      <p>Colour: MOMO scaled within this game, both lineups. Best = green, worst = red.</p>
+      ${d.sources.recomputed ? `<p>Vector rows: recomputed with the live code on Statcast ${esc(d.sources.recomputed.statcast_window.join(" → "))}. Team means vs stored: ${esc(pk.away)} ${d.sources.recomputed.check.away_vector_xwoba.diff >= 0 ? "+" : ""}${d.sources.recomputed.check.away_vector_xwoba.diff}, ${esc(pk.home)} ${d.sources.recomputed.check.home_vector_xwoba.diff >= 0 ? "+" : ""}${d.sources.recomputed.check.home_vector_xwoba.diff}.</p>` : ""}
+      <p>Head to head: MLB Stats API career line minus plate appearances from this game on.</p>
+      <p>Run curves: fitted to the stored projection (${esc(pk.sim_projection)}) and win probability. Park: MLB Stats API fieldInfo.</p>
+    </details>`;
+
+    const sheet = $("#sheet"), scrim = $("#scrim"), wall = $("#wall");
+    const desk = matchMedia("(min-width: 960px)");
+    const find = (s, id) => d.sides[s].hitters.find(h => h.id === id);
+    let cur = null;
+    function show(btn, open) {
+      const s = btn.dataset.side, p = find(s, +btn.dataset.id);
+      if (cur) cur.classList.remove("on");
+      cur = btn; btn.classList.add("on");
+      sheet.innerHTML = sheetHTML(d, s, p);
+      $(".x", sheet).addEventListener("click", close);
+      if (open && !desk.matches) { sheet.classList.add("open"); scrim.classList.add("open"); sheet.scrollTop = 0; }
+    }
+    function close() {
+      sheet.classList.remove("open"); scrim.classList.remove("open");
+      if (cur && !desk.matches) { cur.classList.remove("on"); cur.focus({preventScroll: true}); }
+    }
+    wall.addEventListener("click", e => { const b = e.target.closest(".chip"); if (b) show(b, true); });
+    wall.addEventListener("mouseover", e => { const b = e.target.closest(".chip"); if (b && desk.matches && b !== cur) show(b, false); });
+    wall.addEventListener("focusin", e => { const b = e.target.closest(".chip"); if (b && desk.matches) show(b, false); });
+    scrim.addEventListener("click", close);
+    document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+    // desktop panel starts on the game's best matchup
+    const best = [...wall.querySelectorAll(".chip")].sort((a, b) =>
+      find(a.dataset.side, +a.dataset.id).score.rank - find(b.dataset.side, +b.dataset.id).score.rank)[0];
+    if (desk.matches && best) show(best, false);
+    desk.addEventListener("change", () => { close(); if (desk.matches && cur) show(cur, false); });
+  }
+})();
+</script>
+</body>
+</html>
