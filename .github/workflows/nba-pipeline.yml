@@ -114,6 +114,16 @@ jobs:
           print('=== Rosters + season stats step complete ===')
           "
 
+      # stats.nba.com blocks Actions IPs (the step above trips its circuit
+      # breaker after 2 failed calls). ESPN box scores + play-by-play keep
+      # player_game_stats / player_season_stats / team_season_stats current;
+      # verified against stats.nba.com 2025-26 in scripts/verify_espn_stats.py.
+      - name: Box scores + season stats from ESPN (guarantees freshness)
+        continue-on-error: true
+        timeout-minutes: 12
+        working-directory: nba_pipeline
+        run: python scripts/espn_stats_sync.py
+
       - name: Seed new-season priors from last season (idempotent)
         working-directory: nba_pipeline
         run: python scripts/seed_season.py
@@ -223,10 +233,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r nba_pipeline/requirements.txt
 
-      - name: Refresh trends (collect missing boxscores + lineup stats)
+      - name: Refresh trends (ESPN box scores + season stats, lineup stats, synergy)
         timeout-minutes: 15
         working-directory: nba_pipeline
         run: python scripts/refresh_trends.py
+
+      # ESPN season stats replace the season's rows with teams/players that
+      # have played; re-seed priors for the rest (opening week), as update-lines does.
+      - name: Seed new-season priors from last season (idempotent)
+        working-directory: nba_pipeline
+        run: python scripts/seed_season.py
 
       - name: Regenerate dashboard with fresh trends
         working-directory: nba_pipeline

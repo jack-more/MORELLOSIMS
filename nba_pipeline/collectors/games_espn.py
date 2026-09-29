@@ -92,8 +92,9 @@ def fetch_espn_events(date: datetime) -> list[dict] | None:
     """All NBA events ESPN lists for one date (any status, any season type).
 
     Returns None when ESPN could not be reached (callers fall back to the DB),
-    else a list of dicts with keys: game_date, home_abbr, away_abbr,
-    home_score, away_score, completed, state, season_type, tip_utc (ISO UTC).
+    else a list of dicts with keys: event_id, competition_type, game_date,
+    home_abbr, away_abbr, home_score, away_score, completed, state,
+    season_type, tip_utc (ISO UTC).
     """
     data = espn_get_json(f"{SCOREBOARD_URL}?dates={date.strftime('%Y%m%d')}")
     if data is None:
@@ -125,6 +126,10 @@ def fetch_espn_events(date: datetime) -> list[dict] | None:
             home_score = away_score = 0
 
         events.append({
+            "event_id": str(event.get("id") or ""),
+            # "STD" regular game, "CC" NBA Cup final (not counted in NBA season
+            # stats), "ALLSTAR" (not an NBA team game), playoff round codes.
+            "competition_type": (competition.get("type") or {}).get("abbreviation", ""),
             "game_date": date.strftime("%Y-%m-%d"),
             "home_abbr": _normalize_abbr(home["team"]["abbreviation"]),
             "away_abbr": _normalize_abbr(away["team"]["abbreviation"]),

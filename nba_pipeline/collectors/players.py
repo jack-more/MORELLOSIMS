@@ -128,6 +128,13 @@ class PlayerCollector(BaseCollector):
         by_name = {}
         for r in read_query("SELECT player_id, full_name FROM players", self.db_path).itertuples():
             by_name.setdefault(_norm_name(r.full_name), int(r.player_id))
+        # ESPN athlete -> NBA id, same resolver (and persisted map) as the ESPN
+        # box scores; athletes with no NBA id yet get the deterministic
+        # synthetic id (collectors/espn_ids.py) instead of being dropped.
+        import sqlite3
+        from collectors.espn_ids import ESPNPlayerMapper, is_synthetic
+        map_conn = sqlite3.connect(self.db_path, timeout=30)
+        mapper = ESPNPlayerMapper(map_conn)
 
         still_failed, unmatched, saved = [], [], 0
         for team_id in team_ids:
@@ -138,15 +145,28 @@ class PlayerCollector(BaseCollector):
                 continue
             rows = []
             for a in data["athletes"]:
-                pid = by_name.get(_norm_name(a.get("fullName", "")))
-                if pid is None:
-                    unmatched.append(f"{abbr_of.get(team_id)}:{a.get('fullName')}")
+                name = a.get("fullName", "")
+                pos = (a.get("position") or {}).get("abbreviation", "")
+                if a.get("id") and str(a["id"]) in mapper.cache:
+                    pid = mapper.cache[str(a["id"])]
+                elif by_name.get(_norm_name(name)) is not None:
+                    pid = by_name[_norm_name(name)]
+                    if a.get("id"):
+                        mapper._store(a["id"], pid, name, "players")
+                elif a.get("id"):
+                    pid = mapper.resolve(a["id"], name, team_id)
+                else:
+                    unmatched.append(f"{abbr_of.get(team_id)}:{name}")
                     continue
+                mapper.ensure_player_row(pid, name, pos)
+                if is_synthetic(pid):
+                    unmatched.append(f"{abbr_of.get(team_id)}:{name}")
                 rows.append({
                     "player_id": pid, "team_id": team_id, "season_id": season,
                     "jersey_number": str(a.get("jersey") or ""),
                     "listed_position": (a.get("position") or {}).get("abbreviation", ""),
                 })
+            map_conn.commit()   # release the write lock before execute() below
             if not rows:
                 still_failed.append(team_id)
                 continue
@@ -158,10 +178,12 @@ class PlayerCollector(BaseCollector):
                     self.db_path, [season])
             self._save(pd.DataFrame(rows).drop_duplicates(subset=["player_id"]), "roster_assignments")
             saved += len(rows)
+        map_conn.commit()
+        map_conn.close()
         logger.info(f"  ESPN roster fallback: {saved} assignments for {len(team_ids) - len(still_failed)} "
-                    f"team(s); {len(unmatched)} players with no NBA id yet")
+                    f"team(s); {len(unmatched)} players with no NBA id yet (synthetic ids)")
         if unmatched:
-            logger.info(f"  unmatched (new to the league or name variant): {', '.join(unmatched[:40])}")
+            logger.info(f"  no NBA id yet (new to the league or name variant): {', '.join(unmatched[:40])}")
         return still_failed
 
     def _save_team_roster(self, team_id: int, season: str, players: list, assignments: list):

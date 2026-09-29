@@ -364,6 +364,16 @@ def main():
     else:
         new_boxscores = 0
 
+    # Step 2b: ESPN box scores + season stats — the path that guarantees
+    # freshness (stats.nba.com blocks Actions IPs; lineup stats stay NBA-only).
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from espn_stats_sync import sync as espn_sync
+        res = espn_sync(DB_PATH, SEASON_ID)
+        new_boxscores += res.get("games", 0)
+    except Exception as e:
+        logger.error(f"ESPN box score / season stats sync failed: {e}")
+
     # ── Staleness verification ──
     # Check if player_game_stats has data within the last 14 days.
     # If not, emit a loud warning so it's visible in CI logs.

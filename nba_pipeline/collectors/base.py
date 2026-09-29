@@ -27,8 +27,24 @@ NBA_HEADERS = {
 }
 
 
+class StatsNbaUnavailable(RuntimeError):
+    """stats.nba.com circuit breaker is open for this process."""
+
+
 class BaseCollector:
     """Base class for all data collectors."""
+
+    # Process-wide circuit breaker for stats.nba.com. It blocks GitHub Actions
+    # IPs (every call times out), and each failed call costs ~1.5 min of
+    # retries. After BREAKER_THRESHOLD consecutive calls fail all their
+    # attempts, every later call in the process fails immediately; ESPN
+    # (scripts/espn_stats_sync.py) is what keeps the data current.
+    BREAKER_THRESHOLD = 2
+    _consecutive_failures = 0
+
+    @classmethod
+    def stats_nba_blocked(cls) -> bool:
+        return cls._consecutive_failures >= cls.BREAKER_THRESHOLD
 
     def __init__(self, db_path: str, delay: float = 2.0, max_retries: int = 3):
         self.db_path = db_path
@@ -40,6 +56,22 @@ class BaseCollector:
         Rate-limited wrapper around any nba_api endpoint class.
         Returns list of DataFrames from get_data_frames().
         """
+        if BaseCollector.stats_nba_blocked():
+            raise StatsNbaUnavailable(
+                f"stats.nba.com skipped ({BaseCollector._consecutive_failures} consecutive failed calls "
+                f"this run): {endpoint_class.__name__}")
+        try:
+            dfs = self._call_endpoint_with_retries(endpoint_class, **params)
+        except Exception:
+            BaseCollector._consecutive_failures += 1
+            if BaseCollector.stats_nba_blocked():
+                logger.warning(f"stats.nba.com circuit breaker open after "
+                               f"{BaseCollector._consecutive_failures} failed calls — skipping it for this run")
+            raise
+        BaseCollector._consecutive_failures = 0
+        return dfs
+
+    def _call_endpoint_with_retries(self, endpoint_class, **params) -> list[pd.DataFrame]:
         # Short timeout so retries fit within CI step limits. Alternate header
         # sets between attempts: stats.nba.com has hung on NBA_HEADERS from
         # some networks while answering nba_api's built-in headers in <1s
