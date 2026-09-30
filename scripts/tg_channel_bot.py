@@ -133,7 +133,10 @@ def cmd_run():
         jr = u.get("chat_join_request")
         cb = u.get("callback_query")
         if cb or (msg and OWNER_ID and str(msg.get("chat", {}).get("id")) == str(OWNER_ID)):
-            handle_owner(msg, cb)
+            try:
+                handle_owner(msg, cb)
+            except Exception as e:  # one bad update must not stop the run or lose the offset
+                print(f"  WARN owner update {u['update_id']}: {e}")
             continue
         if msg and msg.get("text", "").startswith("/start"):
             api("sendMessage", chat_id=msg["chat"]["id"], text=PITCH)
@@ -177,6 +180,15 @@ def cmd_run():
     save_json(STATE_FILE, state)
 
 
+def ack(cb, text):
+    """Best effort: Telegram rejects answers to taps older than ~15s, and the
+    bot runs on a cron, so a late tap just gets its result as a DM instead."""
+    try:
+        api("answerCallbackQuery", callback_query_id=cb["id"], text=text[:190])
+    except Exception:
+        pass
+
+
 def handle_owner(msg, cb):
     """Owner DM commands and button taps. Taps from anyone else are ignored."""
     import sys
@@ -185,7 +197,7 @@ def handle_owner(msg, cb):
     import pick_alerts
     if cb:
         if str(cb.get("from", {}).get("id")) != str(OWNER_ID):
-            api("answerCallbackQuery", callback_query_id=cb["id"], text="Not available")
+            ack(cb, "Not available")
             return
         data = cb.get("data", "")
         note = "ok"
@@ -197,7 +209,7 @@ def handle_owner(msg, cb):
         elif data == "picks":
             lines = ops_digest.picks_block(datetime.now(ops_digest.ET).strftime("%Y-%m-%d"))
             api("sendMessage", chat_id=OWNER_ID, text="\n".join(lines) or "No C8+ picks yet today.")
-        api("answerCallbackQuery", callback_query_id=cb["id"], text=note[:190])
+        ack(cb, note)
         return
     text = (msg.get("text") or "").strip().lower()
     if text.startswith("/status"):
