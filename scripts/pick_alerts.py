@@ -58,6 +58,16 @@ def published_today(today):
     return out
 
 
+def card_path(p, sealed=False):
+    """v3 pick card (MLB render_pick_card / NBA render_nba_card), saved to OUT."""
+    os.makedirs(OUT, exist_ok=True)
+    nba = (p.get("sport") or "mlb") == "nba"
+    mod = __import__("render_nba_card" if nba else "render_pick_card")
+    path = os.path.join(OUT, f"{'sealed' if sealed else 'pick'}-{p['id']}.png")
+    (mod.sealed(p) if sealed else mod.render(p, False)).save(path)
+    return path
+
+
 def dm_text(p):
     sim = p.get("sim_projection") or ""
     return (f"🚨 NEW {p['sport'].upper()} PICK · C{p.get('conf')}\n"
@@ -88,29 +98,24 @@ def run(dry=False):
             st["x_sealed"].append(pid)
 
     from post_social_daily import post_to_x
-    import render_sealed
     os.makedirs(OUT, exist_ok=True)
     for p in published_today(today):
         pid = p["id"]
         if pid not in st["dm"]:
             button = [[("📣 Post to X unblurred", f"xopen:{pid}")]]
             ok = False
-            if p["sport"] == "mlb":
-                try:
-                    import render_pick_card as render_series_card  # v3 layout (2026-09-30)
-                    path = os.path.join(OUT, f"series-{pid}.png")
-                    render_series_card.render(p, False).save(path)
-                    ok = ops_tg.send_photo(path, dm_text(p), button)
-                except Exception as e:
-                    print(f"  WARN card render {pid}: {e}")
+            try:
+                path = card_path(p)
+                ok = ops_tg.send_photo(path, dm_text(p), button)
+            except (Exception, SystemExit) as e:
+                print(f"  WARN card render {pid}: {e}")
             if not ok:
                 ok = ops_tg.send(dm_text(p), button)
             if ok:
                 st["dm"].append(pid)
         if pid not in st["x_sealed"] and pid not in st["x_open"]:
             try:
-                path = os.path.join(OUT, f"sealed-{pid}.png")
-                render_sealed.sealed_card(p).save(path)
+                path = card_path(p, sealed=True)
                 if post_to_x(x_caption(p), Path(path), dry_run=dry):
                     st["x_sealed"].append(pid)
             except Exception as e:
@@ -138,15 +143,10 @@ def open_on_x(pid, dry=False):
     from post_social_daily import post_to_x
     cap = (f"{p['pick_text']} {odds_str(p)} · C{p.get('conf')} · {p.get('matchup')}\n"
            f"Logged before the game. Every pick → morellosims.com")
-    images = []
-    if (p.get("sport") or "mlb") == "mlb":
-        import render_pick_card as render_series_card  # v3 layout (2026-09-30)
-        path = os.path.join(OUT, f"series-{pid}.png")
-        os.makedirs(OUT, exist_ok=True)
-        render_series_card.render(p, False).save(path)
-        images = [Path(path)]
-    if not images:
-        return "no card for this sport yet — X needs an image post"
+    try:
+        images = [Path(card_path(p))]
+    except (Exception, SystemExit) as e:
+        return f"card render failed: {e}"
     if post_to_x(cap, images, dry_run=dry):
         st["x_open"].append(pid)
         if not dry:
