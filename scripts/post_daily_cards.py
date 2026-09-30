@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_cards_v2 as cards
-import render_series_card
+import render_pick_card as render_series_card  # v3 layout (2026-09-30)
 import render_series_sheets
 from pathlib import Path
 

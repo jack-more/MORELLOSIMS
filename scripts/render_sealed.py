@@ -30,7 +30,7 @@ GLOW = (96, 128, 244)
 def _base(pick):
     """The real card when we can draw it, else a plain field — always blurred."""
     if pick.get("sport", "mlb") == "mlb":
-        import render_series_card
+        import render_pick_card as render_series_card  # v3 layout (2026-09-30)
         try:
             return render_series_card.render(pick, False).convert("L")
         except Exception:
@@ -39,6 +39,16 @@ def _base(pick):
 
 
 def sealed_card(pick, logged=None):
+    if (pick.get("sport") or "mlb") == "mlb":
+        import render_pick_card
+        try:
+            return render_pick_card.sealed(pick)   # same layout as the reveal
+        except SystemExit:
+            pass                                    # team not in snapshot → generic seal
+    return _generic_sealed(pick, logged)
+
+
+def _generic_sealed(pick, logged=None):
     blur = _base(pick).filter(ImageFilter.GaussianBlur(30))
     img = ImageOps.colorize(blur, black=DEEP, white=GLOW).resize((W, H), Image.BICUBIC).convert("RGBA")
     d = ImageDraw.Draw(img)

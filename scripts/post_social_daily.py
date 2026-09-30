@@ -43,7 +43,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from send_telegram_cards import send_photo as tg_send_photo  # noqa: E402
 import render_pnl_card  # noqa: E402
-import render_series_card  # noqa: E402
+import render_pick_card as render_series_card  # noqa: E402  v3 layout (2026-09-30)
 
 PICKS_MLB = ROOT / "picks" / "mlb.json"
 PICKS_NBA = ROOT / "picks" / "nba.json"

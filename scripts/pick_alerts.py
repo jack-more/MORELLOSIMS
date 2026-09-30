@@ -97,7 +97,7 @@ def run(dry=False):
             ok = False
             if p["sport"] == "mlb":
                 try:
-                    import render_series_card
+                    import render_pick_card as render_series_card  # v3 layout (2026-09-30)
                     path = os.path.join(OUT, f"series-{pid}.png")
                     render_series_card.render(p, False).save(path)
                     ok = ops_tg.send_photo(path, dm_text(p), button)
@@ -140,7 +140,7 @@ def open_on_x(pid, dry=False):
            f"Logged before the game. Every pick → morellosims.com")
     images = []
     if (p.get("sport") or "mlb") == "mlb":
-        import render_series_card
+        import render_pick_card as render_series_card  # v3 layout (2026-09-30)
         path = os.path.join(OUT, f"series-{pid}.png")
         os.makedirs(OUT, exist_ok=True)
         render_series_card.render(p, False).save(path)
