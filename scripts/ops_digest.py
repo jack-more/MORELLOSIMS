@@ -28,7 +28,7 @@ REPO = os.path.dirname(HERE)
 ET = timezone(timedelta(hours=-4))
 GH = os.environ.get("GITHUB_TOKEN", "").strip()
 GH_REPO = os.environ.get("GITHUB_REPOSITORY", "jack-more/MORELLOSIMS")
-WATCH_STATE = os.path.join(REPO, "telegram", "watchdog.json")
+WATCH_STATE = os.path.join(REPO, "ops", "state", "watchdog.json")
 
 # workflow file, label, max hours without a success on a game day, dispatch inputs
 PIPELINES = [

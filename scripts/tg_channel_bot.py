@@ -41,7 +41,9 @@ from datetime import datetime, timedelta, timezone
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SUBS_FILE = os.path.join(REPO, "telegram", "subscribers.json")
-STATE_FILE = os.path.join(REPO, "telegram", "bot_state.json")
+# telegram/ is gitignored (subscriber ids stay local); the update offset must
+# persist between cron runs or every run replays the last 24h of updates.
+STATE_FILE = os.path.join(REPO, "ops", "state", "bot_state.json")
 
 CHECKOUT_URL = "https://morellosims.com/#packages"  # swap for Stripe/Stars link when live
 PITCH = (
@@ -149,6 +151,10 @@ def cmd_run():
                 except Exception:
                     pass  # user never DM'd the bot; Telegram blocks cold DMs
                 print(f"  declined non-subscriber {uid}")
+    # confirm processed updates server-side too, so nothing can replay
+    if upd.get("result"):
+        api("getUpdates", offset=state["offset"], timeout=0)
+        save_json(STATE_FILE, state)
     # new picks → owner DM + sealed X card (exactly once, see pick_alerts.py)
     try:
         import pick_alerts

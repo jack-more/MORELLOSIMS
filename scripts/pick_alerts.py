@@ -10,7 +10,7 @@ For every newly published pick (MLB picks/mlb.json, NBA picks/nba.json):
 
 Runs from tg_channel_bot.py (15-min cron) and is dispatched right after the
 MLB/NBA pipelines publish, so alerts land within minutes. State in
-telegram/pick_alerts.json keeps every send exactly-once across runs.
+ops/state/pick_alerts.json keeps every send exactly-once across runs.
 
   python3 scripts/pick_alerts.py [--dry-run]
 """
@@ -27,7 +27,7 @@ sys.path.insert(0, HERE)
 import ops_tg  # noqa: E402
 
 REPO = os.path.dirname(HERE)
-STATE = os.path.join(REPO, "telegram", "pick_alerts.json")
+STATE = os.path.join(REPO, "ops", "state", "pick_alerts.json")  # telegram/ is gitignored
 LEGACY = os.path.join(REPO, "mlbsim", "posted_cards.json")
 OUT = os.path.join(REPO, "posters", "v2")
 ET = timezone(timedelta(hours=-4))
