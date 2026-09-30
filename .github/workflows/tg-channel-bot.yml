@@ -53,6 +53,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   bot:
@@ -67,33 +68,33 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run channel bot
+      - name: Install dependencies
+        run: pip install requests requests-oauthlib pillow numpy
+
+      - name: Run bot (owner console + pick alerts; channel gatekeeper once configured)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_PREMIUM_CHANNEL_ID: ${{ secrets.TELEGRAM_PREMIUM_CHANNEL_ID }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          # No-op cleanly while the channel is still being set up, matching
-          # social-daily.yml. Without the channel id the bot would still answer
-          # /start DMs but silently ignore every join request — half-running the
-          # gatekeeper is worse than not running it.
-          if [ -z "${TELEGRAM_PREMIUM_CHANNEL_ID}" ]; then
-            echo "TELEGRAM_PREMIUM_CHANNEL_ID not set — premium channel not configured yet."
-            echo "Skipping. See scripts/tg_channel_bot.py docstring for channel setup."
-            exit 0
-          fi
           if [ -z "${TELEGRAM_BOT_TOKEN}" ]; then
             echo "TELEGRAM_BOT_TOKEN not set — skipping."
             exit 0
           fi
-
+          # The premium-channel gatekeeping inside `run` only acts when
+          # TELEGRAM_PREMIUM_CHANNEL_ID is set; the owner console and pick
+          # alerts always run.
           if [ "${{ github.event_name }}" = "schedule" ]; then
             CMD="run"
           else
             CMD="${{ inputs.command }}"
           fi
-
           echo "=== tg_channel_bot.py ${CMD} ==="
           python3 scripts/tg_channel_bot.py "${CMD}"
 
@@ -103,7 +104,7 @@ jobs:
           set -euo pipefail
           git config user.name "TG Channel Bot"
           git config user.email "noreply@github.com"
-          git add telegram/bot_state.json telegram/subscribers.json 2>/dev/null || true
+          git add telegram/bot_state.json telegram/subscribers.json telegram/pick_alerts.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No state change to commit"
           else

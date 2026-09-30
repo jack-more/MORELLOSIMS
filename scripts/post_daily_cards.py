@@ -6,7 +6,7 @@ committed by the workflow so state survives between Actions runs):
   1. settled cards for picks settled since the last run (the morning recap)
   2. the day's slate board (once, when the first pick qualifies) + GO-YARD
      ticket (once, if today's HR lotto audit is fresh)
-  3. a receipt card for each newly qualified pick (the rolling drop)
+  3. (per-pick alerts live in pick_alerts.py — one sender, sealed on X)
 
 No TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID env → prints what it would do and
 exits 0, so local runs and forks don't fail the workflow.
@@ -21,7 +21,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_cards_v2 as cards
 import render_series_card
 import render_series_sheets
-from post_social_daily import post_to_x
 from pathlib import Path
 
 SERIES_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "posters", "v2")
@@ -146,28 +145,8 @@ def main():
         except Exception as e:
             print(f"  WARN goyard: {e}")
 
-    # 3. rolling receipts for newly qualified picks
-    for p in today_pending:
-        if p["id"] in st["receipts"]:
-            continue
-        try:
-            path = series_card(p, settled=False)
-        except Exception as e:
-            print(f"  WARN render receipt {p['id']}: {e}")
-            continue
-        # X gets every pick as it qualifies: the timestamped pre-game proof.
-        if p["id"] not in st.setdefault("x_receipts", []):
-            xcap = (f"{p['pick_text']} {p['odds'] if str(p['odds']).startswith(('+', '-')) else '+' + str(p['odds'])}"
-                    f" · C{p.get('conf')}\n"
-                    f"Logged {NOW_ET}, before first pitch. Sim: {p.get('sim_projection') or ''}\n"
-                    f"Every pick → morellosims.com")
-            if post_to_x(xcap, Path(path), dry_run=False) :
-                st["x_receipts"].append(p["id"])
-        cap = (f"🚨 NEW PICK — posted {NOW_ET}\n"
-               f"{p['pick_text']} ({p['odds']}) · C{p.get('conf')} · risk {p.get('units')} $PP\n"
-               f"SIM {p.get('sim_projection') or ''}")
-        if send_photo(path, cap):
-            st["receipts"].append(p["id"])
+    # 3. per-pick alerts (owner DM + sealed X card) moved to pick_alerts.py,
+    #    dispatched after each pipeline publish so there is one sender.
 
     if DRY:
         print("  (dry run — state not saved)")

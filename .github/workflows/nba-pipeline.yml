@@ -49,6 +49,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 # Prevent overlapping runs from racing on git push
 concurrency:
@@ -215,6 +216,11 @@ jobs:
           git commit -m "NBA SIM — ${DATE}"
           git pull --rebase origin main || true
           git push
+      - name: Kick pick alerts (owner DM + sealed X card)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tg-channel-bot.yml --ref main -f command=run || echo "dispatch failed; the 15-min bot cron will catch it"
 
   # ════════════════════════════════════════════
   # DAILY TRENDS REFRESH (8 AM PST cron)
@@ -313,6 +319,11 @@ jobs:
           git commit -m "NBA trends refresh — ${DATE}"
           git pull --rebase origin main || true
           git push
+      - name: Kick pick alerts (owner DM + sealed X card)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tg-channel-bot.yml --ref main -f command=run || echo "dispatch failed; the 15-min bot cron will catch it"
 
   # ════════════════════════════════════════════
   # POST-GAME SETTLEMENT

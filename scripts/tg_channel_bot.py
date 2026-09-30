@@ -67,6 +67,14 @@ def env(name):
 
 TOKEN = env("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = env("TELEGRAM_PREMIUM_CHANNEL_ID")
+OWNER_ID = env("TELEGRAM_CHAT_ID")   # Jack's DM: the owner console
+OWNER_HELP = (
+    "Owner console\n"
+    "/status — check-in now (slate, picks, pipelines, anything that needs you)\n"
+    "/picks — today's picks in full\n"
+    "Pick alerts arrive here the moment a pick is published; the button under "
+    "each one posts it to X unblurred (X gets the sealed card by default)."
+)
 
 
 def api(method, **params):
@@ -121,6 +129,10 @@ def cmd_run():
         state["offset"] = u["update_id"] + 1
         msg = u.get("message") or {}
         jr = u.get("chat_join_request")
+        cb = u.get("callback_query")
+        if cb or (msg and OWNER_ID and str(msg.get("chat", {}).get("id")) == str(OWNER_ID)):
+            handle_owner(msg, cb)
+            continue
         if msg and msg.get("text", "").startswith("/start"):
             api("sendMessage", chat_id=msg["chat"]["id"], text=PITCH)
             print(f"  pitched {msg['chat'].get('first_name')} ({msg['chat']['id']})")
@@ -137,6 +149,12 @@ def cmd_run():
                 except Exception:
                     pass  # user never DM'd the bot; Telegram blocks cold DMs
                 print(f"  declined non-subscriber {uid}")
+    # new picks → owner DM + sealed X card (exactly once, see pick_alerts.py)
+    try:
+        import pick_alerts
+        pick_alerts.run()
+    except Exception as e:
+        print(f"  WARN pick alerts: {e}")
     # expiries: kick lapsed members (ban+unban = remove without permanent ban)
     if CHANNEL_ID:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -151,6 +169,38 @@ def cmd_run():
                     print(f"  WARN could not remove {uid}: {e}")
     save_json(SUBS_FILE, subs)
     save_json(STATE_FILE, state)
+
+
+def handle_owner(msg, cb):
+    """Owner DM commands and button taps. Taps from anyone else are ignored."""
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import ops_digest
+    import pick_alerts
+    if cb:
+        if str(cb.get("from", {}).get("id")) != str(OWNER_ID):
+            api("answerCallbackQuery", callback_query_id=cb["id"], text="Not available")
+            return
+        data = cb.get("data", "")
+        note = "ok"
+        if data.startswith("xopen:"):
+            note = pick_alerts.open_on_x(data.split(":", 1)[1])
+            api("sendMessage", chat_id=OWNER_ID, text=f"X: {note} ({data.split(':', 1)[1]})")
+        elif data == "status":
+            ops_digest.digest("Check-in")
+        elif data == "picks":
+            lines = ops_digest.picks_block(datetime.now(ops_digest.ET).strftime("%Y-%m-%d"))
+            api("sendMessage", chat_id=OWNER_ID, text="\n".join(lines) or "No C8+ picks yet today.")
+        api("answerCallbackQuery", callback_query_id=cb["id"], text=note[:190])
+        return
+    text = (msg.get("text") or "").strip().lower()
+    if text.startswith("/status"):
+        ops_digest.digest("Check-in")
+    elif text.startswith("/picks"):
+        lines = ops_digest.picks_block(datetime.now(ops_digest.ET).strftime("%Y-%m-%d"))
+        api("sendMessage", chat_id=OWNER_ID, text="\n".join(lines) or "No C8+ picks yet today.")
+    else:
+        api("sendMessage", chat_id=OWNER_ID, text=OWNER_HELP)
 
 
 def cmd_post(photo, caption):

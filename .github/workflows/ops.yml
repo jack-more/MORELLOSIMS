@@ -1,0 +1,72 @@
+name: Ops
+
+# The owner console: twice-daily check-ins in Jack's Telegram DM, an hourly
+# watchdog that re-runs pipelines GitHub's scheduler skipped, and an instant
+# DM when any automated workflow fails. Pick alerts themselves ride the TG
+# Channel Bot workflow (dispatched after every publish).
+
+on:
+  schedule:
+    - cron: '0 15 * * *'    # 11:00 AM ET morning check-in
+    - cron: '30 21 * * *'   # 5:30 PM ET pre-game check-in
+    - cron: '20 * * * *'    # hourly watchdog
+  workflow_run:
+    workflows: [NBA Pipeline, Social Daily, MLB Live Healthcheck, TG Channel Bot, Render Dispatch]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'digest or watchdog'
+        required: true
+        default: 'digest'
+        type: choice
+        options: [digest, watchdog]
+
+concurrency:
+  group: ops
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure'
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      X_API_KEY: ${{ secrets.X_API_KEY }}
+      X_API_SECRET: ${{ secrets.X_API_SECRET }}
+      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+      X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Failure alert
+        if: github.event_name == 'workflow_run'
+        run: python3 scripts/ops_digest.py failure --workflow "${{ github.event.workflow_run.name }}" --url "${{ github.event.workflow_run.html_url }}"
+
+      - name: Check-in
+        if: github.event.schedule == '0 15 * * *' || github.event.schedule == '30 21 * * *' || inputs.command == 'digest'
+        run: python3 scripts/ops_digest.py digest
+
+      - name: Watchdog
+        if: github.event.schedule == '20 * * * *' || inputs.command == 'watchdog'
+        run: |
+          python3 scripts/ops_digest.py watchdog
+          git config user.name "Ops Bot"
+          git config user.email "noreply@github.com"
+          git add telegram/watchdog.json 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Ops — watchdog state"
+            git push || { git fetch origin && git rebase -X theirs origin/main && git push; }
+          fi
