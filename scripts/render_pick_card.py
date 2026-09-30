@@ -214,7 +214,7 @@ def sealed(pick):
         gd = ImageDraw.Draw(g)
         for (bx0, by0, bx1, by1, v) in blobs:
             gd.rounded_rectangle((s(bx0), s(by0), s(bx1), s(by1)), radius=s(18), fill=v)
-        g = g.filter(ImageFilter.GaussianBlur(s(26)))
+        g = g.filter(ImageFilter.GaussianBlur(s(70)))   # heavy: soft glow, no readable edges (owner, 2026-09-30)
         tile = ImageOps.colorize(g, black=(10, 26, 110), white=(120, 150, 250)).convert("RGBA")
         mask = Image.new("L", tile.size, 0)
         ImageDraw.Draw(mask).rounded_rectangle((0, 0, w, h), radius=radius, fill=255)
