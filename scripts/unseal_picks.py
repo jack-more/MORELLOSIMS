@@ -23,7 +23,8 @@ must never see sealed data, so the pipeline stops here.
 
 Each pipeline unseals only its own lane (MLB: picks/mlb.json,
 mlbsim/picks_log.csv, reports/shadow_mlb.json; NBA: picks/nba.json and
-nba_pipeline/data + db), so its working tree holds only files it commits.
+nba_pipeline/data + db; NFL: picks/nfl.json, reports/shadow_nfl.json), so
+its working tree holds only files it commits.
 """
 
 import argparse
@@ -45,6 +46,7 @@ PICK_LOG = os.path.join(NBA_DATA, "pick_log.json")
 DAILY = os.path.join(NBA_DATA, "daily_picks.json")
 MLB_PICKS_LOG = os.path.join(REPO, "mlbsim", "picks_log.csv")
 SHADOW = os.path.join(REPO, "reports", "shadow_mlb.json")
+SHADOW_NFL = os.path.join(REPO, "reports", "shadow_nfl.json")
 
 
 class Run:
@@ -158,11 +160,11 @@ def _nba_db_backfill(entries):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--sport", choices=["mlb", "nba", "all"], default="all")
+    ap.add_argument("--sport", choices=["mlb", "nba", "nfl", "all"], default="all")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     run = Run(a.dry_run)
-    sports = ("mlb", "nba") if a.sport == "all" else (a.sport,)
+    sports = ("mlb", "nba", "nfl") if a.sport == "all" else (a.sport,)
 
     unseal_pick_files(run, sports)
     if "nba" in sports:
@@ -181,6 +183,14 @@ def main():
             d["rows"] = dict(zip((d.get("rows") or {}).keys(), items))
 
         unseal_json_list(run, SHADOW, shadow_items, shadow_set, {"separators": (",", ":")})
+    if "nfl" in sports:
+        def nfl_items(d):
+            return list((d.get("rows") or {}).values())
+
+        def nfl_set(d, items):
+            d["rows"] = dict(zip((d.get("rows") or {}).keys(), items))
+
+        unseal_json_list(run, SHADOW_NFL, nfl_items, nfl_set, {"indent": 1})
 
     for path, n in run.changed:
         print(f"  unsealed {n} record(s) in {path}" + (" (dry run)" if run.dry else ""))

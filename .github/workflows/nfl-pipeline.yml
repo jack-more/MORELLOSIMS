@@ -1,0 +1,153 @@
+name: NFL Pipeline
+
+# SHADOW MODE. Projects every NFL game this week, logs each one to
+# reports/shadow_nfl.json before kickoff, settles after. Publishes nothing and
+# messages no one unless the owner sets ops/config/monetization.json
+# "nfl_publish": true AND the backtest has written a tier into
+# nfl_pipeline/tiers.json (today it has not: reports/nfl_backtest.txt).
+#
+# Bot identity: "NFL Pipeline Bot". Lane (bot-scope-check.yml):
+#   reports/shadow_nfl.json, nfl_pipeline/data/, picks/nfl.json
+#
+# Schedule (UTC; comments give EDT / EST). Tue-Sun per owner; Monday Night
+# games are captured by the Sunday runs and settled Tuesday.
+
+on:
+  schedule:
+    - cron: '0 14 * * 2-6'   # Tue-Sat 10:00 AM EDT / 9:00 AM EST: settle + capture (Thanksgiving / Christmas / Black Friday too)
+    - cron: '30 22 * * 4'    # Thu 6:30 PM EDT / 5:30 PM EST: last capture before TNF
+    - cron: '0 20 * * 6'     # Sat 4:00 PM EDT / 3:00 PM EST: late-season Saturday games
+    - cron: '0 12 * * 0'     # Sun 8:00 AM EDT / 7:00 AM EST: before London / early kickoffs
+    - cron: '0 16 * * 0'     # Sun 12:00 PM EDT / 11:00 AM EST: before 1:00 PM
+    - cron: '30 19 * * 0'    # Sun 3:30 PM EDT / 2:30 PM EST: before 4:05 / 4:25
+    - cron: '0 23 * * 0'     # Sun 7:00 PM EDT / 6:00 PM EST: before SNF (and MNF)
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'run = settle + capture + commit; smoke = verify every data source from Actions (no commit); backtest = rebuild history from raw pbp and re-run the walk-forward backtest, diff vs committed (no commit)'
+        required: true
+        default: 'run'
+        type: choice
+        options: [run, smoke, backtest]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ (github.event_name == 'workflow_dispatch' && inputs.mode != 'run') && 'nfl-pipeline-check' || 'nfl-pipeline' }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.event_name == 'schedule' || inputs.mode == 'run'
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to 26 on 2026-10-19
+    timeout-minutes: 25
+    env:
+      PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: nfl_pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r nfl_pipeline/requirements.txt
+
+      # Seal mode: published NFL picks / shadow rows whose kickoff has passed
+      # go public before settlement. No-op while nothing is sealed.
+      - name: Unseal kicked-off NFL picks
+        run: python3 scripts/unseal_picks.py --sport nfl
+
+      - name: Refresh current-season tables (nflverse schedule + play-by-play)
+        run: python3 nfl_pipeline/tables.py
+
+      - name: ESPN open / close lines for finished games (CLV)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: python3 nfl_pipeline/espn.py lines --seasons 2026
+
+      - name: Shadow ledger — settle finished games, capture upcoming ones
+        run: python3 nfl_pipeline/shadow.py run
+
+      - name: Publish (gated — off unless nfl_publish is true and a tier exists)
+        run: python3 nfl_pipeline/publish.py
+
+      - name: Tests
+        run: |
+          python3 scripts/test_nfl_pipeline.py
+          python3 scripts/test_seal_mode.py
+
+      - name: Ledger + seal guardrails, commit
+        run: |
+          git config user.name "NFL Pipeline Bot"
+          git config user.email "nfl-bot@morellosims.com"
+          python3 nfl_pipeline/check_shadow.py
+          git add reports/shadow_nfl.json nfl_pipeline/data/
+          [ -f picks/nfl.json ] && git add picks/nfl.json || true
+          python3 scripts/check_seal_guardrail.py
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git commit -m "NFL shadow — $(TZ=America/New_York date '+%b %d %I:%M %p ET')"
+          for i in 1 2 3; do
+            git push && exit 0
+            git fetch origin main && git rebase origin/main || { git rebase --abort; exit 1; }
+          done
+          exit 1
+
+  smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'smoke'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r nfl_pipeline/requirements.txt
+      - name: Every data source reachable from Actions
+        run: python3 nfl_pipeline/smoke.py
+      - name: Shadow capture dry run (scratch copy, no commit)
+        run: |
+          python3 nfl_pipeline/tables.py
+          python3 nfl_pipeline/shadow.py capture
+          python3 nfl_pipeline/check_shadow.py
+          python3 nfl_pipeline/publish.py
+
+  backtest:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'backtest'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r nfl_pipeline/requirements.txt
+      - name: Rebuild 2016-2025 tables from raw nflverse play-by-play; must match the committed tables
+        run: python3 nfl_pipeline/tables.py --check
+      - name: Walk-forward backtest from committed tables; 2019-2025 must reproduce the committed report
+        run: |
+          cp reports/nfl_backtest.json /tmp/committed.json
+          python3 nfl_pipeline/backtest.py --final | tail -60
+          python3 - <<'EOF'
+          import json
+          a, b = json.load(open("/tmp/committed.json")), json.load(open("reports/nfl_backtest.json"))
+          pick = lambda r: [s for s in r["per_season"] if s["season"] <= 2025]
+          same = (pick(a) == pick(b) and a["periods"]["dev"] == b["periods"]["dev"]
+                  and a["periods"]["holdout"] == b["periods"]["holdout"] and a["tiers"] == b["tiers"])
+          print("backtest 2019-2025 reproduced exactly" if same else "::error::backtest 2019-2025 differs from committed")
+          raise SystemExit(0 if same else 1)
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfl-backtest
+          path: |
+            reports/nfl_backtest.txt
+            reports/nfl_backtest.json

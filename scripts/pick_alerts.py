@@ -40,6 +40,7 @@ LEGACY = os.path.join(REPO, "mlbsim", "posted_cards.json")
 OUT = os.path.join(REPO, "posters", "v2")
 ET = timezone(timedelta(hours=-4))
 MIN_CONF = 8
+UNLOCK_WORD = {"nba": "tip", "nfl": "kickoff"}
 PREMIUM = os.environ.get("TELEGRAM_PREMIUM_CHANNEL_ID", "").strip()
 
 
@@ -56,9 +57,19 @@ def odds_str(p):
     return o if not o or o.startswith(("+", "-")) else f"+{o}"
 
 
+def pick_sources():
+    """Sport files to alert on. NFL only when the owner has turned NFL
+    publishing on (ops/config/monetization.json nfl_publish) — shadow mode
+    DMs nothing."""
+    out = [("mlb", "picks/mlb.json"), ("nba", "picks/nba.json")]
+    if picks_store.config().get("nfl_publish") is True:
+        out.append(("nfl", "picks/nfl.json"))
+    return out
+
+
 def published_today(today):
     out = []
-    for sport, path in (("mlb", "picks/mlb.json"), ("nba", "picks/nba.json")):
+    for sport, path in pick_sources():
         for p in picks_store.load_picks(os.path.join(REPO, path)):
             if (p.get("sport") or sport) == sport and p.get("date") == today \
                     and p.get("status") == "pending" and int(p.get("conf") or 0) >= MIN_CONF:
@@ -70,8 +81,8 @@ def published_today(today):
 def card_path(p, sealed=False):
     """v3 pick card (MLB render_pick_card / NBA render_nba_card), saved to OUT."""
     os.makedirs(OUT, exist_ok=True)
-    nba = (p.get("sport") or "mlb") == "nba"
-    mod = __import__("render_nba_card" if nba else "render_pick_card")
+    sport = p.get("sport") or "mlb"
+    mod = __import__({"nba": "render_nba_card", "nfl": "render_nfl_card"}.get(sport, "render_pick_card"))
     path = os.path.join(OUT, f"{'sealed' if sealed else 'pick'}-{p['id']}.png")
     (mod.sealed(p) if sealed else mod.render(p, False)).save(path)
     return path
@@ -92,7 +103,7 @@ def premium_text(p):
     return (f"🔒 MEMBERS · {p['sport'].upper()} · C{p.get('conf')} · {p.get('matchup')}\n"
             f"{p['pick_text']} {odds_str(p)}" + (f" · {when}" if when else "") + "\n"
             f"Risk {p.get('units')} $PP" + (f" · Sim {sim}" if sim else "") + "\n"
-            f"Public copy stays sealed until {'tip' if p['sport'] == 'nba' else 'first pitch'}.")
+            f"Public copy stays sealed until {UNLOCK_WORD.get(p['sport'], 'first pitch')}.")
 
 
 def x_caption(p):
@@ -171,7 +182,7 @@ def open_on_x(pid, dry=False):
         return "already posted unblurred"
     p = next((q for q in published_today(datetime.now(ET).strftime("%Y-%m-%d")) if q["id"] == pid), None)
     if p is None:
-        for path in ("picks/mlb.json", "picks/nba.json"):
+        for _, path in pick_sources():
             p = p or next((q for q in picks_store.load_picks(os.path.join(REPO, path)) if q["id"] == pid), None)
     if p is None:
         return "pick not found"

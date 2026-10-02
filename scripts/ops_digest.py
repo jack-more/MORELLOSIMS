@@ -31,9 +31,12 @@ GH_REPO = os.environ.get("GITHUB_REPOSITORY", "jack-more/MORELLOSIMS")
 WATCH_STATE = os.path.join(REPO, "ops", "state", "watchdog.json")
 
 # workflow file, label, max hours without a success on a game day, dispatch inputs
-# MLB retired 2026-10-02 (owner); NFL joins when its pipeline exists.
+# MLB retired 2026-10-02 (owner). NFL runs in shadow mode (no picks, no
+# pick DMs); the watchdog still re-runs it so the shadow ledger never misses a
+# pre-kickoff capture. 30h: NFL runs at most a few times a day.
 PIPELINES = [
     ("nba-pipeline.yml", "NBA", 8, {}),
+    ("nfl-pipeline.yml", "NFL", 30, {}),
 ]
 
 
@@ -74,7 +77,9 @@ def games_today():
     n_mlb = sum(len(x.get("games", [])) for x in mlb.get("dates", []))
     nba = get_json(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={d.replace('-', '')}") or {}
     n_nba = sum(1 for e in nba.get("events", []) if (e.get("season") or {}).get("type") in (2, 3, 5))
-    return {"MLB": n_mlb, "NBA": n_nba}
+    nfl = get_json(f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={d.replace('-', '')}") or {}
+    n_nfl = sum(1 for e in nfl.get("events", []) if (e.get("season") or {}).get("type") in (2, 3))
+    return {"MLB": n_mlb, "NBA": n_nba, "NFL": n_nfl}
 
 
 def last_runs(wf):

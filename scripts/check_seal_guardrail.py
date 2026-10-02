@@ -8,9 +8,10 @@ game starts:
   1. structure — every pick-bearing data file is parsed and every pending,
      not-yet-started pick must be in sealed form with no side / odds / line /
      pick_text / model fields:
-       picks/mlb.json, picks/nba.json, nba_pipeline/data/picks.csv,
+       picks/mlb.json, picks/nba.json, picks/nfl.json, nba_pipeline/data/picks.csv,
        pick_log.json, daily_picks.json, mlbsim/picks_log.csv,
-       reports/shadow_mlb.json, nba_pipeline/db/nba_sim.db (picks table)
+       reports/shadow_mlb.json, reports/shadow_nfl.json,
+       nba_pipeline/db/nba_sim.db (picks table)
   2. text — every other staged text file (index.html, mlbsim/, nbasim/,
      sim/, blog snippet, ...) is scanned for each sealed pick's plaintext
      fingerprints: pick_text next to its odds or confidence, side + odds,
@@ -49,7 +50,9 @@ F_DAILY = "nba_pipeline/data/daily_picks.json"
 F_MLB_LOG = "mlbsim/picks_log.csv"
 F_SHADOW = "reports/shadow_mlb.json"
 F_DB = "nba_pipeline/db/nba_sim.db"
-STRUCTURED = {F_MLB, F_NBA, F_CSV, F_LOG, F_DAILY, F_MLB_LOG, F_SHADOW, F_DB}
+F_NFL = "picks/nfl.json"
+F_SHADOW_NFL = "reports/shadow_nfl.json"
+STRUCTURED = {F_MLB, F_NBA, F_CSV, F_LOG, F_DAILY, F_MLB_LOG, F_SHADOW, F_DB, F_NFL, F_SHADOW_NFL}
 LOG_FORBIDDEN = ("side", "line_value", "direction", "confidence", "sim_spread", "spread_edge",
                  "sim_total", "raw_edge", "conf_label", "ml_odds", "pick_text", "ou_pick_text",
                  "ou_conf", "ou_edge", "pick_team", "run_diff", "model_prob", "model_prob_raw",
@@ -235,7 +238,7 @@ def fingerprints(s):
         out.append(("pick + odds", re.escape(pt) + gap + re.escape(odds) + r"(?!\d)"))
     if side and odds and s["sport"] == "mlb":
         out.append(("side + odds", r"(?<![A-Z])" + re.escape(side) + r"(?:\s+ML)?\s*\(?" + re.escape(odds) + r"(?!\d)"))
-    if s["sport"] == "nba" and re.search(r"[+-]\d+(\.\d)?$", pt or ""):
+    if s["sport"] in ("nba", "nfl") and re.search(r"[+-]\d+(\.\d)?$", pt or ""):
         out.append(("side + line", r"(?<![A-Z])" + re.escape(pt) + r"(?![\d.])"))
     return out
 
@@ -274,6 +277,7 @@ def main():
 
     check_pick_file(c, F_MLB, current(F_MLB, staged), "mlb", staged)
     check_pick_file(c, F_NBA, current(F_NBA, staged), "nba", staged)
+    check_pick_file(c, F_NFL, current(F_NFL, staged), "nfl", staged)
     check_csv(c, F_CSV, current(F_CSV, staged), "side", staged)
     check_csv(c, F_MLB_LOG, current(F_MLB_LOG, staged), "pick", staged)
 
@@ -290,6 +294,16 @@ def main():
     shadow = _load_json(current(F_SHADOW, staged)) or {}
     check_entries(c, F_SHADOW, list((shadow.get("rows") or {}).values()), "shadow row", staged,
                   lambda r: (r.get("date"), f"{r.get('away')} @ {r.get('home')}") in mlb_pending)
+
+    nfl_pending = {(s["date"], s["matchup"]) for s in c.secrets if s["sport"] == "nfl"}
+    shadow_nfl = _load_json(current(F_SHADOW_NFL, staged)) or {}
+
+    def _nfl_key(r):
+        ko = store.parse_ts(r.get("kickoff_utc"))
+        return (ko.astimezone(store.ET).strftime("%Y-%m-%d") if ko else "", f"{r.get('away')} @ {r.get('home')}")
+
+    check_entries(c, F_SHADOW_NFL, list((shadow_nfl.get("rows") or {}).values()), "nfl shadow row", staged,
+                  lambda r: _nfl_key(r) in nfl_pending)
 
     if F_DB in staged:
         check_db(c, staged)

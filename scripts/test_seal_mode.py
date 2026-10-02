@@ -85,6 +85,8 @@ def test_off_is_noop_on_real_files():
     env(mode=False, key=False)
     assert not store.seal_mode()
     for sport, path in store.PICK_FILES.items():
+        if not os.path.exists(path):
+            continue  # picks/nfl.json exists only once NFL publishing is turned on
         # the plaintext ledger as committed (records that never were sealed)
         raw = [r for r in json.load(open(path)) if not any(k in r for k in store.SEAL_META)]
         path = os.path.join(TMP, f"{sport}_plain.json")

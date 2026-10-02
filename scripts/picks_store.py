@@ -62,6 +62,7 @@ CONFIG_PATH = os.path.join(REPO, "ops", "config", "monetization.json")
 PICK_FILES = {
     "mlb": os.path.join(REPO, "picks", "mlb.json"),
     "nba": os.path.join(REPO, "picks", "nba.json"),
+    "nfl": os.path.join(REPO, "picks", "nfl.json"),   # written only when nfl_publish is on
 }
 
 KEY_ENV = "PICKS_SEAL_KEY"          # Actions secret: urlsafe base64 of 32 random bytes
@@ -164,7 +165,7 @@ def _record_date(rec: dict) -> str:
 
 def start_time(rec: dict) -> datetime | None:
     """Scheduled first pitch / tip for a pick-like record, if known."""
-    for k in ("_starts_at", "unlocks_at", "tip_at", "starts_at_utc"):
+    for k in ("_starts_at", "unlocks_at", "tip_at", "starts_at_utc", "kickoff_utc"):
         dt = parse_ts(rec.get(k))
         if dt:
             return dt
@@ -611,7 +612,7 @@ def ref_in(refs, pick_id) -> bool:
 
 def unlock_label(rec: dict) -> str:
     sport = (rec.get("sport") or "mlb").lower()
-    return "TIP" if sport == "nba" else "FIRST PITCH"
+    return {"nba": "TIP", "nfl": "KICKOFF"}.get(sport, "FIRST PITCH")
 
 
 def sealed_text(rec: dict) -> str:
