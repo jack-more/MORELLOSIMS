@@ -104,6 +104,8 @@ def build_player_season_stats(pg: pd.DataFrame, season: str, roster_team: dict |
     reports a traded player under his current team even before he has played
     for it (2025-26: Anthony Davis under WAS with all 20 games for DAL), so
     the roster team wins; players without one get the team of their latest game."""
+    if pg.empty:
+        return pd.DataFrame()   # new season before its first game (load_player_games returns no columns)
     played = pg[pg["min"] > 0].copy()
     if played.empty:
         return pd.DataFrame()

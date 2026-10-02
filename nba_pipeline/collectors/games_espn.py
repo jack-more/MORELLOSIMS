@@ -16,6 +16,7 @@ Provides:
 
 import json
 import logging
+import os
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta, timezone
@@ -88,6 +89,15 @@ def espn_get_json(url: str, timeout: int = 15) -> dict | None:
     return None
 
 
+def dry_run_preseason_as_regular() -> bool:
+    """NBA_DRY_RUN=1 (scripts/dry_run.py, run on a scratch copy of the repo):
+    ESPN preseason games (season type 1) are reported as regular season (2),
+    so one preseason slate exercises the whole regular-season path — box
+    scores, season/lineup stats, freshness, pricing, pick capture, grading.
+    Never set in the real pipeline."""
+    return os.getenv("NBA_DRY_RUN") == "1"
+
+
 def fetch_espn_events(date: datetime) -> list[dict] | None:
     """All NBA events ESPN lists for one date (any status, any season type).
 
@@ -112,6 +122,14 @@ def fetch_espn_events(date: datetime) -> list[dict] | None:
                 away = team_entry
         if not home or not away:
             continue
+        # Preseason games against non-NBA clubs (2025: Melbourne, Hapoel
+        # Jerusalem) carry no team abbreviation; one such game used to raise
+        # KeyError and lose the whole date (scores, box-score sync, slate).
+        if not (home.get("team") or {}).get("abbreviation") or not (away.get("team") or {}).get("abbreviation"):
+            logger.info("ESPN %s: skipping event %s (non-NBA opponent: %s vs %s)", date.strftime("%Y-%m-%d"),
+                        event.get("id"), (home.get("team") or {}).get("displayName"),
+                        (away.get("team") or {}).get("displayName"))
+            continue
 
         tip = event.get("date") or competition.get("date") or ""
         try:
@@ -119,6 +137,8 @@ def fetch_espn_events(date: datetime) -> list[dict] | None:
         except ValueError:
             tip_utc = None
         season_type = (event.get("season") or {}).get("type")
+        if season_type is not None and int(season_type) == 1 and dry_run_preseason_as_regular():
+            season_type = 2   # opening-week rehearsal: price/store preseason as regular season
         try:
             home_score = int(home.get("score", 0) or 0)
             away_score = int(away.get("score", 0) or 0)

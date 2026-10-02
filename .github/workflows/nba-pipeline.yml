@@ -46,14 +46,31 @@ on:
         required: false
         default: ''
         type: string
+      dry_run:
+        description: 'Dry run: rehearse the daily pipeline on a scratch copy, preseason treated as regular season (never commits, posts or touches the ledger)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      dry_run_date:
+        description: 'Dry run: preseason date being rehearsed (YYYY-MM-DD, default today ET); its and the previous day''s ESPN games are synced'
+        required: false
+        default: ''
+        type: string
+      dry_run_probe_dates:
+        description: 'Dry run: extra comma-separated dates whose completed games are fetched from ESPN summary (endpoint probe, no writes)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
   actions: write
 
-# Prevent overlapping runs from racing on git push
+# Prevent overlapping runs from racing on git push. Dry runs never push and
+# get their own group so they can never queue behind or displace a real run.
 concurrency:
-  group: nba-pipeline
+  group: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true') && 'nba-pipeline-dry-run' || 'nba-pipeline' }}
   cancel-in-progress: false
 
 jobs:
@@ -61,7 +78,7 @@ jobs:
   # PRE-GAME / DAILY UPDATE
   # ════════════════════════════════════════════
   update-lines:
-    if: github.event.schedule != '0 17 * * *' && github.event.schedule != '0 16 * * *' && inputs.settle_only != 'true' && inputs.trends_only != 'true'
+    if: github.event.schedule != '0 17 * * *' && github.event.schedule != '0 16 * * *' && inputs.settle_only != 'true' && inputs.trends_only != 'true' && inputs.dry_run != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -348,6 +365,66 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run tg-channel-bot.yml --ref main -f command=run || echo "dispatch failed; the 15-min bot cron will catch it"
+
+  # ════════════════════════════════════════════
+  # OPENING-WEEK DRY RUN (workflow_dispatch, dry_run=true)
+  # Every update-lines step plus trends refresh and grading, run by
+  # scripts/dry_run.py inside a scratch copy of the repo with NBA_DRY_RUN=1
+  # (ESPN preseason games read as regular season). No commit, no bot kick,
+  # read-only token; the real ledger is hashed before/after.
+  # ════════════════════════════════════════════
+  dry-run:
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r nba_pipeline/requirements.txt
+
+      - name: ESPN summary endpoint probe (from Actions)
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          PROBE_DATES: ${{ inputs.dry_run_probe_dates }}
+          REHEARSE: ${{ inputs.dry_run_date }}
+        run: |
+          D="${REHEARSE:-$(TZ=America/New_York date +%F)}"
+          PREV=$(date -d "$D - 1 day" +%F)
+          python3 nba_pipeline/scripts/dry_run.py probe --dates "$PREV,$D${PROBE_DATES:+,$PROBE_DATES}" --json "$RUNNER_TEMP/espn_probe.json"
+
+      - name: Stage scratch copy
+        run: python3 nba_pipeline/scripts/dry_run.py stage --out "$RUNNER_TEMP/nba-dry-run"
+
+      - name: Rehearse the daily pipeline
+        env:
+          REHEARSE: ${{ inputs.dry_run_date }}
+        run: |
+          D="${REHEARSE:-$(TZ=America/New_York date +%F)}"
+          PREV=$(date -d "$D - 1 day" +%F)
+          python3 nba_pipeline/scripts/dry_run.py run --root "$RUNNER_TEMP/nba-dry-run" --date "$D" --sync-dates "$PREV,$D"
+
+      - name: Upload dry-run outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-dry-run-${{ github.run_id }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/espn_probe.json
+            ${{ runner.temp }}/nba-dry-run/dry_run_report.json
+            ${{ runner.temp }}/nba-dry-run/log_*.txt
+            ${{ runner.temp }}/nba-dry-run/nba_pipeline/data/
+            ${{ runner.temp }}/nba-dry-run/nba_pipeline/index.html
+            ${{ runner.temp }}/nba-dry-run/picks/nba.json
 
   # ════════════════════════════════════════════
   # POST-GAME SETTLEMENT
