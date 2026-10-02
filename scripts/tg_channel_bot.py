@@ -74,6 +74,7 @@ OWNER_HELP = (
     "Owner console\n"
     "/status — check-in now (slate, picks, pipelines, anything that needs you)\n"
     "/picks — today's picks in full\n"
+    "Send a bet-slip screenshot — I'll pair it with the pick and post it to X with the card when you say.\n"
     "Pick alerts arrive here the moment a pick is published; the button under "
     "each one posts it to X unblurred (X gets the sealed card by default)."
 )
@@ -158,6 +159,12 @@ def cmd_run():
     if upd.get("result"):
         api("getUpdates", offset=state["offset"], timeout=0)
         save_json(STATE_FILE, state)
+    # slips held for first pitch, and result follow-ups for posted slips
+    try:
+        import slips
+        slips.tick()
+    except Exception as e:
+        print(f"  WARN slips: {e}")
     # new picks → owner DM + sealed X card (exactly once, see pick_alerts.py)
     try:
         import pick_alerts
@@ -201,7 +208,11 @@ def handle_owner(msg, cb):
             return
         data = cb.get("data", "")
         note = "ok"
-        if data.startswith("xopen:"):
+        if data.startswith("slip:"):
+            import slips
+            note = slips.handle(data)
+            api("sendMessage", chat_id=OWNER_ID, text=f"Slip: {note}")
+        elif data.startswith("xopen:"):
             note = pick_alerts.open_on_x(data.split(":", 1)[1])
             api("sendMessage", chat_id=OWNER_ID, text=f"X: {note} ({data.split(':', 1)[1]})")
         elif data == "status":
@@ -210,6 +221,10 @@ def handle_owner(msg, cb):
             lines = ops_digest.picks_block(datetime.now(ops_digest.ET).strftime("%Y-%m-%d"))
             api("sendMessage", chat_id=OWNER_ID, text="\n".join(lines) or "No C8+ picks yet today.")
         ack(cb, note)
+        return
+    if msg.get("photo"):
+        import slips
+        slips.receive(msg)
         return
     text = (msg.get("text") or "").strip().lower()
     if text.startswith("/status"):
