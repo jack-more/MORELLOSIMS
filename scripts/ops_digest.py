@@ -31,8 +31,8 @@ GH_REPO = os.environ.get("GITHUB_REPOSITORY", "jack-more/MORELLOSIMS")
 WATCH_STATE = os.path.join(REPO, "ops", "state", "watchdog.json")
 
 # workflow file, label, max hours without a success on a game day, dispatch inputs
+# MLB retired 2026-10-02 (owner); NFL joins when its pipeline exists.
 PIPELINES = [
-    ("mlb-pipeline.yml", "MLB", 4, {"run_type": "picks"}),
     ("nba-pipeline.yml", "NBA", 8, {}),
 ]
 
@@ -125,14 +125,6 @@ def alerts_block():
     out = []
     if not all(os.environ.get(k) for k in ("X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET")):
         out.append("X secrets not set — nothing is posting to X (repo Settings → Secrets → Actions)")
-    try:
-        from mlb_model_gates import WP_CALIBRATION_STATUS, load_wp_calibration
-        load_wp_calibration()
-        if WP_CALIBRATION_STATUS["state"] != "fresh":
-            out.append(f"MLB win-prob curve {WP_CALIBRATION_STATUS['state']} "
-                       f"({WP_CALIBRATION_STATUS.get('age_days') or '?'}d) — refit is due")
-    except Exception:
-        pass
     return out
 
 
@@ -141,7 +133,7 @@ def digest(label):
     today = now.strftime("%Y-%m-%d")
     g = games_today()
     lines = [f"☀️ {label} · {now.strftime('%a %b %-d, %-I:%M %p ET')}",
-             f"Slate: {g['MLB']} MLB · {g['NBA']} NBA games"]
+             f"Slate: {g['NBA']} NBA games"]
     lines += results_block((now - timedelta(days=1)).strftime("%Y-%m-%d"))
     pb = picks_block(today)
     lines += ["", *pb] if pb else ["", "No C8+ picks published yet today."]
