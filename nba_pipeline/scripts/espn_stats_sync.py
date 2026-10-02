@@ -2,8 +2,9 @@
 """espn_stats_sync.py — keep box scores and season stats current from ESPN.
 
 stats.nba.com blocks GitHub Actions IPs, so this is the path that guarantees
-player_game_stats, player_season_stats and team_season_stats stay current
-(lineup_stats has no ESPN equivalent and is not touched).
+player_game_stats, player_season_stats, team_season_stats and lineup_stats /
+lineup_players (2-5 man groups from play-by-play stints,
+collectors/espn_lineups.py) stay current.
 
 Daily (no dates given): every scored game of the season in `games` that has
 no ESPN box score yet, plus the last --days days (catches games the games
@@ -31,6 +32,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from config import DB_PATH, CURRENT_SEASON  # noqa: E402
 from collectors.espn_boxscores import ESPNBoxScoreCollector, SCHEMA  # noqa: E402
 from collectors.espn_season_stats import write_season_stats, coverage_gaps  # noqa: E402
+from collectors.espn_lineups import write_lineup_stats  # noqa: E402
 
 logger = logging.getLogger("espn_stats_sync")
 
@@ -80,6 +82,7 @@ def sync(db_path=DB_PATH, season=CURRENT_SEASON, start=None, end=None, days=4, c
     tot["gaps_before"] = gaps
     if season_stats:
         tot["season_stats"] = write_season_stats(db_path, season)
+        tot["lineup_stats"] = write_lineup_stats(db_path, season)
     return tot
 
 
@@ -100,6 +103,7 @@ def main():
 
     if args.stats_only:
         write_season_stats(args.db, args.season)
+        write_lineup_stats(args.db, args.season)
         return 0
     tot = sync(args.db, args.season, args.start, args.end, args.days, args.cache,
                fill_pgs=not args.no_pgs, season_stats=not args.no_season_stats, refetch=args.refetch)

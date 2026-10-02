@@ -44,6 +44,7 @@ from datetime import datetime, timedelta, timezone
 
 from collectors.games_espn import espn_get_json, fetch_espn_events, _normalize_abbr
 from collectors.espn_ids import ESPNPlayerMapper
+from collectors.espn_lineups import store_units
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,14 @@ PLAYER_TALLIES = ("sec",) + tuple(f"on_{k}" for k in TEAM_TALLIES) + tuple(f"on_
 ON_COLUMNS = ("on_pts", "on_opp_pts", "on_fgm", "on_fga", "on_fta", "on_tov", "on_oreb", "on_dreb",
               "on_opp_oreb", "on_opp_dreb", "on_opp_fga", "on_opp_fta", "on_opp_tov",
               "on_team_reb", "on_opp_team_reb", "off_poss", "def_poss")
+
+# Five-man unit tallies (lineup_stats is built from these: collectors/espn_lineups.py).
+# poss / opp_poss: possessions that started with the unit on the floor, so
+# each possession is counted once per side. Free throws (points, attempts)
+# go to the units on the floor when the foul was committed, as stats.nba.com
+# credits them; substitutions between free throws are common.
+UNIT_KEYS = ("pts", "poss", "fgm", "fga", "fta")
+UNIT_TALLIES = ("sec",) + UNIT_KEYS + tuple("opp_" + k for k in UNIT_KEYS) + ("fg3m", "fg3a", "ftm")
 
 _PERIOD_SECONDS = lambda p: 720 if p <= 4 else 300  # noqa: E731
 # A possession that changes hands on a make/turnover with this many seconds
@@ -332,7 +341,7 @@ def _classify(p: dict) -> dict:
     return c
 
 
-def parse_pbp(summary: dict, box: dict) -> dict:
+def parse_pbp(summary: dict, box: dict, track_possessions: bool = False) -> dict:
     """On-court reconstruction from play-by-play.
 
     Lineups: period 1 from the box-score starters; later periods from who
@@ -344,8 +353,14 @@ def parse_pbp(summary: dict, box: dict) -> dict:
     offensive rebounds never start a new one. Each possession is credited to
     the ten players on the floor when it starts.
 
+    Five-man units are tallied too (UNIT_TALLIES; free throws credited to
+    the units on the floor at the foul). track_possessions also returns, per
+    possession, the offense and every five each team had on the floor during
+    it (used by scripts/verify_espn_lineups.py to calibrate lineup possessions).
+
     Returns {"players": {espn_id: tallies}, "teams": {espn_team: tallies},
-             "periods": n, "issues": [..], "ok": bool}.
+             "units": [(espn_team, [5 espn ids], tallies)], "periods": n,
+             "issues": [..], "ok": bool[, "possessions": [...]]}.
     """
     plays = summary.get("plays") or []
     team_ids = list(box["teams"])
@@ -357,6 +372,8 @@ def parse_pbp(summary: dict, box: dict) -> dict:
 
     ptally = defaultdict(lambda: dict.fromkeys(PLAYER_TALLIES, 0))
     ttally = {t: dict.fromkeys(TEAM_TALLIES, 0) for t in team_ids}
+    # five-man units: (team, frozenset of 5 espn ids) -> UNIT_TALLIES
+    utally = defaultdict(lambda: dict.fromkeys(UNIT_TALLIES, 0))
 
     by_period = defaultdict(list)
     for p in plays:
@@ -373,16 +390,37 @@ def parse_pbp(summary: dict, box: dict) -> dict:
     starters = {t: {pid for pid, pl in box["players"].items() if pl["espn_team"] == t and pl["started"]}
                 for t in team_ids}
 
-    def credit(team, key, n=1):
-        """Add n to team tally `key` and to the matching on-court tallies of all ten players."""
+    def unit(t):
+        return (t, frozenset(on[t]))
+
+    poss_log = []        # track_possessions: [offense team, {team: [units on court]}] per possession
+    foul_units = None    # (clock, {team: unit}) at the last non-technical foul
+
+    def credit(team, key, n=1, units=None):
+        """Add n to team tally `key` and to the matching on-court tallies of all ten players.
+        units: {team: unit} to credit instead of the current fives (free throws
+        go to the units on the floor when the foul was committed)."""
         ttally[team][key] += n
         for a in on[team]:
             ptally[a]["on_" + key] += n
         for a in on[opp[team]]:
             ptally[a]["on_opp_" + key] += n
+        if key in UNIT_KEYS:
+            u = units or {t: unit(t) for t in team_ids}
+            utally[u[team]][key] += n
+            utally[u[opp[team]]]["opp_" + key] += n
+
+    def ucredit(team, key, n=1, units=None):
+        """Unit-only tally (shooting splits the team/player tallies do not keep)."""
+        utally[(units or {team: unit(team)})[team]][key] += n
+
+    def log_poss(t):
+        if track_possessions:
+            poss_log.append([t, {x: [frozenset(on[x])] for x in team_ids}])
 
     for per in periods:
         pp = by_period[per]
+        foul_units = None
         if per == 1:
             on = {t: set(starters[t]) for t in team_ids}
         else:
@@ -433,6 +471,7 @@ def parse_pbp(summary: dict, box: dict) -> dict:
                 for t in team_ids:
                     for a in on[t]:
                         ptally[a]["sec"] += elapsed
+                    utally[unit(t)]["sec"] += elapsed
                 remaining = clock
             parts = participants(p)
             team = str((p.get("team") or {}).get("id") or "")
@@ -450,7 +489,13 @@ def parse_pbp(summary: dict, box: dict) -> dict:
                         if ball is not None and ain not in in_poss:
                             ptally[ain]["on_poss" if t == ball else "on_opp_poss"] += 1
                             in_poss.add(ain)
+                        # possession log: the new five shares the possession in progress
+                        if ball is not None and track_possessions and poss_log:
+                            poss_log[-1][1][t].append(frozenset(on[t]))
                 continue
+            tl_ = p["type"]["text"].lower()
+            if "foul" in tl_ and "technical" not in tl_:
+                foul_units = (clock, {t: unit(t) for t in team_ids})
             c = _classify(p)
             if not c:
                 continue
@@ -463,13 +508,16 @@ def parse_pbp(summary: dict, box: dict) -> dict:
                 nonlocal ball, ended_by, in_poss
                 if ball != t:
                     credit(t, "poss")
+                    log_poss(t)
                     ball, ended_by = t, None
                     in_poss = on[t] | on[opp[t]]
 
             if c.get("ft"):
-                credit(actor, "fta")
+                fu = foul_units[1] if foul_units and foul_units[0] == clock and not c["technical"] else None
+                credit(actor, "fta", units=fu)
                 if c["made"]:
-                    credit(actor, "pts", int(p.get("scoreValue") or 1))
+                    credit(actor, "pts", int(p.get("scoreValue") or 1), units=fu)
+                    ucredit(actor, "ftm", units=fu)
                 elif c["ft_n"] < c["ft_of"]:
                     ft_rebound_dead = (actor, clock)
                 if c["technical"]:
@@ -484,11 +532,16 @@ def parse_pbp(summary: dict, box: dict) -> dict:
                         ball, ended_by = None, actor
             elif c.get("shot"):
                 start(actor)
+                three = int(p.get("pointsAttempted") or 0) == 3
                 if c["fga"]:
                     credit(actor, "fga")
+                    if three:
+                        ucredit(actor, "fg3a")
                 if c["made"]:
                     credit(actor, "fgm")
                     credit(actor, "pts", int(p.get("scoreValue") or 0))
+                    if three:
+                        ucredit(actor, "fg3m")
                     ball, ended_by, last_make = None, actor, (actor, clock)
             if c.get("tov"):
                 start(actor)
@@ -506,10 +559,12 @@ def parse_pbp(summary: dict, box: dict) -> dict:
         if ball is None and ended_by is not None and ended_clock >= END_PERIOD_MIN_SECONDS:
             # the other team had the ball when the period ran out (no action logged)
             credit(opp[ended_by], "poss")
+            log_poss(opp[ended_by])
         if remaining > 0:
             for t in team_ids:
                 for a in on[t]:
                     ptally[a]["sec"] += remaining
+                utally[unit(t)]["sec"] += remaining
 
     # Reconcile with the box score. Lineup notes above are informational;
     # the game counts as usable only if every point and every player's
@@ -532,7 +587,13 @@ def parse_pbp(summary: dict, box: dict) -> dict:
         pt["def_poss"] = pt["on_opp_poss"]
         pt["on_team_reb"] = pt["on_team_oreb"] + pt["on_team_dreb"]
         pt["on_opp_team_reb"] = pt["on_opp_team_oreb"] + pt["on_opp_team_dreb"]
-    return {"players": dict(ptally), "teams": ttally, "periods": len(periods), "issues": issues, "ok": ok}
+    units = [(t, sorted(members), tl) for (t, members), tl in utally.items()
+             if len(members) == 5 and any(tl.values())]
+    out = {"players": dict(ptally), "teams": ttally, "units": units, "periods": len(periods),
+           "issues": issues, "ok": ok}
+    if track_possessions:
+        out["possessions"] = poss_log
+    return out
 
 
 # ── units: stats.nba.com player_game_stats row ──────────────────────
@@ -729,6 +790,8 @@ class ESPNBoxScoreCollector:
             }
             conn.execute(f"INSERT OR REPLACE INTO espn_player_games ({', '.join(row)}) "
                          f"VALUES ({', '.join('?' * len(row))})", list(row.values()))
+        # five-man units for lineup_stats (collectors/espn_lineups.py)
+        store_units(conn, game_id, pbp.get("units") or [], espn_to_nba, periods)
 
     @staticmethod
     def _prorated_on_court(p, box, pbp):

@@ -364,8 +364,9 @@ def main():
     else:
         new_boxscores = 0
 
-    # Step 2b: ESPN box scores + season stats — the path that guarantees
-    # freshness (stats.nba.com blocks Actions IPs; lineup stats stay NBA-only).
+    # Step 2b: ESPN box scores, season stats and lineup stats (play-by-play
+    # stints) — the path that guarantees freshness (stats.nba.com blocks
+    # Actions IPs). Runs before Step 3 so synergy is computed from it.
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from espn_stats_sync import sync as espn_sync
