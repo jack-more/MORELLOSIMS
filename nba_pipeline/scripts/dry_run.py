@@ -41,8 +41,10 @@ THIS = os.path.abspath(__file__)
 PIPELINE = os.path.dirname(os.path.dirname(THIS))
 REPO = os.path.dirname(PIPELINE)
 
-STAGE_DIRS = ["nba_pipeline", "picks", "nbasim", "sim"]
-STAGE_FILES = ["scripts/build_nbasim_app.py", "scripts/build_sim_app.py"]
+# repo-root scripts/ (page builders, seal-mode store / unseal) and ops/config
+# (seal-mode switch) are used by the NBA steps too
+STAGE_DIRS = ["nba_pipeline", "picks", "nbasim", "sim", "scripts", "ops"]
+STAGE_FILES = []
 LEDGER = ["nba_pipeline/data/picks.csv", "nba_pipeline/data/pick_log.json", "picks/nba.json"]
 PY = sys.executable
 
@@ -72,6 +74,7 @@ for f in (pc.collect_rosters, pc.collect_player_season_stats, pc.collect_team_se
 # Mirrors .github/workflows/nba-pipeline.yml update-lines (and refresh-trends /
 # grade-picks); "required" = the workflow step has no continue-on-error.
 STEPS = [
+    ("Unseal tipped NBA picks", ".", [PY, "scripts/unseal_picks.py", "--sport", "nba"], 120, True),
     ("ESPN game scores", "nba_pipeline", [PY, "-c", GAMES_CODE], 180, False),
     ("Rosters + player stats (stats.nba.com)", "nba_pipeline", [PY, "-c", ROSTER_CODE], 480, False),
     ("ESPN box scores + season + lineup stats", "nba_pipeline", [PY, "scripts/espn_stats_sync.py"], 720, False),
@@ -229,7 +232,7 @@ def cmd_run(args):
     steps = list(STEPS)
     if args.sync_dates:
         ds = sorted(args.sync_dates.split(","))
-        steps.insert(3, ("ESPN box scores for --sync-dates", "nba_pipeline",
+        steps.insert(4, ("ESPN box scores for --sync-dates", "nba_pipeline",
                          [PY, "scripts/espn_stats_sync.py", "--start", ds[0], "--end", ds[-1]], 720, False))
     if args.only:
         steps = [s for s in steps if s[0] in args.only]
