@@ -20,6 +20,7 @@ on:
     - cron: '0 16 * * *'   # Trends refresh (4 PM UTC = 8 AM PST)
     - cron: '0 17 * * *'   # Settlement (5 PM UTC = 9 AM PST)
     - cron: '0 18 * * *'   # Pre-game (6 PM UTC = 10 AM PST)
+    - cron: '30 20 3-19 10 *'  # Preseason dry run, Oct 3-19 (job dry-run only; never commits)
 
   workflow_dispatch:
     inputs:
@@ -70,7 +71,7 @@ permissions:
 # Prevent overlapping runs from racing on git push. Dry runs never push and
 # get their own group so they can never queue behind or displace a real run.
 concurrency:
-  group: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true') && 'nba-pipeline-dry-run' || 'nba-pipeline' }}
+  group: ${{ ((github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true') || github.event.schedule == '30 20 3-19 10 *') && 'nba-pipeline-dry-run' || 'nba-pipeline' }}
   cancel-in-progress: false
 
 jobs:
@@ -78,7 +79,7 @@ jobs:
   # PRE-GAME / DAILY UPDATE
   # ════════════════════════════════════════════
   update-lines:
-    if: github.event.schedule != '0 17 * * *' && github.event.schedule != '0 16 * * *' && inputs.settle_only != 'true' && inputs.trends_only != 'true' && inputs.dry_run != 'true'
+    if: github.event.schedule != '0 17 * * *' && github.event.schedule != '0 16 * * *' && inputs.settle_only != 'true' && inputs.trends_only != 'true' && inputs.dry_run != 'true' && github.event.schedule != '30 20 3-19 10 *'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -371,14 +372,14 @@ jobs:
         run: gh workflow run tg-channel-bot.yml --ref main -f command=run || echo "dispatch failed; the 15-min bot cron will catch it"
 
   # ════════════════════════════════════════════
-  # OPENING-WEEK DRY RUN (workflow_dispatch, dry_run=true)
+  # OPENING-WEEK DRY RUN (workflow_dispatch dry_run=true; daily Oct 3-19 cron)
   # Every update-lines step plus trends refresh and grading, run by
   # scripts/dry_run.py inside a scratch copy of the repo with NBA_DRY_RUN=1
   # (ESPN preseason games read as regular season). No commit, no bot kick,
   # read-only token; the real ledger is hashed before/after.
   # ════════════════════════════════════════════
   dry-run:
-    if: github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true'
+    if: (github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true') || github.event.schedule == '30 20 3-19 10 *'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
