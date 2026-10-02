@@ -78,7 +78,8 @@ def logo(abbr, size):
 
 
 def load_picks():
-    return sorted(json.load(open(os.path.join(REPO, "picks", "nba.json"))), key=lambda p: (p["date"], p["id"]))
+    import picks_store  # seal mode: sealed picks open with PICKS_SEAL_KEY
+    return sorted(picks_store.load_picks("nba"), key=lambda p: (p["date"], p["id"]))
 
 
 def _num(v):

@@ -95,8 +95,8 @@ def fmt_units(pl):
 def main():
     if DRY:
         print("  (no Telegram env — dry run)")
-    with open(PICKS_JSON) as f:
-        picks = json.load(f)
+    import picks_store  # owner DM (TELEGRAM_CHAT_ID): sealed picks open with the key
+    picks = picks_store.load_picks(PICKS_JSON)
     st = load_state()
     cutoff = (datetime.now(ET) - timedelta(days=3)).strftime("%Y-%m-%d")
 

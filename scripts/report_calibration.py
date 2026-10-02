@@ -25,6 +25,9 @@ import os
 import sys
 from collections import defaultdict
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode: one door to pick data)
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PICK_FILES = {
     "mlb": os.path.join(REPO_ROOT, "picks", "mlb.json"),
@@ -76,8 +79,7 @@ def pick_clv(p):
 def load_picks(path):
     if not os.path.exists(path):
         return []
-    with open(path) as f:
-        return json.load(f)
+    return picks_store.load_picks(path)
 
 
 def tier_stats(picks):

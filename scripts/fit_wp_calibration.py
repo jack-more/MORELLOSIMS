@@ -26,7 +26,11 @@ Usage: python3 scripts/fit_wp_calibration.py
 import csv
 import json
 import os
+import sys
 from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode: one door to pick data)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(SCRIPT_DIR)
@@ -37,8 +41,7 @@ OUT_PATH = os.path.join(REPO, "reports", "wp_calibration.json")
 
 def load_settled_with_model_wp():
     """Join settled ML picks with the raw model WP for the picked side."""
-    with open(PICKS_JSON) as f:
-        picks = json.load(f)
+    picks = picks_store.load_picks(PICKS_JSON)
     settled = [
         p for p in picks
         if p.get("sport") == "mlb"

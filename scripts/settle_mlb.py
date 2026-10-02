@@ -11,9 +11,13 @@ Run before build_mlb_sim.py in the morning settle workflow.
 import csv
 import json
 import os
+import sys
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode: settlement only ever sees plaintext)
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 PICKS_JSON = os.path.join(REPO, "picks", "mlb.json")
@@ -150,13 +154,15 @@ def main():
         print("  picks/mlb.json missing — nothing to settle.")
         return
 
-    with open(PICKS_JSON) as f:
-        picks = json.load(f)
+    picks = picks_store.load_picks(PICKS_JSON)
 
     pending = [p for p in picks if p["status"] == "pending" and p["date"] <= YESTERDAY]
     if not pending:
         print(f"  No pending picks to settle (yesterday: {YESTERDAY})")
         return
+    # Hard check: these games are over, so they must have been unsealed
+    # (scripts/unseal_picks.py runs first). Never grade sealed data.
+    picks_store.assert_settleable(pending)
 
     print(f"  Settling {len(pending)} pending pick(s) from {YESTERDAY} or earlier…")
 
@@ -226,8 +232,7 @@ def main():
         print(f"    {p['matchup']} {p['date']} {p['pick_text']:<10} {p['status'].upper():<5} {pl:+g} ({away_runs}-{home_runs})")
 
     if settled_count:
-        with open(PICKS_JSON, "w") as f:
-            json.dump(picks, f, indent=2)
+        picks_store.save_picks(PICKS_JSON, picks)  # == json.dump(picks, indent=2) unless sealed picks exist
         print(f"\n  Settled {settled_count} pick(s) → {PICKS_JSON}")
     else:
         print("\n  Nothing settled this run.")
@@ -271,6 +276,10 @@ def settle_shadow_ledger():
         if not game:
             continue
         state = game.get("status", {}).get("abstractGameState", "")
+        if picks_store.is_raw_sealed(r):
+            if state == "Final":  # over but still sealed: unseal_picks.py did not run
+                picks_store.assert_settleable([r])
+            continue
         if state != "Final":
             continue
         ls = game.get("linescore", {}).get("teams", {})

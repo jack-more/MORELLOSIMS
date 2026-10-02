@@ -44,6 +44,7 @@ sys.path.insert(0, str(SCRIPTS))
 from send_telegram_cards import send_photo as tg_send_photo  # noqa: E402
 import render_pnl_card  # noqa: E402
 import render_pick_card as render_series_card  # noqa: E402  v3 layout (2026-09-30)
+import picks_store  # noqa: E402  public channel + X: public view only, sealed picks stay sealed
 
 PICKS_MLB = ROOT / "picks" / "mlb.json"
 PICKS_NBA = ROOT / "picks" / "nba.json"
@@ -295,10 +296,17 @@ def post_to_telegram(caption: str, image: Path, dry_run: bool) -> bool:
 
 def series_cards(picks: list[dict], settled: bool) -> list[Path]:
     """Render the numbered series card for each pick, strongest first, max 4
-    (one X post carries up to 4 images)."""
+    (one X post carries up to 4 images). A sealed pick (seal mode) gets the
+    sealed card — matchup, time, confidence; never the side."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = []
     for p in sorted(picks, key=lambda p: (-conf_of(p), p.get("id", "")))[:4]:
+        if p.get("sealed"):
+            path = OUT_DIR / f"sealed-{p['id']}.png"
+            render_series_card.sealed(p).save(path)
+            log(f"  rendered {path}")
+            out.append(path)
+            continue
         path = OUT_DIR / f"series-{'settled-' if settled else ''}{p['id']}.png"
         render_series_card.render(p, settled).save(path)
         log(f"  rendered {path}")
@@ -308,7 +316,11 @@ def series_cards(picks: list[dict], settled: bool) -> list[Path]:
 
 def post_cards_to_telegram(caption: str, cards: list[Path], dry_run: bool) -> None:
     for i, card in enumerate(cards):
-        post_to_telegram(caption if i == 0 else card.stem.split("-mlb-")[-1].replace("-ml", " ML"), card, dry_run)
+        if i and card.stem.startswith("sealed-"):
+            sub = "SEALED · " + card.stem.split("-mlb-")[-1].replace("-ml", "").replace("-", " @ ", 1)
+        else:
+            sub = card.stem.split("-mlb-")[-1].replace("-ml", " ML")
+        post_to_telegram(caption if i == 0 else sub, card, dry_run)
 
 
 def since_label(era: dict) -> str:
@@ -323,8 +335,8 @@ def odds_str(p: dict) -> str:
 # ---------------------------------------------------------------- picks mode
 
 def mode_picks(date: str, dry_run: bool) -> int:
-    mlb = load_json(PICKS_MLB, [])
-    nba = load_json(PICKS_NBA, [])
+    mlb = picks_store.load_public_picks(str(PICKS_MLB))
+    nba = picks_store.load_public_picks(str(PICKS_NBA))
     mlb_today = [p for p in mlb if p.get("sport") == "mlb" and p.get("date") == date and conf_of(p) >= 8]
     nba_today = [p for p in nba if p.get("sport") == "nba" and p.get("date") == date and conf_of(p) >= 8]
     if not mlb_today and not nba_today:
@@ -339,7 +351,12 @@ def mode_picks(date: str, dry_run: bool) -> int:
         top = max(mlb_today, key=conf_of)
         n = len(mlb_today)
         lines.append(f"{n} pick{'s' if n != 1 else ''} logged before first pitch")
-        lines.append(f"Top play: {top.get('pick_text', '')} {odds_str(top)} · C{conf_of(top)}")
+        if top.get("sealed"):
+            lines.append(f"Top play: SEALED · C{conf_of(top)} · {top.get('matchup', '')} · unlocks at first pitch")
+            if picks_store.whop_url():
+                lines.append(f"Members have it now → {picks_store.whop_url()}")
+        else:
+            lines.append(f"Top play: {top.get('pick_text', '')} {odds_str(top)} · C{conf_of(top)}")
     if nba_today:
         n = len(nba_today)
         lines.append(f"+ {n} NBA play{'s' if n != 1 else ''} on the board")
@@ -391,7 +408,7 @@ def recap_rows(picks: list[dict]) -> list[render_pnl_card.ResultRow]:
 
 
 def mode_recap(date: str, dry_run: bool) -> int:
-    mlb = load_json(PICKS_MLB, [])
+    mlb = picks_store.load_public_picks(str(PICKS_MLB))
     settled = [
         p for p in mlb
         if p.get("sport") == "mlb" and p.get("date") == date and conf_of(p) >= 8

@@ -28,6 +28,11 @@ MORELLOSIMS = NBA_PIPELINE.parent
 DATA = NBA_PIPELINE / "data"
 PICKS_OUT = MORELLOSIMS / "picks" / "nba.json"
 
+import sys  # noqa: E402
+sys.path.insert(0, str(NBA_PIPELINE))
+from utils.ledger import open_entries, rows_from_reader  # noqa: E402
+from utils.seal import store  # noqa: E402  (scripts/picks_store.py: seal mode)
+
 PICKS_CSV = DATA / "picks.csv"
 PICK_LOG = DATA / "pick_log.json"
 DAILY = DATA / "daily_picks.json"
@@ -221,6 +226,9 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
         "pl": pl,
         "captured_at": (row.get("captured_at") or "").strip() or None,
         "void_reason": (row.get("void_reason") or "").strip() or None,
+        # in-memory only (picks_store strips "_" keys): tip time, so seal
+        # mode knows when this pick unlocks
+        "_starts_at": (row.get("tip_at") or "").strip() or None,
     }
 
 
@@ -228,7 +236,8 @@ def load_csv(path: Path) -> list:
     if not path.exists():
         return []
     with open(path) as f:
-        return list(csv.DictReader(f))
+        # utils.ledger's reader: sealed rows (seal mode) open with PICKS_SEAL_KEY
+        return rows_from_reader(csv.DictReader(f))
 
 
 def load_json(path: Path):
@@ -240,7 +249,7 @@ def load_json(path: Path):
 
 def main():
     csv_rows = load_csv(PICKS_CSV)
-    pick_log = load_json(PICK_LOG) or []
+    pick_log = open_entries(load_json(PICK_LOG) or [])
     meta_idx = build_pick_log_index(pick_log)
 
     # Respect picks/baselines.json's tracking_started cutoff. Anything before
@@ -272,8 +281,9 @@ def main():
     contract.sort(key=lambda p: p["date"], reverse=True)
 
     PICKS_OUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(PICKS_OUT, "w") as f:
-        json.dump(contract, f, indent=2)
+    # Same bytes as json.dump(contract, indent=2); seals pending pre-tip picks
+    # when seal mode is on and unseals (with verification fields) after tip.
+    store.save_picks(str(PICKS_OUT), contract)
 
     settled = sum(1 for p in contract if p["status"] in ("win", "loss", "push"))
     pending = sum(1 for p in contract if p["status"] == "pending")

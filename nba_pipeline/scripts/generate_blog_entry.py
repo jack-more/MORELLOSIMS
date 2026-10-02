@@ -19,6 +19,7 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from utils.ledger import open_entries, read_rows  # noqa: E402  (seal mode aware)
 
 PICKS_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "picks.csv")
 PICK_LOG = os.path.join(os.path.dirname(__file__), "..", "data", "pick_log.json")
@@ -37,7 +38,7 @@ def load_picks_for_date(target_date):
     # Try pick_log.json first (has full metadata)
     if os.path.exists(PICK_LOG):
         with open(PICK_LOG) as f:
-            log = json.load(f)
+            log = open_entries(json.load(f))
         for entry in log:
             if entry.get("slate_date") == target_date:
                 key = (entry["matchup"], entry.get("pick_type", "spread"))
@@ -47,27 +48,26 @@ def load_picks_for_date(target_date):
 
     # Fallback to CSV if no log entries
     if not picks and os.path.exists(PICKS_CSV):
-        with open(PICKS_CSV) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row["date"] == target_date:
-                    key = (row["matchup"], row.get("type", "spread"))
-                    if key not in seen:
-                        seen.add(key)
-                        picks.append({
-                            "slate_date": row["date"],
-                            "matchup": row["matchup"],
-                            "side": row["side"],
-                            "pick_type": row["type"],
-                            "risk": int(float(row["risk"])) if row["risk"] else 30,
-                            "conf_1_10": 7,
-                            "confidence": 65,
-                            "spread_edge": 0,
-                            "sim_spread": None,
-                            "book_spread": None,
-                            "sim_total": None,
-                            "book_total": None,
-                        })
+        for row in read_rows(PICKS_CSV):
+            if row["date"] == target_date:
+                key = (row["matchup"], row.get("type", "spread"))
+                if key not in seen:
+                    seen.add(key)
+                    picks.append({
+                        "slate_date": row["date"],
+                        "matchup": row["matchup"],
+                        "side": row["side"],
+                        "pick_type": row["type"],
+                        "risk": int(float(row["risk"])) if row["risk"] else 30,
+                        "conf_1_10": 7,
+                        "confidence": 65,
+                        "spread_edge": 0,
+                        "sim_spread": None,
+                        "book_spread": None,
+                        "sim_total": None,
+                        "book_total": None,
+                        "tip_at": row.get("tip_at") or None,
+                    })
 
     return picks
 
@@ -96,6 +96,21 @@ def implied_scores(matchup, game_data):
     return None
 
 
+def public_pick(pick):
+    """Seal mode: a pick whose game has not tipped shows no side, no SIM
+    numbers — matchup, stake and confidence only (blog_snippet.html is public)."""
+    from utils.seal import store
+    sealed = store.is_raw_sealed(pick) or (store.seal_mode() and store.before_start(pick))
+    if not sealed:
+        return pick
+    url = store.whop_url()
+    cta = f' <a href="{url}" target="_blank" rel="noopener" style="color:#00FF55;">GET IT NOW →</a>' if url else ""
+    out = {k: pick.get(k) for k in ("slate_date", "matchup", "pick_type", "risk", "conf_1_10", "tip_at")}
+    out.update(side=f"&#128274; {store.sealed_text({'sport': 'nba'})}{cta}", spread_edge=0,
+               sim_spread=None, book_spread=None, sim_total=None, book_total=None, sealed=True)
+    return out
+
+
 def generate_pick_card(pick, game_data):
     """Generate a single pick card HTML."""
     matchup = pick["matchup"]
@@ -109,7 +124,7 @@ def generate_pick_card(pick, game_data):
     type_label = "ML" if pick_type == "ml" else "SPREAD"
     conf_bg = "rgba(42,157,95,0.12)" if c10 >= 8 else "rgba(42,157,95,0.08)" if c10 >= 6 else "rgba(42,157,95,0.05)"
 
-    implied = implied_scores(matchup, game_data)
+    implied = None if pick.get("sealed") else implied_scores(matchup, game_data)
     implied_line = ""
     if implied:
         implied_line = f'<p class="mono" style="font-size:8px; color:rgba(255,255,255,0.35); margin:0 0 4px; letter-spacing:0.5px;">{implied}</p>'
@@ -218,7 +233,7 @@ def main():
     else:
         target_date = datetime.now().strftime("%Y-%m-%d")
 
-    picks = load_picks_for_date(target_date)
+    picks = [public_pick(p) for p in load_picks_for_date(target_date)]
     if not picks:
         print(f"[blog] No picks found for {target_date}")
         return

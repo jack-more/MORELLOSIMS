@@ -15,6 +15,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+import picks_store  # noqa: E402  (seal mode: public view)
 SOURCE = ROOT / "nba_pipeline" / "index.html"
 TARGET = ROOT / "nbasim" / "index.html"
 PICKS_JSON = ROOT / "picks" / "nba.json"
@@ -50,8 +52,7 @@ def aggregate_nba_record() -> tuple[int, int, float, str]:
     pl = float(baseline["pl"])
 
     if PICKS_JSON.exists():
-        with PICKS_JSON.open() as f:
-            picks = json.load(f)
+        picks = picks_store.load_public_picks(str(PICKS_JSON))
         for pick in picks:
             status = pick.get("status")
             if status not in ("win", "loss"):

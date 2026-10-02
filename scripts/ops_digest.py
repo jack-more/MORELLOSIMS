@@ -95,21 +95,23 @@ def odds_str(p):
 
 def picks_block(today):
     lines = []
+    import picks_store  # owner DM: sealed picks open with PICKS_SEAL_KEY
     for sport, path in (("MLB", "picks/mlb.json"), ("NBA", "picks/nba.json")):
-        todays = [p for p in load(os.path.join(REPO, path), []) if p.get("date") == today
+        todays = [p for p in picks_store.load_picks(os.path.join(REPO, path)) if p.get("date") == today
                   and int(p.get("conf") or 0) >= 8]
         if todays:
             lines.append(f"{sport} · {len(todays)} pick{'s' if len(todays) != 1 else ''}")
             for p in sorted(todays, key=lambda p: -int(p.get("conf") or 0)):
-                lines.append(f"  C{p.get('conf')} {p['pick_text']} {odds_str(p)} · {p.get('matchup')} "
+                lines.append(f"  C{p.get('conf')} {p.get('pick_text') or 'SEALED'} {odds_str(p)} · {p.get('matchup')} "
                              f"{p.get('game_time') or ''} [{p.get('status')}]")
     return lines
 
 
 def results_block(day):
     lines = []
+    import picks_store
     for sport, path in (("MLB", "picks/mlb.json"), ("NBA", "picks/nba.json")):
-        done = [p for p in load(os.path.join(REPO, path), []) if p.get("date") == day
+        done = [p for p in picks_store.load_picks(os.path.join(REPO, path)) if p.get("date") == day
                 and p.get("status") in ("win", "loss", "push")]
         if done:
             w = sum(p["status"] == "win" for p in done)

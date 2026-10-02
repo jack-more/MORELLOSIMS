@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import DB_PATH
 from db.connection import execute, read_query
-from utils.ledger import append_rows, parse_ts
+from utils.ledger import append_rows, open_entries, parse_ts, seal_entries
 
 # Mirrors collectors.games_espn.COUNTED_SEASON_TYPES (ESPN: 2 regular,
 # 3 postseason, 5 play-in). Preseason (1) is never captured.
@@ -57,6 +57,33 @@ def risk_amount(conf_1_10):
     return 20
 
 
+def skip_reason(g, threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, now=None):
+    """None when this daily_picks game is a tracked pick, else why not.
+
+    The one capture predicate: capture() uses it to log picks and, under seal
+    mode, generate_frontend.py uses it to seal the same games before capture
+    runs. Returns "" for silent skips (no line / neutral zone).
+    """
+    if g["book_spread"] is None:
+        return ""  # no real sportsbook line
+    # Only regular season / postseason / play-in games are ever tracked.
+    # Unknown season type (schedule sources unreachable) fails closed.
+    if g.get("season_type") not in COUNTED_SEASON_TYPES:
+        return f"SKIP (season type {g.get('season_type')!r}, not regular/post): {g['matchup']}"
+    # Never capture at or after tip-off.
+    tip = parse_ts(g.get("tip_at"))
+    if tip is not None and (now or datetime.now(timezone.utc)) >= tip:
+        return f"SKIP (tipped {g.get('tip_at')}): {g['matchup']}"
+    # Skip if confidence is in the neutral zone (35-65 = no meaningful edge)
+    conf = g["confidence"]
+    if (100 - threshold) <= conf <= threshold:
+        return ""
+    c10 = conf_to_1_10(conf)
+    if c10 < min_conf_grade:
+        return f"SKIP (below C:{min_conf_grade}): {g['matchup']} → {g['pick_text']} | conf={conf:.0f} ({c10}/10)"
+    return None
+
+
 def existing_picks(slate_date):
     """Return set of (matchup, type) already in picks.csv for this date.
 
@@ -82,6 +109,8 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
 
     with open(DAILY_JSON) as f:
         snapshot = json.load(f)
+    if snapshot.get("games"):
+        snapshot["games"] = open_entries(snapshot["games"])  # seal mode: open with the key
 
     raw_slate_date = snapshot["slate_date"]
     generated_at = snapshot["generated_at"]
@@ -133,28 +162,19 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
     picks = []
 
     for g in games:
+        if g.get("sealed") is True:
+            # Sealed by generate_frontend (seal mode) and PICKS_SEAL_KEY is
+            # missing here: capturing blind would drop or corrupt the pick.
+            from utils.seal import store
+            raise store.SealError(f"daily_picks.json game {g.get('matchup')} is sealed and "
+                                  f"{store.KEY_ENV} is not set — cannot capture")
         conf = g["confidence"]
         edge = g["spread_edge"]
 
-        # Skip games without real sportsbook lines
-        if g["book_spread"] is None:
-            continue
-
-        # Only regular season / postseason / play-in games are ever tracked.
-        # Unknown season type (schedule sources unreachable) fails closed.
-        if g.get("season_type") not in COUNTED_SEASON_TYPES:
-            print(f"  SKIP (season type {g.get('season_type')!r}, not regular/post): {g['matchup']}")
-            continue
-
-        # Never capture at or after tip-off.
-        tip = parse_ts(g.get("tip_at"))
-        if tip is not None and datetime.now(timezone.utc) >= tip:
-            print(f"  SKIP (tipped {g.get('tip_at')}): {g['matchup']}")
-            continue
-
-        # Filter: only actionable picks (strong edge)
-        # Skip if confidence is in the neutral zone (35-65 = no meaningful edge)
-        if (100 - threshold) <= conf <= threshold:
+        reason = skip_reason(g, threshold, min_conf_grade)
+        if reason is not None:
+            if reason:
+                print(f"  {reason}")
             continue
 
         pick_text = g["pick_text"]
@@ -169,9 +189,6 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
             direction = "AWAY"
 
         c10 = conf_to_1_10(conf)
-        if c10 < min_conf_grade:
-            print(f"  SKIP (below C:{min_conf_grade}): {matchup} → {pick_text} | conf={conf:.0f} ({c10}/10)")
-            continue
         risk = risk_amount(c10)
 
         # Extract line value from pick_text (e.g., "LAL +3.5" → 3.5)
@@ -221,7 +238,10 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
         }
         picks.append(pick)
         already.add((matchup, pick_type))  # one pick per game per type, even if the slate repeats a game
-        print(f"  PICK [C{c10}]: {matchup} → {pick_text} | conf={conf:.0f} ({c10}/10) | edge={edge:+.1f} | {risk} $PP")
+        if _sealed_now(pick):  # Actions logs are public: never print a sealed side
+            print(f"  PICK [C{c10}]: {matchup} → SEALED until tip | {risk} $PP")
+        else:
+            print(f"  PICK [C{c10}]: {matchup} → {pick_text} | conf={conf:.0f} ({c10}/10) | edge={edge:+.1f} | {risk} $PP")
 
     if not picks:
         print("[capture] No actionable picks found.")
@@ -243,7 +263,38 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
 
     print(f"[capture] Appended {len(picks)} picks to {PICKS_CSV}")
 
-    # ── Write to DB ──
+    # ── Write to DB ── (sealed picks wait: nba_sim.db is committed publicly;
+    # scripts/unseal_picks.py inserts them once the game tips)
+    insert_picks_db([p for p in picks if not _sealed_now(p)])
+    print(f"[capture] Inserted {sum(not _sealed_now(p) for p in picks)} picks to DB")
+
+    # ── Append to audit log ──
+    log_entries = []
+    if os.path.exists(PICK_LOG):
+        with open(PICK_LOG) as f:
+            log_entries = open_entries(json.load(f))
+
+    for p in picks:
+        log_entries.append({
+            **p,
+            "generated_at": generated_at,
+        })
+
+    with open(PICK_LOG, "w") as f:
+        json.dump(seal_entries(log_entries), f, indent=2)
+
+    print(f"[capture] Audit log updated: {len(log_entries)} total entries")
+
+    return picks
+
+
+def _sealed_now(p):
+    from utils.seal import store
+    return store.seal_mode() and store.before_start(p)
+
+
+def insert_picks_db(picks):
+    """Insert captured picks into the nba_sim.db `picks` table (idempotent)."""
     for p in picks:
         try:
             execute("""
@@ -261,27 +312,6 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
             ])
         except Exception as e:
             print(f"  DB insert failed for {p['matchup']}: {e}")
-
-    print(f"[capture] Inserted {len(picks)} picks to DB")
-
-    # ── Append to audit log ──
-    log_entries = []
-    if os.path.exists(PICK_LOG):
-        with open(PICK_LOG) as f:
-            log_entries = json.load(f)
-
-    for p in picks:
-        log_entries.append({
-            **p,
-            "generated_at": generated_at,
-        })
-
-    with open(PICK_LOG, "w") as f:
-        json.dump(log_entries, f, indent=2)
-
-    print(f"[capture] Audit log updated: {len(log_entries)} total entries")
-
-    return picks
 
 
 def main():

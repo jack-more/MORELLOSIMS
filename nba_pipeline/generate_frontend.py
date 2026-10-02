@@ -3538,7 +3538,7 @@ def get_matchups():
         })
     os.makedirs("data", exist_ok=True)
     with open("data/daily_picks.json", "w") as _dpf:
-        json.dump(daily_snapshot, _dpf, indent=2)
+        json.dump(_seal_daily_snapshot(daily_snapshot, slate_iso), _dpf, indent=2)
     logger.info("Picks: saved daily snapshot: %d games → data/daily_picks.json", len(daily_snapshot["games"]))
 
     # ── Line snapshots — per-run book line capture so grading can compute CLV ──
@@ -3573,6 +3573,94 @@ def get_matchups():
         logger.info("Picks: appended %d line snapshots → %s", len(_snap_rows), _snap_path)
 
     return matchups, team_map, slate_date, event_ids
+
+
+# ── Seal mode (scripts/picks_store.py, ops/config/monetization.json) ──────────
+# A game that is (or is about to be captured as) a tracked pick is SEALED in
+# every public artifact until tip: daily_picks.json keeps only market data,
+# and its matchup card renders as a sealed card. Games without a pick keep
+# the free model projection. Off by default — then this is a no-op.
+_SEALED_GAMES = {}  # (away, home) -> {"tip_at": ..., "conf": c10}
+
+
+def _capture_module():
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts", "capture_picks.py")
+    spec = importlib.util.spec_from_file_location("capture_picks_for_seal", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _seal_daily_snapshot(snapshot, slate_iso):
+    from utils.seal import store
+    if not store.seal_mode():
+        return snapshot
+    from utils.ledger import DAILY_KEEP, read_rows
+    cap = _capture_module()
+    pending = {
+        r["matchup"] for r in read_rows(cap.PICKS_CSV)
+        if not r.get("result") and store.before_start(r)
+    }
+    games = []
+    for g in snapshot["games"]:
+        tracked = g["matchup"] in pending or cap.skip_reason(g) is None
+        if tracked and store.before_start(g if g.get("tip_at") else {**g, "date": slate_iso}):
+            _SEALED_GAMES[(g["away"], g["home"])] = {
+                "tip_at": g.get("tip_at"),
+                "conf": cap.conf_to_1_10(g["confidence"]),
+            }
+            games.append(store.seal_record(g if g.get("tip_at") else {**g, "date": slate_iso},
+                                           DAILY_KEEP, kind="nba_daily"))
+        else:
+            games.append(g)
+    if _SEALED_GAMES:
+        logger.info("Seal mode: %d game(s) sealed until tip", len(_SEALED_GAMES))
+    return {**snapshot, "games": games}
+
+
+def render_sealed_matchup_card(m, idx):
+    """Public card for a game whose pick is sealed: matchup, tip, confidence."""
+    from utils.seal import store
+    ha, aa = m["home_abbr"], m["away_abbr"]
+    info = _SEALED_GAMES.get((aa, ha), {})
+    tip = store.parse_ts(info.get("tip_at"))
+    tip_txt = tip.astimezone(store.ET).strftime("%-I:%M %p ET") if tip else "TONIGHT"
+    conf = info.get("conf") or ""
+    url = store.whop_url()
+    cta = (f'<a class="sealed-cta" href="{url}" target="_blank" rel="noopener" '
+           f'style="display:inline-block;margin-top:8px;padding:6px 12px;border:2px solid #00FF55;'
+           f'color:#00FF55;font-weight:700;letter-spacing:1px;text-decoration:none;">GET IT NOW →</a>') if url else ""
+    h_logo, a_logo = get_team_logo_url(ha), get_team_logo_url(aa)
+    return f"""
+    <div class="matchup-card sealed-card" data-conf="{conf}" data-edge="0" data-total="0" data-idx="{idx}">
+        <div class="mc-header">
+            <div class="mc-team mc-away">
+                <img src="{a_logo}" class="mc-logo" alt="{aa}" onerror="this.style.display='none'">
+                <div class="mc-team-info">
+                    <span class="mc-abbr">{aa}</span>
+                    <span class="mc-record">{m['a_wins']}-{m['a_losses']}</span>
+                </div>
+            </div>
+            <div class="mc-center">
+                <div class="mc-pick sealed-pick"><span class="pick-label">C{conf}</span> &#128274; {store.sealed_text({"sport": "nba"})}</div>
+                <div class="mc-total">TIP {tip_txt}</div>
+                {cta}
+            </div>
+            <div class="mc-team mc-home">
+                <div class="mc-team-info right">
+                    <span class="mc-abbr">{ha}</span>
+                    <span class="mc-record">{m['h_wins']}-{m['h_losses']}</span>
+                </div>
+                <img src="{h_logo}" class="mc-logo" alt="{ha}" onerror="this.style.display='none'">
+            </div>
+        </div>
+    </div>
+"""
+
+
+def _is_sealed_matchup(m):
+    return (m["away_abbr"], m["home_abbr"]) in _SEALED_GAMES
 
 
 def get_team_roster(abbreviation, limit=8):
@@ -4711,6 +4799,9 @@ def generate_html():
     matchup_cards = ""
     if matchups:
         for idx, m in enumerate(matchups):
+            if _is_sealed_matchup(m):
+                matchup_cards += render_sealed_matchup_card(m, idx)
+                continue
             matchup_cards += render_matchup_card(m, idx, team_map)
     else:
         matchup_cards = """
@@ -4870,6 +4961,8 @@ def generate_html():
     # ── Build projected player lines for Props tab ──
     proj_lines_html = ""
     for m in matchups:
+        if _is_sealed_matchup(m):
+            continue  # sealed until tip: no player projections for this game
         ha = m["home_abbr"]
         aa = m["away_abbr"]
         h_logo = get_team_logo_url(ha)

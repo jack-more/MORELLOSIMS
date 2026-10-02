@@ -31,7 +31,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, PROJECT_ROOT)
 
 from utils.ledger import (  # noqa: E402
-    SETTLED, VOID, capture_check, compute_profit, read_rows, row_odds,
+    SETTLED, VOID, capture_check, compute_profit, read_rows, row_odds, rows_from_reader,
 )
 
 PICKS_CSV = os.path.join(PROJECT_ROOT, "data", "picks.csv")
@@ -51,14 +51,19 @@ def head_rows():
         return None
     if out.returncode != 0:
         return None
-    return [{k: (v or "").strip() for k, v in r.items()} for r in csv.DictReader(io.StringIO(out.stdout))]
+    # Same reader as the working copy: sealed rows (seal mode) open to
+    # plaintext with PICKS_SEAL_KEY, so keys compare across a seal → unseal.
+    return rows_from_reader(csv.DictReader(io.StringIO(out.stdout)))
 
 
 def log_index():
     if not os.path.exists(PICK_LOG):
         return {}
     idx = {}
-    for p in json.load(open(PICK_LOG)):
+    from utils.seal import store
+    for p in store.open_records(json.load(open(PICK_LOG))):
+        if store.is_raw_sealed(p):
+            continue  # sealed entry we cannot open (no key): no side to key on
         sd = p.get("slate_date", "")
         if sd[:1].isdigit():
             d = sd[:10]

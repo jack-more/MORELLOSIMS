@@ -57,11 +57,17 @@ jobs:
       - name: Render dispatch log
         run: python3 scripts/render_dispatch.py
 
+      - name: Install seal guardrail dependency
+        run: pip install cryptography
+
       - name: Commit and push (if changed)
+        env:
+          PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
         run: |
           git config user.name "Dispatch Bot"
           git config user.email "noreply@github.com"
           git add index.html
+          python3 scripts/check_seal_guardrail.py
           if git diff --cached --quiet; then
             echo "No dispatch changes to commit"
             exit 0

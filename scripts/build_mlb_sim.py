@@ -16,6 +16,10 @@ from collections import defaultdict
 
 from mlb_momo import matchup_swing_to_momo, momentum_to_momi, ms_class, woba_class
 from mlb_vector_live_gate import apply_live_vector_projection, apply_vector_gate_to_candidates
+import picks_store  # seal mode (ops/config/monetization.json): pending picks sealed until first pitch
+if picks_store.seal_mode() and not picks_store.have_key():
+    raise SystemExit(f"FATAL: seal mode is on but {picks_store.KEY_ENV} is not set — "
+                     "refusing to build (picks would publish in plaintext)")
 # Gate/staking/calibration constants + pure helpers live in mlb_model_gates
 # so they can be unit-tested without executing this live builder.
 from mlb_model_gates import (
@@ -90,8 +94,7 @@ def load_season_record():
         wins = losses = 0
         risked = pl = 0.0
         settled_for_streak = []
-        with open(MLB_PICKS_PATH) as f:
-            picks = json.load(f)
+        picks = picks_store.load_public_picks(MLB_PICKS_PATH)
         for p in picks:
             if (p.get("date") or "") < era_start:
                 continue
@@ -136,8 +139,7 @@ def load_season_record():
             settled_for_streak = []
 
             if os.path.exists(MLB_PICKS_PATH):
-                with open(MLB_PICKS_PATH) as f:
-                    picks = json.load(f)
+                picks = picks_store.load_public_picks(MLB_PICKS_PATH)
                 for p in picks:
                     try:
                         conf = int(p.get("conf") or 0)
@@ -2281,9 +2283,9 @@ def h(s):
 
 def load_published_mlb_picks():
     try:
-        with open(MLB_PICKS_PATH) as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
+        return picks_store.load_picks(MLB_PICKS_PATH)
+    except picks_store.SealError:
+        raise
     except Exception:
         return []
 
@@ -2396,6 +2398,80 @@ def qualifies_as_pick(g):
     return g.get("conf", 0) >= MIN_CONF_PICK
 
 
+def game_start_record(g):
+    return {"date": TODAY, "starts_at_utc": g.get("starts_at_utc"), "game_time": g.get("time_str")}
+
+
+def is_sealed_game(g):
+    """Seal mode: this game carries a pending pick (published, or qualifying
+    now) and has not started — every public artifact shows it sealed."""
+    if not picks_store.seal_mode() or g.get("has_started"):
+        return False
+    if picks_store.has_started(game_start_record(g)):
+        return False
+    pick = published_pick_for_game(g)
+    if pick and pick.get("status") == "pending":
+        return True
+    return qualifies_as_pick(g)
+
+
+def render_sealed_game(g, idx):
+    """Sealed card: matchup, market lines, first pitch, confidence — no side,
+    no projection, no model numbers."""
+    aa = g["away_abbr"]; ha = g["home_abbr"]
+    pick = published_pick_for_game(g)
+    conf = int((pick or {}).get("conf") or g.get("conf") or 0)
+    url = picks_store.whop_url()
+    cta = (f'<a class="sealed-cta" href="{h(url)}" target="_blank" rel="noopener" '
+           'style="display:inline-block;margin-top:6px;padding:4px 10px;border:2px solid #111;'
+           'background:#FFEA00;color:#111;font-weight:700;text-decoration:none;letter-spacing:.06em">GET IT NOW \u2192</a>'
+           ) if url else ""
+    away_ml_display = g["away_ml"] if g["away_ml"] else "\u2014"
+    home_ml_display = g["home_ml"] if g["home_ml"] else "\u2014"
+    return f'''<div class="game-card sealed-card" data-conf="{conf}" data-value="0" data-edge="0" data-lean="0">
+  <div class="card-header">
+  <div class="team-block">
+    <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/{g["away_id"]}.svg" alt="{aa}" style="width:100%;height:100%;object-fit:contain"></div>
+    <div class="team-abbr">{aa}</div>
+    <div class="team-ml">{away_ml_display}</div>
+  </div>
+  <div class="card-center">
+    <div class="proj-label">C:{conf}</div>
+    <div class="sim-pick sealed-pick">&#128274; {h(picks_store.sealed_text({"sport": "mlb"}))}</div>
+    {cta}
+  </div>
+  <div class="team-block">
+    <div class="team-logo"><img src="https://www.mlbstatic.com/team-logos/{g["home_id"]}.svg" alt="{ha}" style="width:100%;height:100%;object-fit:contain"></div>
+    <div class="team-abbr">{ha}</div>
+    <div class="team-ml">{home_ml_display}</div>
+  </div>
+</div>
+  <div class="sp-block">
+  <div class="sp-side"><div class="sp-name">{h(g["away_sp"])}</div></div>
+  <div class="sp-vs">VS</div>
+  <div class="sp-side"><div class="sp-name">{h(g["home_sp"])}</div></div>
+</div>
+  <div class="game-meta">{h(g["time_str"])} \u00b7 {h(g["venue"])}</div>
+</div>'''
+
+
+_SEALED_TEAMS = None
+
+
+def hr_sealed(bm):
+    """Seal mode: a batter in a sealed game shows no team total / run
+    contribution — the two projected team totals would reveal the side."""
+    global _SEALED_TEAMS
+    if not picks_store.seal_mode():
+        return False
+    if _SEALED_TEAMS is None:
+        _SEALED_TEAMS = set()
+        for _g in games:
+            if is_sealed_game(_g):
+                _SEALED_TEAMS |= {_g.get("away_abbr"), _g.get("home_abbr")}
+    return bm.get("team") in _SEALED_TEAMS or bm.get("opp_team") in _SEALED_TEAMS
+
+
 # ─── Shadow ledger: every evaluated game, every gate verdict ─────────────────
 # Published picks (~3/month under v2 gates) can never calibrate the gates;
 # the full slate (~15/day) can. Settled nightly by settle_mlb.py; analyzed by
@@ -2409,6 +2485,8 @@ def write_shadow_ledger(games):
     except Exception:
         ledger = {"rows": {}}
     rows = ledger.setdefault("rows", {})
+    for _k in [k for k, v in rows.items() if picks_store.is_raw_sealed(v)]:
+        rows[_k] = picks_store.open_record(rows[_k])  # seal mode: plaintext in memory
     n_new = n_upd = n_frozen = 0
     for g in games:
         if not g.get("game_pk"):
@@ -2466,9 +2544,22 @@ def write_shadow_ledger(games):
             n_upd += 1
         else:
             n_new += 1
+    if picks_store.seal_mode():
+        sealed_rows = {f"{TODAY}_{g['game_pk']}": g for g in games if g.get("game_pk") and is_sealed_game(g)}
+        for _k, _g in sealed_rows.items():
+            if _k in rows and not picks_store.is_raw_sealed(rows[_k]):
+                rows[_k] = picks_store.seal_record(
+                    rows[_k], SHADOW_SEALED_KEEP,
+                    unlock=picks_store.unlock_time(game_start_record(_g)), kind="mlb_shadow")
     with open(SHADOW_LEDGER_PATH, "w") as f:
         json.dump(ledger, f, separators=(",", ":"))
     print(f"  Shadow ledger: +{n_new} new, {n_upd} updated, {n_frozen} frozen ({len(rows)} rows total)")
+
+
+# Public fields of a sealed shadow-ledger row (the model side, probabilities,
+# odds and gate verdicts stay encrypted until first pitch).
+SHADOW_SEALED_KEEP = ("date", "game_pk", "away", "home", "away_sp", "home_sp", "conf",
+                      "published", "frozen", "captured_live", "result")
 
 write_shadow_ledger(games)
 
@@ -2504,6 +2595,8 @@ def render_batter(b):
 </div>'''
 
 def render_game(g, idx):
+    if is_sealed_game(g):
+        return render_sealed_game(g, idx)
     aa = g["away_abbr"]; ha = g["home_abbr"]
     ac = g["away_color"]; hc = g["home_color"]
     ar = g["away_runs"]; hr_ = g["home_runs"]
@@ -3393,6 +3486,8 @@ def render_hr_watch_tab():
         park = fmt_num(bm.get("park_factor", 1.0), 2)
         team_total = fmt_num(bm.get("team_total", 0), 1)
         run = fmt_num(bm.get("run_contrib", 0), 2)
+        if hr_sealed(bm):
+            team_total, run = "\u2014", "\u2014"
         surge = round(surge_power_score(bm))
         h2h_display = h2h_value if h2h_value != "0" else None
         bar_scale = 15.0
@@ -3538,7 +3633,7 @@ def render_hr_watch_tab():
           <td class="hr-col-sur">{round(surge_power_score(bm))}</td>
           <td class="hr-col-stack">{round(team_stack_pressure(bm), 1)}</td>
           <td class="hr-col-park">{fmt_num(bm.get("park_factor", 1.0), 2)}x</td>
-          <td class="hr-col-total">{fmt_num(bm.get("team_total", 0), 1)}</td>
+          <td class="hr-col-total">{"\u2014" if hr_sealed(bm) else fmt_num(bm.get("team_total", 0), 1)}</td>
           <td class="hr-col-h2h">{h2h}</td>
         </tr>'''
         return f'''<div class="daily-bucket hr-deep-board">
@@ -3851,8 +3946,8 @@ def render_hr_watch_tab():
                 "base_hr_rate": bm.get("base_hr_rate"),
                 "hr_lift": bm.get("hr_lift"),
                 "proj_hr": bm.get("proj_hr"),
-                "run_contrib": bm.get("run_contrib"),
-                "team_total": bm.get("team_total"),
+                "run_contrib": None if hr_sealed(bm) else bm.get("run_contrib"),
+                "team_total": None if hr_sealed(bm) else bm.get("team_total"),
                 "park_factor": bm.get("park_factor"),
                 "momo": bm.get("ms"),
                 "momi": bm.get("momi"),
@@ -3997,6 +4092,8 @@ def render_hr_watch_tab():
             "conf": int(p.get("conf") or (g.get("conf") if g else 0) or 0),
             "sort_conf": int(p.get("conf") or (g.get("conf") if g else 0) or 0),
             "sort_edge": float((g or {}).get("edge") or p.get("sim_edge") or 0),
+            "sealed": bool(g and is_sealed_game(g)) or (
+                p.get("status") == "pending" and picks_store.is_sealed(p)),
         })
 
     edges = sorted(qualified_picks, key=lambda x: (-x["conf"], -x.get("edge", 0)))
@@ -4010,6 +4107,7 @@ def render_hr_watch_tab():
             "conf": g["conf"],
             "sort_conf": g["conf"],
             "sort_edge": g.get("edge", 0),
+            "sealed": is_sealed_game(g),
         })
 
     rows = sorted(rows, key=lambda x: (-x["sort_conf"], -x["sort_edge"]))[:12]
@@ -4017,6 +4115,17 @@ def render_hr_watch_tab():
     for i, row in enumerate(rows):
         cc = conf_color(row["conf"])
         prem = ' ma-premium' if row["conf"] >= 8 else ''
+        if row.get("sealed"):
+            _url = picks_store.whop_url()
+            _cta = f' <a class="sealed-cta" href="{h(_url)}" target="_blank" rel="noopener">GET IT NOW \u2192</a>' if _url else ""
+            edges_html += f'''<div class="pick-row sealed-row">
+  <div class="pick-rank">{i+1}</div>
+  <div class="pick-info">
+    <div class="pick-label gp-pick-strong">&#128274; SEALED <span class="mc-conf-num" style="color:{cc}">C:{row["conf"]}</span></div>
+    <div class="pick-matchup">{h(row["matchup"])} \u00b7 {h(picks_store.sealed_text({"sport": "mlb"}))}{_cta}</div>
+  </div>
+</div>'''
+            continue
         edges_html += f'''<div class="pick-row{prem}">
   <div class="pick-rank">{i+1}</div>
   <div class="pick-info">
@@ -4875,6 +4984,9 @@ if os.path.exists(PICKS_LOG):
         with open(PICKS_LOG, newline="") as f:
             for row in csv.DictReader(f):
                 clean = {field: row.get(field, "") for field in PICKS_LOG_FIELDS}
+                if row.get(picks_store.BLOB_COL):  # seal mode: open with the key
+                    clean[picks_store.BLOB_COL] = row[picks_store.BLOB_COL]
+                    clean = picks_store.open_csv_row(clean, PICKS_LOG_FIELDS)
                 pick_log_rows[_pick_log_key(clean)] = clean
     except Exception as e:
         print(f"  WARN: Could not read existing picks CSV, rewriting fresh: {e}")
@@ -4910,8 +5022,28 @@ for g in writeable_picks:
     }
     pick_log_rows[_pick_log_key(row)] = row
 
+# Public fields of a sealed picks_log.csv row; pick/runs/WP/vector columns stay
+# encrypted until first pitch.
+PICKS_LOG_SEALED_KEEP = ("date", "time", "conf", "away", "home", "away_ml", "home_ml",
+                         "away_sp", "home_sp", "result", "game_pk", "model_version")
+
+
+def _seal_pick_log_row(row):
+    if row.get(picks_store.BLOB_COL) and not row.get("_sealed"):
+        return row  # sealed row we could not open (no key): pass through
+    plain = {f: row.get(f, "") for f in PICKS_LOG_FIELDS}
+    if picks_store.seal_mode() and not plain.get("result") and picks_store.before_start(plain):
+        return picks_store.seal_csv_row(plain, PICKS_LOG_FIELDS, PICKS_LOG_SEALED_KEEP,
+                                        {"pick": picks_store.SEALED_SIDE})
+    return plain
+
+
+if picks_store.seal_mode() or any(r.get(picks_store.BLOB_COL) for r in pick_log_rows.values()):
+    pick_log_rows = {k: _seal_pick_log_row(v) for k, v in pick_log_rows.items()}
+
 with open(PICKS_LOG, "w", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=PICKS_LOG_FIELDS, lineterminator="\n")
+    writer = csv.DictWriter(f, fieldnames=picks_store.csv_fieldnames(PICKS_LOG_FIELDS, pick_log_rows.values()),
+                            lineterminator="\n")
     writer.writeheader()
     writer.writerows(
         sorted(
@@ -4934,8 +5066,9 @@ os.makedirs(os.path.dirname(PICKS_JSON), exist_ok=True)
 existing = []
 if os.path.exists(PICKS_JSON):
     try:
-        with open(PICKS_JSON) as f:
-            existing = _json.load(f)
+        existing = picks_store.load_picks(PICKS_JSON)
+    except picks_store.SealError:
+        raise
     except Exception:
         existing = []
 by_id = {p["id"]: p for p in existing}
@@ -5070,8 +5203,9 @@ for g in writeable_picks:
         "settled_at": None,
     }
 merged = sorted(by_id.values(), key=lambda p: (p["date"], p["matchup"]), reverse=True)
-with open(PICKS_JSON, "w") as f:
-    _json.dump(merged, f, indent=2)
+# Same bytes as json.dump(merged, indent=2) with seal mode off; with it on,
+# pending pre-first-pitch picks are written sealed (scripts/picks_store.py).
+picks_store.save_picks(PICKS_JSON, merged)
 print(f"  picks/mlb.json: {len(merged)} total picks ({sum(1 for p in merged if p['status'] == 'pending')} pending)")
 
 # Print picks summary to stdout (used by commit message)
@@ -5079,7 +5213,10 @@ today_board = sorted(
     [p for p in merged if p.get("sport") == "mlb" and p.get("date") == TODAY and p.get("bet_type") == "ml"],
     key=lambda p: (-int(p.get("conf") or 0), p.get("matchup", "")),
 )
-picks_summary = " | ".join(f'{p["pick_text"]} (C:{p["conf"]})' for p in today_board)
+# Actions logs are public: sealed picks print without their side.
+picks_summary = " | ".join(
+    (f'SEALED {p["matchup"]} (C:{p["conf"]})' if picks_store.is_sealed(p) else f'{p["pick_text"]} (C:{p["conf"]})')
+    for p in today_board)
 if not picks_summary:
     picks_summary = "NO PLAYS"
 print(f"\n  OFFICIAL BOARD: {picks_summary}")

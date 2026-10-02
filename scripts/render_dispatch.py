@@ -10,6 +10,7 @@ Usage:  python3 scripts/render_dispatch.py
 import json
 import os
 import re
+import sys
 from collections import defaultdict, OrderedDict
 from datetime import datetime, timedelta
 
@@ -20,6 +21,9 @@ MLB_PATH = os.path.join(REPO, "picks", "mlb.json")
 BASELINES_PATH = os.path.join(REPO, "picks", "baselines.json")
 MODEL_ERA_PATH = os.path.join(REPO, "picks", "model_era.json")
 TRACKED_MIN_CONF = {"mlb": 8}
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode: public view only — never decrypts)
 
 
 def load_model_era():
@@ -153,7 +157,29 @@ def group_by_week(picks):
     return grouped
 
 
+def render_sealed_row(p, sport):
+    """Seal mode: matchup, first pitch / tip, confidence, units — no side."""
+    url = picks_store.whop_url()
+    side = f"&#128274; {esc(picks_store.sealed_text(p))}"
+    if url:
+        side = f'<a class="sealed-cta" href="{esc(url)}" target="_blank" rel="noopener">{side}</a>'
+    when = picks_store.start_label(p)
+    detail = f"SEALED · unlocks at {'tip' if sport == 'nba' else 'first pitch'}" + (f" ({when})" if when else "")
+    return f'''
+                        <div class="pick-row pending sealed" data-status="pending" data-matchup="{esc(p["matchup"])}">
+                            <span class="pr-date">{short_date(p["date"])}</span>
+                            <span class="pr-matchup">{esc(p["matchup"])}</span>
+                            <span class="pr-side pick-side-text">{side}</span>
+                            <span class="pr-conf">C:{esc(p.get("conf"))}</span>
+                            <span class="pr-units">{p["units"]}</span>
+                            <span class="pr-result">—</span>
+                        </div>
+                        <div class="pick-detail" hidden>{esc(detail)}</div>'''
+
+
 def render_pick_row(p, sport):
+    if p.get("sealed"):
+        return render_sealed_row(p, sport)
     if p["status"] == "win":
         cls = "win"
         result = f'W {(p.get("pl") or 0):+g}'
@@ -472,10 +498,11 @@ def update_home_card_bubbles(html, sport, agg, era=None, archive=None):
 
 
 def main():
-    with open(NBA_PATH) as f:
-        nba_picks = json.load(f)
-    with open(MLB_PATH) as f:
-        mlb_picks = json.load(f)
+    # Public view: sealed picks stay sealed (and any plaintext pending pick
+    # is sealed here too while seal mode is on). Identical to json.load
+    # when seal mode is off and nothing is sealed.
+    nba_picks = picks_store.load_public_picks(NBA_PATH)
+    mlb_picks = picks_store.load_public_picks(MLB_PATH)
 
     baselines = load_baselines()
     nba_baseline = baselines.get("nba")

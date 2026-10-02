@@ -219,6 +219,12 @@ def grade_all():
         pick_type = pick.get("type") or "spread"
         risk = float(pick.get("risk") or 0)
 
+        # Seal mode: settlement only ever grades plaintext. A final score for
+        # a row that is still sealed means scripts/unseal_picks.py did not run.
+        if (pick.get("_sealed") or side == "SEALED") and _game_for(pick, scores) is not None:
+            from utils.seal import store
+            store.assert_settleable([pick])
+
         if pick_type == "spread":
             result = grade_spread(matchup, side, scores, pick_date=pick.get("date"))
         elif pick_type == "ml":
@@ -227,8 +233,12 @@ def grade_all():
             result = None  # TODO: total/prop grading
 
         if result is None:
-            print(f"  PENDING: {pick['date']} | {matchup} | {side}")
+            # Actions logs are public: a pending pick still sealed for tip
+            # prints without its side.
+            shown = "SEALED" if pick.get("_sealed") or pick.get("side") == "SEALED" else side
+            print(f"  PENDING: {pick['date']} | {matchup} | {shown}")
             continue
+
 
         game = _game_for(pick, scores)
         pick["home_score"] = str(game["home_score"])

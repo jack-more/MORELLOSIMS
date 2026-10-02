@@ -27,6 +27,10 @@ import argparse
 import json
 import os
 import subprocess
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode: one door to pick data)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PICKS_JSON = os.path.join(REPO, "picks", "mlb.json")
@@ -50,6 +54,8 @@ def first_published():
             data = json.loads(git("show", f"{sha}:picks/mlb.json"))
         except Exception:
             continue
+        if picks_store.have_key():  # sealed history opens with the key
+            data = [picks_store.open_pick(r) if picks_store.is_raw_sealed(r) else r for r in data]
         for p in data:
             if p.get("sport") == "mlb" and p.get("date", "") >= VECTOR_START and p["id"] not in first:
                 first[p["id"]] = (p, sha, ts)
@@ -78,8 +84,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    with open(PICKS_JSON) as f:
-        picks = json.load(f)
+    picks = picks_store.load_picks(PICKS_JSON)
     by_id = {p["id"]: p for p in picks}
     first = first_published()
     posted = telegram_receipts()
@@ -123,8 +128,7 @@ def main():
     if args.dry_run:
         return
     merged = sorted(by_id.values(), key=lambda p: (p["date"], p["matchup"]), reverse=True)
-    with open(PICKS_JSON, "w") as f:
-        json.dump(merged, f, indent=2)
+    picks_store.save_picks(PICKS_JSON, merged)
 
 
 if __name__ == "__main__":

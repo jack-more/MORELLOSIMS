@@ -348,8 +348,13 @@ def runs_bar(d, x, y, w, label_l, val_l, color_l, label_r, val_r, color_r):
     d.text((x + w - 16 - text_w(d, rt, f_lab), y + 6), rt, font=f_lab, fill=(255, 255, 255))
 
 
+def _all_picks():
+    import picks_store  # seal mode: owner cards open sealed picks with the key
+    return picks_store.load_picks(PICKS_JSON)
+
+
 def load_pick(pick_id):
-    picks = json.load(open(PICKS_JSON))
+    picks = _all_picks()
     for p in picks:
         if p["id"] == pick_id:
             return p
@@ -357,7 +362,7 @@ def load_pick(pick_id):
 
 
 def season_record():
-    picks = json.load(open(PICKS_JSON))
+    picks = _all_picks()
     w = sum(1 for p in picks if p.get("status") == "win")
     l = sum(1 for p in picks if p.get("status") == "loss")
     base = {}
@@ -500,7 +505,7 @@ def render_receipt(pick, settled=False, out_name=None):
 # ── Card: daily slate board ────────────────────────────────────────────────
 
 def render_slate(date):
-    picks = [p for p in json.load(open(PICKS_JSON)) if p["date"] == date]
+    picks = [p for p in _all_picks() if p["date"] == date]
     if not picks:
         raise SystemExit(f"no picks for {date}")
     img = cement_background()

@@ -25,7 +25,11 @@ Usage:
 import argparse
 import json
 import os
+import sys
 from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode: one door to pick data)
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 LEDGER = os.path.join(REPO, "bankroll", "ledger.json")
@@ -62,8 +66,7 @@ def load_picks():
     picks = []
     for pf in PICK_FILES:
         if os.path.exists(pf):
-            with open(pf) as f:
-                picks.extend(json.load(f))
+            picks.extend(picks_store.load_picks(pf))
     return picks
 
 

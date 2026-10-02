@@ -120,7 +120,10 @@ def pill(draw: ImageDraw.ImageDraw, xy, text: str, fill, text_fill=CREAM):
 
 
 def load_data() -> tuple[list[dict], dict]:
-    picks = json.loads(PICKS_JSON.read_text(encoding="utf-8"))
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import picks_store  # public card: sealed picks stay sealed
+    picks = picks_store.load_public_picks(str(PICKS_JSON))
     baselines = json.loads(BASELINES_JSON.read_text(encoding="utf-8"))
     return picks, baselines.get("nba", {})
 
@@ -130,7 +133,7 @@ def pick_rows(picks: list[dict]) -> tuple[list[PickRow], list[PickRow]]:
     settled = []
     for pick in picks:
         row = PickRow(
-            pick_text=str(pick.get("pick_text") or ""),
+            pick_text="SEALED" if pick.get("sealed") else str(pick.get("pick_text") or ""),
             matchup=str(pick.get("matchup") or ""),
             conf=int(pick.get("conf") or 0),
             projection=str(pick.get("sim_projection") or ""),

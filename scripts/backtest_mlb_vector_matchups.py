@@ -151,8 +151,8 @@ def load_pick_log_prices(path: str | Path) -> dict[tuple[str, str, str], tuple[i
 
 
 def load_picks(args: argparse.Namespace) -> list[PickRow]:
-    with Path(args.picks_json).open() as f:
-        raw = json.load(f)
+    import picks_store  # seal mode: open sealed picks with the key
+    raw = picks_store.load_picks(str(args.picks_json))
     prices = load_pick_log_prices(args.picks_log)
     picks: list[PickRow] = []
     for row in raw:

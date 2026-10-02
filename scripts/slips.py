@@ -31,6 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import ops_tg  # noqa: E402
 import pick_alerts  # noqa: E402
+import picks_store  # noqa: E402
 
 REPO = os.path.dirname(HERE)
 STATE = os.path.join(REPO, "ops", "state", "slips.json")
@@ -50,8 +51,9 @@ def _save(st):
 
 def _all_picks():
     out = []
+    import picks_store  # seal mode: sealed picks open with PICKS_SEAL_KEY
     for sport, path in (("mlb", "picks/mlb.json"), ("nba", "picks/nba.json")):
-        for p in pick_alerts.load(os.path.join(REPO, path), []):
+        for p in picks_store.load_picks(os.path.join(REPO, path)):
             p.setdefault("sport", sport)
             out.append(p)
     return out
@@ -96,7 +98,10 @@ def receive(msg):
         return
     key = str(msg["message_id"])
     st = _load()
-    st["slips"][key] = {"file_id": photos[-1]["file_id"], "caption": msg.get("caption") or "",
+    # ops/state is committed publicly: under seal mode the caption (Jack's
+    # words, may name the side) is not kept and NBA pick ids are hashed.
+    caption = "" if picks_store.seal_mode() else (msg.get("caption") or "")
+    st["slips"][key] = {"file_id": photos[-1]["file_id"], "caption": caption,
                         "received": datetime.now(ET).isoformat(), "pick_id": None, "status": "new"}
     cands = _match(msg.get("caption"), _candidates())
     if not cands:
@@ -104,7 +109,7 @@ def receive(msg):
         st["slips"][key]["status"] = "unmatched"
     elif len(cands) == 1:
         p = cands[0]
-        st["slips"][key]["pick_id"] = p["id"]
+        st["slips"][key]["pick_id"] = picks_store.state_ref(p["id"])
         ops_tg.send(f"Slip for {p['pick_text']} {pick_alerts.odds_str(p)} · {p.get('matchup')} "
                     f"{p.get('game_time') or ''} [{p.get('status')}].\n"
                     "Post it to X with the card? (X shows the screenshot as sent — crop balance/username.)",
@@ -112,7 +117,7 @@ def receive(msg):
     else:
         ops_tg.send("Which pick is this slip for?",
                     [[(f"{p['pick_text']} · {p.get('matchup')}", f"slip:pick:{key}:{i}")] for i, p in enumerate(cands[:6])])
-        st["slips"][key]["choices"] = [p["id"] for p in cands[:6]]
+        st["slips"][key]["choices"] = [picks_store.state_ref(p["id"]) for p in cands[:6]]
     _save(st)
 
 
@@ -147,7 +152,7 @@ def handle(data):
 
 
 def _pick(pid):
-    return next(p for p in _all_picks() if p["id"] == pid)
+    return next(p for p in _all_picks() if picks_store.ref_matches(pid, p["id"]))
 
 
 def _download(file_id):
@@ -205,8 +210,8 @@ def _post(s, dry=False):
         s["status"], s["posted_at"] = "posted", datetime.now(ET).isoformat()
         s["posted_settled"] = settled
         ast = pick_alerts.load(pick_alerts.STATE, {"dm": [], "x_sealed": [], "x_open": []})
-        if p["id"] not in ast["x_open"]:
-            ast["x_open"].append(p["id"])
+        if not picks_store.ref_in(ast["x_open"], p["id"]):
+            ast["x_open"].append(picks_store.state_ref(p["id"]))
             with open(pick_alerts.STATE, "w") as f:
                 json.dump(ast, f, indent=2)
         return "posted to X"

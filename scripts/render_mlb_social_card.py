@@ -333,9 +333,18 @@ def generated_date(doc: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _public_picks() -> list:
+    """Public view only — the social card is published; sealed picks never
+    show their side (seal mode, scripts/picks_store.py)."""
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import picks_store
+    return picks_store.load_public_picks(str(PICKS_JSON))
+
+
 def parse_tracking_stats(doc: str) -> TrackingStats | None:
     try:
-        picks = json.loads(PICKS_JSON.read_text(encoding="utf-8"))
+        picks = _public_picks()
         baselines = json.loads(BASELINES_JSON.read_text(encoding="utf-8"))
         baseline = baselines.get("mlb", {})
         tracked = []
@@ -502,7 +511,7 @@ def load_official_pick_rows(doc: str, parsed_rows: list[GameRow]) -> list[GameRo
         return []
 
     try:
-        picks = json.loads(PICKS_JSON.read_text(encoding="utf-8"))
+        picks = _public_picks()
     except (OSError, json.JSONDecodeError):
         return []
 
@@ -524,6 +533,8 @@ def load_official_pick_rows(doc: str, parsed_rows: list[GameRow]) -> list[GameRo
     for pick in picks:
         if pick.get("sport") != "mlb" or pick.get("status") != "pending":
             continue
+        if pick.get("sealed"):
+            continue  # sealed until first pitch: never on a public card
         if target_date and pick.get("date") != target_date:
             continue
         try:

@@ -65,7 +65,9 @@ def git(*args: str) -> str:
 
 
 def load_pick(pick_id: str) -> dict:
-    picks = json.load(open(PICKS))
+    sys.path.insert(0, str(REPO / "scripts"))
+    import picks_store  # seal mode: open sealed picks with the key
+    picks = picks_store.load_picks(str(PICKS))
     picks = picks if isinstance(picks, list) else picks.get("picks", [])
     p = next((x for x in picks if isinstance(x, dict) and x.get("id") == pick_id), None)
     if not p:

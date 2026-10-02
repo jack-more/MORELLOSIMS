@@ -64,6 +64,10 @@ jobs:
     if: github.event.schedule != '0 17 * * *' && github.event.schedule != '0 16 * * *' && inputs.settle_only != 'true' && inputs.trends_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Seal mode (ops/config/monetization.json): key that seals pending picks
+      # in public files until first pitch / tip. Unused while seal mode is off.
+      PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -75,6 +79,11 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r nba_pipeline/requirements.txt
+
+      # Seal mode: picks whose tip has passed go public (with the nonce that
+      # proves the pre-game commitment) before capture / grading / sync.
+      - name: Unseal tipped NBA picks
+        run: python3 scripts/unseal_picks.py --sport nba
 
       - name: Refresh game scores (ESPN)
         continue-on-error: true
@@ -207,6 +216,9 @@ jobs:
           # Closing-line history for CLV: without committing it, every run's
           # snapshots were lost and grading never saw a closing line.
           if [ -f nba_pipeline/data/line_snapshots.csv ]; then git add nba_pipeline/data/line_snapshots.csv; fi
+          # Seal mode guardrail: no staged public file may show a sealed
+          # pick's side / odds / line before its game starts.
+          python3 scripts/check_seal_guardrail.py
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
@@ -229,6 +241,10 @@ jobs:
     if: github.event.schedule == '0 16 * * *' || inputs.trends_only == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Seal mode (ops/config/monetization.json): key that seals pending picks
+      # in public files until first pitch / tip. Unused while seal mode is off.
+      PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -238,6 +254,11 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r nba_pipeline/requirements.txt
+
+      # Seal mode: picks whose tip has passed go public (with the nonce that
+      # proves the pre-game commitment) before capture / grading / sync.
+      - name: Unseal tipped NBA picks
+        run: python3 scripts/unseal_picks.py --sport nba
 
       - name: Refresh trends (ESPN box scores + season stats, lineup stats, synergy)
         timeout-minutes: 15
@@ -310,6 +331,9 @@ jobs:
           # Closing-line history for CLV: without committing it, every run's
           # snapshots were lost and grading never saw a closing line.
           if [ -f nba_pipeline/data/line_snapshots.csv ]; then git add nba_pipeline/data/line_snapshots.csv; fi
+          # Seal mode guardrail: no staged public file may show a sealed
+          # pick's side / odds / line before its game starts.
+          python3 scripts/check_seal_guardrail.py
 
           if git diff --cached --quiet; then
             echo "No trend changes to commit"
@@ -332,6 +356,10 @@ jobs:
     if: github.event.schedule == '0 17 * * *' || inputs.settle_only == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Seal mode (ops/config/monetization.json): key that seals pending picks
+      # in public files until first pitch / tip. Unused while seal mode is off.
+      PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -341,6 +369,11 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r nba_pipeline/requirements.txt
+
+      # Seal mode: picks whose tip has passed go public (with the nonce that
+      # proves the pre-game commitment) before capture / grading / sync.
+      - name: Unseal tipped NBA picks
+        run: python3 scripts/unseal_picks.py --sport nba
 
       # Scores: ESPN first (header rotation), nba_sim.db `games` when ESPN 403s.
       - name: Grade picks
@@ -368,6 +401,13 @@ jobs:
           git add nbasim/index.html
           if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
           if [ -f nba_pipeline/data/settlement_results.json ]; then git add nba_pipeline/data/settlement_results.json; fi
+          # files the unseal step may have rewritten (no-op when nothing was sealed)
+          if [ -f nba_pipeline/data/pick_log.json ]; then git add nba_pipeline/data/pick_log.json; fi
+          if [ -f nba_pipeline/data/daily_picks.json ]; then git add nba_pipeline/data/daily_picks.json; fi
+          git add nba_pipeline/db/nba_sim.db
+          # Seal mode guardrail: no staged public file may show a sealed
+          # pick's side / odds / line before its game starts.
+          python3 scripts/check_seal_guardrail.py
 
           if git diff --cached --quiet; then
             echo "No settlement changes"

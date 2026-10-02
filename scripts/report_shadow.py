@@ -16,6 +16,10 @@ Usage: python3 scripts/report_shadow.py
 
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode: one door to pick data)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(REPO, "reports", "shadow_mlb.json")
@@ -45,7 +49,7 @@ def line(rows, label):
 def main():
     try:
         with open(LEDGER) as f:
-            rows = list(json.load(f)["rows"].values())
+            rows = picks_store.open_records(list(json.load(f)["rows"].values()))
     except Exception:
         print("No shadow ledger yet.")
         return

@@ -104,7 +104,10 @@ def F(kind, size):
 
 
 def load_picks():
-    return sorted(json.load(open(os.path.join(REPO, "picks", "mlb.json"))), key=lambda p: (p["date"], p["id"]))
+    """All MLB picks; sealed ones opened when PICKS_SEAL_KEY is set (owner
+    cards, DMs). Public renderers use picks_store.load_public_picks."""
+    import picks_store
+    return sorted(picks_store.load_picks("mlb"), key=lambda p: (p["date"], p["id"]))
 
 
 # ── print effects ──────────────────────────────────────────────────────────

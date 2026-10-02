@@ -47,7 +47,9 @@ def load_sources(base_url):
         picks_raw = read_url(f"{root}/picks/mlb.json?v=health-{cache_buster}")
     else:
         html = read_text(REPO_ROOT / "mlbsim" / "index.html")
-        picks_raw = read_text(REPO_ROOT / "picks" / "mlb.json")
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import picks_store  # public view: sealed picks print sealed
+        return html, picks_store.load_public_picks(str(REPO_ROOT / "picks" / "mlb.json"))
     return html, json.loads(picks_raw)
 
 
@@ -129,7 +131,9 @@ def main():
             print(f"  - {error}")
         return 1
 
-    board = " | ".join(f'{p.get("side")} C:{p.get("conf")}' for p in todays) or "NO PENDING PICKS"
+    board = " | ".join(
+        (f'SEALED {p.get("matchup")} C:{p.get("conf")}' if p.get("sealed") else f'{p.get("side")} C:{p.get("conf")}')
+        for p in todays) or "NO PENDING PICKS"
     print(f"MLB publish verification passed for {args.date}: {board}")
     return 0
 

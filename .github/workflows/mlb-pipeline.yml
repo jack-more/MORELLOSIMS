@@ -97,6 +97,10 @@ jobs:
       always() &&
       (needs.atlas-refresh.result == 'success' || needs.atlas-refresh.result == 'skipped') &&
       github.event.schedule != '0 6 * * *'
+    env:
+      # Seal mode (ops/config/monetization.json): key that seals pending picks
+      # in public files until first pitch / tip. Unused while seal mode is off.
+      PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,10 +112,15 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install requests requests-oauthlib pillow pybaseball numpy pandas qrcode
+        run: pip install requests requests-oauthlib pillow pybaseball numpy pandas qrcode cryptography
 
       - name: Pull latest (in case atlas job pushed)
         run: git pull origin main
+
+      # Seal mode: picks whose first pitch has passed go public (with the
+      # nonce that proves the pre-game commitment) before anything settles.
+      - name: Unseal started MLB picks
+        run: python3 scripts/unseal_picks.py --sport mlb
 
       - name: Settle old MLB picks
         timeout-minutes: 10
@@ -130,6 +139,9 @@ jobs:
 
       - name: Guard MLB pick gates + calibration
         run: python3 scripts/test_mlb_model_gates.py
+
+      - name: Guard seal mode (sealing, unsealing, guardrail tests)
+        run: python3 scripts/test_seal_mode.py
 
       - name: Verify MLB publish freshness
         run: python3 scripts/verify_mlb_publish.py --max-age-minutes 90 --require-hr-h2h-lane
@@ -164,6 +176,9 @@ jobs:
           [ -f reports/shadow_mlb.json ] && git add reports/shadow_mlb.json || true
           [ -f reports/hr_board_ledger.json ] && git add reports/hr_board_ledger.json || true
           [ -d posters/assets/mlb-headshots ] && git add posters/assets/mlb-headshots || true
+          # Seal mode guardrail: no staged public file may show a sealed
+          # pick's side / odds / line before its game starts.
+          python3 scripts/check_seal_guardrail.py
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -181,6 +196,10 @@ jobs:
     timeout-minutes: 60
     if: >-
       github.event.schedule == '0 6 * * *'
+    env:
+      # Seal mode (ops/config/monetization.json): key that seals pending picks
+      # in public files until first pitch / tip. Unused while seal mode is off.
+      PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -190,7 +209,10 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install requests pillow pybaseball numpy pandas
+        run: pip install requests pillow pybaseball numpy pandas cryptography
+
+      - name: Unseal started MLB picks
+        run: python3 scripts/unseal_picks.py --sport mlb
 
       - name: Settle yesterday's MLB picks
         timeout-minutes: 45
@@ -213,6 +235,9 @@ jobs:
       - name: Guard MLB pick gates + calibration
         run: python3 scripts/test_mlb_model_gates.py
 
+      - name: Guard seal mode (sealing, unsealing, guardrail tests)
+        run: python3 scripts/test_seal_mode.py
+
       - name: Verify MLB publish freshness
         run: python3 scripts/verify_mlb_publish.py --max-age-minutes 90 --require-hr-h2h-lane
 
@@ -230,6 +255,9 @@ jobs:
           [ -f mlbsim/odds_snapshots.csv ] && git add mlbsim/odds_snapshots.csv || true
           [ -f reports/shadow_mlb.json ] && git add reports/shadow_mlb.json || true
           [ -f reports/hr_board_ledger.json ] && git add reports/hr_board_ledger.json || true
+          # Seal mode guardrail: no staged public file may show a sealed
+          # pick's side / odds / line before its game starts.
+          python3 scripts/check_seal_guardrail.py
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

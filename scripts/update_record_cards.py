@@ -12,6 +12,10 @@ Marker convention: each card lives between
 import json
 import os
 import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import picks_store  # noqa: E402  (seal mode)
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 PICKS_DIR = os.path.join(REPO, "picks")
@@ -59,8 +63,7 @@ def aggregate(picks_json_path, baseline, sport):
     pl = baseline["pl"]
     settled_for_streak = []
     if os.path.exists(picks_json_path):
-        with open(picks_json_path) as f:
-            picks = json.load(f)
+        picks = picks_store.load_public_picks(picks_json_path)
         for p in picks:
             if not is_tracked_pick(p, sport):
                 continue
@@ -160,8 +163,7 @@ def update_homepage_hero(html, sport, wins, losses, roi, baseline):
     risked = baseline["risked"]
     pl = baseline["pl"]
     if os.path.exists(os.path.join(PICKS_DIR, f"{sport}.json")):
-        with open(os.path.join(PICKS_DIR, f"{sport}.json")) as f:
-            picks = json.load(f)
+        picks = picks_store.load_public_picks(os.path.join(PICKS_DIR, f"{sport}.json"))
         for p in picks:
             if is_tracked_pick(p, sport):
                 risked += p.get("units") or 50
