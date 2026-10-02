@@ -800,6 +800,11 @@ def main():
     else:
         logger.info("Skipping potential model — no snapshots taken")
 
+    # Step 3: keep the committed DB under GitHub's 100 MB limit (lossless:
+    # months older than the retention window move to db/archive/*.csv.gz)
+    from utils.snapshot_archive import archive_snapshots
+    archive_snapshots(DB_PATH)
+
     logger.info("=" * 60)
     logger.info("INTELLIGENCE SNAPSHOT COMPLETE")
     logger.info("=" * 60)
