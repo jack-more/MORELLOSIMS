@@ -52,7 +52,7 @@ permissions:
 
 jobs:
   atlas-refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to 26 on 2026-10-19, eve of NBA opener
     timeout-minutes: 120
     if: >-
       github.event_name == 'workflow_dispatch' &&
@@ -90,7 +90,7 @@ jobs:
           fi
 
   generate-picks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to 26 on 2026-10-19, eve of NBA opener
     needs: [atlas-refresh]
     timeout-minutes: 60
     if: >-
@@ -192,7 +192,7 @@ jobs:
         run: gh workflow run tg-channel-bot.yml --ref main -f command=run || echo "dispatch failed; the 15-min bot cron will catch it"
 
   settle-picks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to 26 on 2026-10-19, eve of NBA opener
     timeout-minutes: 60
     if: >-
       github.event.schedule == '0 6 * * *'
@@ -271,7 +271,7 @@ jobs:
         run: gh workflow run tg-channel-bot.yml --ref main -f command=run || echo "dispatch failed; the 15-min bot cron will catch it"
 
   alert-on-failure:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to 26 on 2026-10-19, eve of NBA opener
     needs: [atlas-refresh, generate-picks, settle-picks]
     if: always() && contains(needs.*.result, 'failure')
     steps:
