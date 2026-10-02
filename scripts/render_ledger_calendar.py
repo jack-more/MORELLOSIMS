@@ -25,6 +25,7 @@ from render_cards_v2 import text_w  # noqa: E402
 from render_series_card import REPO, S, W, H, BG, CREAM, INK, WIN, LOSS, s, F, paper_grain, _mix  # noqa: E402
 
 MUTED = (112, 102, 90)
+UNIT = 50.0  # $PP per unit, the standard stake
 EMPTY = (228, 220, 202)
 
 
@@ -32,7 +33,7 @@ def daily():
     out, n = collections.defaultdict(float), collections.Counter()
     for r in csv.DictReader(open(os.path.join(REPO, "nba_pipeline", "data", "picks.csv"))):
         if r["result"] in ("W", "L", "P"):
-            out[r["date"]] += float(r["profit"] or 0)
+            out[r["date"]] += float(r["profit"] or 0) / UNIT   # units (1u = 50 $PP)
             n[r["date"]] += 1
     return out, n
 
@@ -48,7 +49,7 @@ def month_block(img, x0, y0, w, h, ym, pl):
     days = {k: v for k, v in pl.items() if k.startswith(ym)}
     tot = sum(days.values())
     d.text((x0, y0 + s(4)), date(y, m, 1).strftime("%b").upper(), font=F("mono_b", 20), fill=INK)
-    tt = f"{tot:+,.0f}u"
+    tt = f"{tot:+,.1f}u"
     d.text((x0 + w - text_w(d, tt, F("black", 26)), y0 - s(2)), tt, font=F("black", 26), fill=WIN if tot >= 0 else LOSS)
     gy = y0 + s(42)
     cw = (w - s(4) * 6) / 7
@@ -66,7 +67,7 @@ def month_block(img, x0, y0, w, h, ym, pl):
             col = MUTED if v is None else CREAM
             d.text((cx + s(3), cy + s(2)), str(dd), font=F("mono_b", 10), fill=col)
             if v is not None:
-                lab = "0" if round(v) == 0 else f"{v:+.0f}"
+                lab = "0" if abs(v) < 0.05 else f"{v:+.1f}"
                 f = F("cond", 15)
                 d.text((cx + (cw - text_w(d, lab, f)) / 2, cy + ch - s(19)), lab, font=f, fill=CREAM)
 
@@ -93,7 +94,7 @@ def render():
     tail = "RED DAYS INCLUDED."
     d.text((L, s(236)), tail, font=fit_font(d, tail, "black", s(84), R - L, min_size=s(48)), fill=LOSS)
     total = sum(pl.values())
-    sub = f"{green} green days · {red} red · {total:+,.0f}u · every pick logged, none deleted"
+    sub = f"{green} green days · {red} red · {total:+,.1f}u · every pick logged, none deleted"
     d.text((L, s(352)), sub, font=F("mono_b", 22), fill=MUTED)
 
     cols = 3
@@ -111,12 +112,12 @@ def render():
     d.rounded_rectangle((sx, sy, sx + bw, sy + bh - s(30)), radius=s(22), fill=INK)
     d.text((sx + s(24), sy + s(26)), "ALL PICKS", font=F("mono_b", 20), fill=CREAM)
     wl = sum(1 for _ in [])
-    big = f"{total:+,.0f}u"
+    big = f"{total:+,.1f}u"
     d.text((sx + s(24), sy + s(70)), big, font=fit_font(d, big, "black", s(64), bw - s(48), min_size=s(36)), fill=(120, 220, 160))
     rec = _record()
     d.text((sx + s(24), sy + s(160)), rec, font=F("black", 40), fill=CREAM)
     d.text((sx + s(24), sy + s(222)), f"{green} up days · {red} down", font=F("mono_b", 18), fill=CREAM)
-    foot = "UNITS = $PP AT THE POSTED PRICE · MORELLOSIMS.COM"
+    foot = "1u = 50 $PP · GRADED AT THE POSTED PRICE · MORELLOSIMS.COM"
     d.text(((W - text_w(d, foot, F("mono_b", 22))) / 2, s(1236)), foot, font=F("mono_b", 22), fill=INK)
     return paper_grain(img.convert("RGB")).resize((1080, 1350), Image.LANCZOS)
 

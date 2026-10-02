@@ -175,8 +175,9 @@ def _caption(p):
         pass
     stamp = f"Logged {logged}, before the game." if logged else "Logged before the game."
     st = p.get("status")
-    try:  # stored result is away-home
-        a_pts, h_pts = str(p.get("result")).split("-")
+    try:  # stored result: MLB away-home, NBA home-away (both verified against the leagues' finals)
+        x, y = str(p.get("result")).split("-")
+        a_pts, h_pts = (y, x) if p.get("sport") == "nba" else (x, y)
         final = f"{p['away']} {a_pts} – {p['home']} {h_pts}"
     except ValueError:
         final = str(p.get("result") or "")

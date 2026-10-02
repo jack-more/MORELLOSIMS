@@ -229,8 +229,8 @@ def render(pick, settled=False):
         word = {"win": "WIN", "loss": "LOSS"}.get(pick["status"], "PUSH")
         d.rounded_rectangle((L, wy, R, wy + s(170)), radius=s(26), fill=col)
         d.text((L + s(40), wy + s(26)), word, font=F("black", 104), fill=CREAM)
-        try:
-            a_pts, h_pts = str(pick.get("result")).split("-")
+        try:  # NBA results are stored HOME-AWAY (verified vs ESPN: 06-13 NYK@SAS "90-94" = SA 90, NY 94)
+            h_pts, a_pts = str(pick.get("result")).split("-")
             fin = f"{away} {a_pts} – {home} {h_pts}"
         except ValueError:
             fin = str(pick.get("result") or "")

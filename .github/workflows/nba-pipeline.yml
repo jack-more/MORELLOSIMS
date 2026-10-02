@@ -476,6 +476,11 @@ jobs:
       - name: Refresh public NBA dashboard record
         run: python3 scripts/build_nbasim_app.py --record-only
 
+      - name: Rebuild NBA season ledger page (settled picks only)
+        run: |
+          python3 scripts/build_nba_ledger_page.py
+          python3 scripts/test_score_order.py
+
       - name: Commit settlement
         run: |
           git config user.name "NBA Pipeline Bot"
@@ -484,6 +489,7 @@ jobs:
 
           git add picks/nba.json
           git add nbasim/index.html
+          git add ledger/nba
           if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
           if [ -f nba_pipeline/data/settlement_results.json ]; then git add nba_pipeline/data/settlement_results.json; fi
           # files the unseal step may have rewritten (no-op when nothing was sealed)
