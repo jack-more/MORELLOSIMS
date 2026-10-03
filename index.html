@@ -4,78 +4,99 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Morello Sims — NBA picks, logged before tip</title>
-<meta name="description" content="Last NBA season: every pick logged before tip, losses included. Pick your pass for opening night.">
-<meta property="og:title" content="Morello Sims — every pick logged before tip">
-<meta property="og:description" content="Last NBA season, in the open. Pick your pass for opening night, Oct 20.">
-<meta property="og:image" content="https://morellosims.com/assets/home/hero.jpg">
+<meta name="description" content="NBA picks from a simulation, logged before tip and graded in public. Choose the set that suits you.">
+<meta property="og:title" content="Morello Sims — NBA picks, logged before tip">
+<meta property="og:description" content="One free pick a day, tonight's whole board, or every board for a month. Opening night Oct 20.">
+<meta property="og:image" content="https://morellosims.com/assets/home/sea.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,500;0,700;0,800;1,200;1,300&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,200;0,300;0,500;0,700;0,800;1,200;1,300&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/morello-auth.css?v=20261002-free-clicks">
 <style>
-:root{--sky:#3187DC;--sky-deep:#1F66B4;--ink:#0D1B2A;--paper:#FBFAF6;--green:#139447}
+/* poster palette, sampled from the reference: sky, sign rim, sign face, grass */
+:root{--sky:#3187DC;--sky-deep:#1F66B4;--rim:#F36269;--rim-deep:#C9444B;--face:#F5F0ED;--grass:#139447;--ink:#0D1B2A}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--sky);color:#fff;font-family:Inter,system-ui,sans-serif;overflow-x:hidden}
 button,input{font:inherit;color:inherit}
 button{background:none;border:0;cursor:pointer}
 a{color:inherit}
-.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
 
-/* 1. the season */
-.hero{position:relative;min-height:88svh;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
-.hero .bg{position:absolute;inset:0;background:url(/assets/home/hero.jpg) center 55%/cover}
-.hero .bg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(49,135,220,.5) 0%,rgba(49,135,220,.1) 40%,rgba(13,27,42,.05) 58%,rgba(13,27,42,.62) 100%)}
-.top,.low{position:relative;z-index:1}
-.top{display:flex;justify-content:space-between;align-items:center;padding:16px;max-width:1080px;margin:0 auto;width:100%}
-.brand{font-weight:800;letter-spacing:2px;font-size:13px;text-decoration:none}
+.top{display:flex;justify-content:space-between;align-items:center;padding:16px;max-width:1080px;margin:0 auto}
+.brand{font-weight:800;letter-spacing:2px;font-size:12px;text-decoration:none}
 .toplinks{display:flex;gap:16px;font-style:italic;font-weight:300;font-size:14px}
 .toplinks a{text-decoration:none;border-bottom:1px solid rgba(255,255,255,.6)}
-.low{padding:0 16px 28px;max-width:1080px;margin:0 auto;width:100%}
-.whisper{font-style:italic;font-weight:200;font-size:clamp(14px,3.8vw,18px);margin-bottom:10px}
-.big{font-weight:800;font-size:clamp(84px,26vw,220px);line-height:.82;letter-spacing:-4px;text-shadow:0 6px 30px rgba(13,27,42,.25)}
-.sub{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-weight:700;font-size:clamp(18px,5vw,26px)}
-.sub i{font-style:normal;font-weight:300;opacity:.85;font-size:.7em;display:block;letter-spacing:1px;text-transform:uppercase}
-.months{display:flex;gap:6px;margin-top:18px;max-width:640px;width:100%}
-.months a{flex:1;text-decoration:none;border-radius:12px;padding:9px 4px;text-align:center;background:rgba(255,255,255,.16);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.35)}
-.months a b{display:block;font-weight:800;font-size:15px}
-.months a small{font-size:10px;letter-spacing:1px;opacity:.9}
-.months a:hover{background:rgba(255,255,255,.3)}
 
-/* 2. pick your trip */
-.trip{padding:40px 16px 34px}
-.trip h2{font-weight:800;font-size:clamp(34px,9vw,64px);letter-spacing:-1.5px;line-height:.95}
-.trip h2 em{font-style:italic;font-weight:200}
-.trip .note{font-style:italic;font-weight:200;margin:10px 0 22px;font-size:15px}
-.passes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-@media(max-width:760px){.passes{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:80%;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-left:16px;padding:14px 16px 16px;margin:-14px -16px 0;width:calc(100% + 32px)}}
-.pass{scroll-snap-align:start;background:var(--paper);color:var(--ink);border-radius:22px;overflow:hidden;text-align:left;display:flex;flex-direction:column;box-shadow:0 14px 34px rgba(13,27,42,.22);transition:transform .3s cubic-bezier(.2,.9,.3,1.3),box-shadow .3s}
-.pass:hover{transform:translateY(-4px)}
-.pass[aria-checked="true"]{transform:translateY(-10px);box-shadow:0 22px 44px rgba(13,27,42,.35);outline:3px solid #fff;outline-offset:3px}
-.pass .ph{height:190px;background-size:cover;background-position:center;position:relative}
-.pass .ph b{position:absolute;left:14px;bottom:12px;color:#fff;font-weight:800;font-size:30px;letter-spacing:-.5px;text-shadow:0 2px 14px rgba(0,0,0,.4)}
-.pass .ph em{position:absolute;right:12px;top:12px;font-style:normal;background:rgba(255,255,255,.92);color:var(--ink);border-radius:999px;padding:5px 10px;font-weight:800;font-size:13px}
-.pass .body{padding:14px 16px 16px;display:grid;gap:12px}
-.pass .what{font-size:15px;line-height:1.35}
-.pass .stub{border-top:2px dashed #D9DFE6;margin:0 -16px;padding:12px 16px 0;position:relative;display:flex;justify-content:space-between;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#5B6B80}
-.pass .stub b{color:var(--ink)}
-.pass .stub:before,.pass .stub:after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--sky)}
-.pass .stub:before{left:-10px}.pass .stub:after{right:-10px}
-.cta{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:26px}
-.go{border:1px solid #fff;border-radius:999px;padding:16px 34px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-size:14px;opacity:.5;pointer-events:none;transition:all .25s}
-.go.ready{opacity:1;pointer-events:auto;background:#fff;color:var(--sky-deep)}
-.hint{font-style:italic;font-weight:200;font-size:13px}
-#ma-profile-btn{display:none!important}
-footer{padding:18px 16px 40px;max-width:1080px;margin:0 auto;font-size:12px;opacity:.9;display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between}
+/* the poster */
+.poster{max-width:1080px;margin:0 auto;padding:0 16px;text-align:center}
+.whisper{font-style:italic;font-weight:200;font-size:clamp(13px,3.6vw,16px);line-height:1.45;margin-top:18px}
+.mark{display:block;width:84px;height:84px;margin:34px auto 6px}
+.season{display:inline-block;text-decoration:none;margin-top:8px}
+.season b{display:block;font-weight:200;font-size:clamp(76px,22vw,168px);letter-spacing:-3px;line-height:.9}
+.season span{display:inline-block;margin-top:8px;font-weight:300;font-size:clamp(13px,3.6vw,16px);border-bottom:1px solid rgba(255,255,255,.55);padding-bottom:2px}
+.season span em{font-style:normal;font-weight:700}
+
+.row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(10px,4vw,56px);max-width:860px;margin:0 auto}
+.pick-row{margin-top:clamp(40px,9vw,72px)}
+/* the poster's outlined dropdowns */
+.sel{display:flex;align-items:stretch;border:1px solid rgba(255,255,255,.85);border-radius:3px;height:36px;text-align:left;width:100%}
+.sel span{flex:1;padding:0 6px 0 9px;display:flex;align-items:center;font-style:italic;font-weight:300;font-size:clamp(13px,3.6vw,20px);white-space:nowrap;overflow:hidden}
+.sel i{width:clamp(24px,7vw,34px);border-left:1px solid rgba(255,255,255,.85);display:grid;place-items:center}
+.sel i svg{transition:transform .25s}
+.sel[aria-expanded="true"]{background:#fff;color:var(--sky-deep)}
+.sel[aria-expanded="true"] i{border-color:var(--sky)}
+.sel[aria-expanded="true"] i svg{transform:rotate(180deg)}
+
+/* three of the same object, three weights */
+.objs{margin-top:clamp(28px,7vw,54px);position:relative;z-index:2}
+.obj{position:relative;aspect-ratio:1/1.08;width:100%;max-width:220px;margin:0 auto;border-radius:22%;background:var(--face);
+  border:var(--w) solid var(--rim);box-shadow:calc(var(--w) * -1) calc(var(--w) * .5) 0 var(--rim-deep),0 26px 34px rgba(8,40,80,.28);
+  transition:transform .35s cubic-bezier(.2,.9,.3,1.3);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.obj svg{width:58%;height:auto;margin-top:-8%}
+.obj small{position:absolute;bottom:9%;left:0;right:0;font-family:"IBM Plex Mono",monospace;font-size:clamp(8px,2.1vw,11px);letter-spacing:.5px;color:var(--grass);text-transform:uppercase}
+.obj[aria-pressed="true"]{transform:translateY(-12px) rotate(-2deg)}
+.objs .row>button:hover .obj{transform:translateY(-6px)}
+
+/* the water they stand in */
+.sea{position:relative;margin-top:-90px;padding:120px 16px 40px;background:linear-gradient(180deg,var(--sky) 0%,rgba(49,135,220,0) 26%),url(/assets/home/sea.jpg) center 30%/cover}
+
+/* the goods: drops open under the sets */
+.goods{max-width:720px;margin:0 auto;background:var(--face);color:var(--ink);border-radius:22px;padding:20px 18px 18px;box-shadow:0 24px 50px rgba(8,30,60,.35);text-align:left;display:none}
+.goods.on{display:block;animation:drop .4s cubic-bezier(.2,.8,.2,1)}
+@keyframes drop{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+.goods h2{font-weight:800;font-size:clamp(26px,7vw,40px);letter-spacing:-1px;line-height:1}
+.goods h2 em{font-style:italic;font-weight:200;color:var(--sky-deep)}
+.goods .price{font-weight:800;color:var(--sky-deep)}
+.goods .lede{font-size:15px;line-height:1.4;margin:8px 0 14px;color:#33475F}
+.night{border:1px solid #E1DAD4;border-radius:16px;overflow:hidden;background:#fff}
+.night header{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;background:#FBF8F5;border-bottom:1px solid #EEE7E1;font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:#5B6B80}
+.night header a{color:var(--sky-deep);text-transform:none;letter-spacing:0;font-size:13px}
+.p{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 14px;border-top:1px solid #F1EBE6}
+.p:first-of-type{border-top:0}
+.p b{font-weight:800;font-size:19px;letter-spacing:-.3px}
+.p .r{font-weight:800;font-size:17px;text-align:right}
+.p .r.w{color:var(--grass)}.p .r.l{color:#B0201E}.p .r.x{color:#5B6B80}
+.p small{font-size:12px;color:#5B6B80;grid-column:1/-1}
+.p.sealed b{filter:blur(7px);user-select:none}
+.months{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:12px 14px}
+.months a{text-decoration:none;text-align:center;border-radius:10px;padding:8px 2px;background:#F3F7FC;border:1px solid #DCE7F3}
+.months small{display:block;font-size:10px;letter-spacing:1px;color:#5B6B80}
+.months b{font-weight:800;font-size:15px}
+.next{font-size:13px;color:#33475F;line-height:1.45;margin:12px 2px 0}
+.go{display:block;width:100%;margin-top:16px;background:var(--sky);color:#fff;border-radius:16px;padding:18px;font-weight:800;font-size:17px;letter-spacing:.3px}
+.go:hover{background:var(--sky-deep)}
+.prompt{font-style:italic;font-weight:300;font-size:15px;text-align:center;text-shadow:0 1px 10px rgba(0,0,0,.35)}
+
+footer{padding:26px 16px 40px;max-width:1080px;margin:0 auto;font-size:12px;display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between}
 footer nav{display:flex;gap:14px;flex-wrap:wrap}
 footer a{text-decoration:none;font-weight:500}
+#ma-profile-btn{display:none!important}
 
-/* 3. the hard sale */
-.sale{position:fixed;inset:0;z-index:50;background:var(--paper);color:var(--ink);overflow-y:auto;transform:translateY(100%);transition:transform .5s cubic-bezier(.2,.8,.2,1);visibility:hidden}
+/* the hard sale */
+.sale{position:fixed;inset:0;z-index:50;background:var(--face);color:var(--ink);overflow-y:auto;transform:translateY(100%);transition:transform .5s cubic-bezier(.2,.8,.2,1);visibility:hidden}
 .sale.on{transform:none;visibility:visible}
-.sale .band{height:210px;background-size:cover;background-position:center;position:relative}
-.sale .band:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(251,250,246,1))}
-.sale .inner{max-width:720px;margin:-80px auto 0;position:relative;padding:0 16px 60px}
+.sale .band{height:200px;background:linear-gradient(180deg,rgba(49,135,220,.2),var(--face)),url(/assets/home/sea.jpg) center 30%/cover}
+.sale .inner{max-width:720px;margin:-90px auto 0;position:relative;padding:0 16px 60px}
 .back{font-style:italic;font-weight:300;color:var(--sky-deep);font-size:14px;margin-bottom:10px}
 .sale h1{font-weight:800;font-size:clamp(38px,10vw,70px);line-height:.95;letter-spacing:-1.5px}
 .sale h1 em{font-style:italic;font-weight:200;color:var(--sky-deep)}
@@ -85,138 +106,188 @@ footer a{text-decoration:none;font-weight:500}
 .proof span{font-size:11px;color:#5B6B80;letter-spacing:.6px;text-transform:uppercase}
 .get{list-style:none;margin:20px 0;display:grid;gap:10px}
 .get li{display:flex;gap:12px;font-size:16px;line-height:1.4}
-.get li:before{content:"";flex:none;width:18px;height:18px;margin-top:2px;border-radius:50%;background:var(--green) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3 3 7-7' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat}
+.get li:before{content:"";flex:none;width:18px;height:18px;margin-top:2px;border-radius:50%;background:var(--grass) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3 3 7-7' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat}
 .clock{background:var(--ink);color:#fff;border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0}
 .clock b{font-weight:800;font-size:clamp(22px,6vw,30px)}
 .clock span{font-style:italic;font-weight:300;font-size:13px;opacity:.85}
-.buy{display:block;width:100%;text-align:center;background:var(--sky);color:#fff;border-radius:18px;padding:20px;font-weight:800;font-size:18px;text-decoration:none;margin:10px 0}
+.buy{display:block;width:100%;text-align:center;background:var(--sky);color:#fff;border-radius:18px;padding:20px;font-weight:800;font-size:18px;margin:10px 0}
 .buy:hover{background:var(--sky-deep)}
 .email{display:flex;gap:8px;margin:10px 0}
 .email input{flex:1;min-width:0;border:1px solid #CFD8E3;border-radius:14px;padding:16px;font-size:16px;color:var(--ink);background:#fff}
 .email button{background:var(--sky);color:#fff;border-radius:14px;padding:0 18px;font-weight:800}
-.ok{color:var(--green);font-weight:700;margin-top:6px}
+.ok{color:var(--grass);font-weight:700;margin-top:6px}
 .small{font-size:11px;color:#6A788B;line-height:1.5;margin-top:20px}
 .alt{display:block;text-align:center;font-style:italic;font-weight:300;color:var(--sky-deep)}
 </style>
 </head>
 <body>
 
-<section class="hero" aria-label="Last NBA season">
-  <div class="bg" role="img" aria-label="A trail through wildflowers toward blue mountains"></div>
-  <div class="top"><a class="brand" href="/">MORELLO SIMS</a>
-    <span class="toplinks"><a href="/ledger/nba/">every pick</a><a href="#" id="signin">sign in</a></span></div>
-  <div class="low">
-    <p class="whisper">Last NBA season. Every pick logged before tip. Losses included.</p>
-    <div class="big" id="units">+15.0u</div>
-    <div class="sub">
-      <span id="rec">122-93-1<i>record</i></span>
-      <span id="roi">+8.3%<i>roi</i></span>
-      <span id="n">216<i>picks, none deleted</i></span>
-    </div>
-    <nav class="months" id="months" aria-label="Season by month"></nav>
+<div class="top"><a class="brand" href="/">MORELLO SIMS</a>
+  <span class="toplinks"><a href="/ledger/nba/">every pick</a><a href="#" id="signin">sign in</a></span></div>
+
+<section class="poster" aria-label="Choose your set">
+  <p class="whisper">NBA picks from a simulation, logged before tip.<br>
+    When you see the board, lie down on the nearest grass.<br>
+    Choose the set that suits you.<br>Have a nice night.</p>
+
+  <svg class="mark" viewBox="0 0 100 100" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+    <circle cx="30" cy="26" r="13"/>
+    <path d="M30 70 Q36 74 40 86"/><path d="M50 96 Q47 62 70 30"/><path d="M58 96 Q59 68 44 48"/><path d="M72 94 Q76 74 88 60"/>
+  </svg>
+
+  <a class="season" href="/ledger/nba/" id="season"><b id="units">+15.0u</b>
+    <span>last NBA season · <em id="rec">122-93-1</em> · <em id="n">216</em> picks, every one public →</span></a>
+
+  <div class="row pick-row" role="radiogroup" aria-label="Sets">
+    <button class="sel" data-id="light" aria-expanded="false"><span>Free pick</span><i><svg width="14" height="9" viewBox="0 0 14 9"><path d="M1 1l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></i></button>
+    <button class="sel" data-id="regular" aria-expanded="false"><span>Tonight</span><i><svg width="14" height="9" viewBox="0 0 14 9"><path d="M1 1l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></i></button>
+    <button class="sel" data-id="bold" aria-expanded="false"><span>All month</span><i><svg width="14" height="9" viewBox="0 0 14 9"><path d="M1 1l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></i></button>
   </div>
+  <div class="row objs" id="objs"></div>
 </section>
 
-<main class="trip wrap" id="join">
-  <h2>Pick your trip. <em>We'll handle the picks.</em></h2>
-  <p class="note">Opening night boards Tue Oct 20. Choose the pass that suits you, then take off.</p>
-  <div class="passes" id="passes" role="radiogroup" aria-label="Choose your pass"></div>
-  <div class="cta"><button class="go" id="go">Take off →</button><span class="hint" id="hint">choose a pass</span></div>
-</main>
+<section class="sea" id="join">
+  <p class="prompt" id="prompt">Tap a set to see what's in it.</p>
+  <div class="goods" id="goods" aria-live="polite"></div>
+</section>
 
 <footer>
-  <nav><a href="/ledger/nba/">Ledger</a><a href="/nbasim/">NBA sim</a><a href="/classic/">Classic site</a></nav>
+  <nav><a href="/ledger/nba/">Ledger</a><a href="/nbasim/">NBA sim</a><a href="https://x.com/MorelloSims">X</a><a href="/classic/">Classic site</a></nav>
   <span>Simulations, not guarantees · 21+ · bet responsibly</span>
 </footer>
 
-<section class="sale" id="sale" aria-live="polite" aria-hidden="true">
-  <div class="band" id="band"></div>
+<section class="sale" id="sale" aria-hidden="true">
+  <div class="band"></div>
   <div class="inner">
-    <button class="back" id="back">← other passes</button>
+    <button class="back" id="back">← other sets</button>
     <h1 id="h1">—</h1>
     <div class="proof">
       <div><b id="pu">+15.0u</b><span>last season</span></div>
       <div><b id="pr">122-93-1</b><span>record</span></div>
       <div><b id="pn">216</b><span>picks, none deleted</span></div>
     </div>
-    <div class="clock"><div><span>Opening night boards in</span><br><b id="cd">—</b></div><span>Tue Oct 20 · BOS @ DET</span></div>
+    <div class="clock"><div><span>Opening night board in</span><br><b id="cd">—</b></div><span>Tue Oct 20 · BOS @ DET</span></div>
     <ul class="get" id="get"></ul>
     <div id="action"></div>
     <a class="alt" href="/ledger/nba/">Check every pick from last season first →</a>
-    <p class="small">Simulations, not guarantees. Past results don't promise future ones. 1u = 50 $PP at the posted price. 21+ · bet responsibly · 1-800-GAMBLER.</p>
+    <p class="small">Simulations, not guarantees. Past results don't promise future ones. 1u = one standard bet at the posted price. 21+ · bet responsibly · 1-800-GAMBLER.</p>
   </div>
 </section>
 
 <script>
-const SETS=[
-  {id:"light",name:"Day pass",price:"Free",img:"/assets/home/light.jpg",what:"One pick a day, in the open. Plus the full ledger.",
-   stub:["Daily","Free"],head:'Day pass. <em>One pick a day, on us.</em>',
-   get:["The free pick of the day, every day","The full public ledger — tap any day","Results the next morning"]},
-  {id:"regular",name:"Tonight",price:"$19.99",img:"/assets/home/regular.jpg",what:"Every pick on tonight's board, the moment it drops.",
-   stub:["Tonight","24 hr"],head:'Tonight. <em>Every pick on the board.</em>',product:"pickmaker_dual",buy:"Take off — $19.99 for tonight",
-   get:["Every pick tonight, the moment it drops","The card, the line and the sim's edge for each","Alerts for 24 hours"]},
-  {id:"bold",name:"The season",price:"$199.99",img:"/assets/home/bold.jpg",what:"Every pick, every night, for 30 days.",
-   stub:["30 days","All picks"],head:'The season. <em>Every pick, every night.</em>',product:"monthly_board",buy:"Take off — $199.99 for 30 days",
-   get:["Every NBA pick for 30 days, the moment it drops","Alerts on your phone","The card, the line and the sim's edge for each pick","Opening week included"]},
-];
-let chosen=null;
-const $=id=>document.getElementById(id);
-$("passes").innerHTML=SETS.map(s=>`<button class="pass" role="radio" aria-checked="false" data-id="${s.id}">
-  <div class="ph" style="background-image:url(${s.img})"><b>${s.name}</b><em>${s.price}</em></div>
-  <div class="body"><div class="what">${s.what}</div>
-  <div class="stub"><span>boards <b>${s.stub[0]}</b></span><span><b>${s.stub[1]}</b></span></div></div></button>`).join("");
-document.querySelectorAll(".pass").forEach(el=>el.addEventListener("click",()=>{
-  chosen=SETS.find(s=>s.id===el.dataset.id);
-  document.querySelectorAll(".pass").forEach(p=>p.setAttribute("aria-checked",p===el));
-  $("go").classList.add("ready"); $("hint").textContent=`${chosen.name} · ${chosen.price}`;
-  track("pass_select",{pass:chosen.id});
-}));
-$("go").addEventListener("click",()=>{
-  if(!chosen)return;
-  $("band").style.backgroundImage=`url(${chosen.img})`;
-  $("h1").innerHTML=chosen.head;
-  $("get").innerHTML=chosen.get.map(g=>`<li>${g}</li>`).join("");
-  $("action").innerHTML = chosen.product
-    ? `<button class="buy" id="buy">${chosen.buy}</button>`
+// one object, three weights — the poster's idea
+const BLADES = ["M44 92 Q41 56 66 18","M53 92 Q55 62 36 40","M68 90 Q73 66 88 50","M18 62 Q27 68 31 80","M30 92 Q26 70 12 58","M60 92 Q66 50 84 30"];
+const GRASS = n => `<svg viewBox="0 0 100 100" fill="none" stroke="#139447" stroke-width="5" stroke-linecap="round" aria-hidden="true">
+  ${BLADES.slice(0, n).map(d => `<path d="${d}"/>`).join("")}</svg>`;
+const SETS = {
+  light:  {name:"Free pick", price:"Free",    w:1, rim:"4px", tag:"free",
+           head:'Free pick. <em>One a day, on us.</em>', lede:"One pick from the board every day, in the open. Plus the full ledger.",
+           get:["The free pick of the day, every day","The full public ledger — tap any day","Results the next morning"]},
+  regular:{name:"Tonight",   price:"$19.99",  w:3, rim:"5px", tag:"$19.99", product:"pickmaker_dual",
+           head:'Tonight. <em>The whole board.</em>', lede:"Every pick on tonight's board, the moment it drops. Good for 24 hours.",
+           buy:"Take off — $19.99 for tonight",
+           get:["Every pick tonight, the moment it drops","The line and the sim's number for each","Alerts for 24 hours"]},
+  bold:   {name:"All month", price:"$199.99", w:6, rim:"6px", tag:"$199.99", product:"monthly_board",
+           head:'All month. <em>Every pick, every night.</em>', lede:"Every board for 30 days, the moment each one drops.",
+           buy:"Take off — $199.99 for 30 days",
+           get:["Every NBA pick for 30 days, the moment it drops","Alerts on your phone","The line and the sim's number for each pick","Opening week included"]},
+};
+const $ = id => document.getElementById(id);
+$("objs").innerHTML = Object.entries(SETS).map(([id,s]) =>
+  `<button data-id="${id}" aria-label="${s.name}, ${s.price}"><div class="obj" style="--w:${s.rim}" aria-pressed="false">${GRASS(s.w)}<small>${s.tag}</small></div></button>`).join("");
+
+let L = null, chosen = null;   // L = the public ledger
+const f = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "u";
+const fu = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "u";
+const day = d => new Date(d + "T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"});
+
+// a real night from the ledger, by rule: the latest board with 3+ picks, all logged before tip
+function sampleNight(){
+  const by = {}; L.picks.forEach(p => (by[p.date] = by[p.date] || []).push(p));
+  const d = Object.keys(by).sort().reverse().find(k => by[k].length >= 3 && !by[k].some(p => p.late));
+  return {date:d, picks:by[d]};
+}
+const row = (p, sealed) => `<div class="p${sealed ? " sealed" : ""}"><b>${sealed ? "XXX +0.0" : p.pick}</b>
+  <span class="r ${p.result === "W" ? "w" : p.result === "L" ? "l" : "x"}">${p.result} ${fu(p.units)}</span>
+  <small>${p.away} @ ${p.home} · ${p.odds} · logged ${p.logged || "before tip"} · final ${p.final.replace(/\s–\s/," – ")}</small></div>`;
+
+function goods(id){
+  const s = SETS[id]; let body = "";
+  if (L){
+    const n = sampleNight(), total = n.picks.reduce((a,p) => a + p.units, 0);
+    const head = `<header><span>${day(n.date)} · a real board</span><a href="/ledger/nba/#${n.date}">open that day →</a></header>`;
+    if (id === "light") body = `<div class="night">${head}${row(n.picks[0])}${n.picks.slice(1).map(p => row(p, true)).join("")}</div>
+      <p class="next">The free pick is one from the board, in the open. The rest stays sealed.</p>`;
+    if (id === "regular") body = `<div class="night">${head}${n.picks.map(p => row(p)).join("")}
+      <div class="p"><b>Board</b><span class="r ${total >= 0 ? "w" : "l"}">${fu(total)}</span></div></div>
+      <p class="next">Tonight gets you the whole board, the moment it drops.</p>`;
+    if (id === "bold"){
+      const m = {}; L.picks.forEach(p => { const k = p.date.slice(0,7); m[k] = (m[k] || 0) + p.units; });
+      body = `<div class="night"><header><span>every night · last season</span><a href="/ledger/nba/">the full ledger →</a></header>
+        <div class="months">${Object.entries(m).map(([k,v]) => `<a href="/ledger/nba/#${L.picks.find(p => p.date.startsWith(k)).date}">
+        <small>${new Date(k + "-15").toLocaleString("en-US",{month:"short"}).toUpperCase()}</small><b>${f(v)}</b></a>`).join("")}</div></div>
+        <p class="next">All month gets every board, every night, for 30 days. Tap a month to see each night.</p>`;
+    }
+  }
+  return `<h2>${s.name}.${s.product ? ` <span class="price">${s.price}</span>` : ""}</h2><p class="lede">${s.lede}</p>${body}
+    <p class="next">From opening night (Oct 20), tonight's board shows here, sealed until you're in.</p>
+    <button class="go" id="takeoff">Take off →</button>`;
+}
+
+function choose(id){
+  chosen = id;
+  document.querySelectorAll(".sel").forEach(b => b.setAttribute("aria-expanded", b.dataset.id === id));
+  document.querySelectorAll(".obj").forEach(o => o.setAttribute("aria-pressed", o.parentElement.dataset.id === id));
+  $("prompt").style.display = "none";
+  const g = $("goods"); g.innerHTML = goods(id); g.classList.remove("on"); void g.offsetWidth; g.classList.add("on");
+  $("takeoff").addEventListener("click", sale);
+  g.scrollIntoView({behavior:"smooth", block:"start"});
+  track("pass_select", {pass:id});
+}
+document.querySelectorAll(".sel, #objs button").forEach(b => b.addEventListener("click", () => choose(b.dataset.id)));
+
+function sale(){
+  const s = SETS[chosen];
+  $("h1").innerHTML = s.head;
+  $("get").innerHTML = s.get.map(g => `<li>${g}</li>`).join("");
+  $("action").innerHTML = s.product
+    ? `<button class="buy" id="buy">${s.buy}</button>`
     : `<form class="email" id="email"><input type="email" required placeholder="you@email.com" aria-label="Email"><button>Send it</button></form><div id="emailok"></div>`;
-  if(chosen.product){ $("buy").addEventListener("click",()=>{ track("pass_checkout",{pass:chosen.id});
-      const a=window.morelloAuth; if(!a){ location.href="/classic/#packages"; return; }
-      const product=chosen.product, signedIn=!!a.getCurrentUser();
+  if (s.product){ $("buy").addEventListener("click", () => { track("pass_checkout", {pass:chosen});
+      const a = window.morelloAuth; if (!a){ location.href = "/classic/#packages"; return; }
+      const product = s.product, signedIn = !!a.getCurrentUser();
       a.checkout(product);
       // not signed in: checkout() opens "create account"; continue to payment
       // as soon as the account exists, so nobody has to find the button again
-      if(!signedIn){ let n=0; const w=setInterval(()=>{ n++;
-        if(a.getCurrentUser()){ clearInterval(w); a.closeModal(); a.checkout(product); }
-        if(n>300) clearInterval(w); },1000); }
+      if (!signedIn){ let n = 0; const w = setInterval(() => { n++;
+        if (a.getCurrentUser()){ clearInterval(w); a.closeModal(); a.checkout(product); }
+        if (n > 300) clearInterval(w); }, 1000); }
   }); }
-  else { $("email").addEventListener("submit",async e=>{ e.preventDefault(); const v=e.target.querySelector("input").value;
-      const ok = window.morelloAuth ? await window.morelloAuth.emailCapture(v,"home_day_pass") : false;
-      $("emailok").innerHTML = ok?'<p class="ok">You\'re in. The free pick lands in your inbox.</p>':'<p class="ok" style="color:#B0201E">Couldn\'t save that — try again.</p>'; }); }
-  const s=$("sale"); s.classList.add("on"); s.setAttribute("aria-hidden","false"); s.scrollTop=0;
-  track("pass_takeoff",{pass:chosen.id});
-});
-$("back").addEventListener("click",()=>{ $("sale").classList.remove("on"); $("sale").setAttribute("aria-hidden","true"); });
-$("signin").addEventListener("click",e=>{ e.preventDefault(); const a=window.morelloAuth; if(!a) return;
+  else { $("email").addEventListener("submit", async e => { e.preventDefault(); const v = e.target.querySelector("input").value;
+      const ok = window.morelloAuth ? await window.morelloAuth.emailCapture(v, "home_day_pass") : false;
+      $("emailok").innerHTML = ok ? '<p class="ok">You\'re in. The free pick lands in your inbox.</p>' : '<p class="ok" style="color:#B0201E">Couldn\'t save that — try again.</p>'; }); }
+  const el = $("sale"); el.classList.add("on"); el.setAttribute("aria-hidden", "false"); el.scrollTop = 0;
+  track("pass_takeoff", {pass:chosen});
+}
+$("back").addEventListener("click", () => { $("sale").classList.remove("on"); $("sale").setAttribute("aria-hidden", "true"); });
+$("signin").addEventListener("click", e => { e.preventDefault(); const a = window.morelloAuth; if (!a) return;
   a.openModal(a.getCurrentUser() ? "profile" : "signin"); });
 // once auth resolves, the top link becomes the account link
-let tries=0; const who=setInterval(()=>{ const a=window.morelloAuth; tries++;
-  if(a && a.getCurrentUser()){ $("signin").textContent="account"; clearInterval(who); } if(tries>20) clearInterval(who); },500);
-function track(n,p){ try{ window.morelloAuth && window.morelloAuth.trackEvent(n,p); }catch(_){} }
+let tries = 0; const who = setInterval(() => { const a = window.morelloAuth; tries++;
+  if (a && a.getCurrentUser()){ $("signin").textContent = "account"; clearInterval(who); } if (tries > 20) clearInterval(who); }, 500);
+function track(n, p){ try { window.morelloAuth && window.morelloAuth.trackEvent(n, p); } catch(_){} }
 
 // numbers come from the public ledger
-fetch("/ledger/nba/2025-26.json").then(r=>r.json()).then(d=>{
-  const s=d.summary, f=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(1)+"u", rec=`${s.w}-${s.l}${s.p?"-"+s.p:""}`;
-  $("units").textContent=f(s.units); $("pu").textContent=f(s.units);
-  $("rec").innerHTML=`${rec}<i>record</i>`; $("pr").textContent=rec;
-  $("roi").innerHTML=`${s.roi>=0?"+":""}${s.roi}%<i>roi</i>`;
-  $("n").innerHTML=`${s.picks}<i>picks, none deleted</i>`; $("pn").textContent=s.picks;
-  const m={}; d.picks.forEach(p=>{const k=p.date.slice(0,7); m[k]=(m[k]||0)+p.units;});
-  $("months").innerHTML=Object.entries(m).map(([k,v])=>
-    `<a href="/ledger/nba/#${k}-${String(d.picks.find(p=>p.date.startsWith(k)).date.slice(8)).padStart(2,"0")}"><small>${new Date(k+"-15").toLocaleString("en-US",{month:"short"}).toUpperCase()}</small><b>${f(v)}</b></a>`).join("");
-}).catch(()=>{});
-const tip=new Date("2026-10-20T19:00:00Z").getTime();
-const tick=()=>{const s=Math.max(0,(tip-Date.now())/1000|0);$("cd").textContent=`${s/86400|0}d ${s%86400/3600|0}h ${s%3600/60|0}m`;};
-tick(); setInterval(tick,30000);
+fetch("/ledger/nba/2025-26.json").then(r => r.json()).then(d => {
+  L = d; const s = d.summary, rec = `${s.w}-${s.l}${s.p ? "-" + s.p : ""}`;
+  $("units").textContent = f(s.units); $("pu").textContent = f(s.units);
+  $("rec").textContent = rec; $("pr").textContent = rec;
+  $("n").textContent = s.picks; $("pn").textContent = s.picks;
+  if (chosen) choose(chosen);
+}).catch(() => {});
+const tip = new Date("2026-10-20T19:00:00Z").getTime();
+const tick = () => { const s = Math.max(0, (tip - Date.now()) / 1000 | 0); $("cd").textContent = `${s / 86400 | 0}d ${s % 86400 / 3600 | 0}h ${s % 3600 / 60 | 0}m`; };
+tick(); setInterval(tick, 30000);
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
