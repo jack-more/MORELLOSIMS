@@ -7,131 +7,142 @@
 <meta name="description" content="Every NBA pick, in units, by day. Wins and losses.">
 <link rel="icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,500;0,700;0,800;1,200;1,300&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-:root{--stock:#F3ECDC;--card:#FBF7EE;--ink:#1C1816;--muted:#70665A;--line:#D9CFBB;--house:#1238D6;
-  --win:#14804A;--loss:#B0201E;--push:#8A8070;--empty:#E6DDC9}
+:root{--sky:#3187DC;--sky-deep:#1F66B4;--ink:#0D1B2A;--paper:#FBFAF6;--card:#fff;--muted:#5B6B80;--line:#E3E8EE;
+  --win:#139447;--loss:#C8372D;--push:#8A96A6;--empty:#EEF2F6}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--stock);color:var(--ink);font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:500;line-height:1.45}
+body{background:var(--paper);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-weight:500;line-height:1.45;overflow-x:hidden}
 a{color:inherit}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .wrap{max-width:1120px;margin:0 auto;padding:0 16px}
-.k{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);font-weight:700}
-.black{font-family:"Archivo Black",sans-serif}
-.cond{font-family:"Barlow Condensed",sans-serif;font-weight:700}
-.bar{position:sticky;top:0;z-index:20;background:rgba(243,236,220,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.bar .wrap{display:flex;align-items:center;justify-content:space-between;height:56px}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:700;letter-spacing:1px}
-.brand img{width:26px;height:26px}
-.pill{display:inline-flex;align-items:center;text-decoration:none;font-weight:700;letter-spacing:1px;text-transform:uppercase;border-radius:10px;padding:9px 14px;font-size:12px;background:var(--house);color:var(--stock)}
+.k{font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.soft{font-style:italic;font-weight:300;color:var(--muted);font-size:14px}
+.black{font-weight:800;letter-spacing:-.5px}
+.cond,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:700}
 
-.hero{padding:28px 0 8px}
-.hero h1{font-size:clamp(40px,9vw,84px);line-height:.9;text-transform:uppercase;margin:8px 0 14px}
-.big{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;border-top:3px solid var(--ink);border-bottom:3px solid var(--ink);padding:14px 0}
-.big .u{font-size:clamp(60px,15vw,128px);line-height:.85}
+/* sky band: the claim */
+.sky{background:var(--sky);color:#fff}
+.bar .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+.brand{font-weight:800;letter-spacing:2px;font-size:13px;text-decoration:none}
+.pill{display:inline-flex;align-items:center;text-decoration:none;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:999px;padding:10px 16px;font-size:12px;background:#fff;color:var(--sky-deep)}
+.hero{padding-top:18px;padding-bottom:26px}
+.whisper{font-style:italic;font-weight:200;font-size:clamp(14px,3.8vw,18px)}
+.hero h1{font-weight:800;font-size:clamp(40px,9vw,72px);line-height:.95;letter-spacing:-1.5px;margin:6px 0 10px}
+.hero h1 em{font-style:italic;font-weight:200}
+.big{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;padding:6px 0 4px}
+.big .u{font-size:clamp(72px,18vw,150px);line-height:.85;letter-spacing:-3px;text-shadow:0 6px 30px rgba(13,27,42,.2)}
 .stats{display:grid;grid-template-columns:repeat(3,auto);gap:4px 22px}
-.stats b{font-family:"Archivo Black";font-size:clamp(20px,4.6vw,30px);display:block;line-height:1.05}
-.stats span{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
-.facts{display:flex;gap:10px;overflow-x:auto;padding:14px 0 4px;-webkit-overflow-scrolling:touch}
-.fact{flex:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;text-align:left}
-.fact b{display:block;font-family:"Archivo Black";font-size:18px}
-.fact span{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
-.fact:hover,.fact:focus-visible{border-color:var(--ink)}
+.stats b{font-weight:800;font-size:clamp(20px,4.6vw,28px);display:block;line-height:1.05}
+.stats span{font-size:11px;opacity:.85;letter-spacing:1px;text-transform:uppercase;font-weight:300}
+.facts{display:flex;gap:8px;overflow-x:auto;padding:18px 0 2px;-webkit-overflow-scrolling:touch}
+.fact{flex:none;border-radius:14px;padding:10px 14px;text-align:left;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);color:#fff}
+.fact b{display:block;font-weight:800;font-size:18px}
+.fact span{font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.9}
+.fact:hover,.fact:focus-visible{background:rgba(255,255,255,.3)}
+.sky .tab{border-color:rgba(255,255,255,.6);color:#fff}
+.sky .tab[aria-pressed="true"]{background:#fff;color:var(--sky-deep)}
 
-.sec{padding:22px 0}
-.head{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;border-bottom:3px solid var(--ink);padding-bottom:8px;margin-bottom:12px}
-.head h2{font-size:clamp(28px,6vw,44px);line-height:.9;text-transform:uppercase}
+/* paper: the receipts */
+.sec{padding:26px 0 6px}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:12px}
+.head h2{font-weight:800;font-size:clamp(28px,6vw,40px);line-height:.95;letter-spacing:-1px}
 
-.chart{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:12px 10px 6px;position:relative}
+.chart{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:12px 10px 6px;position:relative}
 .chart svg{width:100%;height:220px;display:block;touch-action:pan-y}
-.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--stock);border-radius:10px;padding:6px 10px;font-size:12px;white-space:nowrap;transform:translate(-50%,-120%);opacity:0;transition:opacity .12s}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;white-space:nowrap;transform:translate(-50%,-120%);opacity:0;transition:opacity .12s}
 
 .tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px}
-.tab{flex:none;text-decoration:none;border:2px solid var(--ink);border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase}
-.tab[aria-pressed="true"]{background:var(--ink);color:var(--stock)}
+.tab{flex:none;text-decoration:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase}
+.tab[aria-pressed="true"]{background:var(--sky);border-color:var(--sky);color:#fff}
 
 .months{display:grid;grid-template-columns:1fr;gap:16px}
 @media(min-width:640px){.months{grid-template-columns:1fr 1fr}}
 @media(min-width:980px){.months{grid-template-columns:1fr 1fr 1fr}}
-.month{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px}
+.month{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:14px}
 .mh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
-.mh b{font-family:"Archivo Black";font-size:22px}
+.mh b{font-weight:800;font-size:22px;letter-spacing:-.5px}
 .dow,.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
 .dow span{font-size:10px;color:var(--muted);text-align:center;letter-spacing:1px}
 .day{aspect-ratio:1/1.05;border-radius:9px;background:var(--empty);display:flex;flex-direction:column;justify-content:space-between;padding:4px 5px;text-align:left;min-width:0}
 .day i{font-style:normal;font-size:10px;color:var(--muted)}
-.day b{font-family:"Barlow Condensed";font-size:clamp(13px,3.6vw,17px);line-height:1;color:#fff;text-align:center}
+.day b{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:clamp(10px,2.9vw,14px);line-height:1;color:#fff;text-align:center}
 .day.has i{color:rgba(255,255,255,.85)}
 .day.has{transition:transform .1s, box-shadow .1s}
-.day.has:hover,.day.has:focus-visible{transform:translateY(-2px);box-shadow:0 6px 14px rgba(0,0,0,.18);outline:none}
-.day.sel{outline:3px solid var(--ink);outline-offset:1px}
+.day.has:hover,.day.has:focus-visible{transform:translateY(-2px);box-shadow:0 6px 14px rgba(13,27,42,.18);outline:none}
+.day.sel{outline:3px solid var(--sky);outline-offset:1px}
 .day.off{visibility:hidden}
 
 .list{display:grid;gap:8px}
 .lr{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;text-align:left;width:100%}
-.lr:hover{border-color:var(--ink)}
-.res{font-family:"Archivo Black";font-size:12px;border-radius:8px;padding:4px 7px;color:#fff}
+.lr:hover{border-color:var(--sky)}
+.res{font-weight:800;font-size:12px;border-radius:8px;padding:4px 7px;color:#fff}
 .res.W{background:var(--win)}.res.L{background:var(--loss)}.res.P{background:var(--push)}
 .u.pos{color:var(--win)}.u.neg{color:var(--loss)}
+.sky .u.pos,.sky .u.neg,.daytot .u.pos,.daytot .u.neg{color:#fff}
 
-/* day sheet */
-.scrim{position:fixed;inset:0;background:rgba(22,20,15,.45);opacity:0;pointer-events:none;transition:opacity .18s;z-index:30}
-.sheet{position:fixed;z-index:31;left:0;right:0;bottom:0;max-height:86vh;overflow:auto;background:var(--stock);border-radius:24px 24px 0 0;padding:16px 16px 28px;transform:translateY(105%);transition:transform .22s ease}
-.open .scrim{opacity:1;pointer-events:auto}.open .sheet{transform:none}
+/* day sheet: one pass per pick */
+.scrim{position:fixed;inset:0;background:rgba(13,27,42,.45);opacity:0;pointer-events:none;transition:opacity .18s;z-index:30}
+.sheet{position:fixed;z-index:31;left:0;right:0;bottom:0;max-height:86vh;overflow:auto;background:var(--sky);color:#fff;border-radius:24px 24px 0 0;padding:16px 16px 28px;transform:translateY(105%);transition:transform .22s ease,visibility 0s .22s;visibility:hidden}
+.open .scrim{opacity:1;pointer-events:auto}.open .sheet{transform:none;visibility:visible;transition:transform .22s ease}
 @media(min-width:820px){.sheet{left:auto;top:0;bottom:0;width:440px;max-height:none;border-radius:24px 0 0 24px;transform:translateX(105%)}}
-.sh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
-.sh h3{font-size:clamp(20px,6vw,26px);text-transform:uppercase}
+.sh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.sh h3{font-weight:800;font-size:clamp(22px,6vw,28px);letter-spacing:-.5px}
 .nav{display:flex;gap:6px}
-.nav button{border:2px solid var(--ink);border-radius:10px;width:38px;height:38px;font-weight:700}
-.daytot{display:flex;gap:16px;align-items:baseline;border-top:3px solid var(--ink);border-bottom:3px solid var(--ink);padding:10px 0;margin-bottom:12px}
-.daytot b{font-family:"Archivo Black";font-size:40px;line-height:1}
-.pk{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin-bottom:10px;position:relative;overflow:hidden}
-.pk:before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--team,#999)}
-.pk .t1{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.pk .pick{font-family:"Barlow Condensed";font-weight:700;font-size:30px;line-height:1;text-transform:uppercase}
-.pk .mu{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:4px}
-.pk .why{font-size:13px;margin-top:8px}
-.pk .meta{font-size:11px;color:var(--muted);margin-top:6px;letter-spacing:.5px}
+.nav button{border:1px solid rgba(255,255,255,.6);border-radius:999px;width:38px;height:38px;font-weight:700}
+.daytot{display:flex;gap:14px;align-items:baseline;padding:4px 0 14px}
+.daytot b{font-weight:800;font-size:44px;line-height:1;letter-spacing:-1px}
+.daytot .k{color:#fff;opacity:.85}
+.pk{background:var(--paper);color:var(--ink);border-radius:20px;padding:14px 16px 12px;margin-bottom:12px;position:relative;box-shadow:0 10px 26px rgba(13,27,42,.18)}
+.pk .t1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pk .pick{font-weight:800;font-size:28px;line-height:1;letter-spacing:-.5px}
+.pk .pick:before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--team,#999);margin-right:8px;vertical-align:middle}
+.pk .mu{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:6px}
+.pk .why{font-size:14px;margin-top:10px;font-style:italic;font-weight:300}
+.pk .meta{border-top:2px dashed #D9DFE6;margin:12px -16px 0;padding:10px 16px 0;position:relative;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.pk .meta:before,.pk .meta:after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--sky)}
+.pk .meta:before{left:-10px}.pk .meta:after{right:-10px}
 .late{display:inline-block;font-size:10px;letter-spacing:1px;text-transform:uppercase;border:1px solid var(--muted);border-radius:6px;padding:1px 6px;margin-left:6px}
-.close{border:2px solid var(--ink);border-radius:10px;width:38px;height:38px;font-weight:700;font-size:14px}
-footer{border-top:3px solid var(--ink);padding:18px 0 40px;font-size:12px;color:var(--muted);margin-top:20px}
+.close{border:1px solid rgba(255,255,255,.6);border-radius:999px;width:38px;height:38px;font-weight:700;font-size:14px}
+footer{padding:22px 0 44px;font-size:12px;color:var(--muted);margin-top:20px;line-height:1.6}
 </style>
 </head>
 <body>
+<div class="sky">
 <header class="bar"><div class="wrap">
-  <a class="brand" href="/"><img src="/favicon.svg" alt=""> MORELLO SIMS</a>
+  <a class="brand" href="/">MORELLO SIMS</a>
   <a class="pill" href="/#join">Get the picks</a>
 </div></header>
+<section class="hero wrap">
+  <div class="tabs" id="seasons"></div>
+  <p class="whisper" id="kick">NBA. Every pick, logged before tip.</p>
+  <h1>The ledger. <em>Losses included.</em></h1>
+  <div class="big">
+    <div class="u black" id="units">—</div>
+    <div class="stats">
+      <div><b id="rec">—</b><span>record</span></div>
+      <div><b id="roi">—</b><span>roi</span></div>
+      <div><b id="n">—</b><span>picks</span></div>
+    </div>
+  </div>
+  <div class="facts" id="facts"></div>
+</section>
+</div>
 
 <main class="wrap">
-  <section class="hero">
-    <div class="tabs" id="seasons"></div>
-    <div class="k" id="kick">NBA · every itemized pick</div>
-    <h1 class="black">The ledger.</h1>
-    <div class="big">
-      <div class="u black" id="units">—</div>
-      <div class="stats">
-        <div><b id="rec">—</b><span>record</span></div>
-        <div><b id="roi">—</b><span>roi</span></div>
-        <div><b id="n">—</b><span>picks</span></div>
-      </div>
-    </div>
-    <div class="facts" id="facts"></div>
-  </section>
-
   <section class="sec">
-    <div class="head"><h2 class="black">Running units</h2><div class="k">tap a point</div></div>
+    <div class="head"><h2>Running units</h2><span class="soft">tap a point</span></div>
     <div class="chart"><svg id="chart" role="img" aria-label="Running units by day"></svg><div class="tip" id="tip"></div></div>
   </section>
 
   <section class="sec">
-    <div class="head"><h2 class="black">Every day</h2><div class="k">tap a day</div></div>
+    <div class="head"><h2>Every day</h2><span class="soft">tap a day</span></div>
     <div class="tabs" id="tabs"></div>
     <div class="months" id="months"></div>
   </section>
 
   <section class="sec">
-    <div class="head"><h2 class="black">Every pick</h2><div class="k" id="listk"></div></div>
+    <div class="head"><h2>Every pick</h2><span class="soft" id="listk"></span></div>
     <div class="list" id="list"></div>
   </section>
 
@@ -143,7 +154,7 @@ footer{border-top:3px solid var(--ink);padding:18px 0 40px;font-size:12px;color:
 <div id="sheetwrap">
   <div class="scrim" id="scrim"></div>
   <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sht">
-    <div class="sh"><h3 class="black" id="sht">—</h3>
+    <div class="sh"><h3 id="sht">—</h3>
       <div class="nav"><button id="prev" aria-label="Previous pick day">‹</button><button id="next" aria-label="Next pick day">›</button><button class="close" id="close" aria-label="Close">✕</button></div></div>
     <div class="daytot"><b id="dtot">—</b><span class="k" id="drec"></span></div>
     <div id="dpicks"></div>
@@ -159,7 +170,7 @@ const SEASON = new URLSearchParams(location.search).get("s") || "__SEASON__";
 fetch("seasons.json").then(r=>r.json()).then(list=>{ if(list.length>1){
   document.getElementById("seasons").innerHTML=list.slice().reverse().map(s=>`<a class="tab" href="?s=${s}" aria-pressed="${s===SEASON}">${s}</a>`).join("");}}).catch(()=>{});
 fetch(SEASON+".json").then(r=>r.json()).then(d=>{D=d; document.title=`NBA Ledger ${d.season} · Morello Sims`;
-  document.getElementById("kick").textContent=`NBA ${d.season} · every itemized pick`; init();});
+  document.getElementById("kick").textContent=`NBA ${d.season}. Every pick, logged before tip.`; init();});
 
 function init(){
   const s=D.summary;
@@ -167,8 +178,7 @@ function init(){
   days=Object.keys(byDay).sort();
   const tot=d=>byDay[d].reduce((a,p)=>a+p.units,0);
   document.getElementById("units").textContent=fmtU(s.units);
-  document.getElementById("units").style.color=s.units>=0?"var(--win)":"var(--loss)";
-  document.getElementById("rec").textContent=`${s.w}-${s.l}${s.p?"-"+s.p:""}`;
+    document.getElementById("rec").textContent=`${s.w}-${s.l}${s.p?"-"+s.p:""}`;
   document.getElementById("roi").textContent=(s.roi>=0?"+":"")+s.roi+"%";
   document.getElementById("n").textContent=s.picks;
   // facts: clickable
@@ -201,7 +211,7 @@ function init(){
 }
 function pretty(d,short){const x=new Date(d+"T12:00:00");return x.toLocaleDateString("en-US",short?{month:"short",day:"numeric"}:{weekday:"short",month:"short",day:"numeric"});}
 function color(v){if(Math.abs(v)<0.05)return"var(--push)";const a=Math.min(1,.35+Math.abs(v)/3*.65);
-  return v>0?`rgba(20,128,74,${a})`:`rgba(176,32,30,${a})`;}
+  return v>0?`rgba(19,148,71,${a})`:`rgba(200,55,45,${a})`;}
 function setMonth(m){month=m;document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-pressed",t.dataset.m===m));render();}
 function render(){
   const ms=[...new Set(days.map(d=>d.slice(0,7)))].filter(m=>month==="ALL"||m===month);
@@ -219,7 +229,7 @@ function render(){
   const ps=D.picks.filter(p=>month==="ALL"||p.date.startsWith(month)).slice().reverse();
   document.getElementById("listk").textContent=`${ps.length} picks`;
   document.getElementById("list").innerHTML=ps.map(p=>`<button class="lr" data-d="${p.date}"><span class="res ${p.result}">${p.result}</span>
-    <span><b class="cond" style="font-size:20px">${p.pick}</b> <span class="k">${p.away} @ ${p.home} · ${pretty(p.date,true)}</span></span>
+    <span><b class="black" style="font-size:19px">${p.pick}</b> <span class="k">${p.away} @ ${p.home} · ${pretty(p.date,true)}</span></span>
     <b class="u ${cls(p.units)} black">${fmtU(p.units)}</b></button>`).join("");
   document.querySelectorAll(".lr").forEach(b=>b.onclick=()=>openDay(b.dataset.d));
 }
@@ -231,11 +241,11 @@ function chart(){
   const ys=v=>H-pad-(v-lo)*(H-2*pad)/((hi-lo)||1);
   const path=pts.map((p,i)=>`${i?"L":"M"}${xs(i).toFixed(1)},${ys(p.v).toFixed(1)}`).join("");
   svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
-  svg.innerHTML=`<line x1="${pad}" x2="${W-pad}" y1="${ys(0)}" y2="${ys(0)}" stroke="#D9CFBB" stroke-width="2" stroke-dasharray="4 4"/>
-    <path d="${path} L${xs(pts.length-1)},${ys(0)} L${xs(0)},${ys(0)} Z" fill="rgba(18,56,214,.10)"/>
-    <path d="${path}" fill="none" stroke="#1238D6" stroke-width="3.5" stroke-linejoin="round"/>
-    ${pts.map((p,i)=>`<circle cx="${xs(i)}" cy="${ys(p.v)}" r="3" fill="#1238D6"/><circle cx="${xs(i)}" cy="${ys(p.v)}" r="13" fill="transparent" data-i="${i}" style="cursor:pointer"/>`).join("")}
-    <text x="${W-pad}" y="${ys(pts.at(-1).v)-10}" text-anchor="end" font-family="Archivo Black" font-size="16" fill="#1C1816">${fmtU(pts.at(-1).v)}</text>`;
+  svg.innerHTML=`<line x1="${pad}" x2="${W-pad}" y1="${ys(0)}" y2="${ys(0)}" stroke="#D9DFE6" stroke-width="2" stroke-dasharray="4 4"/>
+    <path d="${path} L${xs(pts.length-1)},${ys(0)} L${xs(0)},${ys(0)} Z" fill="rgba(49,135,220,.12)"/>
+    <path d="${path}" fill="none" stroke="#3187DC" stroke-width="3.5" stroke-linejoin="round"/>
+    ${pts.map((p,i)=>`<circle cx="${xs(i)}" cy="${ys(p.v)}" r="3" fill="#3187DC"/><circle cx="${xs(i)}" cy="${ys(p.v)}" r="13" fill="transparent" data-i="${i}" style="cursor:pointer"/>`).join("")}
+    <text x="${W-pad}" y="${ys(pts.at(-1).v)-10}" text-anchor="end" font-family="Inter" font-weight="800" font-size="16" fill="#0D1B2A">${fmtU(pts.at(-1).v)}</text>`;
   const tip=document.getElementById("tip");
   svg.querySelectorAll("circle[data-i]").forEach(c=>{const p=pts[+c.dataset.i];
     const show=()=>{const r=svg.getBoundingClientRect(),k=r.width/W;tip.style.left=(c.cx.baseVal.value*k+12)+"px";tip.style.top=(c.cy.baseVal.value*k+12)+"px";
