@@ -27,6 +27,7 @@ from render_cards_v2 import text_w, fit_font  # noqa: E402
 from render_series_card import REPO, load_picks, team_ref, palette, _mix, _lum, _contrast  # noqa: E402
 from render_card_back import s, F, S, W, H, WHITE, fence_knots, fence_curve, polar  # noqa: E402
 import sim_reference as ref  # noqa: E402
+from unit_fmt import stake_u  # noqa: E402
 
 INSET = 64          # frame line, px from the edge (1x)
 BAND = 40           # spec band between edge and frame
@@ -136,7 +137,7 @@ def render(pick):
     bottom = f"{venue['name'].upper()}   ·   {dims} FT   ·   {when} {pick.get('game_time') or ''}".strip()
     d = ImageDraw.Draw(img)
     d.text((W / 2 - text_w(d, bottom, bf) / 2, H - mid - s(14)), bottom, font=bf, fill=line)
-    text_rot(img, f"C{pick.get('conf')} CONFIDENCE   ·   {pick.get('units')} $PP", bf, line, (mid, H / 2), 90)
+    text_rot(img, f"C{pick.get('conf')} CONFIDENCE   ·   {stake_u(pick.get('units'))}", bf, line, (mid, H / 2), 90)
     text_rot(img, "LOGGED BEFORE FIRST PITCH   ·   MORELLOSIMS.COM", bf, line, (W - mid, H / 2), -90)
 
     return img.convert("RGB").resize((1080, 1350), Image.LANCZOS)

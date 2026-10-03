@@ -33,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import ops_tg  # noqa: E402
 import picks_store  # noqa: E402
+from unit_fmt import stake_u  # noqa: E402
 
 REPO = os.path.dirname(HERE)
 STATE = os.path.join(REPO, "ops", "state", "pick_alerts.json")  # telegram/ is gitignored
@@ -92,7 +93,7 @@ def dm_text(p):
     sim = p.get("sim_projection") or ""
     return (f"🚨 NEW {p['sport'].upper()} PICK · C{p.get('conf')}\n"
             f"{p['pick_text']} {odds_str(p)} · {p.get('matchup')} · {p.get('game_time') or ''}\n"
-            f"Risk {p.get('units')} $PP" + (f" · Sim {sim}" if sim else "") + "\n"
+            f"Risk {stake_u(p.get('units'))}" + (f" · Sim {sim}" if sim else "") + "\n"
             f"X gets the sealed card. Tap below to post it unblurred.")
 
 
@@ -102,7 +103,7 @@ def premium_text(p):
     when = p.get("game_time") or picks_store.start_label(p)
     return (f"🔒 MEMBERS · {p['sport'].upper()} · C{p.get('conf')} · {p.get('matchup')}\n"
             f"{p['pick_text']} {odds_str(p)}" + (f" · {when}" if when else "") + "\n"
-            f"Risk {p.get('units')} $PP" + (f" · Sim {sim}" if sim else "") + "\n"
+            f"Risk {stake_u(p.get('units'))}" + (f" · Sim {sim}" if sim else "") + "\n"
             f"Public copy stays sealed until {UNLOCK_WORD.get(p['sport'], 'first pitch')}.")
 
 

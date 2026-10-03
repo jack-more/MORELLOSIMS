@@ -19,6 +19,7 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFilter
 
 from render_cards_v2 import REPO, font, text_w, fit_font, team_logo
+from unit_fmt import stake_u, pl_u  # noqa: E402
 
 S = 2                      # supersample; final card is 1080x1350
 W, H = 1080 * S, 1350 * S
@@ -343,7 +344,7 @@ def render(pick, settled=False):
     lines = [
         f"Sim: {pa} {pr} – {ha} {hr}",
         f"Moneyline {odds} {at} {team_ref(opp)[0].title()}",
-        f"C{pick.get('conf')} confidence · {pick.get('units')} $PP",
+        f"C{pick.get('conf')} confidence · {stake_u(pick.get('units'))}",
     ]
     bf = F("cond_sb", 38)
     for i, t in enumerate(lines):
@@ -357,7 +358,7 @@ def render(pick, settled=False):
         pl = pick.get("pl") or 0
         st = pick["status"]
         l1 = {"win": "CASHED", "loss": "LOSS", "push": "PUSH"}[st]
-        l2 = f"{final_str(pick)} · {'+' if pl > 0 else ''}{pl:g} $PP"
+        l2 = f"{final_str(pick)} · {pl_u(pl)}"
         stamp(img, (mx - s(26), my + int(R * 0.40)), l1, l2, WIN if st == "win" else LOSS if st == "loss" else INK)
 
     out = img.convert("RGB")

@@ -34,6 +34,7 @@ from render_cards_v2 import text_w, fit_font  # noqa: E402
 from render_series_card import (  # noqa: E402
     REPO, S, W, H, BG, CREAM, INK, WIN, LOSS, s, F, keyline_mark, paper_grain, _mix, _contrast, _hex, _lum,
 )
+from unit_fmt import stake_u, pl_u  # noqa: E402
 
 ET = timezone(timedelta(hours=-4))
 MUTED = (112, 102, 90)
@@ -197,7 +198,7 @@ def _receipt(img, pick, footer, left=None):
     rf = F("mono_b", 22)
     left = left or (f"LOGGED {logged} · BEFORE KICKOFF" if logged else "LOGGED BEFORE KICKOFF")
     d.text((L, s(1186)), left, font=rf, fill=MUTED)
-    right = f"{pick.get('units')} $PP" if pick.get("units") is not None else ""
+    right = f"RISK {stake_u(pick.get('units'))}" if pick.get("units") is not None else ""
     d.text((R - text_w(d, right, rf), s(1186)), right, font=rf, fill=MUTED)
     ff = F("mono_b", 26)
     d.text((cx - text_w(d, footer, ff) / 2, s(1232)), footer, font=ff, fill=INK)
@@ -257,7 +258,7 @@ def render(pick, settled=False, tag=None, receipt=None):
             fin = f"{away} {a_pts} – {home} {h_pts}"
         except ValueError:
             fin = str(pick.get("result") or "")
-        money = f"{(pick.get('pl') or 0):+g} $PP" if pick.get("pl") is not None else ""
+        money = pl_u(pick.get('pl')) if pick.get("pl") is not None else ""
         d.text((R - s(40) - text_w(d, fin, F("mono_b", 30)), wy + s(40)), fin, font=F("mono_b", 30), fill=CREAM)
         if money:
             d.text((R - s(40) - text_w(d, money, F("black", 54)), wy + s(86)), money, font=F("black", 54), fill=CREAM)

@@ -26,6 +26,7 @@ import os
 from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from unit_fmt import stake_u  # noqa: E402
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 FONT_DIR = os.path.join(REPO, "posters", "assets", "fonts")
@@ -466,7 +467,7 @@ def render_receipt(pick, settled=False, out_name=None):
     # stake line
     units = pick.get("units")
     if units:
-        d.text((x, y + 6), f"RISK {units} $PP", font=font("mono_b", 30), fill=INK)
+        d.text((x, y + 6), f"RISK {stake_u(units)}", font=font("mono_b", 30), fill=INK)
         rec_w, rec_l = season_record()
         rec = f"SEASON {rec_w}-{rec_l}"
         d.text((tx1 - 50 - text_w(d, rec, font("mono_b", 30)), y + 6), rec, font=font("mono_b", 30), fill=INK)
@@ -557,7 +558,7 @@ def render_slate(date):
         of = font("black", 72)
         d.text((W - 150 - text_w(d, odds, of), y + 44), odds, font=of, fill=INK)
         cf = font("mono_b", 26)
-        ct = f'C{p.get("conf")} · {p.get("units")} $PP'
+        ct = f'C{p.get("conf")} · {stake_u(p.get("units"))}'
         d.text((W - 150 - text_w(d, ct, cf), y + 130), ct, font=cf, fill=hexrgb("#B08D3C"))
         y += stub_h + 34
 

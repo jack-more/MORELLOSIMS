@@ -45,6 +45,7 @@ from send_telegram_cards import send_photo as tg_send_photo  # noqa: E402
 import render_pnl_card  # noqa: E402
 import render_pick_card as render_series_card  # noqa: E402  v3 layout (2026-09-30)
 import picks_store  # noqa: E402  public channel + X: public view only, sealed picks stay sealed
+from unit_fmt import pl_u  # noqa: E402
 
 PICKS_MLB = ROOT / "picks" / "mlb.json"
 PICKS_NBA = ROOT / "picks" / "nba.json"
@@ -100,7 +101,7 @@ def units_of(pick: dict, key: str) -> float:
 
 
 def fmt_units(value: float) -> str:
-    return f"{value:+.1f}".replace(".0", "") + " $PP"
+    return pl_u(value)
 
 
 def truncate_caption(text: str, limit: int = 280) -> str:

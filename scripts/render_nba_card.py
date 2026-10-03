@@ -44,6 +44,7 @@ LOGOS = os.path.join(REPO, "posters", "assets", "nba-team-logos")
 # nba_pipeline/utils/constants.ESPN_ABBR_MAP, inverted)
 sys.path.insert(0, os.path.join(REPO, "nba_pipeline"))
 from utils.constants import ESPN_ABBR_MAP  # noqa: E402
+from unit_fmt import stake_u, pl_u  # noqa: E402
 NBA_TO_ESPN = {v: k for k, v in ESPN_ABBR_MAP.items()}
 
 
@@ -180,7 +181,7 @@ def _receipt(img, pick, footer):
     logged = _logged(pick)
     rf = F("mono_b", 22)
     d.text((L, s(1186)), f"LOGGED {logged} · BEFORE TIP" if logged else "LOGGED BEFORE TIP", font=rf, fill=MUTED)
-    right = f"{pick.get('units')} $PP"
+    right = f"RISK {stake_u(pick.get('units'))}"
     d.text((R - text_w(d, right, rf), s(1186)), right, font=rf, fill=MUTED)
     ff = F("mono_b", 26)
     d.text((cx - text_w(d, footer, ff) / 2, s(1232)), footer, font=ff, fill=INK)
@@ -234,7 +235,7 @@ def render(pick, settled=False):
             fin = f"{away} {a_pts} – {home} {h_pts}"
         except ValueError:
             fin = str(pick.get("result") or "")
-        money = f"{(pick.get('pl') or 0):+g} $PP"
+        money = pl_u(pick.get('pl'))
         d.text((R - s(40) - text_w(d, fin, F("mono_b", 30)), wy + s(40)), fin, font=F("mono_b", 30), fill=CREAM)
         d.text((R - s(40) - text_w(d, money, F("black", 54)), wy + s(86)), money, font=F("black", 54), fill=CREAM)
         if margin is not None:

@@ -20,6 +20,7 @@ from render_series_card import (
     REPO, S, W, H, BG, CREAM, INK, WIN, LOSS, palette,
     s, F, load_picks, team_ref, keyline_mark, paper_grain, baseball, final_str,
 )
+from unit_fmt import stake_u, pl_u  # noqa: E402
 
 MUTED = (120, 108, 96)
 BLUE = (18, 56, 214)        # house blue (brand guide): sheets + card back
@@ -194,7 +195,7 @@ def checklist(date, sport="mlb"):
 
     w, l, pl = era_totals()
     extra = f" · +{len(picks) - 6} more on site" if len(picks) > 6 else ""
-    footer(img, frame, "MORELLOSIMS.COM", f"SINCE {md(era_start())}: {w}-{l} · {pl:+g} $PP{extra}")
+    footer(img, frame, "MORELLOSIMS.COM", f"SINCE {md(era_start())}: {w}-{l} · {pl_u(pl)}{extra}")
     return finish(img)
 
 
@@ -244,8 +245,8 @@ def record():
     d.text((mx - text_w(d, lab, F("mono_b", 22)) / 2, my + s(96)), lab, font=F("mono_b", 22), fill=CREAM)
 
     y = my + R + s(60)
-    cells = [(f"{pl:+,.0f}", "NET $PP", WIN if pl >= 0 else LOSS),
-             (f"{risked:,}", "$PP RISKED", INK),
+    cells = [(pl_u(pl), "NET", WIN if pl >= 0 else LOSS),
+             (stake_u(risked), "RISKED", INK),
              (f"{100 * pl / risked:+.1f}%" if risked else "–", "ROI", WIN if pl >= 0 else LOSS)]
     colw = (fx1 - fx0 - s(80)) / 3
     for i, (v, lab, col) in enumerate(cells):
@@ -320,8 +321,8 @@ def ledger(sport):
     d.text((mx - text_w(d, lab, lf) / 2, my + ly), lab, font=lf, fill=CREAM)
 
     y = my + R + s(26)
-    cells = [(f"{pl:+,.0f}" if rows else "0", "NET $PP", (WIN if pl >= 0 else LOSS) if rows else INK),
-             (f"{rk:,}", "$PP RISKED", INK),
+    cells = [(pl_u(pl) if rows else "0u", "NET", (WIN if pl >= 0 else LOSS) if rows else INK),
+             (stake_u(rk), "RISKED", INK),
              (f"{100 * pl / rk:+.1f}%" if rk else "–", "ROI", (WIN if pl >= 0 else LOSS) if rk else INK)]
     colw = (fx1 - fx0 - s(80)) / 3
     for i, (v, lb, col) in enumerate(cells):
@@ -330,7 +331,7 @@ def ledger(sport):
         d.text((cx - text_w(d, v, vf) / 2, y), v, font=vf, fill=col)
         d.text((cx - text_w(d, lb, F("mono_b", 20)) / 2, y + s(100)), lb, font=F("mono_b", 20), fill=MUTED)
 
-    # running $PP, one step per settled pick
+    # running units, one step per settled pick
     y += s(176)
     x0, x1 = fx0 + s(44), fx1 - s(44)
     if rows:
@@ -348,10 +349,10 @@ def ledger(sport):
         d.line(pts, fill=BLUE, width=s(5), joint="curve")
         ex, ey = pts[-1]
         d.ellipse((ex - s(9), ey - s(9), ex + s(9), ey + s(9)), fill=WIN if run[-1] >= 0 else LOSS)
-        d.text((x0, y - s(30)), "RUNNING $PP · EVERY PICK", font=F("mono_b", 18), fill=MUTED)
+        d.text((x0, y - s(30)), "RUNNING UNITS · EVERY PICK", font=F("mono_b", 18), fill=MUTED)
         y += gh + s(26)
     else:
-        rules = "FLAT 50 $PP · LOGGED BEFORE KICKOFF · NOTHING DELETED"
+        rules = "FLAT 1U · LOGGED BEFORE KICKOFF · NOTHING DELETED"
         rfnt = fit_font(d, rules, "mono_b", s(22), x1 - x0, min_size=s(14))
         d.text((mx - text_w(d, rules, rfnt) / 2, y + s(20)), rules, font=rfnt, fill=MUTED)
 

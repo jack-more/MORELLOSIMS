@@ -29,6 +29,7 @@ from render_card_back import (  # noqa: E402
     s, F, S, W, H, BLUE, WHITE, CARD, FRAME, CX0, CX1, card_mask, grain_layer, on_background,
 )
 import numpy as np  # noqa: E402
+from unit_fmt import stake_u, pl_u  # noqa: E402
 
 WIN_TINT = (140, 232, 170)
 LOSS_TINT = (255, 150, 140)
@@ -142,7 +143,7 @@ class LedgerCard:
             ymid = (y0 + y1) // 2
             d.line((x0, ymid, x1, ymid), fill=WHITE, width=s(4))
             d.ellipse((x0 - s(9), ymid - s(9), x0 + s(9), ymid + s(9)), outline=WHITE, width=s(4), fill=BLUE)
-            d.text((x0 + s(18), ymid - s(56)), "0 $PP", font=num_f, fill=WHITE)
+            d.text((x0 + s(18), ymid - s(56)), "0u", font=num_f, fill=WHITE)
             d.text((x0 + s(18), ymid + s(18)), "PICK 001 LANDS HERE", font=lab_f, fill=WHITE)
             for i in range(1, 17):
                 x = x0 + i * (x1 - x0) / 16
@@ -164,7 +165,7 @@ class LedgerCard:
         zy = Y(0)
         for dx in range(int(x0), int(x1), s(20)):
             d.line((dx, zy, dx + s(10), zy), fill=WHITE, width=s(2))
-        d.text((x1 - text_w(d, "0 $PP", lab_f), zy + s(8)), "0 $PP", font=lab_f, fill=WHITE)
+        d.text((x1 - text_w(d, "0u", lab_f), zy + s(8)), "0u", font=lab_f, fill=WHITE)
 
         # stepped ledger line: flat between picks, a riser at each result
         pts = [(X(0), Y(0))]
@@ -238,7 +239,7 @@ class LedgerCard:
         d, rows = self.d, self.rows
         d.text((CX0, s(Y_WALL)), "EVERY PICK, IN ORDER", font=F("mono_b", 16), fill=WHITE)
         if not rows:
-            msg = ("NO ENTRIES YET. EVERY PICK IS LOGGED BEFORE KICKOFF AT A FLAT 50 $PP, "
+            msg = ("NO ENTRIES YET. EVERY PICK IS LOGGED BEFORE KICKOFF AT A FLAT 1U, "
                    "SETTLED IN PUBLIC, NOTHING DELETED.")
             self.flow([(w + " ", WHITE) for w in msg.split()], F("cond_sb", 40))
             return
@@ -283,11 +284,11 @@ class LedgerCard:
         d, rows = self.d, self.rows
         rk = sum(p.get("units") or 0 for p in rows)
         pl = sum(p.get("pl") or 0 for p in rows)
-        big = f"{pl:+,.0f}" if rows else "0"
+        big = pl_u(pl) if rows else "0u"
         bf = F("cond", 150)
         bx = CX1 - text_w(d, big, bf)
         d.text((bx, s(Y_FOOT + 4)), big, font=bf, fill=WHITE)
-        sub = f"NET $PP · {rk:,.0f} RISKED · {100 * pl / rk:+.1f}% ROI" if rk else "NET $PP · FLAT 50 PER PICK"
+        sub = f"NET UNITS · {stake_u(rk)} RISKED · {100 * pl / rk:+.1f}% ROI" if rk else "NET UNITS · FLAT 1U PER PICK"
         sf = F("mono_b", 18)
         d.text((CX1 - text_w(d, sub, sf), s(Y_FOOT + 180)), sub, font=sf, fill=WHITE)
         # footnote: other records, never blended into the headline

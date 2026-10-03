@@ -24,6 +24,7 @@ TRACKED_MIN_CONF = {"mlb": 8}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import picks_store  # noqa: E402  (seal mode: public view only — never decrypts)
+from unit_fmt import pl_u  # noqa: E402
 
 
 def load_model_era():
@@ -236,16 +237,16 @@ def render_week(wk_data, sport):
         rec_text = "PENDING"
     elif pending:
         rec_cls = "mixed"
-        rec_text = f'{w}-{l} · {pl:+g} $PP · {pending}P'
+        rec_text = f'{w}-{l} · {pl_u(pl)} · {pending}P'
     elif w > l:
         rec_cls = "win"
-        rec_text = f'{w}-{l} · {pl:+g} $PP'
+        rec_text = f'{w}-{l} · {pl_u(pl)}'
     elif l > w:
         rec_cls = "loss"
-        rec_text = f'{w}-{l} · {pl:+g} $PP'
+        rec_text = f'{w}-{l} · {pl_u(pl)}'
     else:
         rec_cls = "mixed"
-        rec_text = f'{w}-{l} · {pl:+g} $PP'
+        rec_text = f'{w}-{l} · {pl_u(pl)}'
 
     rows = "".join(render_pick_row(p, sport) for p in picks)
     return f'''

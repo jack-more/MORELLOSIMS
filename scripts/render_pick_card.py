@@ -33,6 +33,7 @@ from render_series_card import (  # noqa: E402
     REPO, S, W, H, BG, CREAM, INK, WIN, LOSS, PLATES,
     palette, team_ref, final_str, s, F, load_picks, keyline_mark, paper_grain, _mix, _contrast,
 )
+from unit_fmt import stake_u, pl_u  # noqa: E402
 
 ET = timezone(timedelta(hours=-4))
 MUTED = (112, 102, 90)
@@ -109,7 +110,7 @@ def render(pick, settled=False):
         d.rounded_rectangle((L, wy, R, wy + s(170)), radius=s(26), fill=col)
         d.text((L + s(40), wy + s(26)), word, font=F("black", 104), fill=CREAM)
         f2 = F("mono_b", 30)
-        fin, money = final_str(pick), f"{pl:+g} $PP"
+        fin, money = final_str(pick), pl_u(pl)
         d.text((R - s(40) - text_w(d, fin, f2), wy + s(40)), fin, font=f2, fill=CREAM)
         d.text((R - s(40) - text_w(d, money, F("black", 54)), wy + s(86)), money, font=F("black", 54), fill=CREAM)
         if sim and side in sim and opp in sim:
@@ -168,7 +169,7 @@ def _receipt(img, pick, footer):
     rf = F("mono_b", 22)
     left = f"LOGGED {logged} · BEFORE FIRST PITCH" if logged else "LOGGED BEFORE FIRST PITCH"
     d.text((L, s(1186)), left, font=rf, fill=MUTED)
-    right = f"{pick.get('units')} $PP"
+    right = f"RISK {stake_u(pick.get('units'))}"
     d.text((R - text_w(d, right, rf), s(1186)), right, font=rf, fill=MUTED)
     ff = F("mono_b", 26)
     d.text((cx - text_w(d, footer, ff) / 2, s(1232)), footer, font=ff, fill=INK)

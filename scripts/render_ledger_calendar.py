@@ -117,7 +117,7 @@ def render():
     rec = _record()
     d.text((sx + s(24), sy + s(160)), rec, font=F("black", 40), fill=CREAM)
     d.text((sx + s(24), sy + s(222)), f"{green} up days · {red} down", font=F("mono_b", 18), fill=CREAM)
-    foot = "1u = 50 $PP · GRADED AT THE POSTED PRICE · MORELLOSIMS.COM"
+    foot = "FLAT 1U · GRADED AT THE POSTED PRICE · MORELLOSIMS.COM"
     d.text(((W - text_w(d, foot, F("mono_b", 22))) / 2, s(1236)), foot, font=F("mono_b", 22), fill=INK)
     return paper_grain(img.convert("RGB")).resize((1080, 1350), Image.LANCZOS)
 

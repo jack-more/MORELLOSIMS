@@ -22,6 +22,7 @@ import render_cards_v2 as cards
 import render_pick_card as render_series_card  # v3 layout (2026-09-30)
 import render_series_sheets
 from pathlib import Path
+from unit_fmt import pl_u  # noqa: E402
 
 SERIES_OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "posters", "v2")
 
@@ -89,7 +90,7 @@ def save_state(st):
 
 
 def fmt_units(pl):
-    return f"+{pl:g}" if pl >= 0 else f"{pl:g}"
+    return pl_u(pl)
 
 
 def main():
@@ -113,7 +114,7 @@ def main():
             continue
         mark = "✅ WIN" if p["status"] == "win" else "🔴 LOSS"
         cap = (f"{mark} · {p['pick_text']} ({p['odds']}) — {p.get('result','')}\n"
-               f"{fmt_units(p.get('pl') or 0)} $PP · settled in public, like always")
+               f"{fmt_units(p.get('pl') or 0)} · settled in public, like always")
         if send_photo(path, cap):
             st["settled"].append(p["id"])
 
