@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/morello-auth.css?v=20261002-free-clicks">
 <style>
 /* poster palette, sampled from the reference: sky, sign rim, sign face, grass */
-:root{--sky:#3187DC;--sky-deep:#1F66B4;--rim:#F36269;--rim-deep:#C9444B;--face:#F5F0ED;--grass:#139447;--ink:#0D1B2A}
+:root{--sky:#3187DC;--sky-deep:#1F66B4;--rim:#E8B53B;--rim-deep:#B9861B;--face:#F5F0ED;--grass:#0F8A43;--ink:#0D1B2A}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--sky);color:#fff;font-family:Inter,system-ui,sans-serif;overflow-x:hidden}
 button,input{font:inherit;color:inherit}
@@ -23,7 +23,7 @@ button{background:none;border:0;cursor:pointer}
 a{color:inherit}
 
 .top{display:flex;justify-content:space-between;align-items:center;padding:16px;max-width:1080px;margin:0 auto}
-.brand{font-weight:800;letter-spacing:2px;font-size:12px;text-decoration:none}
+.brand{font-weight:800;letter-spacing:2px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:8px}
 .toplinks{display:flex;gap:16px;font-style:italic;font-weight:300;font-size:14px}
 .toplinks a{text-decoration:none;border-bottom:1px solid rgba(255,255,255,.6)}
 
@@ -52,7 +52,7 @@ a{color:inherit}
 .obj{position:relative;aspect-ratio:1/1.08;width:100%;max-width:220px;margin:0 auto;border-radius:22%;background:var(--face);
   border:var(--w) solid var(--rim);box-shadow:calc(var(--w) * -1) calc(var(--w) * .5) 0 var(--rim-deep),0 26px 34px rgba(8,40,80,.28);
   transition:transform .35s cubic-bezier(.2,.9,.3,1.3);display:flex;flex-direction:column;align-items:center;justify-content:center}
-.obj svg{width:58%;height:auto;margin-top:-8%}
+.obj svg{width:72%;height:auto;margin-top:-10%}
 .obj small{position:absolute;bottom:9%;left:0;right:0;font-family:"IBM Plex Mono",monospace;font-size:clamp(8px,2.1vw,11px);letter-spacing:.5px;color:var(--grass);text-transform:uppercase}
 .obj[aria-pressed="true"]{transform:translateY(-12px) rotate(-2deg)}
 .objs .row>button:hover .obj{transform:translateY(-6px)}
@@ -122,7 +122,7 @@ footer a{text-decoration:none;font-weight:500}
 </head>
 <body>
 
-<div class="top"><a class="brand" href="/">MORELLO SIMS</a>
+<div class="top"><a class="brand" href="/"><img src="/favicon.svg" width="22" height="22" alt="">MORELLO SIMS</a>
   <span class="toplinks"><a href="/ledger/nba/">every pick</a><a href="#" id="signin">sign in</a></span></div>
 
 <section class="poster" aria-label="Choose your set">
@@ -131,7 +131,7 @@ footer a{text-decoration:none;font-weight:500}
     Choose the set that suits you.<br>Have a nice night.</p>
 
   <svg class="mark" viewBox="0 0 100 100" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-    <circle cx="30" cy="26" r="13"/>
+    <circle cx="30" cy="26" r="13" stroke="#F7D774" stroke-width="2"/><circle cx="30" cy="26" r="8.5" stroke="#F7D774" stroke-width="1.1"/>
     <path d="M30 70 Q36 74 40 86"/><path d="M50 96 Q47 62 70 30"/><path d="M58 96 Q59 68 44 48"/><path d="M72 94 Q76 74 88 60"/>
   </svg>
 
@@ -175,26 +175,30 @@ footer a{text-decoration:none;font-weight:500}
 </section>
 
 <script>
-// one object, three weights — the poster's idea
-const BLADES = ["M44 92 Q41 56 66 18","M53 92 Q55 62 36 40","M68 90 Q73 66 88 50","M18 62 Q27 68 31 80","M30 92 Q26 70 12 58","M60 92 Q66 50 84 30"];
-const GRASS = n => `<svg viewBox="0 0 100 100" fill="none" stroke="#139447" stroke-width="5" stroke-linecap="round" aria-hidden="true">
-  ${BLADES.slice(0, n).map(d => `<path d="${d}"/>`).join("")}</svg>`;
+// one object, more gold the more you get: a gold coin rising over money-green grass
+const COIN = (x, y, w) => `<svg x="${x}" y="${y}" width="${w}" height="${w}" viewBox="0 0 40 40" style="stroke:none"><circle cx="20" cy="20" r="18" fill="#B9861B"/><circle cx="20" cy="19" r="17" fill="#E8B53B"/><circle cx="20" cy="19" r="12.5" fill="none" stroke="#F7D774" stroke-width="2"/><path d="M11 13 Q14 8 20 7" fill="none" stroke="#FFF3C4" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+const ART = {
+  light:   COIN(10, 4, 28) + '<path d="M52 94 Q50 70 66 46"/>',
+  regular: COIN(6, 0, 36) + '<path d="M48 94 Q46 70 66 44"/><path d="M56 94 Q58 74 42 58"/><path d="M70 92 Q74 74 88 62"/>',
+  bold:    COIN(4, -2, 40) + COIN(66, 4, 22) + '<path d="M46 94 Q44 70 64 46"/><path d="M55 94 Q57 74 40 58"/><path d="M68 92 Q72 74 88 62"/><path d="M20 74 Q28 80 31 90"/><path d="M32 94 Q28 80 14 72"/><path d="M60 94 Q66 66 82 52"/>',
+};
+const TILE = id => `<svg viewBox="0 0 100 100" fill="none" stroke="#0F8A43" stroke-width="6" stroke-linecap="round" aria-hidden="true">${ART[id]}</svg>`;
 const SETS = {
-  light:  {name:"Free pick", price:"Free",    w:1, rim:"4px", tag:"free",
+  light:  {name:"Free pick", price:"Free",    rim:"4px", tag:"free",
            head:'Free pick. <em>One a day, on us.</em>', lede:"One pick from the board every day, in the open. Plus the full ledger.",
            get:["The free pick of the day, every day","The full public ledger — tap any day","Results the next morning"]},
-  regular:{name:"Tonight",   price:"$19.99",  w:3, rim:"5px", tag:"$19.99", product:"pickmaker_dual",
+  regular:{name:"Tonight",   price:"$19.99",  rim:"6px", tag:"$19.99", product:"pickmaker_dual",
            head:'Tonight. <em>The whole board.</em>', lede:"Every pick on tonight's board, the moment it drops. Good for 24 hours.",
            buy:"Take off — $19.99 for tonight",
            get:["Every pick tonight, the moment it drops","The line and the sim's number for each","Alerts for 24 hours"]},
-  bold:   {name:"All month", price:"$199.99", w:6, rim:"6px", tag:"$199.99", product:"monthly_board",
+  bold:   {name:"All month", price:"$199.99", rim:"8px", tag:"$199.99", product:"monthly_board",
            head:'All month. <em>Every pick, every night.</em>', lede:"Every board for 30 days, the moment each one drops.",
            buy:"Take off — $199.99 for 30 days",
            get:["Every NBA pick for 30 days, the moment it drops","Alerts on your phone","The line and the sim's number for each pick","Opening week included"]},
 };
 const $ = id => document.getElementById(id);
 $("objs").innerHTML = Object.entries(SETS).map(([id,s]) =>
-  `<button data-id="${id}" aria-label="${s.name}, ${s.price}"><div class="obj" style="--w:${s.rim}" aria-pressed="false">${GRASS(s.w)}<small>${s.tag}</small></div></button>`).join("");
+  `<button data-id="${id}" aria-label="${s.name}, ${s.price}"><div class="obj" style="--w:${s.rim}" aria-pressed="false">${TILE(id)}<small>${s.tag}</small></div></button>`).join("");
 
 let L = null, chosen = null;   // L = the public ledger
 const f = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "u";
