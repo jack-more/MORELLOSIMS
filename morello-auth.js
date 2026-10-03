@@ -831,9 +831,10 @@
       }
     });
 
-    // 3) Lock/unlock pick-history dispatch rows by sport package.
-    lockHomePickHistory('.post-nba-picks', 'pickmaker_nba', 'DAILY BOARD PASS');
-    lockHomePickHistory('.post-mlb-picks', 'pickmaker_mlb', 'DAILY BOARD PASS');
+    // 3) Pick history is PUBLIC (the ledger is the trust product — every
+    //    settled pick, wins and losses). Never lock it behind a pass.
+    //    (2026-10-02: free visitors couldn't open their own record.)
+    ['.post-nba-picks', '.post-mlb-picks'].forEach(sel => lockHomePickHistory(sel, 'free', ''));
 
     // 4) Add pricing tooltips to dashboard cards
     addPricingTooltips();
@@ -1535,6 +1536,10 @@
 
   // ── Gate a card's button: if no access at click-time, show pricing instead ──
   function gateCardButton(card, requiredTier) {
+    // The sim dashboards are the free hook: anyone can open them; only the
+    // picks on them are gated (blur / seal mode). Blocking the button made
+    // every click on the homepage a paywall for free users (2026-10-02).
+    return;
     const btn = card.querySelector('.btn-action');
     if (!btn || btn.dataset.maGateListenerSet) return;
     btn.dataset.maGateListenerSet = 'true';
