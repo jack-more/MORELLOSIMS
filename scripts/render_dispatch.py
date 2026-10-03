@@ -15,7 +15,7 @@ from collections import defaultdict, OrderedDict
 from datetime import datetime, timedelta
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-INDEX = os.path.join(REPO, "index.html")
+INDEX = os.path.join(REPO, "classic", "index.html")  # old homepage, kept at /classic/ (2026-10-02)
 NBA_PATH = os.path.join(REPO, "picks", "nba.json")
 MLB_PATH = os.path.join(REPO, "picks", "mlb.json")
 BASELINES_PATH = os.path.join(REPO, "picks", "baselines.json")
