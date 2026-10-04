@@ -165,8 +165,16 @@ def coin(d, cx, cy, r):
     d.line(_bez((cx - 9 * k, cy - 6 * k), (cx - 6 * k, cy - 11 * k), (cx, cy - 12 * k)), fill=GOLD_SHINE, width=max(1, int(2.4 * k)))
 
 
+MARK_PNG = os.path.join(REPO, "assets", "brand", "mark-600.png")   # rendered from assets/brand/mark.svg
+
+
 def brand_mark(img, x, y, size):
     """Logo: gold-rimmed tile, a coin rising over money-green grass."""
+    if os.path.exists(MARK_PNG):
+        m = Image.open(MARK_PNG).convert("RGBA")
+        m = m.resize((int(size), int(size * m.height / m.width)), Image.LANCZOS)
+        img.alpha_composite(m, (int(x), int(y)))
+        return
     d = ImageDraw.Draw(img)
     u = size / 32
     d.rounded_rectangle((x + 2 * u, y + 2 * u, x + 30 * u, y + 30 * u), radius=8 * u, fill=GOLD)
