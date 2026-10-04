@@ -36,7 +36,11 @@ from render_series_card import (  # noqa: E402
 
 ET = timezone(timedelta(hours=-4))
 MUTED = (112, 102, 90)
-HOUSE = (18, 56, 214)
+# brand (morellosims.com): poster sky, gold rim, money green
+SKY = (49, 135, 220)
+GOLD, GOLD_DEEP, GOLD_HI, GOLD_SHINE = (232, 181, 59), (185, 134, 27), (247, 215, 116), (255, 243, 196)
+GRASS = (15, 138, 67)
+HOUSE = SKY
 SNAP = json.load(open(os.path.join(REPO, "data", "reference", "nba_teams_espn_2026.json")))["teams"]
 COURT = json.load(open(os.path.join(REPO, "data", "reference", "nba_court_dimensions.json")))
 LOGOS = os.path.join(REPO, "posters", "assets", "nba-team-logos")
@@ -84,6 +88,15 @@ def load_picks():
 
 def _num(v):
     return f"{v:+.1f}" if v else "PK"
+
+
+UNIT_PP = 50.0   # 1u = 50 $PP, the standard stake
+
+
+def _u(pp, sign=False):
+    v = float(pp or 0) / UNIT_PP
+    t = f"{v:+.2f}" if sign else f"{v:.2f}"
+    return t.rstrip("0").rstrip(".") + "u" if "." in t else t + "u"
 
 
 def _logged(p):
@@ -138,19 +151,49 @@ def half_court(tint, width, height):
     return img
 
 
-def _stock(pick):
-    img = Image.new("RGBA", (W, H), BG + (255,))
-    x0, y0, x1, y1 = s(44), s(44), W - s(44), H - s(44)
-    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(sh).rounded_rectangle((x0, y0 + s(16), x1, y1 + s(16)), radius=s(54), fill=(0, 0, 0, 150))
-    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(s(22))))
+def _bez(p0, p1, p2, n=24):
+    return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+             (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]) for t in (i / n for i in range(n + 1))]
+
+
+def coin(d, cx, cy, r):
+    """The brand's gold coin (same proportions as the site's SVG)."""
+    k = r / 18
+    d.ellipse((cx - r, cy - r + k, cx + r, cy + r + k), fill=GOLD_DEEP)
+    d.ellipse((cx - 17 * k, cy - 17 * k, cx + 17 * k, cy + 17 * k), fill=GOLD)
+    d.ellipse((cx - 12.5 * k, cy - 12.5 * k, cx + 12.5 * k, cy + 12.5 * k), outline=GOLD_HI, width=max(1, int(2 * k)))
+    d.line(_bez((cx - 9 * k, cy - 6 * k), (cx - 6 * k, cy - 11 * k), (cx, cy - 12 * k)), fill=GOLD_SHINE, width=max(1, int(2.4 * k)))
+
+
+def brand_mark(img, x, y, size):
+    """Logo: gold-rimmed tile, a coin rising over money-green grass."""
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle((x0, y0, x1, y1), radius=s(54), fill=CREAM + (255,))
+    u = size / 32
+    d.rounded_rectangle((x + 2 * u, y + 2 * u, x + 30 * u, y + 30 * u), radius=8 * u, fill=GOLD)
+    d.rounded_rectangle((x + 4.5 * u, y + 4.5 * u, x + 27.5 * u, y + 27.5 * u), radius=5.5 * u, fill=CREAM)
+    coin(d, x + 11.5 * u, y + 11.5 * u, 5 * u)
+    for a, b, c in (((16.5, 26), (16, 20), (21, 14)), ((19, 26), (19.5, 21.5), (15, 18.5)), ((22.5, 25.5), (23.5, 21), (26.5, 18.5))):
+        d.line(_bez(*[(x + px * u, y + py * u) for px, py in (a, b, c)]), fill=GRASS, width=max(2, int(2.2 * u)), joint="curve")
+
+
+def _stock(pick):
+    """The card is the brand tile: gold rim with a deeper gold edge, on the poster sky."""
+    img = Image.new("RGBA", (W, H), SKY + (255,))
+    x0, y0, x1, y1 = s(44), s(40), W - s(44), H - s(48)
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle((x0, y0 + s(24), x1, y1 + s(24)), radius=s(58), fill=(8, 40, 80, 110))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(s(26))))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((x0 - s(10), y0 + s(6), x1 - s(10), y1 + s(6)), radius=s(58), fill=GOLD_DEEP + (255,))
+    d.rounded_rectangle((x0, y0, x1, y1), radius=s(58), fill=GOLD + (255,))
+    d.rounded_rectangle((x0 + s(12), y0 + s(12), x1 - s(12), y1 - s(12)), radius=s(48), fill=CREAM + (255,))
     set_no = next((i for i, p in enumerate(load_picks(), 1) if p["id"] == pick["id"]), None)
     mf = F("mono_b", 24)
-    d.text((s(92), s(96)), "MORELLO SIMS", font=mf, fill=INK)
-    tag = f"C{pick.get('conf')}" + (f" · NBA No. {set_no}" if set_no else "")
-    d.text((W - s(92) - text_w(d, tag, mf), s(96)), tag, font=mf, fill=INK)
+    brand_mark(img, s(88), s(80), s(46))
+    d = ImageDraw.Draw(img)
+    d.text((s(146), s(94)), "MORELLO SIMS", font=mf, fill=INK)
+    tag = f"NBA No. {set_no}" if set_no else "NBA"
+    d.text((W - s(92) - text_w(d, tag, mf), s(94)), tag, font=mf, fill=INK)
     return img
 
 
@@ -179,8 +222,11 @@ def _receipt(img, pick, footer):
     L, R, cx = s(92), W - s(92), W // 2
     logged = _logged(pick)
     rf = F("mono_b", 22)
-    d.text((L, s(1186)), f"LOGGED {logged} · BEFORE TIP" if logged else "LOGGED BEFORE TIP", font=rf, fill=MUTED)
-    right = f"{pick.get('units')} $PP"
+    # "before tip" only when the record shows it: reinstated rows were logged late
+    late = str(pick.get("void_reason") or "").startswith("REINSTATED")
+    when = "LOGGED LATE" if late else "BEFORE TIP"
+    d.text((L, s(1186)), f"LOGGED {logged} · {when}" if logged and not late else when, font=rf, fill=MUTED)
+    right = f"{_u(pick.get('units'))} STAKE"
     d.text((R - text_w(d, right, rf), s(1186)), right, font=rf, fill=MUTED)
     ff = F("mono_b", 26)
     d.text((cx - text_w(d, footer, ff) / 2, s(1232)), footer, font=ff, fill=INK)
@@ -234,7 +280,7 @@ def render(pick, settled=False):
             fin = f"{away} {a_pts} – {home} {h_pts}"
         except ValueError:
             fin = str(pick.get("result") or "")
-        money = f"{(pick.get('pl') or 0):+g} $PP"
+        money = _u(pick.get("pl"), sign=True)
         d.text((R - s(40) - text_w(d, fin, F("mono_b", 30)), wy + s(40)), fin, font=F("mono_b", 30), fill=CREAM)
         d.text((R - s(40) - text_w(d, money, F("black", 54)), wy + s(86)), money, font=F("black", 54), fill=CREAM)
         if margin is not None:
@@ -270,7 +316,7 @@ def sealed(pick):
         for bx0, by0, bx1, by1, v in blobs:
             gd.rounded_rectangle((s(bx0), s(by0), s(bx1), s(by1)), radius=s(18), fill=v)
         g = g.filter(ImageFilter.GaussianBlur(s(70)))
-        tile = ImageOps.colorize(g, black=(10, 26, 110), white=(120, 150, 250)).convert("RGBA")
+        tile = ImageOps.colorize(g, black=(22, 82, 150), white=(150, 200, 245)).convert("RGBA")
         mask = Image.new("L", tile.size, 0)
         ImageDraw.Draw(mask).rounded_rectangle((0, 0, w, h), radius=radius, fill=255)
         img.paste(tile, box[:2], mask)
@@ -282,7 +328,7 @@ def sealed(pick):
     d = ImageDraw.Draw(img)
     sf = F("black", 150)
     d.text((cx - text_w(d, "SEALED", sf) / 2, s(300)), "SEALED", font=sf, fill=CREAM)
-    sub = f"C{pick.get('conf')} PLAY · {'MONEYLINE' if pick.get('bet_type') == 'ml' else 'SPREAD'}"
+    sub = f"TONIGHT · {'MONEYLINE' if pick.get('bet_type') == 'ml' else 'SPREAD'}"
     d.text((cx - text_w(d, sub, F("mono_b", 34)) / 2, s(490)), sub, font=F("mono_b", 34), fill=CREAM)
     d.text((L, s(728)), "THE SIM", font=F("mono_b", 26), fill=MUTED)
     msg, mf = "MEMBERS HAVE IT NOW", F("cond", 64)
