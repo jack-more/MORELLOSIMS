@@ -90,7 +90,7 @@ def _num(v):
     return f"{v:+.1f}" if v else "PK"
 
 
-UNIT_PP = 50.0   # 1u = 50 $PP, the standard stake
+UNIT_PP = 25.0   # 1u = 25 $PP (stakes 20/30/50/100 = 0.8/1.2/2/4u)
 
 
 def _u(pp, sign=False):

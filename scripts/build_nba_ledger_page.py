@@ -2,7 +2,7 @@
 """NBA season ledger page: every itemized pick, in units, clickable by day.
 
 Writes ledger/nba/2025-26.json (data) and ledger/nba/index.html (page):
-  - season stats in units (1u = 50 $PP, the standard stake)
+  - season stats in units (1u = 25 $PP; plays are sized 0.8u–4u)
   - running-units chart; tap a point to open that day
   - calendar heat map; tap a day to see every pick with its units, the
     final score, the sim's line vs the book's, and when it was logged
@@ -24,7 +24,7 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "nba_pipeline"))
 from utils.constants import ESPN_ABBR_MAP  # noqa: E402
 
-UNIT = 50.0                       # $PP per unit (standard stake)
+UNIT = 25.0                       # $PP per unit (owner, 2026-10-05: stakes 20/30/50/100 = 0.8/1.2/2/4u)
 
 def season_of(d):
     """NBA season label for a game date: Oct-Dec → that year's season."""

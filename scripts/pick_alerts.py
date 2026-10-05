@@ -92,7 +92,7 @@ def dm_text(p):
     sim = p.get("sim_projection") or ""
     return (f"🚨 NEW {p['sport'].upper()} PICK · C{p.get('conf')}\n"
             f"{p['pick_text']} {odds_str(p)} · {p.get('matchup')} · {p.get('game_time') or ''}\n"
-            f"Risk {p.get('units')} $PP" + (f" · Sim {sim}" if sim else "") + "\n"
+            f"Risk {p.get('units')} $PP ({float(p.get('units') or 0) / 25:g}u)" + (f" · Sim {sim}" if sim else "") + "\n"
             f"X gets the sealed card. Tap below to post it unblurred.")
 
 
@@ -102,7 +102,7 @@ def premium_text(p):
     when = p.get("game_time") or picks_store.start_label(p)
     return (f"🔒 MEMBERS · {p['sport'].upper()} · C{p.get('conf')} · {p.get('matchup')}\n"
             f"{p['pick_text']} {odds_str(p)}" + (f" · {when}" if when else "") + "\n"
-            f"Risk {p.get('units')} $PP" + (f" · Sim {sim}" if sim else "") + "\n"
+            f"Risk {p.get('units')} $PP ({float(p.get('units') or 0) / 25:g}u)" + (f" · Sim {sim}" if sim else "") + "\n"
             f"Public copy stays sealed until {UNLOCK_WORD.get(p['sport'], 'first pitch')}.")
 
 

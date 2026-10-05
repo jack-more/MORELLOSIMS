@@ -99,8 +99,12 @@ def units_of(pick: dict, key: str) -> float:
         return 0.0
 
 
+UNIT_PP = 25.0   # public posts speak in units: 1u = 25 $PP (same as the site)
+
+
 def fmt_units(value: float) -> str:
-    return f"{value:+.1f}".replace(".0", "") + " $PP"
+    """$PP profit → units for anything public."""
+    return f"{value / UNIT_PP:+.1f}u"
 
 
 def truncate_caption(text: str, limit: int = 280) -> str:

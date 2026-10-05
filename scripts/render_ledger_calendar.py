@@ -25,7 +25,7 @@ from render_cards_v2 import text_w  # noqa: E402
 from render_series_card import REPO, S, W, H, BG, CREAM, INK, WIN, LOSS, s, F, paper_grain, _mix  # noqa: E402
 
 MUTED = (112, 102, 90)
-UNIT = 50.0  # $PP per unit, the standard stake
+UNIT = 25.0  # $PP per unit (stakes 20/30/50/100 = 0.8/1.2/2/4u)
 EMPTY = (228, 220, 202)
 
 
@@ -33,7 +33,7 @@ def daily():
     out, n = collections.defaultdict(float), collections.Counter()
     for r in csv.DictReader(open(os.path.join(REPO, "nba_pipeline", "data", "picks.csv"))):
         if r["result"] in ("W", "L", "P"):
-            out[r["date"]] += float(r["profit"] or 0) / UNIT   # units (1u = 50 $PP)
+            out[r["date"]] += float(r["profit"] or 0) / UNIT   # units (1u = 25 $PP)
             n[r["date"]] += 1
     return out, n
 
@@ -117,7 +117,7 @@ def render():
     rec = _record()
     d.text((sx + s(24), sy + s(160)), rec, font=F("black", 40), fill=CREAM)
     d.text((sx + s(24), sy + s(222)), f"{green} up days · {red} down", font=F("mono_b", 18), fill=CREAM)
-    foot = "1u = 50 $PP · GRADED AT THE POSTED PRICE · MORELLOSIMS.COM"
+    foot = "1u = 25 $PP · GRADED AT THE POSTED PRICE · MORELLOSIMS.COM"
     d.text(((W - text_w(d, foot, F("mono_b", 22))) / 2, s(1236)), foot, font=F("mono_b", 22), fill=INK)
     return paper_grain(img.convert("RGB")).resize((1080, 1350), Image.LANCZOS)
 
