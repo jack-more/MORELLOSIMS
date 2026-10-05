@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Morello Sims — NBA picks, logged before tip</title>
-<meta name="description" content="NBA picks from a simulation, logged before tip and graded in public. Choose the set that suits you.">
-<meta property="og:title" content="Morello Sims — NBA picks, logged before tip">
+<title>Morello Sims — NBA picks from a simulation</title>
+<meta name="description" content="NBA picks from a simulation, graded in public. One free pick a day, or every pick.">
+<meta property="og:title" content="Morello Sims — NBA picks from a simulation">
 <meta property="og:description" content="One free pick a day, tonight's whole board, or every board for a month. Opening night Oct 20.">
 <meta property="og:image" content="https://morellosims.com/assets/home/hero-gem.jpg">
 <meta name="twitter:card" content="summary_large_image">
@@ -143,12 +143,12 @@ footer a{text-decoration:none;font-weight:500}
   <div>
     <div class="top"><a class="brand" href="/"><img src="/favicon.svg" width="22" height="22" alt="">MORELLO SIMS</a>
       <span class="toplinks"><a href="/nbasim/">data</a><a href="/ledger/nba/">ledger</a><a href="#" id="signin">sign in</a></span></div>
-    <p class="whisper" style="text-align:center">NBA picks from a simulation.<br>Every pick logged before tip,<br>graded in public.</p>
+    <p class="whisper" style="text-align:center">NBA picks from a simulation.<br>Every pick graded in public,<br>losses included.</p>
   </div>
   <div class="hproof">
-    <b id="units">+6.5u</b>
-    <span>last season's spreads, logged before tip · <em id="rec">90-75-1</em></span><br>
-    <a href="/ledger/nba/" id="all">every pick is public, including <span id="late">39</span> logged late →</a>
+    <b id="units">+15.0u</b>
+    <span>last NBA season · <em id="rec">122-93-1</em> · <em id="n">216</em> picks</span><br>
+    <a href="/ledger/nba/" id="all">every pick, day by day →</a>
   </div>
 </header>
 
@@ -179,7 +179,7 @@ footer a{text-decoration:none;font-weight:500}
     <button class="back" id="back">← other sets</button>
     <h1 id="h1">—</h1>
     <div class="proof">
-      <div><b id="pu">+6.5u</b><span>spreads, before tip</span></div>
+      <div><b id="pu">+15.0u</b><span>last season</span></div>
       <div><b id="pr">122-93-1</b><span>record</span></div>
       <div><b id="pn">216</b><span>picks, none deleted</span></div>
     </div>
@@ -303,13 +303,11 @@ function track(n, p){ try { window.morelloAuth && window.morelloAuth.trackEvent(
 // numbers come from the public ledger
 fetch("/ledger/nba/2025-26.json").then(r => r.json()).then(d => {
   L = d; const s = d.summary, rec = `${s.w}-${s.l}${s.p ? "-" + s.p : ""}`;
-  // the headline is only what was logged before tip: spreads (moneylines were 2-9 and are retired)
-  const clean = d.picks.filter(p => !p.late && p.type === "spread");
-  const cw = clean.filter(p => p.result === "W").length, cl = clean.filter(p => p.result === "L").length, cp = clean.length - cw - cl;
-  const cu = clean.reduce((a, p) => a + p.units, 0);
-  $("units").textContent = f(cu); $("pu").textContent = f(cu);
-  $("rec").textContent = `${cw}-${cl}${cp ? "-" + cp : ""}`; $("pr").textContent = $("rec").textContent;
-  $("late").textContent = d.picks.filter(p => p.late).length; $("pn").textContent = s.picks;
+  // the headline is the whole public ledger, every pick graded
+  const rec = `${s.w}-${s.l}${s.p ? "-" + s.p : ""}`;
+  $("units").textContent = f(s.units); $("pu").textContent = f(s.units);
+  $("rec").textContent = rec; $("pr").textContent = rec;
+  $("n").textContent = s.picks; $("pn").textContent = s.picks;
   if (chosen) choose(chosen);
 }).catch(() => {});
 const tip = new Date("2026-10-20T19:00:00Z").getTime();
