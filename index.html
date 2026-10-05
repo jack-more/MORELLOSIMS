@@ -33,12 +33,14 @@ a{color:inherit}
 @media(max-width:400px){.brand span{display:none}}
 
 /* the hero: a rare stone in shallow water */
-.hero{position:relative;min-height:92svh;display:flex;flex-direction:column;justify-content:space-between;background:url(/assets/home/hero-gem.jpg) 50% 40%/cover;color:#fff}
+.hero{position:relative;min-height:100svh;display:flex;flex-direction:column;justify-content:space-between;background:url(/assets/home/hero-gem.jpg) 50% 40%/cover;color:#fff}
+/* wide screens crop the photo top/bottom: show its lower part so the stone sits high and the number below it never overlaps */
+@media (min-aspect-ratio: 3/2){.hero{background-position:50% 100%}}
 .hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(49,135,220,.55) 0%,rgba(49,135,220,0) 34%,rgba(8,40,80,0) 60%,rgba(8,40,80,.45) 100%);pointer-events:none}
 .hero>*{position:relative;z-index:1}
 .hero .whisper{margin-top:4px;text-shadow:0 1px 14px rgba(8,40,80,.35)}
 .hproof{padding:0 16px 30px;text-align:center}
-.hproof b{display:block;font-weight:200;font-size:clamp(72px,20vw,150px);letter-spacing:-3px;line-height:.9;text-shadow:0 6px 30px rgba(8,40,80,.35)}
+.hproof b{display:block;font-weight:200;font-size:clamp(64px,min(20vw,14vh),150px);letter-spacing:-3px;line-height:.9;text-shadow:0 6px 30px rgba(8,40,80,.35)}
 .hproof span{display:inline-block;margin-top:8px;font-weight:300;font-size:clamp(13px,3.6vw,16px);text-shadow:0 1px 10px rgba(8,40,80,.6)}
 .hproof span em{font-style:normal;font-weight:700}
 .hproof a{display:inline-block;margin-top:10px;font-style:italic;font-weight:300;font-size:14px;border-bottom:1px solid rgba(255,255,255,.7);text-decoration:none}
@@ -112,7 +114,7 @@ a{color:inherit}
 footer{padding:26px 16px 40px;max-width:1080px;margin:0 auto;font-size:12px;display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between}
 footer nav{display:flex;gap:14px;flex-wrap:wrap}
 footer a{text-decoration:none;font-weight:500}
-#ma-profile-btn,.ma-site-nav{display:none!important}
+#ma-profile-btn,.ma-site-nav,#ma-streak-chip{display:none!important}
 
 /* the hard sale */
 .sale{position:fixed;inset:0;z-index:50;background:var(--face);color:var(--ink);overflow-y:auto;transform:translateY(100%);transition:transform .5s cubic-bezier(.2,.8,.2,1);visibility:hidden}
@@ -152,7 +154,7 @@ footer a{text-decoration:none;font-weight:500}
     <p class="whisper" style="text-align:center">NBA picks from a simulation.<br>Every pick graded in public,<br>losses included.</p>
   </div>
   <div class="hproof">
-    <b id="units">+15.0u</b>
+    <b id="units">+29.6u</b>
     <span>last NBA season · <em id="rec">122-93-1</em> · <em id="n">216</em> picks</span><br>
     <a href="/ledger/nba/" id="all">every pick, day by day →</a>
   </div>
@@ -185,7 +187,7 @@ footer a{text-decoration:none;font-weight:500}
     <button class="back" id="back">← other sets</button>
     <h1 id="h1">—</h1>
     <div class="proof">
-      <div><b id="pu">+15.0u</b><span>last season</span></div>
+      <div><b id="pu">+29.6u</b><span>last season</span></div>
       <div><b id="pr">122-93-1</b><span>record</span></div>
       <div><b id="pn">216</b><span>picks, none deleted</span></div>
     </div>
@@ -307,10 +309,9 @@ let tries = 0; const who = setInterval(() => { const a = window.morelloAuth; tri
 function track(n, p){ try { window.morelloAuth && window.morelloAuth.trackEvent(n, p); } catch(_){} }
 
 // numbers come from the public ledger
-fetch("/ledger/nba/2025-26.json").then(r => r.json()).then(d => {
-  L = d; const s = d.summary, rec = `${s.w}-${s.l}${s.p ? "-" + s.p : ""}`;
+fetch("/ledger/nba/2025-26.json", {cache: "no-cache"}).then(r => r.json()).then(d => {
   // the headline is the whole public ledger, every pick graded
-  const rec = `${s.w}-${s.l}${s.p ? "-" + s.p : ""}`;
+  L = d; const s = d.summary, rec = `${s.w}-${s.l}${s.p ? "-" + s.p : ""}`;
   $("units").textContent = f(s.units); $("pu").textContent = f(s.units);
   $("rec").textContent = rec; $("pr").textContent = rec;
   $("n").textContent = s.picks; $("pn").textContent = s.picks;
