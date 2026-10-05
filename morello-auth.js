@@ -384,11 +384,10 @@
     nav.className = 'ma-site-nav';
 
     const sites = [
-      // NBA is the product; MLB and the experiments live in the archive
-      { label: 'PICKS',   path: '/',            color: '#E8B53B', page: 'home' },
-      { label: 'DATA',    path: '/nbasim/',     color: '#3187DC', page: 'nbasim' },
-      { label: 'LEDGER',  path: '/ledger/nba/', color: '#0F8A43', page: 'ledger' },
-      { label: 'ARCHIVE', path: '/archive/',    color: '#B8B0A6', page: 'archive' }
+      // hierarchy: NBA, then NFL, then Extra (MLB + experiments)
+      { label: 'NBA',   path: '/',       color: '#3187DC', page: 'home' },
+      { label: 'NFL',   path: '/nfl/',   color: '#0F8A43', page: 'nfl' },
+      { label: 'EXTRA', path: '/extra/', color: '#B8B0A6', page: 'extra' }
     ];
 
     sites.forEach(site => {
