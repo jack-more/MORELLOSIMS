@@ -197,9 +197,8 @@ def _stock(pick):
     d.rounded_rectangle((x0 + s(12), y0 + s(12), x1 - s(12), y1 - s(12)), radius=s(48), fill=CREAM + (255,))
     set_no = next((i for i, p in enumerate(load_picks(), 1) if p["id"] == pick["id"]), None)
     mf = F("mono_b", 24)
-    brand_mark(img, s(88), s(80), s(46))
-    d = ImageDraw.Draw(img)
-    d.text((s(146), s(94)), "MORELLO SIMS", font=mf, fill=INK)
+    # wordmark only (owner, 2026-10-05: no icon until a real one is commissioned)
+    d.text((s(92), s(94)), "MORELLO SIMS", font=mf, fill=INK)
     tag = f"NBA No. {set_no}" if set_no else "NBA"
     d.text((W - s(92) - text_w(d, tag, mf), s(94)), tag, font=mf, fill=INK)
     return img
