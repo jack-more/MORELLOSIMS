@@ -23,7 +23,7 @@ BASELINES = os.path.join(PICKS_DIR, "baselines.json")
 HOMEPAGE = os.path.join(REPO, "classic", "index.html")  # old homepage, kept at /classic/ (2026-10-02)
 PAGES = {
     "mlb": (os.path.join(REPO, "mlbsim", "index.html"), os.path.join(PICKS_DIR, "mlb.json"), "#FFEA00"),
-    "nba": (os.path.join(REPO, "nbasim", "index.html"), os.path.join(PICKS_DIR, "nba.json"), "#00FF55"),
+    # /nbasim/ is now the data page (scripts/build_data_page.py); its record lives on the ledger
 }
 
 

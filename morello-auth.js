@@ -384,11 +384,11 @@
     nav.className = 'ma-site-nav';
 
     const sites = [
-      { label: 'HOME',    path: '/',         color: '#AAAAAA', page: 'home' },
-      { label: 'NBA',     path: '/nbasim/',  color: '#00FF55', page: 'nbasim' },
-      { label: 'MLB',     path: '/mlbsim/',  color: '#FFEA00', page: 'mlbsim' },
-      { label: 'ATLAS',   path: '/atlas/',   color: '#FF6B00', page: 'atlas' },
-      { label: 'GOYARD',  path: '/goyard/',  color: '#00CFFF', page: 'goyard' }
+      // NBA is the product; MLB and the experiments live in the archive
+      { label: 'PICKS',   path: '/',            color: '#E8B53B', page: 'home' },
+      { label: 'DATA',    path: '/nbasim/',     color: '#3187DC', page: 'nbasim' },
+      { label: 'LEDGER',  path: '/ledger/nba/', color: '#0F8A43', page: 'ledger' },
+      { label: 'ARCHIVE', path: '/archive/',    color: '#B8B0A6', page: 'archive' }
     ];
 
     sites.forEach(site => {
@@ -539,36 +539,36 @@
 
   function renderSignupForm() {
     return `
-      <h2>CREATE ACCOUNT</h2>
-      <p class="ma-subtitle">JOIN MORELLO SIMS</p>
+      <h2>Create your account</h2>
+      <p class="ma-subtitle">One step, then straight to checkout.</p>
       <div class="ma-form-group">
-        <label>EMAIL</label>
+        <label>Email</label>
         <input type="email" id="ma-email" placeholder="your@email.com" autocomplete="email">
       </div>
       <div class="ma-form-group">
-        <label>PASSWORD</label>
-        <input type="password" id="ma-password" placeholder="Min 6 characters" autocomplete="new-password">
+        <label>Password</label>
+        <input type="password" id="ma-password" placeholder="At least 6 characters" autocomplete="new-password">
       </div>
       <div class="ma-error" id="ma-error"></div>
-      <button class="ma-btn-primary" onclick="window.morelloAuth.handleSignup()">CREATE ACCOUNT</button>
-      <button class="ma-toggle-link" onclick="window.morelloAuth.openModal('signin')">Already have an account? Sign In</button>
+      <button class="ma-btn-primary" onclick="window.morelloAuth.handleSignup()">Create account</button>
+      <button class="ma-toggle-link" onclick="window.morelloAuth.openModal('signin')">Already have an account? Sign in</button>
     `;
   }
 
   function renderSigninForm() {
     return `
-      <h2>SIGN IN</h2>
-      <p class="ma-subtitle">MORELLO SIMS</p>
+      <h2>Sign in</h2>
+      <p class="ma-subtitle">Welcome back.</p>
       <div class="ma-form-group">
-        <label>EMAIL</label>
+        <label>Email</label>
         <input type="email" id="ma-email" placeholder="your@email.com" autocomplete="email">
       </div>
       <div class="ma-form-group">
-        <label>PASSWORD</label>
+        <label>Password</label>
         <input type="password" id="ma-password" placeholder="Password" autocomplete="current-password">
       </div>
       <div class="ma-error" id="ma-error"></div>
-      <button class="ma-btn-primary" onclick="window.morelloAuth.handleSignin()">SIGN IN</button>
+      <button class="ma-btn-primary" onclick="window.morelloAuth.handleSignin()">Sign in</button>
       <button class="ma-toggle-link" onclick="window.morelloAuth.openModal('signup')">No account? Create one</button>
     `;
   }
@@ -578,88 +578,67 @@
     const tierColor = TIER_COLORS[tier] || '#888';
     const tierLabel = getCurrentPassLabel(tier);
     return `
-      <h2>PROFILE</h2>
-      <p class="ma-subtitle">MORELLO SIMS ACCOUNT</p>
+      <h2>Your account</h2>
+      <p class="ma-subtitle">Morello Sims</p>
       <div class="ma-profile-info">
         <div class="ma-profile-email">${currentUser.email}</div>
         <div class="ma-profile-tier-display" style="color:${tierColor}">${tierLabel}</div>
       </div>
       ${tier === 'free' || tier === 'fnf' ? `
-        <button class="ma-btn-primary" onclick="window.morelloAuth.openModal('pricing')" style="background:#FF6B00">UPGRADE ACCOUNT</button>
+        <button class="ma-btn-primary" onclick="window.morelloAuth.openModal('pricing')">Get the picks</button>
       ` : ''}
       ${(tier === 'pickmaker_nba' || tier === 'pickmaker_mlb' || tier === 'pickmaker_dual') ? `
-        <button class="ma-btn-secondary" onclick="window.morelloAuth.openModal('pricing')">BUY ANOTHER PASS</button>
+        <button class="ma-btn-secondary" onclick="window.morelloAuth.openModal('pricing')">Buy another pass</button>
       ` : ''}
       ${currentRefCode ? `
         <div class="ma-invite-box">
-          <div class="ma-invite-label">YOUR INVITE LINK</div>
+          <div class="ma-invite-label">Your invite link</div>
           <div class="ma-invite-link" id="ma-invite-link" onclick="window.morelloAuth.copyInviteLink()">morellosims.com/?ref=${currentRefCode}</div>
           <div class="ma-invite-meta">3 signups = 1 week free &middot; ${currentReferralCount} signup${currentReferralCount === 1 ? '' : 's'} so far</div>
         </div>
       ` : ''}
-      <button class="ma-btn-secondary ma-btn-danger" onclick="window.morelloAuth.handleSignout()" style="margin-top:12px">SIGN OUT</button>
+      <button class="ma-btn-secondary ma-btn-danger" onclick="window.morelloAuth.handleSignout()" style="margin-top:12px">Sign out</button>
     `;
   }
 
   function renderPricingView() {
+    // NBA only — the same three sets as the homepage
     return `
-      <h2>CHOOSE YOUR ACCESS</h2>
-      <p class="ma-subtitle">MORELLO SIMS TIERS</p>
+      <h2>Get the picks</h2>
+      <p class="ma-subtitle">Every pick logged before tip, graded in public.</p>
       <div class="ma-pricing-grid">
         <div class="ma-pricing-card">
           <div>
-            <div class="ma-pricing-name">MLB ATLAS</div>
-            <div class="ma-pricing-desc">3D pitcher galaxy + archetype browser</div>
+            <div class="ma-pricing-name">Free pick</div>
+            <div class="ma-pricing-desc">One pick from the board every day, plus the full ledger.</div>
           </div>
           <div style="text-align:right">
-            <div class="ma-pricing-amount" style="color:#ff4400">FREE</div>
+            <div class="ma-pricing-amount">Free</div>
+            <a class="ma-pricing-btn" href="/#join" onclick="window.morelloAuth.closeModal()">Get it</a>
           </div>
         </div>
-
         <div class="ma-pricing-card">
           <div>
-            <div class="ma-pricing-name">DAILY BOARD PASS</div>
-            <div class="ma-pricing-desc">Access to the Morello board, HR LOTTO, and model notes. Valid for 24 hours after purchase.</div>
+            <div class="ma-pricing-name">Tonight</div>
+            <div class="ma-pricing-desc">Every pick on tonight's board, the moment it drops. Good for 24 hours.</div>
           </div>
           <div style="text-align:right">
-            <div class="ma-pricing-amount">$19.99<span class="ma-pricing-period"> ONE-TIME</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_dual')">BUY DAILY BOARD</button>
+            <div class="ma-pricing-amount">$19.99</div>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('pickmaker_dual')">Buy tonight</button>
           </div>
         </div>
-
-        <div class="ma-pricing-card">
-          <div>
-            <div class="ma-pricing-name">WEEKLY BOARD PASS</div>
-            <div class="ma-pricing-desc">Seven days of Morello board access, HR LOTTO, model notes, and tracked context.</div>
-          </div>
-          <div style="text-align:right">
-            <div class="ma-pricing-amount">$69.99<span class="ma-pricing-period"> ONE-TIME</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('weekly_board')">BUY WEEKLY BOARD</button>
-          </div>
-        </div>
-
         <div class="ma-pricing-card highlight">
           <div>
-            <div class="ma-pricing-name">MONTHLY BOARD PASS</div>
-            <div class="ma-pricing-desc">Thirty days of Morello board access, HR LOTTO, model notes, and tracked context.</div>
+            <div class="ma-pricing-name">All month</div>
+            <div class="ma-pricing-desc">Every board for 30 days, the moment each one drops.</div>
           </div>
           <div style="text-align:right">
-            <div class="ma-pricing-amount">$199.99<span class="ma-pricing-period"> ONE-TIME</span></div>
-            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('monthly_board')">BUY MONTHLY BOARD</button>
-          </div>
-        </div>
-
-        <div class="ma-pricing-card" style="opacity:0.5">
-          <div>
-            <div class="ma-pricing-name">FnF</div>
-            <div class="ma-pricing-desc">Friends &amp; Family — dashboard access</div>
-          </div>
-          <div style="text-align:right">
-            <span class="ma-invite-label">INVITE ONLY</span>
+            <div class="ma-pricing-amount">$199.99</div>
+            <button class="ma-pricing-btn" onclick="window.morelloAuth.checkout('monthly_board')">Buy 30 days</button>
           </div>
         </div>
       </div>
-      ${currentUser ? '' : '<button class="ma-toggle-link" onclick="window.morelloAuth.openModal(\'signin\')">Already have an account? Sign In</button>'}
+      ${currentUser ? '' : '<button class="ma-toggle-link" onclick="window.morelloAuth.openModal(\'signin\')">Already have an account? Sign in</button>'}
     `;
   }
 

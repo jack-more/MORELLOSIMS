@@ -87,8 +87,7 @@ STEPS = [
     ("Ledger integrity", "nba_pipeline", [PY, "scripts/check_ledger.py"], 60, True),
     ("Blog entry", "nba_pipeline", [PY, "scripts/generate_blog_entry.py"], 120, True),
     ("Sync picks/nba.json", ".", [PY, "nba_pipeline/scripts/sync_to_picks_json.py"], 60, True),
-    ("Build /nbasim/", ".", [PY, "scripts/build_nbasim_app.py"], 60, True),
-    ("Build /sim/", ".", [PY, "scripts/build_sim_app.py"], 60, True),
+    ("Build /nbasim/ data page", ".", [PY, "scripts/build_data_page.py"], 90, True),
     ("Grade picks", "nba_pipeline", [PY, "scripts/grade_picks.py"], 300, True),
 ]
 

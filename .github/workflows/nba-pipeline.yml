@@ -210,11 +210,9 @@ jobs:
       - name: Sync NBA picks to contract format (picks/nba.json)
         run: python3 nba_pipeline/scripts/sync_to_picks_json.py
 
-      - name: Build public NBA dashboard at /nbasim/
-        run: python3 scripts/build_nbasim_app.py
+      - name: Build the data page at /nbasim/
+        run: python3 scripts/build_data_page.py   # the data side: slate + game reports, sim sealed until tip
 
-      - name: Build standalone NBA Simulator app at /sim/
-        run: python3 scripts/build_sim_app.py
 
       - name: Commit and push
         run: |
@@ -222,8 +220,7 @@ jobs:
           git config user.email "noreply@github.com"
           DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
 
-          git add nbasim/index.html
-          git add sim/index.html
+          git add nbasim/index.html nbasim/slate.json
           git add picks/nba.json
           git add nba_pipeline/db/nba_sim.db
           # snapshot history moved out of the DB (utils/snapshot_archive.py)
@@ -327,11 +324,9 @@ jobs:
       - name: Sync NBA picks to contract format (picks/nba.json)
         run: python3 nba_pipeline/scripts/sync_to_picks_json.py
 
-      - name: Build public NBA dashboard at /nbasim/
-        run: python3 scripts/build_nbasim_app.py
+      - name: Build the data page at /nbasim/
+        run: python3 scripts/build_data_page.py   # the data side: slate + game reports, sim sealed until tip
 
-      - name: Build standalone NBA Simulator app at /sim/
-        run: python3 scripts/build_sim_app.py
 
       - name: Commit and push
         run: |
@@ -339,8 +334,7 @@ jobs:
           git config user.email "noreply@github.com"
           DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
 
-          git add nbasim/index.html
-          git add sim/index.html
+          git add nbasim/index.html nbasim/slate.json
           git add picks/nba.json
           git add nba_pipeline/db/nba_sim.db
           # snapshot history moved out of the DB (utils/snapshot_archive.py)
@@ -474,7 +468,7 @@ jobs:
 
       # nba_pipeline/index.html only exists in update-lines; refresh the card in place.
       - name: Refresh public NBA dashboard record
-        run: python3 scripts/build_nbasim_app.py --record-only
+        run: python3 scripts/build_data_page.py
 
       - name: Rebuild NBA season ledger page (settled picks only)
         run: |
@@ -488,7 +482,7 @@ jobs:
           DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
 
           git add picks/nba.json
-          git add nbasim/index.html
+          git add nbasim/index.html nbasim/slate.json
           git add ledger/nba
           if [ -f nba_pipeline/data/picks.csv ]; then git add nba_pipeline/data/picks.csv; fi
           if [ -f nba_pipeline/data/settlement_results.json ]; then git add nba_pipeline/data/settlement_results.json; fi
