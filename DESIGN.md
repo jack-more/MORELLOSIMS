@@ -36,11 +36,14 @@ Calm, certain, specific. Short sentences, real numbers from the ledger, no hype.
 | rule | `#DCD5CB` | hairlines, card borders |
 | green | `#17734F` | wins, accents, numerals, links on hover |
 | loss | `#E9A08F` | losing nights (lighter than green — never hue alone) |
-| sky | `#4994E6` / hero top `#5C9FDF→#6DAAE3` | hero ground (ink text on it) |
-| deep water | `#1D3854` | research cards, favicon |
+| deep water | `#1D3854` | hero, closing band, pick-card ground, favicon, X avatar and banner (paper text on it) |
 
-No black, no neon, no grey grounds, no gradient washes (the only gradient is
-the hero's sky, which matches the photo).
+No black, no neon, no grey grounds, no gradient washes. The hero is flat deep
+water so the pick reel (also on deep water) sits in it without a seam.
+
+**X profile:** avatar = serif "M" on deep water (same as the favicon); banner =
+wordmark, "NBA picks from a simulation. Every pick graded in public.", and the
+live pick card on deep water. Bio carries no record (the site does).
 
 ## Type
 
