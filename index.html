@@ -49,6 +49,8 @@ h2{font-size:clamp(40px,4.4vw,64px)}
 .hero h1{font-size:clamp(52px,6.6vw,104px);line-height:.95;letter-spacing:-1.5px;max-width:11ch}
 .hero .sub{font-size:clamp(17px,1.4vw,20px);line-height:1.5;max-width:30em;color:#D3DBE1;text-wrap:pretty}
 .hero .cta{display:flex;flex-wrap:wrap;align-items:center;gap:22px;margin-top:6px}
+.wt-link{font-family:var(--mono);font-size:13px;letter-spacing:.5px;text-decoration:none;border:1px solid rgba(244,241,236,.35);border-radius:999px;padding:12px 18px;min-height:44px;display:inline-flex;align-items:center}
+.wt-link:hover{border-color:#9FD9BC}
 .pill.light{background:var(--paper);color:var(--ink);font-size:17px;padding:18px 30px}
 .pill.light:hover{background:#9FD9BC;color:var(--ink)}
 .reel{width:100%;max-width:470px;justify-self:center}
@@ -68,6 +70,41 @@ h2{font-size:clamp(40px,4.4vw,64px)}
 .strip .wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:24px 32px;padding-top:34px;padding-bottom:34px}
 .strip b{display:block;font-family:var(--serif);font-weight:400;font-size:44px;line-height:1}
 .strip span{display:block;margin-top:6px;font-size:14px;color:var(--ink-3)}
+
+/* win totals: the sim vs the book, one row per team */
+.wt .wrap{display:flex;flex-direction:column;gap:40px;padding-top:110px;padding-bottom:110px}
+.wt .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:20px 40px}
+.wt h2{max-width:13ch}
+.wt .top p{max-width:30em}
+.wt-key{display:flex;flex-wrap:wrap;gap:10px 26px;font-size:14px;color:var(--ink-2)}
+.wt-key span{display:flex;align-items:center;gap:8px}
+.wt-key .k-line{width:2px;height:16px;background:var(--ink)}
+.wt-key .k-sim{width:12px;height:12px;border-radius:50%;background:var(--green)}
+.wt-key .k-rng{width:26px;height:6px;border-radius:3px;background:#DCE7E1}
+.rows{display:flex;flex-direction:column}
+.wrow{display:grid;grid-template-columns:minmax(0,250px) minmax(0,1fr) 150px;gap:10px 28px;align-items:center;padding:18px 0;border-top:1px solid var(--rule)}
+.wrow:last-child{border-bottom:1px solid var(--rule)}
+.wrow .tm{display:flex;align-items:center;gap:12px;font-weight:500;font-size:17px;min-width:0}
+.wrow .tm img{width:36px;height:36px;flex:none}
+.wrow .tm span{line-height:1.25}
+.plot{position:relative;height:46px}
+.plot .track{position:absolute;left:0;right:0;top:22px;height:2px;background:var(--rule)}
+.plot .rng{position:absolute;top:19px;height:8px;border-radius:4px;background:#DCE7E1}
+.plot .bk{position:absolute;top:12px;width:2px;height:22px;background:var(--ink);transform:translateX(-1px)}
+.plot .sm{position:absolute;top:16px;width:14px;height:14px;border-radius:50%;background:var(--green);transform:translateX(-7px);box-shadow:0 0 0 3px var(--paper)}
+.plot .lab{position:absolute;font-family:var(--mono);font-size:12px;white-space:nowrap;transform:translateX(-50%)}
+.plot .lab.b{top:-4px;color:var(--ink)}
+.plot .lab.s{top:34px;color:var(--green)}
+.wrow .lean{text-align:right;font-family:var(--mono);font-size:15px;line-height:1.35}
+.wrow .lean b{display:block;font-family:var(--sans);font-weight:600;font-size:17px;color:var(--green)}
+.wt .more{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 32px;background:var(--paper-2);border:1px solid var(--rule);border-radius:22px;padding:26px 28px}
+.wt .more p{font-size:17px;max-width:26em}
+.wt .more .email{flex:1;min-width:min(100%,320px);max-width:440px}
+.wt small{font-size:13px;color:var(--ink-2);line-height:1.5}
+@media(max-width:720px){
+  .wrow{grid-template-columns:minmax(0,1fr) auto}
+  .wrow .plot{grid-column:1/-1;grid-row:2}
+}
 
 /* what you get */
 .get{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:64px;align-items:center;padding-top:120px;padding-bottom:120px}
@@ -177,6 +214,7 @@ footer nav a{color:var(--paper);text-decoration:none}
     <h1>The sim found <span id="h-units">29.6</span> units last season.</h1>
     <p class="sub">It plays every NBA game before tip and sends you only the ones worth betting. All <span id="h-picks">216</span> picks from last season are graded in public, wins and losses.</p>
     <div class="cta"><a class="pill light" href="#plans">Get tonight’s picks</a><a href="/ledger/nba/">See every pick</a></div>
+    <a class="wt-link" href="#win-totals">New: the sim’s 2026-27 win totals →</a>
   </div>
   <div class="reel"><video id="reel" autoplay muted loop playsinline preload="auto" poster="/assets/home/pick-reveal.jpg" aria-label="A real pick from the ledger: Knicks at Spurs, Knicks +5.0, logged before tip. It won by 4, +1.82 units."><source src="/assets/home/pick-reveal.mp4" type="video/mp4"></video></div>
   </div>
@@ -188,6 +226,26 @@ footer nav a{color:var(--paper);text-decoration:none}
     <div><b id="s-rec">122–93–1</b><span>record</span></div>
     <div><b id="s-roi">+8.2%</b><span>return on every unit risked</span></div>
     <div><b id="s-picks">216</b><span>picks, all graded in public</span></div>
+  </div>
+</section>
+
+<section class="wt" id="win-totals" aria-labelledby="wt-h">
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <p class="eyebrow" style="color:var(--green);margin-bottom:14px">2026-27 win totals</p>
+        <h2 id="wt-h">Where the sim disagrees with Vegas.</h2>
+      </div>
+      <p class="lede">The sim played the season <span id="wt-n">20,000</span> times on this year’s rosters, rookies and injuries included. These are the biggest gaps from the book.</p>
+    </div>
+    <div class="wt-key" aria-hidden="true"><span><i class="k-line"></i>Book line</span><span><i class="k-sim"></i>Sim’s average</span><span><i class="k-rng"></i>8 of 10 simulated seasons</span></div>
+    <div class="rows" id="wt-rows"></div>
+    <div class="more" id="wt-more">
+      <p><strong>All 30 teams are free.</strong> Leave your email and the full board opens here. You’ll get the opening-night pick on Oct 20 too.</p>
+      <form class="email" id="wt-form" aria-label="Get all 30 win totals"><label class="sr" for="wt-email">Email</label><input id="wt-email" type="email" required placeholder="you@email.com" autocomplete="email"><button type="submit">Show all 30</button></form>
+      <p class="note" id="wt-ok" hidden style="font-size:14px;color:var(--green);font-weight:500"></p>
+    </div>
+    <small id="wt-src">Book lines: BetMGM, Oct 7. Graded in public after the season.</small>
   </div>
 </section>
 
@@ -337,6 +395,39 @@ if (reel && matchMedia("(prefers-reduced-motion: reduce)").matches) {
   reel.pause(); reel.addEventListener("loadedmetadata", () => { reel.currentTime = reel.duration - .05; }, {once: true});
   if (reel.readyState >= 1) reel.currentTime = reel.duration - .05;
 }
+
+// win totals: five rows open, all 30 after an email
+const WT_FREE = 5;
+let wtOpen = false; try { wtOpen = localStorage.getItem("ms_wt_open") === "1"; } catch(_){}
+function wtRender(d){
+  const lo = 10, hi = 70, x = v => ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * 100).toFixed(2) + "%";
+  const teams = wtOpen ? d.teams : d.teams.slice(0, WT_FREE);
+  $("wt-rows").innerHTML = teams.map(t => {
+    const sim = t.sim.toFixed(1), gap = Math.abs(t.sim - t.line).toFixed(1);
+    return `<div class="wrow">
+      <div class="tm"><img src="https://cdn.nba.com/logos/nba/${t.team_id}/global/L/logo.svg" alt="" loading="lazy"><span>${t.name}</span></div>
+      <div class="plot" role="img" aria-label="${t.name}: book ${t.line} wins, sim ${sim}, range ${t.low} to ${t.high}">
+        <i class="track"></i><i class="rng" style="left:${x(t.low)};width:calc(${x(t.high)} - ${x(t.low)})"></i>
+        <i class="bk" style="left:${x(t.line)}"></i><i class="sm" style="left:${x(t.sim)}"></i>
+        <span class="lab b" style="left:${x(t.line)}">${t.line}</span><span class="lab s" style="left:${x(t.sim)}">${sim}</span>
+      </div>
+      <div class="lean"><b>${t.side === "OVER" ? "Over" : "Under"} ${t.line}</b>sim ${t.side === "OVER" ? "+" : "−"}${gap} wins</div>
+    </div>`;
+  }).join("");
+  $("wt-more").hidden = wtOpen;
+  $("wt-n").textContent = d.seasons_played.toLocaleString("en-US");
+  const bd = new Date(d.book_date + "T12:00:00").toLocaleString("en-US", {month: "short", day: "numeric"});
+  $("wt-src").textContent = `Book lines: ${d.book}, ${bd}. Graded in public after the season.`;
+}
+let WT = null;
+fetch("/ledger/nba/win-totals-2026-27.json", {cache: "no-cache"}).then(r => r.json()).then(d => { WT = d; wtRender(d); }).catch(() => { $("win-totals").hidden = true; });
+$("wt-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const v = $("wt-email").value, ok = window.morelloAuth ? await window.morelloAuth.emailCapture(v, "home_win_totals") : false;
+  if (!ok) { const n = $("wt-ok"); n.hidden = false; n.textContent = "Couldn’t save that. Try again."; return; }
+  wtOpen = true; try { localStorage.setItem("ms_wt_open", "1"); } catch(_){}
+  track("win_totals_open", {}); if (WT) wtRender(WT);
+});
 
 // every number comes from the public ledger
 fetch("/ledger/nba/2025-26.json", {cache: "no-cache"}).then(r => r.json()).then(d => {
