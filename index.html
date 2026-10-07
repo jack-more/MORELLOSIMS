@@ -7,7 +7,7 @@
 <meta name="description" content="The sim plays every NBA game before tip and sends you only the ones worth betting. Every pick graded in public, wins and losses.">
 <meta property="og:title" content="Morello Sims — NBA picks from a simulation">
 <meta property="og:description" content="Every pick graded in public, wins and losses. Opening night is October 20.">
-<meta property="og:image" content="https://morellosims.com/assets/home/hero-gem.jpg">
+<meta property="og:image" content="https://morellosims.com/assets/home/pick-card.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/morello-auth.css?v=20261005-brand">
 <style>
 /* the system: paper, ink, gem green; Instrument Serif display over Geist */
-:root{--paper:#F4F1EC;--paper-2:#FBF9F6;--ink:#0F1D26;--ink-2:#4A5864;--ink-3:#B7C2CB;--rule:#DCD5CB;--green:#17734F;--loss:#E9A08F;--empty:#ECE6DD;
+:root{--paper:#F4F1EC;--paper-2:#FBF9F6;--ink:#0F1D26;--ink-2:#4A5864;--ink-3:#B7C2CB;--rule:#DCD5CB;--green:#17734F;--loss:#E9A08F;--empty:#ECE6DD;--deep:#1D3854;--mist:#B7C2CB;
   --serif:"Instrument Serif","Times New Roman",serif;--sans:"Geist","Helvetica Neue",Helvetica,sans-serif;--mono:"Geist Mono",ui-monospace,monospace}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
@@ -32,21 +32,36 @@ h2{font-size:clamp(40px,4.4vw,64px)}
 .pill.dark:hover{background:var(--green);color:var(--paper)}
 .sr{position:absolute;left:-9999px}
 
-/* hero */
-.hero{background:linear-gradient(180deg,#5C9FDF 0%,#6DAAE3 100%)}
+/* hero: deep water, the pick itself beside the headline */
+.hero{background:var(--deep);color:var(--paper)}
+.hero a{color:var(--paper)}.hero a:hover{color:#9FD9BC}
 .nav{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 24px;max-width:1200px;margin:0 auto}
 /* the wordmark: type only, no icon */
 .brand{font-family:var(--serif);font-size:28px;line-height:1;letter-spacing:-.3px;text-decoration:none;white-space:nowrap}
 .nav .links{display:flex;align-items:center;gap:24px;font-size:15px}
 .nav .links a{text-decoration:none}
-.nav .links a.on{border-bottom:1px solid var(--ink)}
+.nav .links a.on{border-bottom:1px solid currentColor}
 @media(max-width:460px){.brand{font-size:24px}.nav .links{gap:14px;font-size:14px}}
-.hero .copy{display:flex;flex-direction:column;align-items:center;text-align:center;gap:22px;padding:56px 24px 40px;max-width:1200px;margin:0 auto}
+.hero .inner{max-width:1200px;margin:0 auto;padding:24px 24px 72px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:40px 56px;align-items:center}
+.hero .copy{display:flex;flex-direction:column;align-items:flex-start;gap:24px}
 .eyebrow{font-family:var(--mono);font-size:13px;letter-spacing:2px;text-transform:uppercase}
-.hero h1{font-size:clamp(52px,7.6vw,112px);line-height:.95;letter-spacing:-1.5px;max-width:11ch}
-.hero .sub{font-size:clamp(17px,1.5vw,20px);line-height:1.5;max-width:34em;text-wrap:pretty}
-.hero .cta{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:22px;margin-top:6px}
-.hero-img{height:clamp(340px,42vw,620px);background:url(/assets/home/hero-gem.jpg) 50% 58%/cover}
+.hero .eyebrow{color:var(--mist)}
+.hero h1{font-size:clamp(52px,6.6vw,104px);line-height:.95;letter-spacing:-1.5px;max-width:11ch}
+.hero .sub{font-size:clamp(17px,1.4vw,20px);line-height:1.5;max-width:30em;color:#D3DBE1;text-wrap:pretty}
+.hero .cta{display:flex;flex-wrap:wrap;align-items:center;gap:22px;margin-top:6px}
+.pill.light{background:var(--paper);color:var(--ink);font-size:17px;padding:18px 30px}
+.pill.light:hover{background:#9FD9BC;color:var(--ink)}
+.reel{width:100%;max-width:470px;justify-self:center}
+.reel video{display:block;width:100%;height:auto;aspect-ratio:4/5;background:var(--deep);
+  /* feather the frame so video color never shows a seam against the page */
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent),linear-gradient(180deg,transparent,#000 2.5%,#000 97.5%,transparent);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent),linear-gradient(180deg,transparent,#000 2.5%,#000 97.5%,transparent);mask-composite:intersect}
+@media(max-width:900px){
+  .hero .inner{grid-template-columns:1fr;padding-top:16px;padding-bottom:48px}
+  .hero .copy{align-items:center;text-align:center}
+  .hero .cta{justify-content:center}
+  .reel{max-width:400px}
+}
 
 /* proof strip */
 .strip{background:var(--ink);color:var(--paper)}
@@ -126,9 +141,9 @@ h2{font-size:clamp(40px,4.4vw,64px)}
 .faq p{margin-top:12px;font-size:16px;line-height:1.6;color:var(--ink-2)}
 
 /* close */
-.close{background:linear-gradient(180deg,rgba(15,29,38,.18),rgba(15,29,38,.18)),url(/assets/home/hero-gem.jpg) 50% 80%/cover;color:#fff}
+.close{background:var(--deep);color:var(--paper)}
 .close .wrap{display:flex;flex-direction:column;align-items:center;text-align:center;gap:26px;padding-top:150px;padding-bottom:150px}
-.close h2{font-size:clamp(44px,6vw,88px);text-shadow:0 2px 24px rgba(15,29,38,.45)}
+.close h2{font-size:clamp(44px,6vw,88px)}
 footer{background:var(--ink);color:#C4CDD4}
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:20px;padding-top:44px;padding-bottom:44px;font-size:14px}
 footer .brand{color:var(--paper);font-size:26px}
@@ -156,13 +171,15 @@ footer nav a{color:var(--paper);text-decoration:none}
     <a class="brand" href="/">Morello Sims</a>
     <div class="links"><a class="on" href="/">NBA</a><a href="/nfl/">NFL</a><a href="/extra/">Extra</a><a href="#" id="signin">Sign in</a></div>
   </nav>
+  <div class="inner">
   <div class="copy">
     <p class="eyebrow">NBA picks · Opening night Oct 20</p>
     <h1>The sim found <span id="h-units">29.6</span> units last season.</h1>
     <p class="sub">It plays every NBA game before tip and sends you only the ones worth betting. All <span id="h-picks">216</span> picks from last season are graded in public, wins and losses.</p>
-    <div class="cta"><a class="pill dark" href="#plans">Get tonight’s picks</a><a href="/ledger/nba/">See every pick</a></div>
+    <div class="cta"><a class="pill light" href="#plans">Get tonight’s picks</a><a href="/ledger/nba/">See every pick</a></div>
   </div>
-  <div class="hero-img" role="img" aria-label="A green cushion-cut gem resting in clear, sparkling shallow water"></div>
+  <div class="reel"><video id="reel" autoplay muted loop playsinline preload="auto" poster="/assets/home/pick-reveal.jpg" aria-label="A real pick from the ledger: Knicks at Spurs, Knicks +5.0, logged before tip. It won by 4, +1.82 units."><source src="/assets/home/pick-reveal.mp4" type="video/mp4"></video></div>
+  </div>
 </header>
 
 <section class="strip" aria-label="Last season">
@@ -253,7 +270,7 @@ footer nav a{color:var(--paper);text-decoration:none}
 </section>
 
 <section class="close" aria-label="Opening night">
-  <div class="wrap"><h2>Opening night is October 20.</h2><a class="pill dark" href="#plans">Get tonight’s picks</a></div>
+  <div class="wrap"><h2>Opening night is October 20.</h2><a class="pill light" href="#plans">Get tonight’s picks</a></div>
 </section>
 
 <footer>
@@ -313,6 +330,13 @@ $("free").addEventListener("submit", async e => {
 $("signin").addEventListener("click", e => { e.preventDefault(); const a = window.morelloAuth; if (!a) return; a.openModal(a.getCurrentUser() ? "profile" : "signin"); });
 let tries = 0; const who = setInterval(() => { const a = window.morelloAuth; tries++;
   if (a && a.getCurrentUser()) { $("signin").textContent = "Account"; clearInterval(who); } if (tries > 20) clearInterval(who); }, 500);
+
+// the hero reel holds on the finished card for visitors who asked for less motion
+const reel = $("reel");
+if (reel && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  reel.pause(); reel.addEventListener("loadedmetadata", () => { reel.currentTime = reel.duration - .05; }, {once: true});
+  if (reel.readyState >= 1) reel.currentTime = reel.duration - .05;
+}
 
 // every number comes from the public ledger
 fetch("/ledger/nba/2025-26.json", {cache: "no-cache"}).then(r => r.json()).then(d => {
