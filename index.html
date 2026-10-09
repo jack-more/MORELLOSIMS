@@ -211,8 +211,8 @@ footer nav a{color:var(--paper);text-decoration:none}
   <div class="inner">
   <div class="copy">
     <p class="eyebrow">NBA picks · Opening night Oct 20</p>
-    <h1>The sim found <span id="h-units">29.6</span> units last season.</h1>
-    <p class="sub">It plays every NBA game before tip and sends you only the ones worth betting. All <span id="h-picks">216</span> picks from last season are graded in public, wins and losses.</p>
+    <h1><span id="h-wr">56.7%</span> winners. <span id="h-units">+29.6</span> units.</h1>
+    <p class="sub">Last NBA season, <strong><span id="h-roi">+8.2%</span> on every unit risked</strong>. The sim plays every game before tip and sends you only the ones worth betting. All <span id="h-picks">216</span> picks are graded in public, wins and losses.</p>
     <div class="cta"><a class="pill light" href="#plans">Get tonight’s picks</a><a href="/ledger/nba/">See every pick</a></div>
     <a class="wt-link" href="#win-totals">New: the sim’s 2026-27 win totals →</a>
   </div>
@@ -222,10 +222,10 @@ footer nav a{color:var(--paper);text-decoration:none}
 
 <section class="strip" aria-label="Last season">
   <div class="wrap">
-    <div><b id="s-units">+29.6u</b><span>last NBA season</span></div>
-    <div><b id="s-rec">122–93–1</b><span>record</span></div>
+    <div><b id="s-wr">56.7%</b><span>win rate</span></div>
+    <div><b id="s-units">+29.6u</b><span>units up, last NBA season</span></div>
     <div><b id="s-roi">+8.2%</b><span>return on every unit risked</span></div>
-    <div><b id="s-picks">216</b><span>picks, all graded in public</span></div>
+    <div><b id="s-rec">122–93–1</b><span>record · <em id="s-picks" style="font-style:normal">216</em> picks graded in public</span></div>
   </div>
 </section>
 
@@ -432,9 +432,11 @@ $("wt-form").addEventListener("submit", async e => {
 // every number comes from the public ledger
 fetch("/ledger/nba/2025-26.json", {cache: "no-cache"}).then(r => r.json()).then(d => {
   const s = d.summary, u = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "u";
-  $("h-units").textContent = s.units.toFixed(1); $("h-picks").textContent = s.picks; $("s-picks").textContent = s.picks;
+  const wr = (100 * s.w / (s.w + s.l)).toFixed(1) + "%", roi = (s.roi >= 0 ? "+" : "−") + Math.abs(s.roi).toFixed(1) + "%";
+  $("h-wr").textContent = wr; $("s-wr").textContent = wr; $("h-roi").textContent = roi;
+  $("h-units").textContent = (s.units >= 0 ? "+" : "−") + Math.abs(s.units).toFixed(1); $("h-picks").textContent = s.picks; $("s-picks").textContent = s.picks;
   $("s-units").textContent = u(s.units); $("s-rec").textContent = `${s.w}–${s.l}${s.p ? "–" + s.p : ""}`;
-  $("s-roi").textContent = (s.roi >= 0 ? "+" : "−") + Math.abs(s.roi).toFixed(1) + "%";
+  $("s-roi").textContent = roi;
   const night = {}; d.picks.forEach(p => night[p.date] = (night[p.date] || 0) + p.units);
   const up = Object.values(night).filter(v => v > 0).length, down = Object.values(night).filter(v => v < 0).length;
   [$("r-up"), ...document.querySelectorAll(".q-up")].forEach(el => el.textContent = up);
