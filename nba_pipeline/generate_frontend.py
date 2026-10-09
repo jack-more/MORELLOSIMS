@@ -5118,7 +5118,7 @@ def generate_html():
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://morellosims.com/morello-auth.css?v=20261005-brand">
+    <link rel="stylesheet" href="https://morellosims.com/morello-auth.css?v=20261008-tg">
     <style>
 {generate_css()}
     </style>
@@ -5577,7 +5577,7 @@ def generate_html():
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://morellosims.com/morello-auth.js?v=20261005-brand" data-ma-theme="nba"></script>
+    <script src="https://morellosims.com/morello-auth.js?v=20261008-tg" data-ma-theme="nba"></script>
 </body>
 </html>"""
 

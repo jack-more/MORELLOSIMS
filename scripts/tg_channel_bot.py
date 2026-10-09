@@ -1,34 +1,33 @@
 #!/usr/bin/env python3
-"""@MorelloSimsBot — premium channel gatekeeper + publisher.
+"""@MorelloSimsBot — members channel gatekeeper + publisher + owner console.
 
-Designed to run stateless on a cron (no persistent server). Each run:
-  1. drains getUpdates
-  2. answers /start DMs with the pitch + checkout link
-  3. approves channel join requests for active subscribers, declines others
-     (with a DM pointing at checkout)
-  4. kicks subscribers whose access expired
+Runs stateless on a 15-minute cron (.github/workflows/tg-channel-bot.yml). Each run:
+  1. drains getUpdates (messages, button taps, join requests, member joins)
+  2. answers /start DMs with the pitch
+  3. records who joined the members channel with which purchase (tg_members.py)
+  4. removes anyone whose pass or comp has ended, and anyone who got in
+     without one of our one-person links
+  5. owner console, slip relay and pick alerts (picks post to the channel)
+
+Getting in: a paid member taps "Join the members channel" on morellosims.com;
+the telegramInvite Cloud Function checks their pass and mints a link that works
+once, for one person, for one hour. Join requests are always declined.
 
 Channel setup (one-time, by hand — Telegram does not let bots create channels):
-  1. Create a private channel (e.g. "Morello Sims Premium")
-  2. Add @MorelloSimsBot as admin with "Invite Users via Link" +
-     "Manage Join Requests" (and "Post Messages" for card publishing)
-  3. Channel settings → create an invite link with "Request Admin Approval" ON
-     — that link is what you sell / put behind checkout
-  4. Forward any message from the channel to @userinfobot (or run this script
-     with --discover after posting once) to get the channel id, then add
-     TELEGRAM_PREMIUM_CHANNEL_ID=<id> to .env
-
-Subscribers ledger: bankroll-grade honesty — a plain JSON file
-(telegram/subscribers.json) mapping user_id -> {until, note}. Until Stripe or
-Telegram Stars is wired into checkout, adding a subscriber is manual:
-  python3 scripts/tg_channel_bot.py grant --user 12345 --days 30 --note "..."
+  1. Create a private channel; Settings → turn on "Restrict saving content"
+  2. Add @MorelloSimsBot as admin: Invite users via link, Ban users,
+     Post messages, Pin messages, Delete messages
+  3. The bot DMs the owner the channel id when it's made admin — save it as
+     TELEGRAM_PREMIUM_CHANNEL_ID (GitHub secret + Firebase function secret)
+  4. python3 scripts/tg_channel_bot.py post-rules   (posts + pins ops/telegram_rules.md)
 
 Usage:
-  python3 scripts/tg_channel_bot.py run        # process updates + expiries
+  python3 scripts/tg_channel_bot.py run
   python3 scripts/tg_channel_bot.py post --photo <path> --caption "..."
-  python3 scripts/tg_channel_bot.py grant --user <id> --days 30
-  python3 scripts/tg_channel_bot.py revoke --user <id>
+  python3 scripts/tg_channel_bot.py grant --user <telegram id> --days 30 --note "comp"
+  python3 scripts/tg_channel_bot.py revoke --user <telegram id>
   python3 scripts/tg_channel_bot.py list
+  python3 scripts/tg_channel_bot.py post-rules
 """
 
 import argparse
@@ -40,19 +39,29 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-SUBS_FILE = os.path.join(REPO, "telegram", "subscribers.json")
 # telegram/ is gitignored (subscriber ids stay local); the update offset must
 # persist between cron runs or every run replays the last 24h of updates.
 STATE_FILE = os.path.join(REPO, "ops", "state", "bot_state.json")
 
-CHECKOUT_URL = "https://morellosims.com/#packages"  # swap for Stripe/Stars link when live
+CHECKOUT_URL = "https://morellosims.com/#plans"
 PITCH = (
-    "🌀 Morello Sims Premium\n\n"
-    "Every C8+ pick, the GO-YARD home run lotto, and the full sim board — "
-    "posted before first pitch, settled in public, tracked with closing lines.\n\n"
-    f"Join here: {CHECKOUT_URL}\n\n"
-    "Already a member? Request to join the channel and you'll be approved automatically."
+    "Morello Sims — members channel\n\n"
+    "Every NBA pick posts here the moment the sim logs it, before tip. "
+    "Every one is graded on the public ledger, wins and losses.\n\n"
+    f"Get a pass: {CHECKOUT_URL}\n\n"
+    "Already bought one? Sign in at morellosims.com, open your account and tap "
+    "Join the members channel. Your link works once and only for you."
 )
+WELCOME = (
+    "You're in. Picks post in the channel the moment they're logged, before tip.\n"
+    "The rules are pinned at the top. Your access ends with your pass; renew any time at "
+    + CHECKOUT_URL
+)
+ENDED = (
+    "Your Morello Sims pass has ended, so you've been removed from the members channel.\n"
+    f"Pick it back up any time: {CHECKOUT_URL}"
+)
+ALLOWED_UPDATES = json.dumps(["message", "callback_query", "chat_join_request", "chat_member", "my_chat_member"])
 
 
 def env(name):
@@ -78,6 +87,44 @@ OWNER_HELP = (
     "Pick alerts arrive here the moment a pick is published; the button under "
     "each one posts it to X unblurred (X gets the sealed card by default)."
 )
+
+
+def remove_member(user_id, dm=ENDED):
+    """Remove without a permanent ban (ban + unban), then tell them why."""
+    api("banChatMember", chat_id=CHANNEL_ID, user_id=user_id)
+    api("unbanChatMember", chat_id=CHANNEL_ID, user_id=user_id, only_if_banned=True)
+    if dm:
+        try:
+            api("sendMessage", chat_id=user_id, text=dm)
+        except Exception:
+            pass  # never DM'd the bot; Telegram blocks cold DMs
+
+
+def invite_link(name, expire_ts):
+    r = api("createChatInviteLink", chat_id=CHANNEL_ID, name=name[:32], member_limit=1, expire_date=expire_ts)
+    return r["result"]["invite_link"]
+
+
+def handle_member_update(cm):
+    """chat_member: somebody joined or left the members channel."""
+    import tg_members
+    new, old = cm.get("new_chat_member", {}), cm.get("old_chat_member", {})
+    if new.get("status") != "member" or old.get("status") not in ("left", "kicked"):
+        return
+    user = new["user"]
+    if str(user["id"]) == str(OWNER_ID) or user.get("is_bot"):
+        return
+    name = (cm.get("invite_link") or {}).get("name", "")
+    kind = tg_members.record_join(user, name) if tg_members.db() is not None else "unchecked"
+    if kind in ("member", "comp"):
+        print(f"  members: {user['id']} joined ({kind})")
+        try:
+            api("sendMessage", chat_id=user["id"], text=WELCOME)
+        except Exception:
+            pass
+    elif kind is None:
+        remove_member(user["id"], dm=PITCH)
+        print(f"  members: removed {user['id']} — joined without a pass link")
 
 
 def api(method, **params):
@@ -117,22 +164,31 @@ def save_json(path, obj):
         json.dump(obj, f, indent=2)
 
 
-def is_active(subs, user_id):
-    rec = subs.get(str(user_id))
-    return bool(rec) and rec.get("until", "") >= datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-
 def cmd_run():
     if not TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN missing")
-    subs = load_json(SUBS_FILE, {})
     state = load_json(STATE_FILE, {"offset": 0})
-    upd = api("getUpdates", offset=state["offset"], timeout=10)
+    upd = api("getUpdates", offset=state["offset"], timeout=10, allowed_updates=ALLOWED_UPDATES)
     for u in upd.get("result", []):
         state["offset"] = u["update_id"] + 1
         msg = u.get("message") or {}
         jr = u.get("chat_join_request")
         cb = u.get("callback_query")
+        cm = u.get("chat_member")
+        mcm = u.get("my_chat_member")
+        if mcm and OWNER_ID and mcm.get("new_chat_member", {}).get("status") == "administrator":
+            # setup helper: the bot was made admin somewhere — tell the owner the chat id
+            ch = mcm.get("chat", {})
+            api("sendMessage", chat_id=OWNER_ID,
+                text=f"I'm now an admin in \"{ch.get('title')}\". Its id is {ch.get('id')} — "
+                     "save that as TELEGRAM_PREMIUM_CHANNEL_ID.")
+            continue
+        if cm and CHANNEL_ID and str(cm.get("chat", {}).get("id")) == str(CHANNEL_ID):
+            try:
+                handle_member_update(cm)
+            except Exception as e:
+                print(f"  WARN member update {u['update_id']}: {e}")
+            continue
         if cb or (msg and OWNER_ID and str(msg.get("chat", {}).get("id")) == str(OWNER_ID)):
             try:
                 handle_owner(msg, cb)
@@ -143,18 +199,14 @@ def cmd_run():
             api("sendMessage", chat_id=msg["chat"]["id"], text=PITCH)
             print(f"  pitched {msg['chat'].get('first_name')} ({msg['chat']['id']})")
         elif jr and CHANNEL_ID and str(jr["chat"]["id"]) == str(CHANNEL_ID):
+            # members join with their own one-person link, never by request
             uid = jr["from"]["id"]
-            if is_active(subs, uid):
-                api("approveChatJoinRequest", chat_id=CHANNEL_ID, user_id=uid)
-                print(f"  approved subscriber {uid}")
-            else:
-                api("declineChatJoinRequest", chat_id=CHANNEL_ID, user_id=uid)
-                try:
-                    api("sendMessage", chat_id=uid,
-                        text=f"Your Morello Sims Premium membership isn't active yet.\n{CHECKOUT_URL}")
-                except Exception:
-                    pass  # user never DM'd the bot; Telegram blocks cold DMs
-                print(f"  declined non-subscriber {uid}")
+            api("declineChatJoinRequest", chat_id=CHANNEL_ID, user_id=uid)
+            try:
+                api("sendMessage", chat_id=uid, text=PITCH)
+            except Exception:
+                pass  # user never DM'd the bot; Telegram blocks cold DMs
+            print(f"  declined join request {uid}")
     # confirm processed updates server-side too, so nothing can replay
     if upd.get("result"):
         api("getUpdates", offset=state["offset"], timeout=0)
@@ -171,19 +223,10 @@ def cmd_run():
         pick_alerts.run()
     except Exception as e:
         print(f"  WARN pick alerts: {e}")
-    # expiries: kick lapsed members (ban+unban = remove without permanent ban)
+    # expiries: remove members whose pass or comp has ended
     if CHANNEL_ID:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        for uid, rec in list(subs.items()):
-            if rec.get("until", "") < today and not rec.get("kicked"):
-                try:
-                    api("banChatMember", chat_id=CHANNEL_ID, user_id=uid)
-                    api("unbanChatMember", chat_id=CHANNEL_ID, user_id=uid, only_if_banned=True)
-                    rec["kicked"] = today
-                    print(f"  expired + removed {uid}")
-                except Exception as e:
-                    print(f"  WARN could not remove {uid}: {e}")
-    save_json(SUBS_FILE, subs)
+        import tg_members
+        tg_members.sweep(remove_member)
     save_json(STATE_FILE, state)
 
 
@@ -244,35 +287,41 @@ def cmd_post(photo, caption):
 
 
 def cmd_grant(user, days, note):
-    subs = load_json(SUBS_FILE, {})
-    until = (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d")
-    subs[str(user)] = {"until": until, "note": note or "", "granted": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
-    save_json(SUBS_FILE, subs)
-    print(f"granted {user} until {until}")
+    """Comp a Telegram user id; the one-person link goes to the owner's DM."""
+    import tg_members
+    link, until = tg_members.grant(user, days, note, invite_link)
+    msg = f"Comp for {user} until {until:%b %d %H:%M} UTC ({note or 'no note'}). Their link (one use, 24h): {link}"
+    if OWNER_ID:
+        api("sendMessage", chat_id=OWNER_ID, text=msg)
+    print("comp granted — link sent to the owner DM")
 
 
 def cmd_revoke(user):
-    subs = load_json(SUBS_FILE, {})
-    if str(user) in subs:
-        subs[str(user)]["until"] = "1970-01-01"
-        save_json(SUBS_FILE, subs)
-        print(f"revoked {user} (will be removed on next run)")
-    else:
-        print("unknown user")
+    import tg_members
+    tg_members.revoke(user)
+    print(f"revoked {user} (removed on the next run)")
 
 
 def cmd_list():
-    subs = load_json(SUBS_FILE, {})
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    for uid, rec in sorted(subs.items()):
-        status = "ACTIVE" if rec.get("until", "") >= today else "expired"
-        print(f"  {uid:>12} until {rec.get('until')} [{status}] {rec.get('note','')}")
-    print(f"{sum(1 for r in subs.values() if r.get('until','') >= today)} active / {len(subs)} total")
+    import tg_members
+    if tg_members.db() is None:
+        raise SystemExit("FIREBASE_SERVICE_ACCOUNT missing")
+    for row in tg_members.listing():
+        print(row)
+
+
+def cmd_post_rules():
+    """Post the membership rules (ops/telegram_rules.md) to the channel and pin them."""
+    path = os.path.join(REPO, "ops", "telegram_rules.md")
+    text = open(path).read().strip()
+    r = api("sendMessage", chat_id=CHANNEL_ID, text=text, disable_web_page_preview=True)
+    api("pinChatMessage", chat_id=CHANNEL_ID, message_id=r["result"]["message_id"], disable_notification=True)
+    print("rules posted and pinned")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run", "post", "grant", "revoke", "list"])
+    ap.add_argument("cmd", choices=["run", "post", "grant", "revoke", "list", "post-rules"])
     ap.add_argument("--photo")
     ap.add_argument("--caption", default="")
     ap.add_argument("--user")
@@ -287,6 +336,8 @@ def main():
         cmd_grant(a.user, a.days, a.note)
     elif a.cmd == "revoke":
         cmd_revoke(a.user)
+    elif a.cmd == "post-rules":
+        cmd_post_rules()
     else:
         cmd_list()
 

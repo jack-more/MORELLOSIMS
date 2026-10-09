@@ -8,9 +8,9 @@ name: TG Channel Bot
 #
 # Each run drains getUpdates and:
 #   - answers /start DMs with the pitch + checkout link
-#   - approves channel join requests from active subscribers
-#   - declines everyone else (and DMs them the checkout link)
-#   - removes subscribers whose access expired
+#   - records which purchase each new channel member joined with (Firestore)
+#   - removes members whose pass ended, and anyone without a pass link
+#   - declines join requests (members join with one-person links instead)
 #
 # Telegram only retains updates for ~24h, so a join request that arrives while
 # this workflow is not polling is lost for good. Hence the tight interval.
@@ -33,8 +33,25 @@ on:
         default: 'list'
         type: choice
         options:
-          - list    # read-only: print the subscriber ledger
-          - run     # live: approve/decline/kick + send DMs
+          - list        # read-only: print the members ledger
+          - run         # live: record joins, remove lapsed members, DMs
+          - post-rules  # post + pin ops/telegram_rules.md in the channel
+          - grant       # comp a Telegram user (needs user + days)
+          - revoke      # end a comp (needs user)
+      user:
+        description: 'grant/revoke: Telegram user id'
+        required: false
+        type: string
+      days:
+        description: 'grant: days of access'
+        required: false
+        default: '30'
+        type: string
+      note:
+        description: 'grant: note'
+        required: false
+        default: ''
+        type: string
       photo:
         description: 'post only: path to card PNG'
         required: false
@@ -69,13 +86,14 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests requests-oauthlib pillow numpy cryptography
+        run: pip install requests requests-oauthlib pillow numpy cryptography firebase-admin
 
       - name: Run bot (owner console + pick alerts; channel gatekeeper once configured)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_PREMIUM_CHANNEL_ID: ${{ secrets.TELEGRAM_PREMIUM_CHANNEL_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
           PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
@@ -97,7 +115,11 @@ jobs:
             CMD="${{ inputs.command }}"
           fi
           echo "=== tg_channel_bot.py ${CMD} ==="
-          python3 scripts/tg_channel_bot.py "${CMD}"
+          case "${CMD}" in
+            grant)  python3 scripts/tg_channel_bot.py grant --user "${{ inputs.user }}" --days "${{ inputs.days }}" --note "${{ inputs.note }}" ;;
+            revoke) python3 scripts/tg_channel_bot.py revoke --user "${{ inputs.user }}" ;;
+            *)      python3 scripts/tg_channel_bot.py "${CMD}" ;;
+          esac
 
       - name: Commit bot state
         if: github.event_name == 'schedule' || inputs.command == 'run'

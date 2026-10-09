@@ -188,6 +188,77 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   res.json({ received: true });
 });
 
+// TELEGRAM INVITE
+// A paid member taps "Join the members channel" on the site. We check their
+// access window in Firestore, then mint a one-person invite link that dies in
+// an hour (or when their access does, whichever is first). The link's name
+// carries the uid, so the channel bot can match the Telegram account that
+// joins with it to this purchase and remove it when access ends.
+// Secrets (set once): firebase functions:secrets:set TELEGRAM_BOT_TOKEN
+//                     firebase functions:secrets:set TELEGRAM_PREMIUM_CHANNEL_ID
+function hasActiveAccess(data) {
+  if (!data) return false;
+  if (data.tier === 'admin') return true;
+  const exp = data.accessExpiresAt && data.accessExpiresAt.toMillis ? data.accessExpiresAt.toMillis() : 0;
+  if (exp > Date.now()) return true;
+  // legacy recurring subscriptions carry no expiry; the webhook flips them to free when they lapse
+  return data.checkoutMode === 'subscription' && data.tier && data.tier !== 'free';
+}
+
+exports.telegramInvite = functions
+  .runWith({ secrets: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_PREMIUM_CHANNEL_ID'] })
+  .https.onRequest((req, res) => {
+    cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+      }
+      try {
+        const authHeader = req.headers.authorization || '';
+        if (!authHeader.startsWith('Bearer ')) {
+          res.status(401).json({ error: 'Sign in first' });
+          return;
+        }
+        const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+        const uid = decoded.uid;
+        const snap = await db.collection('users').doc(uid).get();
+        const data = snap.exists ? snap.data() : null;
+        if (!hasActiveAccess(data)) {
+          res.status(403).json({ error: 'No active pass' });
+          return;
+        }
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        const channel = process.env.TELEGRAM_PREMIUM_CHANNEL_ID;
+        if (!token || !channel) {
+          res.status(503).json({ error: 'Channel not open yet' });
+          return;
+        }
+        const accessEnd = data.accessExpiresAt && data.accessExpiresAt.toMillis ? data.accessExpiresAt.toMillis() : Infinity;
+        const expireSec = Math.floor(Math.min(Date.now() + 60 * 60 * 1000, accessEnd) / 1000);
+        const tg = await fetch(`https://api.telegram.org/bot${token}/createChatInviteLink`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: channel, name: `u:${uid}`.slice(0, 32), member_limit: 1, expire_date: expireSec })
+        }).then(r => r.json());
+        if (!tg.ok) {
+          console.error('createChatInviteLink failed:', tg.description);
+          res.status(502).json({ error: 'Telegram did not issue a link' });
+          return;
+        }
+        await db.collection('tg_invites').add({
+          uid,
+          link: tg.result.invite_link,
+          expiresAt: admin.firestore.Timestamp.fromMillis(expireSec * 1000),
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.json({ link: tg.result.invite_link });
+      } catch (err) {
+        console.error('telegramInvite error:', err);
+        res.status(500).json({ error: 'Could not create invite' });
+      }
+    });
+  });
+
 // ON USER CREATE - Check FnF whitelist
 exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
   const email = user.email;

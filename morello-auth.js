@@ -369,6 +369,11 @@
       removeStreakChip();
     }
     setupTailButtons();
+    // back from Stripe: open the account panel, where the channel button lives
+    if (user && /[?&]checkout=success/.test(window.location.search)) {
+      openModal('profile');
+      try { history.replaceState(null, '', window.location.pathname + window.location.hash); } catch (_) {}
+    }
   }
 
   // ══════════════════════════════════════════════════
@@ -585,6 +590,10 @@
       </div>
       ${tier === 'free' || tier === 'fnf' ? `
         <button class="ma-btn-primary" onclick="window.morelloAuth.openModal('pricing')">Get the picks</button>
+      ` : ''}
+      ${(tier === 'pickmaker_nba' || tier === 'pickmaker_mlb' || tier === 'pickmaker_dual' || tier === 'all_access' || tier === 'admin') ? `
+        <button class="ma-btn-primary" id="ma-tg-join" onclick="window.morelloAuth.joinTelegram()">Join the members channel</button>
+        <div class="ma-tg-note" id="ma-tg-note">Opens Telegram. Your link works once, only for you.</div>
       ` : ''}
       ${(tier === 'pickmaker_nba' || tier === 'pickmaker_mlb' || tier === 'pickmaker_dual') ? `
         <button class="ma-btn-secondary" onclick="window.morelloAuth.openModal('pricing')">Buy another pass</button>
@@ -1365,6 +1374,45 @@
     }
   }
 
+  // Members channel: the telegramInvite function checks the pass and returns
+  // a one-person Telegram invite link that expires within the hour.
+  async function joinTelegram() {
+    if (!currentUser) { openModal('signin'); return; }
+    const btn = document.getElementById('ma-tg-join');
+    const note = document.getElementById('ma-tg-note');
+    const say = (t) => { if (note) note.textContent = t; };
+    if (btn) { btn.disabled = true; btn.textContent = 'Getting your link…'; }
+    try {
+      const token = await currentUser.getIdToken();
+      const resp = await fetch(FUNCTIONS_BASE + '/telegramInvite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: '{}'
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.link) {
+        trackEvent('telegram_join', {});
+        say('Telegram is opening. If it doesn’t, tap here:');
+        if (note) {
+          const a = document.createElement('a');
+          a.href = data.link; a.textContent = ' open the invite'; a.rel = 'noopener';
+          note.appendChild(a);
+        }
+        window.location.href = data.link;
+      } else if (resp.status === 403) {
+        say('Your pass isn’t active. Pick one up to get in.');
+      } else if (resp.status === 503 || resp.status === 404) {
+        say('The members channel opens before tip on October 20.');
+      } else {
+        say('Couldn’t get your link. Try again in a minute.');
+      }
+    } catch (e) {
+      say('Couldn’t get your link. Try again in a minute.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Join the members channel'; }
+    }
+  }
+
   function copyInviteLink() {
     if (!currentRefCode) return;
     const link = 'https://morellosims.com/?ref=' + currentRefCode;
@@ -1672,6 +1720,7 @@
     getCurrentUser: () => currentUser,
     getCurrentTier: () => currentTier,
     copyInviteLink,
+    joinTelegram,
     emailCapture: submitEmailCapture,
     getStreak: () => currentStreak,
     getRefCode: () => currentRefCode

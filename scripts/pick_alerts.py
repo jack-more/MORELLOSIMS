@@ -100,10 +100,10 @@ def premium_text(p):
     """Member post. First line carries no side (dry runs print it to public logs)."""
     sim = p.get("sim_projection") or ""
     when = p.get("game_time") or picks_store.start_label(p)
-    return (f"🔒 MEMBERS · {p['sport'].upper()} · C{p.get('conf')} · {p.get('matchup')}\n"
-            f"{p['pick_text']} {odds_str(p)}" + (f" · {when}" if when else "") + "\n"
-            f"Risk {p.get('units')} $PP ({float(p.get('units') or 0) / 25:g}u)" + (f" · Sim {sim}" if sim else "") + "\n"
-            f"Public copy stays sealed until {UNLOCK_WORD.get(p['sport'], 'first pitch')}.")
+    return (f"MEMBERS · {p['sport'].upper()} · {p.get('matchup')}" + (f" · {when}" if when else "") + "\n"
+            f"{p['pick_text']} {odds_str(p)} · {float(p.get('units') or 0) / 25:g}u\n"
+            + (f"The sim: {sim}\n" if sim else "")
+            + f"Logged {datetime.now(ET).strftime('%-I:%M %p ET')}. The public card stays sealed until {UNLOCK_WORD.get(p['sport'], 'tip')}.")
 
 
 def x_caption(p):
