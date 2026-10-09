@@ -315,14 +315,15 @@ def main():
                        "injured": {k: round(v, 2) for k, v in avail.items()}},
            "market": market["source"], "market_captured": market["captured"], "board": board}
     json.dump(out, open(os.path.join(OUT_DIR, "sim_2026-27.json"), "w"), indent=1)
-    # the public board for the site: lines, the sim's number and range, no model internals
+    # a site-ready board: lines, the sim's number and range, no model internals
     names = {r["abbreviation"]: (r["team_id"], r["full_name"]) for r in rows(con, "SELECT team_id, abbreviation, full_name FROM teams")}
     public = {"season": NEW, "run": out["run"][:10], "seasons_played": args.n,
               "book": "BetMGM", "book_date": market["captured"],
               "teams": [{"team": r["team"], "team_id": names[r["team"]][0], "name": names[r["team"]][1],
                          "line": r["line"], "sim": r["sim_mean"], "low": r["p10"], "high": r["p90"],
                          "side": r["side"], "price": r["price"]} for r in board]}
-    json.dump(public, open(os.path.join(ROOT, "..", "ledger", "nba", "win-totals-2026-27.json"), "w"), indent=1)
+    # private until Jack approves it for the site (never write into ledger/ from here)
+    json.dump(public, open(os.path.join(OUT_DIR, "board_2026-27.json"), "w"), indent=1)
     print(f"\n{'team':5}{'line':>6}{'sim':>7}{'gap':>6}  {'10-90%':>9}  {'side':6}{'P(side)':>8}{'mkt':>6}{'EV/u':>7}  net'26 -> proj")
     for r in board:
         mk = r["market_p_over"] if r["side"] == "OVER" else 1 - r["market_p_over"]
