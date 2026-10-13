@@ -171,6 +171,41 @@ elif SHOT == 'box':
     lm2.node_tree.links.new(li.outputs['Color'], lb2.inputs['Base Color']); top.data.materials.append(lm2); top.parent = lid
     lid.location = (0.4, BY / 2 + 3.4, 5.5); lid.rotation_euler = (math.radians(74), 0, math.radians(-2))
     root, vial = roots[2], []
+elif SHOT.startswith('pack'):
+    # one vial standing in front of its own carton on a stone ledge (pack = the vial's own carton; packset = four cartons)
+    def carton(no, loc, rz):
+        CW, CD, CH = 3.4, 3.4, 7.6; hw, hd = CW / 2, CD / 2
+        bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UV')
+        def V(x, y, z): return bm.verts.new((x, y, z))
+        A = 4080.0; B = 3300.0
+        def face(ps, uvs):
+            f = bm.faces.new([V(*q) for q in ps])
+            for lp, (px, py) in zip(f.loops, uvs): lp[uvl].uv = (px / A, 1 - py / B)
+        # walls, each listed bottom-left, bottom-right, top-right, top-left as seen from outside
+        face([(-hw, -hd, 0), (hw, -hd, 0), (hw, -hd, CH), (-hw, -hd, CH)], [(0, 2280), (1020, 2280), (1020, 0), (0, 0)])             # front -Y
+        face([(hw, -hd, 0), (hw, hd, 0), (hw, hd, CH), (hw, -hd, CH)], [(1020, 2280), (2040, 2280), (2040, 0), (1020, 0)])           # right +X
+        face([(hw, hd, 0), (-hw, hd, 0), (-hw, hd, CH), (hw, hd, CH)], [(2040, 2280), (3060, 2280), (3060, 0), (2040, 0)])           # back +Y
+        face([(-hw, hd, 0), (-hw, -hd, 0), (-hw, -hd, CH), (-hw, hd, CH)], [(3060, 2280), (4080, 2280), (4080, 0), (3060, 0)])       # left -X
+        face([(-hw, -hd, CH), (hw, -hd, CH), (hw, hd, CH), (-hw, hd, CH)], [(0, 3300), (1020, 3300), (1020, 2280), (0, 2280)])        # top
+        face([(-hw, hd, 0), (hw, hd, 0), (hw, -hd, 0), (-hw, -hd, 0)], [(1020, 2280), (2040, 2280), (2040, 3300), (1020, 3300)])      # bottom
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5); bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        me = bpy.data.meshes.new('carton'); bm.to_mesh(me); bm.free(); ob = bpy.data.objects.new('carton', me); sc.collection.objects.link(ob)
+        bv = ob.modifiers.new('bev', 'BEVEL'); bv.width = 0.035; bv.segments = 3; bv.harden_normals = True
+        cm_, cb_ = mat('carton%s' % no, **{'Roughness': 0.58, 'Coat Weight': 0.12, 'Coat Roughness': 0.35})
+        cnt = cm_.node_tree; ci = cnt.nodes.new('ShaderNodeTexImage'); ci.image = bpy.data.images.load(os.path.join(TEX, 'carton-%s.png' % no)); ci.interpolation = 'Cubic'
+        cnt.links.new(ci.outputs['Color'], cb_.inputs['Base Color'])
+        cnz = cnt.nodes.new('ShaderNodeTexNoise'); cnz.inputs['Scale'].default_value = 700; cbp = cnt.nodes.new('ShaderNodeBump'); cbp.inputs['Strength'].default_value = 0.05
+        cnt.links.new(cnz.outputs['Fac'], cbp.inputs['Height']); cnt.links.new(cbp.outputs['Normal'], cb_.inputs['Normal'])
+        ob.data.materials.append(cm_); ob.location = loc; ob.rotation_euler = (0, 0, math.radians(rz)); return ob
+    if SHOT == 'pack':
+        carton(NO, (2.15, 1.7, 0), -24)
+        root, vial = make_vial(NO); root.location = (-1.75, -1.9, 0); root.rotation_euler = (0, 0, math.radians(-9))
+    else:
+        nos = NO.split('+')
+        for k, n in enumerate(nos):
+            carton(n, ((k - (len(nos) - 1) / 2) * 4.25 + 2.2, 1.8 + (k % 2) * 0.7, 0), -14 + k * 7)
+        rr, _ = make_vial(nos[0]); rr.location = (-7.7, -1.6, 0); rr.rotation_euler = (0, 0, math.radians(-8))
+        root, vial = rr, []
 else:
     root, vial = make_vial(NO)
 
@@ -190,6 +225,7 @@ area('strip', 1.2, (13, -6, 6), 1800, sx=16)           # thin strip camera-right
 area('top', 8, (0, 2, 18), 1600)                       # overhead fill on the cap and crimp
 
 floating = SHOT == 'float' or SHOT.startswith('floatspin:')
+PACK = SHOT.startswith('pack')
 if not floating:
     # sweep: floor running into a curved wall, in the area's dusty mid tone
     prof = [(-40, 0.0, -30)] + [(0, 0, 0)]
@@ -211,6 +247,7 @@ if not floating:
         bm.faces.new((rows[i][0], rows[i][1], rows[i + 1][1], rows[i + 1][0]))
     sme = bpy.data.meshes.new('sweep'); bm.to_mesh(sme); bm.free(); sw = bpy.data.objects.new('sweep', sme); sc.collection.objects.link(sw)
     for p in sme.polygons: p.use_smooth = True
+    if PACK: sw.hide_render = True
     wm_, wb = mat('sweep', **{'Base Color': lin('#D8CDB8' if SHOT in ('lineup', 'box') else SWEEP[AREA]), 'Roughness': 0.85}); sw.data.materials.append(wm_)
     # low sun through palm fronds: a cut-out between the sun and the set casts the leaf shadows
     sun = bpy.data.lights.new('sun', 'SUN'); sun.energy = 5.0; sun.angle = math.radians(1.2); sun.color = (1.0, 0.94, 0.84)
@@ -221,6 +258,32 @@ if not floating:
     fm, fb = mat('fronds', **{'Base Color': (0, 0, 0, 1), 'Roughness': 1.0}); fnt = fm.node_tree
     fi = fnt.nodes.new('ShaderNodeTexImage'); fi.image = bpy.data.images.load(os.path.join(TEX, 'fronds.png')); fnt.links.new(fi.outputs['Alpha'], fb.inputs['Alpha'])
     g.data.materials.append(fm); g.visible_camera = False; g.visible_glossy = False; g.visible_transmission = False; g.visible_diffuse = False
+    if PACK:
+        # travertine ledge: warm stone, open pores, a soft front edge the camera sees
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 3.5, -2.0)); led = bpy.context.active_object; led.scale = (70, 17, 4); bpy.ops.object.transform_apply(scale=True)
+        lbv = led.modifiers.new('bev', 'BEVEL'); lbv.width = 0.35; lbv.segments = 6
+        tm, tb = mat('travertine', **{'Roughness': 0.82}); tnt = tm.node_tree
+        tco = tnt.nodes.new('ShaderNodeTexCoord'); tmp = tnt.nodes.new('ShaderNodeMapping'); tmp.inputs['Scale'].default_value = (1.0, 0.3, 1.0); tnt.links.new(tco.outputs['Object'], tmp.inputs['Vector'])
+        tn = tnt.nodes.new('ShaderNodeTexNoise'); tn.inputs['Scale'].default_value = 0.35; tn.inputs['Detail'].default_value = 3; tnt.links.new(tmp.outputs['Vector'], tn.inputs['Vector'])
+        tr_ = tnt.nodes.new('ShaderNodeValToRGB'); tr_.color_ramp.elements[0].color = lin('#D3BFA0'); tr_.color_ramp.elements[1].color = lin('#E9DCC5')
+        tnt.links.new(tn.outputs['Fac'], tr_.inputs['Fac']); tnt.links.new(tr_.outputs['Color'], tb.inputs['Base Color'])
+        tv = tnt.nodes.new('ShaderNodeTexVoronoi'); tv.inputs['Scale'].default_value = 3.2; tnt.links.new(tmp.outputs['Vector'], tv.inputs['Vector'])
+        tpr = tnt.nodes.new('ShaderNodeMapRange'); tpr.inputs['From Min'].default_value = 0.0; tpr.inputs['From Max'].default_value = 0.16; tnt.links.new(tv.outputs['Distance'], tpr.inputs['Value'])
+        tfn = tnt.nodes.new('ShaderNodeTexNoise'); tfn.inputs['Scale'].default_value = 18; tml = tnt.nodes.new('ShaderNodeMath'); tml.operation = 'MULTIPLY'
+        tnt.links.new(tpr.outputs['Result'], tml.inputs[0]); tnt.links.new(tfn.outputs['Fac'], tml.inputs[1])
+        tbp = tnt.nodes.new('ShaderNodeBump'); tbp.inputs['Strength'].default_value = 0.35; tnt.links.new(tml.outputs['Value'], tbp.inputs['Height']); tnt.links.new(tbp.outputs['Normal'], tb.inputs['Normal'])
+        led.data.materials.append(tm)
+        # plaster wall behind, warm off-white with a hand-trowelled bump
+        bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 12, 20)); wal = bpy.context.active_object; wal.scale = (90, 50, 1); wal.rotation_euler = (math.radians(90), 0, 0)
+        pm_, pb_ = mat('plaster', **{'Base Color': lin('#EDE2D3'), 'Roughness': 0.9}); pnt = pm_.node_tree
+        pn = pnt.nodes.new('ShaderNodeTexNoise'); pn.inputs['Scale'].default_value = 0.35; pn.inputs['Detail'].default_value = 4; pbp = pnt.nodes.new('ShaderNodeBump'); pbp.inputs['Strength'].default_value = 0.18
+        pnt.links.new(pn.outputs['Fac'], pbp.inputs['Height']); pnt.links.new(pbp.outputs['Normal'], pb_.inputs['Normal']); wal.data.materials.append(pm_)
+        # hard late sun from camera left, low, through the fronds onto wall, carton and stone
+        for nm, k in (('key', 0.18), ('strip', 0.35), ('top', 0.12)): bpy.data.objects[nm].data.energy *= k
+        bg.inputs['Strength'].default_value = 0.12
+        sun.color = (1.0, 0.86, 0.68)
+        sun.energy = 9.0; sun.angle = math.radians(0.5); so.rotation_euler = (math.radians(58), 0, math.radians(-48))
+        g.location = (-10, -10, 24); g.rotation_euler = so.rotation_euler; g.rotation_euler.rotate_axis('Z', math.radians(15)); g.scale = (1.4, 1.4, 1)
 
 # ---------- camera and pose ----------
 cam = bpy.data.cameras.new('cam'); co = bpy.data.objects.new('cam', cam); sc.collection.objects.link(co); sc.camera = co
@@ -241,6 +304,11 @@ elif SHOT == 'pair':
 elif SHOT == 'box':
     cam.lens = 55; co.location = (8, -40, 17); cam.dof.focus_distance = 44; cam.dof.aperture_fstop = 11
     d = Vector((0, 2.4, 3.6)) - co.location; co.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler(); sc.view_settings.exposure = -0.35
+elif PACK:
+    cam.lens = 85 if SHOT == 'pack' else 55
+    co.location = (-2.0, -29, 6.2) if SHOT == 'pack' else (-0.6, -35, 6.6)
+    d = Vector((0.25 if SHOT == 'pack' else 0.6, 0.0, 3.3 if SHOT == 'pack' else 3.5)) - co.location; co.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
+    cam.dof.focus_distance = (Vector((0, -1, 3.5)) - co.location).length; cam.dof.aperture_fstop = 5.6
 elif SHOT == 'lineup':
     cam.lens = 70; co.location = (0, -40, 7.0); co.rotation_euler = (math.radians(84.5), 0, 0); cam.dof.focus_distance = 40
 else:

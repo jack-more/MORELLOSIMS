@@ -10,6 +10,8 @@
   const byNo = n => P.find(p => p.no === n), std = p => p.sizes[p.def];
   const SETS = C.sets.map(s => ({ ...s, list: s.items.reduce((a, n) => a + std(byNo(n))[1], 0) }));
   const FREE = C.freeShipping, tierOf = q => q >= 3 ? 0.85 : q === 2 ? 0.9 : 1;
+  // launch pricing: the cart price is the launch price; the struck list price is what it becomes after launch (PLACEHOLDER)
+  const listOf = v => Math.round(v * 100 / (100 - C.launch.off)), lp = v => `<span class="lchip">Launch</span><s>$${listOf(v)}</s>$${v}`;
   const base = document.querySelector('.z-base'), PAGE = base ? base.dataset.page : 'home';
   // what the label prints (label.js); url is the lot report the QR opens. WIRE: point at the real report URLs.
   const labelData = (p, mg) => ({ no: p.no, name: p.name, full: p.full, area: p.area, mg: mg || std(p)[0], lot: p.lot, filled: p.filled, url: 'https://zuma.example/lot/' + p.lot });
@@ -36,14 +38,14 @@
   <div class="z-bright z-pad"><span class="z-area">${AREAS[p.area].label}</span><h3>${esc(p.name)}</h3><p class="z-full">${esc(p.full.toUpperCase() !== p.name.toUpperCase() ? p.full : 'Lyophilized')}</p></div>
   <div class="z-deep z-pad"><p class="z-lotline"><span>${STOCK[p.status].split(' · ')[0]}</span><span>Lot ${p.lot}</span></p>
     <div class="csizes" role="group" aria-label="Amount of ${esc(p.name)}">${p.sizes.map((s, j) => `<button class="z-chip" type="button" data-csize="${j}" aria-pressed="${j === k}">${s[0]}</button>`).join('')}</div>
-    <div class="z-row cbuy"><span class="z-price" data-cp>$${z[1]}</span><span class="cbtns"><button class="z-btn z-btn-sm" type="button" data-qadd="${i}">${addWord(p)}</button><a class="z-btn z-btn-line z-btn-sm z-stretch" href="${p.href}?size=${k}" aria-label="View ${esc(p.name)}"><span class="cview">View</span> ${arr}</a></span></div></div>
+    <div class="z-row cbuy"><span class="z-price" data-cp>${lp(z[1])}</span><span class="cbtns"><button class="z-btn z-btn-sm" type="button" data-qadd="${i}">${addWord(p)}</button><a class="z-btn z-btn-line z-btn-sm z-stretch" href="${p.href}?size=${k}" aria-label="View ${esc(p.name)}"><span class="cview">View</span> ${arr}</a></span></div></div>
 </article>`;
   }
   document.addEventListener('click', e => {
     const c = e.target.closest('[data-csize]');
     if (c) { const el = c.closest('.z-pcard'), p = byNo(el.dataset.no), k = +c.dataset.csize; pick[p.no] = k;
       el.querySelectorAll('[data-csize]').forEach(b => b.setAttribute('aria-pressed', String(b === c)));
-      el.querySelectorAll('[data-cp]').forEach(s => s.textContent = '$' + p.sizes[k][1]); el.querySelector('.z-stretch').href = p.href + '?size=' + k; return; }
+      el.querySelectorAll('[data-cp]').forEach(s => s.innerHTML = lp(p.sizes[k][1])); el.querySelector('.z-stretch').href = p.href + '?size=' + k; return; }
     const q = e.target.closest('[data-quick]'); if (q) { openProduct(+q.dataset.quick); return; }
     const a = e.target.closest('[data-qadd]'); if (a) { const p = P[+a.dataset.qadd], z = p.sizes[sizeOf(p)]; addItem(p.no + '-' + z[0], `${p.name} · ${z[0]}`, z[1], 1, p.area, p.no);
       a.textContent = 'Added ✓'; setTimeout(() => a.textContent = addWord(p), 1400); }
@@ -103,12 +105,12 @@
   function saveCart() { try { localStorage.setItem('zuma-cart', JSON.stringify(cart)); } catch (e) {} renderCart(); }
   function addItem(key, label, price, qty, area, no) { const f = cart.find(c => c.key === key); if (f) f.qty += qty; else cart.push({ key, label, price, qty, area, no }); saveCart();
     toast('Added to cart · ' + label.split(' · ').slice(0, 2).join(' · '), true); }
-  const thumbOf = c => c.no === 'box' ? img('box-1000.webp') : img('vial-' + (c.no || c.key.split('-')[0]) + '.webp');
+  const thumbOf = c => c.no === 'box' ? img('box-1000.webp') : c.no === 'set' ? img('set-pack-800.webp') : img('vial-' + (c.no || c.key.split('-')[0]) + '.webp');
   function renderCart() {
     if (!$('#cart')) return;
     const n = cart.reduce((a, c) => a + c.qty, 0), t = cart.reduce((a, c) => a + c.qty * c.price, 0);
     $('#cartn').textContent = n; $('#c-total').textContent = '$' + t; $('#c-empty').hidden = n > 0;
-    $('#c-items').innerHTML = cart.map((c, k) => `<li data-area="${c.area || 'metabolic'}"><span class="${c.no === 'box' ? 'z-sand' : 'z-light'} cthumb"><img src="${thumbOf(c)}" alt=""></span>
+    $('#c-items').innerHTML = cart.map((c, k) => `<li data-area="${c.area || 'metabolic'}"><span class="${c.no === 'box' || c.no === 'set' ? 'z-sand' : 'z-light'} cthumb"><img src="${thumbOf(c)}" alt=""></span>
       <span class="cbody"><span class="t">${esc(c.label)}</span><span class="cqty"><span class="z-stepper z-stepper-sm" role="group" aria-label="Quantity"><button type="button" data-cq="${k}" data-d="-1" aria-label="One fewer">−</button><output>${c.qty}</output><button type="button" data-cq="${k}" data-d="1" aria-label="One more">+</button></span><button class="z-link" type="button" data-rm="${k}">Remove</button></span></span>
       <span class="z-price">$${c.qty * c.price}</span></li>`).join('');
     const ok = n > 0 && $('#c-ok').checked; $('#c-go').disabled = !ok; $('#c-crypto').disabled = !ok;
@@ -154,6 +156,7 @@
   function refresh() { const p = P[D.i], full = p.sizes[D.size][1] * D.qty; $('#q-n').textContent = D.qty;
     $('#d-add').textContent = priceNow() < full ? `${addWord(p)} · $${priceNow()} (was $${full})` : `${addWord(p)} · $${priceNow()}`; if ($('#bb-add')) $('#bb-add').textContent = addWord(p);
     $('#d-tiers').textContent = D.qty >= 3 ? '15% off for 3 or more vials' : D.qty === 2 ? '10% off for 2 vials · add one more for 15%' : '2 vials save 10% · 3 or more save 15%';
+    if ($('#pdp-list')) $('#pdp-list').textContent = '$' + listOf(p.sizes[D.size][1]);
     if ($('#pdp-price')) { $('#pdp-price').textContent = '$' + Math.round(unitFor()); $('#pdp-per').textContent = D.freq === 'standing' ? 'per vial, subscribed' : 'per vial'; }
     if ($('#bb-price')) { $('#bb-price').textContent = '$' + priceNow(); $('#bb-size').textContent = `${p.sizes[D.size][0]} × ${D.qty}${D.freq === 'standing' ? ' · every 30 days' : ''}`; }
     window.ZUMA3D && ZUMA3D.reprint(D.i, p.sizes[D.size][0]); }
@@ -215,7 +218,7 @@
     wireBuy(); refresh();
     $$('.pdp-thumb[data-view="label"], .pdp-thumb[data-view="box"]').forEach(t => t.addEventListener('click', () => {
       $$('.pdp-thumb').forEach(x => x.setAttribute('aria-pressed', String(x === t))); $('#pdp-stage').classList.add('still');
-      $('#d-poster').src = t.dataset.view === 'label' ? img('label-' + p.no + '.webp') : img('box-2000.webp'); }));
+      $('#d-poster').src = t.dataset.view === 'label' ? img('label-' + p.no + '.webp') : img('pack-' + p.no + '.webp'); }));
     // the add-to-cart bar appears once the buy box's button scrolls out of view
     const bb = $('#buybar'), btn = $('#d-add');
     if (bb && btn && 'IntersectionObserver' in window) new IntersectionObserver(([en]) => { const showBar = !en.isIntersecting && en.boundingClientRect.top < 0;
@@ -282,7 +285,7 @@
   function closeDialog(d) { d.hidden = true; if (dlgFrom && dlgFrom.focus) dlgFrom.focus(); }
   function openLaunch(kind, from) { const L = LAUNCH[kind] || ['At launch', '']; $('#l-ctx').textContent = L[0]; $('#l-p').textContent = L[1]; openDialog($('#launch'), from); }
   document.addEventListener('click', e => { const b = e.target.closest('[data-launch]'); if (b && !b.disabled) { openLaunch(b.dataset.launch, b); return; }
-    const c = e.target.closest('[data-coa]'); if (c && c.dataset.coa && c.id !== 'd-lotlink') { e.preventDefault(); openCoa(c.dataset.coa, c); } });
+    const c = e.target.closest('[data-coa]'); if (c && c.dataset.coa && c.id !== 'd-lotlink') { e.preventDefault(); openCoa(c.dataset.coa, c, c.dataset.lot); } });
   on('#l-close', 'click', () => closeDialog($('#launch')));
   on('#launch', 'click', e => { if (e.target === $('#launch')) closeDialog($('#launch')); });
   on('#news', 'submit', e => { e.preventDefault(); openLaunch('news', $('#news button')); });
@@ -292,8 +295,8 @@
     const W = 520, H = 150, pts = []; for (let x = 0; x <= W; x += 2) { const t = x / W, g = (c, w, h) => h * Math.exp(-((t - c) ** 2) / (2 * w * w));
       const y = 4 + g(0.18, 0.006, 6) + g(0.52 + seed * 0.01, 0.012, 128) + g(0.71, 0.007, 9) + 1.2 * Math.sin(x * 0.7 + seed); pts.push(`${x},${(H - y).toFixed(1)}`); }
     return `<svg viewBox="0 0 520 160" role="img" aria-label="Sample HPLC trace: one main peak"><path d="M0 150H520" stroke="currentColor" stroke-opacity=".35"/><polyline fill="none" stroke="currentColor" stroke-width="2" points="${pts.join(' ')}"/><text x="2" y="160" font-size="10" fill="currentColor" opacity=".7">0 min</text><text x="484" y="160" font-size="10" fill="currentColor" opacity=".7">30 min</text></svg>`; }
-  function openCoa(no, from) {
-    const p = byNo(no); if (!p) return; let d = $('#coa');
+  function openCoa(no, from, lotNo) {
+    const p0 = byNo(no); if (!p0) return; const p = lotNo ? { ...p0, lot: lotNo, filled: (LOTS.find(l => l.lot === lotNo) || p0).filled } : p0; let d = $('#coa');
     if (!d) { d = document.createElement('div'); d.className = 'z-dialog'; d.id = 'coa'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'coa-h'); d.hidden = true;
       d.innerHTML = '<div class="z-dialog-card z-white coa" id="coa-card"></div>'; (base || document.body).appendChild(d);
       d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-dclose]')) closeDialog(d); }); }
@@ -320,4 +323,81 @@
 
   let tt = 0; function toast(t, withCart) { const el = $('#toast'); if (!el) return; el.innerHTML = esc(t) + (withCart ? ' <button class="z-link" type="button" data-opencart>View cart</button>' : ''); el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600); }
   document.addEventListener('click', e => { if (e.target.closest('[data-opencart]')) { $('#toast').classList.remove('on'); renderCart(); show($('#cart')); } });
+
+  // ---------- every lot (lot library page): current lot plus earlier ones, newest first ----------
+  const LOTS = P.flatMap(p => [{ p, lot: p.lot, filled: p.filled, status: p.status }].concat(C.lot.previous.map(([pre, d]) => ({ p, lot: `${p.code}-${pre}A`, filled: d, status: 'ok' }))));
+  if ($('#lib-rows')) {
+    let la = 'all', ls = 'all', lq = '';
+    $('#lib-areas').innerHTML = `<button class="z-chip" type="button" data-a="all" aria-pressed="true">All areas</button>` + Object.entries(AREAS).map(([k, a]) => `<button class="z-chip" type="button" data-a="${k}" data-area="${k}" aria-pressed="false">${sw}${a.short}</button>`).join('');
+    const draw = () => {
+      const q = lq.trim().toUpperCase().replace(/\s+/g, '');
+      const rows = LOTS.filter(l => (la === 'all' || l.p.area === la) && (ls === 'all' || l.status === ls) && (!q || l.lot.toUpperCase().includes(q) || l.p.name.toUpperCase().replace(/\s+/g, '').includes(q) || l.p.full.toUpperCase().includes(q)));
+      $('#lib-rows').innerHTML = rows.map(l => `<tr><td class="z-tnm"><a class="z-link" href="${l.p.href}">${esc(l.p.name)}</a></td><td class="areacell" data-k="Area"><span class="area" data-area="${l.p.area}">${sw}${AREAS[l.p.area].label}</span></td><td data-k="Lot">${l.lot}</td><td data-k="Fills">${l.p.sizes.map(z => z[0]).join(' · ')}</td><td data-k="Filled">${l.filled}</td><td data-k="Tested">HPLC · MS</td><td><span class="${STATUS[l.status][1]}">${STATUS[l.status][0]}</span></td><td>${l.status === 'ok' ? `<button class="z-link" type="button" data-coa="${l.p.no}" data-lot="${l.lot}">Report ↗</button>` : '<span class="z-soft">Due</span>'}</td></tr>`).join('');
+      $('#lib-count').textContent = `${rows.length} ${rows.length === 1 ? 'lot' : 'lots'}`; $('#lib-none').hidden = rows.length > 0; $('#lib').hidden = !rows.length;
+      $$('#lib-areas .z-chip').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.a === la))); $$('#lib-status .z-chip').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === ls))); };
+    on('#lib-areas', 'click', e => { const b = e.target.closest('[data-a]'); if (b) { la = b.dataset.a; draw(); } });
+    on('#lib-status', 'click', e => { const b = e.target.closest('[data-s]'); if (b) { ls = b.dataset.s; draw(); } });
+    on('#lib-q', 'input', e => { lq = e.target.value; draw(); });
+    const pre = new URLSearchParams(location.search).get('lot'); if (pre) { lq = pre; $('#lib-q').value = pre; }
+    draw();
+  }
+
+  // ---------- build a set: the number of different compounds sets the saving; a set can repeat every 30 days ----------
+  if ($('#bld-grid')) {
+    const TIERS = C.builder.tiers, REP = C.builder.repeatOff;
+    const tierFor = n => TIERS.reduce((t, x) => n >= x[0] ? x : t, TIERS[0]);
+    const B = {}; let rep = false;   // B[no] = { size, qty }
+    const plus = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+    const tick = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    $('#bld-grid').innerHTML = P.map(p => `<article class="bcard" data-no="${p.no}" data-area="${p.area}">
+  <div class="bcard-pic"><img src="${img('pack-' + p.no + '.webp')}" width="720" height="900" loading="lazy" alt="ZUMA ${esc(p.name)}: the vial in front of its ${AREAS[p.area].short.toLowerCase()} carton">
+    <span class="bcard-area">${sw}${AREAS[p.area].short}</span>
+    <button class="bcard-pick" type="button" data-pick="${p.no}" aria-pressed="false" aria-label="Add ${esc(p.name)} to your set">${plus}</button></div>
+  <div class="bcard-body"><div class="bcard-row"><h3>${esc(p.name)}</h3><span class="z-price" data-bp>${lp(std(p)[1])}</span></div>
+    <p class="bcard-sub">${esc(p.full.toUpperCase() !== p.name.toUpperCase() ? p.full : 'Lyophilized')} · Lot ${p.lot}${p.status === 'pending' ? ' · in testing' : ''}</p>
+    <div class="bcard-opts"><div class="z-chips" role="group" aria-label="Amount of ${esc(p.name)}">${p.sizes.map((s, j) => `<button class="z-chip" type="button" data-bsize="${j}" aria-pressed="${j === p.def}">${s[0]}</button>`).join('')}</div>
+      <div class="z-stepper z-stepper-sm bcard-qty" role="group" aria-label="Vials of ${esc(p.name)}" hidden><button type="button" data-bq="-1" aria-label="One fewer vial">−</button><output>1</output><button type="button" data-bq="1" aria-label="One more vial">+</button></div></div>
+    <a class="z-link bcard-more" href="${p.href}">Compound details ${arr}</a></div>
+</article>`).join('');
+    const sizeIdx = {}; P.forEach(p => sizeIdx[p.no] = p.def);
+    const d = new Date(); d.setDate(d.getDate() + 3); $('#bp-date').value = d.toISOString().slice(0, 10); $('#bp-date').min = new Date().toISOString().slice(0, 10);
+    function bdraw() {
+      const nos = Object.keys(B), n = nos.length, t = tierFor(n), vials = nos.reduce((a, k) => a + B[k].qty, 0);
+      const sub = nos.reduce((a, k) => a + byNo(k).sizes[B[k].size][1] * B[k].qty, 0), off = t[1] + (rep && n ? REP : 0), save = Math.round(sub * off / 100), total = sub - save;
+      $$('.bcard').forEach(c => { const no = c.dataset.no, on = !!B[no], b = c.querySelector('[data-pick]'); c.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.innerHTML = on ? tick : plus;
+        b.setAttribute('aria-label', (on ? 'Remove ' : 'Add ') + byNo(no).name + (on ? ' from' : ' to') + ' your set'); const q = c.querySelector('.bcard-qty'); q.hidden = !on; if (on) q.querySelector('output').textContent = B[no].qty;
+        c.querySelectorAll('[data-bsize]').forEach(s => s.setAttribute('aria-pressed', String(+s.dataset.bsize === sizeIdx[no]))); c.querySelector('[data-bp]').innerHTML = lp(byNo(no).sizes[sizeIdx[no]][1]); });
+      $('#bp-tiers').innerHTML = TIERS.map((x, i) => { const hi = (TIERS[i + 1] || [7])[0] - 1, lab = hi >= 6 ? `${x[0]}+` : x[0] === hi ? `${x[0]}` : `${x[0]}–${hi}`;
+        return `<span role="listitem" class="bp-tier${x === t && n ? ' on' : ''}"><b>${lab}</b><small>${x[1] ? x[1] + '% off' : 'List'}</small></span>`; }).join('');
+      $('#bp-items').innerHTML = nos.map(k => { const p = byNo(k), z = p.sizes[B[k].size];
+        return `<li data-area="${p.area}"><span class="bp-sw">${sw}</span><span class="bp-nm"><b>${esc(p.name)}</b><small>${z[0]} · ${B[k].qty} ${B[k].qty === 1 ? 'vial' : 'vials'}</small></span><span class="bp-pr">$${z[1] * B[k].qty}</span><button type="button" class="bp-x" data-unpick="${k}" aria-label="Remove ${esc(p.name)}">×</button></li>`; }).join('');
+      $('#bp-empty').hidden = n > 0; $('#bp-sum').hidden = n === 0;
+      $('#bp-vials').textContent = vials; $('#bp-sub').textContent = '$' + sub; $('#bp-save').textContent = save ? '−$' + save : '$0';
+      $('#bp-save-l').textContent = n === 0 ? 'Set saving' : off ? `Set saving · ${t[1]}%${rep ? ` + ${REP}% repeat` : ''}` : n < TIERS[1][0] ? `Add ${TIERS[1][0] - n} more ${TIERS[1][0] - n === 1 ? 'compound' : 'compounds'} to save ${TIERS[1][1]}%` : 'Set saving';
+      $('#bp-total').textContent = '$' + total; $('#bp-state').textContent = n ? (rep ? 'Repeats monthly' : 'Ready') : 'Draft';
+      const left = Math.max(0, FREE - total); $('#bp-ship').textContent = !n ? `Free cold-chain shipping on orders over $${FREE}.` : left ? `$${left} away from free cold-chain shipping.` : 'Free cold-chain shipping unlocked.';
+      const nextT = TIERS.find(x => x[0] > n);
+      $('#bp-add').disabled = !n; $('#bp-add').textContent = n ? `Add set to cart · $${total}` : 'Pick at least one compound';
+      $('#bld-count').textContent = n ? `${n} picked · ${vials} ${vials === 1 ? 'vial' : 'vials'}${nextT ? ` · ${nextT[0] - n} more for ${nextT[1]}% off` : ' · top saving'}` : '0 picked';
+      $('#bm-t').textContent = n ? `${n} picked · $${total}` : '0 picked'; $('#bld-mbar').classList.toggle('on', n > 0); $('#bld-mbar').setAttribute('aria-hidden', String(!n)); $('#bld-mbar a').tabIndex = n ? 0 : -1;
+      $('#bp-datebox').hidden = !rep;
+      return { nos, total, rep };
+    }
+    on('#bld-grid', 'click', e => {
+      const pk = e.target.closest('[data-pick]'); if (pk) { const no = pk.dataset.pick; if (B[no]) delete B[no]; else B[no] = { size: sizeIdx[no], qty: 1 }; bdraw(); return; }
+      const sz = e.target.closest('[data-bsize]'); if (sz) { const no = sz.closest('.bcard').dataset.no; sizeIdx[no] = +sz.dataset.bsize; if (B[no]) B[no].size = sizeIdx[no]; bdraw(); return; }
+      const q = e.target.closest('[data-bq]'); if (q) { const no = q.closest('.bcard').dataset.no; B[no].qty = Math.min(20, B[no].qty + +q.dataset.bq); if (B[no].qty < 1) delete B[no]; bdraw(); } });
+    on('#bp-items', 'click', e => { const x = e.target.closest('[data-unpick]'); if (x) { delete B[x.dataset.unpick]; bdraw(); } });
+    on('#bp-rep', 'change', e => { rep = e.target.checked; bdraw(); });
+    on('#bp-add', 'click', e => { const s = bdraw(); if (!s.nos.length) return;
+      const parts = s.nos.map(k => `${byNo(k).name} ${byNo(k).sizes[B[k].size][0]}${B[k].qty > 1 ? ' ×' + B[k].qty : ''}`);
+      const key = 'build-' + s.nos.map(k => `${k}.${B[k].size}.${B[k].qty}`).join('_') + (s.rep ? '-r' + $('#bp-date').value : '');
+      addItem(key, `Your set · ${parts.join(' + ')}${s.rep ? ' · every 30 days from ' + $('#bp-date').value : ''}`, s.total, 1, 'metabolic', 'set');
+      const b = e.currentTarget; b.textContent = 'Added to cart ✓'; setTimeout(bdraw, 1400); });
+    const pre = new URLSearchParams(location.search).get('add'); if (pre && byNo(pre)) B[pre] = { size: sizeIdx[pre], qty: 1 };
+    bdraw();
+  }
+
+  // ---------- preview badge: on every page until launch ----------
+  if (base && !$('.pv-badge')) { const pv = document.createElement('div'); pv.className = 'pv-badge'; pv.setAttribute('role', 'note'); pv.innerHTML = '<i aria-hidden="true"></i>Preview shop · no purchases'; base.appendChild(pv); }
 })();

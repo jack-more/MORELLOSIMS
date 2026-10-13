@@ -36,6 +36,8 @@ def pages():
            ('shop.html', 'shop.html', 'shop.html', 'Shop all six ZUMA research peptides: tested by HPLC and MS, every lot report published. For laboratory research use only.', 'shop', None)]
     for i, p in enumerate(json.loads((SRC / 'data' / 'catalog.json').read_text(encoding='utf-8'))['products']):
         out.append(('product.html', p['slug'] + '.html', p['slug'] + '.html', f'ZUMA {p["name"]}: {p["about"]} For laboratory research use only.', 'pdp', i))
+    out.append(('build.html', 'build.html', 'build.html', 'Build a ZUMA set: pick any research peptides; three or more compounds save 10%, five or more save 15%. For laboratory research use only.', 'build', None))
+    out.append(('lots.html', 'lots.html', 'lots.html', 'Every ZUMA lot, its test status and its report. Search by the lot number on the vial or carton. For laboratory research use only.', 'lots', None))
     out.append(('brand.html', 'brand.html', 'brand.html', 'ZUMA brand guide: the four research-area palettes, the bands, interaction rules, layout, type, the label and the research-use rules.', 'brand', None))
     return out
 
@@ -106,6 +108,8 @@ def esc(t): return html.escape(str(t), quote=True)
 def area_of(k): return CAT['areas'][k]
 def by_no(n): return next(p for p in CAT['products'] if p['no'] == n)
 def lot_of(p): return p['code'] + '-2610A'
+def list_of(price): return round(price * 100 / (100 - CAT['launch']['off']))   # the struck list price beside a launch price
+def launch_price(price): return f'<span class="lchip">Launch</span><s>${list_of(price)}</s>${price}'
 STATUS = {'ok': ('Report published', '<span class="z-tag z-tag-solid z-tag-dot">Report published</span>'),
           'pending': ('In testing: ships when its report is out', '<span class="z-tag z-tag-ring">In testing</span>')}
 
@@ -116,13 +120,14 @@ def mega():
                         f'<span><b>{esc(p["name"])}</b><small>{esc(p["full"])} · from ${p["sizes"][0][1]}</small></span></a>' for p in CAT['products'] if p['area'] == k)
         cols += f'<div class="mega-col" data-area="{k}"><p class="mega-h">{SW}{a["label"]}</p>{items}</div>'
     return (f'<div class="z-wrap mega-in"><div class="mega-cols">{cols}</div>'
-            f'<a class="mega-feature z-sand" href="shop.html#sets"><img src="{{{{ASSET}}}}img/box-1000.webp" alt="" loading="lazy"><b>The Collection</b><small>All six, boxed · $360</small><span class="z-btn z-btn-sm">Shop sets {ARR}</span></a>'
+            f'<a class="mega-feature z-sand" href="build.html"><img src="{{{{ASSET}}}}img/set-pack-800.webp" alt="" loading="lazy"><b>Build a set</b><small>Any compounds · save up to 15%</small><span class="z-btn z-btn-sm">Build your set {ARR}</span></a>'
             f'<p class="mega-all"><a class="z-link" href="shop.html">Shop all six {ARR}</a></p></div>')
 
 def menu():
     prods = ''.join(f'<a href="{p["slug"]}.html"><span>{esc(p["name"])}</span></a>' for p in CAT['products'])
     return (f'<p class="z-kicker z-soft menu-h">Shop</p><a href="shop.html"><span>Shop all six</span></a>{prods}'
-            f'<p class="z-kicker z-soft menu-h">ZUMA</p><a href="{{{{H}}}}#sets">Sets</a><a href="{{{{H}}}}#lots">Lots</a><a href="{{{{H}}}}#token">$ZUMA</a><a href="{{{{H}}}}#referrals">Referrals</a><a href="{{{{H}}}}#about">About</a>')
+            f'<a href="build.html"><span>Build a set</span></a>'
+            f'<p class="z-kicker z-soft menu-h">ZUMA</p><a href="lots.html">Lot reports</a><a href="{{{{H}}}}#sets">Sets</a><a href="{{{{H}}}}#token">$ZUMA</a><a href="{{{{H}}}}#referrals">Referrals</a><a href="{{{{H}}}}#about">About</a>')
 
 def promos():
     out = ''
@@ -132,7 +137,7 @@ def promos():
     return out
 
 def footshop():
-    return '<a href="shop.html">Shop all six</a>' + ''.join(f'<a href="{p["slug"]}.html">{esc(p["name"])}</a>' for p in CAT['products']) + '<a href="shop.html#sets">Sets</a>'
+    return '<a href="shop.html">Shop all six</a><a href="build.html">Build a set</a>' + ''.join(f'<a href="{p["slug"]}.html">{esc(p["name"])}</a>' for p in CAT['products']) + '<a href="shop.html#sets">Sets</a>'
 
 def catalog_script():
     data = {k: v for k, v in CAT.items() if not k.startswith('_')}
@@ -144,7 +149,7 @@ def related_card(p):
             f'<div class="z-light z-pic"><img src="{{{{ASSET}}}}img/vial-{p["no"]}.webp" width="720" height="960" loading="lazy" alt="ZUMA {esc(p["name"])} vial">'
             f'</div>'
             f'<div class="z-bright z-pad"><span class="z-area">{a["label"]}</span><h3>{esc(p["name"])}</h3><p class="z-full">{esc(p["full"]) if p["full"].upper() != p["name"].upper() else "Lyophilized"}</p></div>'
-            f'<div class="z-deep z-pad"><div class="z-row"><span class="z-price">From ${p["sizes"][0][1]}</span><a class="z-btn z-btn-sm z-stretch" href="{p["slug"]}.html" aria-label="View {esc(p["name"])}">View {ARR}</a></div></div></article>')
+            f'<div class="z-deep z-pad"><div class="z-row"><span class="z-price">{launch_price(p["sizes"][0][1])}</span><a class="z-btn z-btn-sm z-stretch" href="{p["slug"]}.html" aria-label="View {esc(p["name"])}">View {ARR}</a></div></div></article>')
 
 def pdp_fill(s, i):
     p = CAT['products'][i]; k = p['area']; a = area_of(k)
@@ -171,7 +176,7 @@ def pdp_fill(s, i):
                      f'<div><b>The Collection</b><span>All six, one of each, boxed</span><div class="pair-btns"><button class="z-btn z-btn-sm" type="button" data-set="collection">Add the Collection · ${col["price"]}, save ${lst - col["price"]}</button></div></div></div></div>')
     related = ''.join(related_card(x) for x in CAT['products'] if x['no'] != p['no'])
     rep = {'{{NO}}': p['no'], '{{NAME}}': esc(p['name']), '{{FULL}}': esc(p['full']), '{{AREA}}': k, '{{AREA_LABEL}}': a['label'], '{{AREA_SHORT}}': a['short'].lower(),
-           '{{AREA_SHORT_LOWER}}': a['short'].lower(), '{{ABOUT}}': esc(p['about']), '{{I}}': str(i), '{{FROM}}': str(p['sizes'][p['def']][1]),
+           '{{AREA_SHORT_LOWER}}': a['short'].lower(), '{{ABOUT}}': esc(p['about']), '{{I}}': str(i), '{{FROM}}': str(p['sizes'][p['def']][1]), '{{LIST}}': str(list_of(p['sizes'][p['def']][1])),
            '{{LOT}}': lot_of(p), '{{FILLED}}': CAT['lot']['filled'], '{{STATUS}}': tag, '{{STATUS_WORDS}}': words, '{{LABEL_S}}': '-s' if p['no'] == '01' else '',
            '{{BADGE}}': f'<span class="z-tag z-tag-solid pdp-badge">{esc(p["badge"])}</span>' if p['badge'] else ''}
     for t, v in rep.items(): s = s.replace(t, v)
