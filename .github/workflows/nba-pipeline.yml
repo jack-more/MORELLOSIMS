@@ -156,7 +156,25 @@ jobs:
         working-directory: nba_pipeline
         run: python scripts/seed_season.py
 
-      - name: Check data freshness (fails in-season when stats lag the games)
+      # MOJO's anchor. Was only in `main.py collect` (manual full pipeline), so
+      # scheduled runs never filled player_rapm. On a fetch failure the
+      # collector writes nothing and the committed table keeps the last pull;
+      # check_freshness fails the run if the table is ever empty.
+      - name: Refresh RAPM (nbarapm.com)
+        continue-on-error: true
+        timeout-minutes: 3
+        working-directory: nba_pipeline
+        run: |
+          python -c "
+          import sys, os, logging
+          sys.path.insert(0, os.getcwd())
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+          from config import DB_PATH
+          from collectors.rapm import RAPMCollector
+          print(f'RAPM: {RAPMCollector(DB_PATH).collect()} players stored')
+          "
+
+      - name: Check data freshness (fails in-season when stats lag the games, or RAPM is missing)
         working-directory: nba_pipeline
         run: python scripts/check_freshness.py
 
