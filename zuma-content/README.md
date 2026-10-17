@@ -8,7 +8,7 @@ Instagram shows the newest post top-left, so post them **in reverse**: 9 first, 
 
 | Grid spot | File | Caption |
 |---|---|---|
-| 1 (post last) | `ig-1-logo.png` | zuma. Research compounds, tested lot by lot. Now open at zumatides.com |
+| 1 (post last) | `ig-1-logo.png` | zuma. Every lot tested. Now open at zumatides.com |
 | 2 | `ig-2-meet.png` | Meet the 12. Twelve research compounds across six areas, each in its own colour. Every lot is tested and every report is published before it ships. |
 | 3 | `ig-3-lots.png` | Every lot tested. Purity by HPLC, identity by mass spectrometry. Each vial carries its lot number and a QR code to that lot's report. |
 | 4 | `ig-4-metabolic.png` | Metabolic research: RT-3 (retatrutide), TZ-2 (tirzepatide), MOTS-c and NAD+. Blue on every label and carton. |
@@ -23,7 +23,7 @@ End every caption with: **For laboratory research use only. Not for human or vet
 ## X
 
 - Header: `x-header.png` (1500 × 500). Profile picture: `x-profile.png` (400 × 400).
-- Bio: Research compounds, tested lot by lot. Every lot report published. For laboratory research use only. zumatides.com
+- Bio: Every lot tested. Every lot report published. For laboratory research use only. zumatides.com
 
 Launch thread:
 
