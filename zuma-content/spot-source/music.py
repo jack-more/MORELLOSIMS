@@ -1,10 +1,10 @@
 # An original 20-second bed for the ZUMA spot, synthesized from scratch: 120 BPM, E minor, cut to the picture.
-# 0-1 TV static and power-on thunk; 1-15.5 groove (kick, clap, hats, saw bass, offbeat stabs, hits on the slams,
-# riser into the star wipe); 15.2 tape-stop; 15.7 logo chord with a sparkle on the chrome sweep; fade to 20 s.
+# 0-1 TV static and power-on thunk; 1-17.5 groove (kick, clap, hats, saw bass, offbeat stabs, hits on the slams,
+# riser into the star wipe); 17.2 tape-stop; 17.55 flower bloom and chord, 18.7 logo with a sparkle on the chrome sweep; fade to 23.5 s.
 import numpy as np, wave
 from scipy.signal import butter, lfilter
 
-SR, DUR, BPM = 44100, 20.0, 120
+SR, DUR, BPM = 44100, 23.5, 120
 BEAT = 60 / BPM
 N = int(SR * DUR)
 mix = np.zeros((N, 2))
@@ -63,7 +63,7 @@ n = int(.6 * SR); tt = np.arange(n) / SR; add(np.sin(2 * np.pi * 60 * tt) * np.e
 bass_line = [40, 40, 43, 45, 48, 47, 45, 43]   # E2 E2 G2 A2 C3 B2 A2 G2, eighth notes
 chords = [[64, 67, 71], [64, 67, 71], [60, 64, 67], [62, 66, 69]]  # Em Em C D
 b0 = 1.0
-nbeats = int((15.2 - b0) / BEAT)
+nbeats = int((17.2 - b0) / BEAT)
 for b in range(nbeats):
     at = b0 + b * BEAT
     if 11.55 <= at < 12.0: continue                       # breath before the star-wipe drop
@@ -80,7 +80,7 @@ for b in range(nbeats):
 for k, at in enumerate((5.0, 5.5, 6.0)):
     add(whoosh(.35, True), at - .35, .6); add(impact(), at, .6 if k < 2 else .9)
 # fusion: shimmer chimes as colours swap
-for at, m in ((8.0, 76), (9.0, 79), (10.0, 83), (11.0, 81)): chime(m, at, .18)
+for at, m in ((8.0, 76), (8.8, 79), (9.6, 83), (10.4, 81), (11.2, 86)): chime(m, at, .18)
 add(whoosh(.5, True), 11.1, .9); add(impact(), 11.6, .7)    # riser into the star wipe
 # twelve pops on the grid: little bloops
 for i in range(12):
@@ -88,12 +88,14 @@ for i in range(12):
     add(np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-tt * 25) * .35, 11.62 + i * .25, .6, pan=(i % 6 - 2.5) / 3)
 # 15.2 tape stop: pitch-down sweep then silence
 n = int(.3 * SR); tt = np.arange(n) / SR; f = 220 * (1 - tt / .3) ** 2 + 30
-add(lp(saw(f, n), 1200) * (1 - tt / .3) * .35, 15.2)
+add(lp(saw(f, n), 1200) * (1 - tt / .3) * .35, 17.2)
 # 15.7 logo: big chord, sub hit, sparkle on the chrome sweep, final chimes
-add(impact(), 15.7, .8)
-add(pad([52, 59, 64, 67, 71, 74], 4.3), 15.7, 1.0)
-for i, m in enumerate((88, 91, 95, 98, 100)): chime(m, 16.6 + i * .07, .12)
-chime(76, 17.0, .2); chime(83, 17.6, .22)
+add(impact(), 17.55, .8)
+add(pad([52, 59, 64, 67, 71, 74], 5.9), 17.55, 1.0)
+for i, m in enumerate((76, 79, 83)): chime(m, 17.55 + i * .5, .16)
+add(impact(), 18.7, .5)
+for i, m in enumerate((88, 91, 95, 98, 100)): chime(m, 19.6 + i * .07, .12)
+chime(76, 20.0, .2); chime(83, 20.6, .22)
 
 # master: gentle glue compression, fade out, normalize
 L = mix.copy()

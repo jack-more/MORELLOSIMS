@@ -22,8 +22,11 @@ End every caption with: **For laboratory research use only. Not for human or vet
 
 ## X
 
-- Header: `x-header.png` (1500 × 500). Profile picture: `x-profile.png` (400 × 400).
-- Bio: Every lot tested. Every lot report published. For laboratory research use only. zumatides.com
+- **Profile picture:** `x-pfp-ring.png` (recommended: the flower on ink inside a ring of the six area colours). Plain version: `x-pfp-ink.png`.
+- **Banner:** `x-banner-bloom.png` (recommended: the wordmark, "Every lot tested." and the flower blooming in the six colours). Alternative: `x-banner-v2.png` (six area columns with oversized vials).
+- **Name:** zuma · **Location:** On Solana · **Website:** zumatides.com/enter
+- **Bio (140 characters):** Twelve research compounds. Every lot tested, every report on-chain. For laboratory research use only. Founding members → zumatides.com/enter
+- **Spot:** `zuma-spot-2000s.mp4` (23.5 s, 1920×1080, with sound). Source in `../spot-source/`.
 
 Launch thread:
 

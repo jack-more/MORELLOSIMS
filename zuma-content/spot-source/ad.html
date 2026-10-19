@@ -10,7 +10,7 @@ const AREA = { metabolic: ['#1F4FD8', '#A3CEFF'], tissue: ['#0E9A5B', '#ABE9C3']
 const NO_AREA = { '01': 'metabolic', '02': 'metabolic', '06': 'metabolic', '08': 'metabolic', '09': 'tissue', '05': 'dermal', '10': 'dermal', '04': 'endocrine', '07': 'endocrine', '11': 'neuro', '12': 'neuro', '03': 'supplies' };
 const NAME = { '01': 'RT-3', '05': 'GHK-Cu', '09': 'BPC+TB', '04': 'TESAMORELIN', '11': 'SELANK' };
 const GRID = ['01', '02', '06', '08', '09', '05', '10', '04', '07', '11', '12', '03'];
-const SPIN = {}, HERO = {}; let LOCK, MARK, WORD, LW, MW, WW, WH;
+const SPIN = {}, HERO = {}; let LOCK, MARK, WORD, FLOWER, LW, MW, WW, WH;
 const img = s => new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = s; });
 
 async function load() {
@@ -19,6 +19,7 @@ async function load() {
   for (const n of ['01', '04', '05', '09', '11']) SPIN[n] = await Promise.all(Array.from({ length: 24 }, (_, k) => img(`../site3/src/img/hspin/${n}-${String(k).padStart(2, '0')}.webp`)));
   for (const n of GRID) HERO[n] = await img(`../site3/src/img/hero-vial-${n}.webp`);
   const F = await (await fetch('final.json')).json(), Wd = await (await fetch('wordmark.json')).json();
+  const FO = await (await fetch('flower_outer.json')).json(); FLOWER = new Path2D(FO.outer);
   LOCK = new Path2D(F.lock); MARK = new Path2D(F.mark); WORD = new Path2D(Wd.solid); LW = F.W; MW = F.mw; WW = Wd.w; WH = Wd.h;
   window.READY = true;
 }
@@ -71,7 +72,19 @@ function flare(px, py, a) {
   x.restore();
 }
 function star(cx, cy, r) { x.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .45 : r; x.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); } x.closePath(); }
-function bug(a) { if (a <= 0) return; x.save(); x.globalAlpha = .55 * a; x.translate(W - 230, H - 96); const k = 150 / WW; x.scale(k, k); x.fillStyle = '#fff'; x.fill(WORD, 'evenodd'); x.restore(); }
+// the byline, bottom left on every shot after the power-on (SKO-style): logo, site, the two disclaimer lines
+function byline(t) {
+  if (t < 1) return;
+  const light = t >= 11.75 && t < 17.3, col = light ? '#111319' : '#FFFFFF';
+  x.save(); x.shadowColor = light ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,.55)'; x.shadowBlur = 8; x.fillStyle = col;
+  x.save(); x.translate(64, H - 196); const k = 46 / 100; x.scale(k, k); x.fill(LOCK, 'evenodd'); x.restore();
+  x.font = '700 30px Figtree'; x.fillText('zumatides.com', 64, H - 104);
+  x.font = '600 17px Figtree'; x.globalAlpha = .92;
+  x.fillText('FOR LABORATORY RESEARCH USE ONLY. NOT FOR HUMAN OR VETERINARY USE.', 64, H - 74);
+  x.fillText('NOT INTENDED TO DIAGNOSE, TREAT, CURE, OR PREVENT ANY DISEASE.', 64, H - 50);
+  x.restore();
+}
+function bug(a, t) { if (a <= 0) return; x.save(); x.globalAlpha = .6 * a; flower(MARK, W - 250, H - 78, 64, t * .8, '#fff'); x.translate(W - 205, H - 96); const k = 140 / WW; x.scale(k, k); x.fillStyle = '#fff'; x.fill(WORD, 'evenodd'); x.restore(); }
 function overlays(t) {
   x.save(); x.globalAlpha = .07; x.fillStyle = '#000'; for (let y = 0; y < H; y += 4) x.fillRect(0, y, W, 2); x.restore();
   const g = x.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
@@ -105,6 +118,16 @@ function dancer(n, t, cx, cy, h, phase, beatPh) {
   x.save(); x.translate(cx, cy + h / 2 + hop); x.rotate(sway); x.scale(1 / squash * .98, squash); x.drawImage(im, -w / 2, -h, w, h); x.restore();
 }
 
+// ---------- the flower
+const FCX = 52.13, FCY = 54.81;
+function flower(path, cx, cy, h, rot, style, rule = 'evenodd', lineW = 0) {
+  x.save(); x.translate(cx, cy); x.rotate(rot); const k = h / 100; x.scale(k, k); x.translate(-FCX, -FCY);
+  if (lineW) { x.lineWidth = lineW / k; x.lineJoin = 'round'; x.strokeStyle = style; x.stroke(path); }
+  else { x.fillStyle = style; x.fill(path, rule); }
+  x.restore();
+}
+const snap = t => { const b = Math.floor(t / BEAT), p = clamp(((t % BEAT) / BEAT) / .35); return (b + back(p)) * Math.PI * 2 / 5; };   // one petal per beat
+
 // ---------- scenes
 function sceneCRT(t) {
   fill('#000');
@@ -119,7 +142,7 @@ function sceneCuts(t) {   // 1.0 to 5.0: a colour and a vial per beat
   const i = clamp(Math.floor((t - 1) / BEAT), 0, 7), ph = ((t - 1) % BEAT) / BEAT, n = seq[i], [br, lt] = AREA[NO_AREA[n]];
   fill(br);
   // huge outlined name scrolling behind
-  for (let row = -1; row <= 1; row++) { const off = ((t * 380 * (row % 2 ? -1 : 1)) % 1400); for (let k = -1; k < 3; k++) outlineText(NAME[n], off + k * 1400 - 200, H / 2 + row * 330, 300, lt, .35); }
+  x.save(); x.globalAlpha = .55; flower(MARK, W / 2, H / 2 + 20, 1500, snap(t - 1), lt); x.restore();
   const others = seq.filter(m => m !== n);
   dancer(others[i % others.length], t, 420, H / 2 + 40, 760, .3, ph);
   dancer(others[(i + 2) % others.length], t, W - 420, H / 2 + 40, 760, .8, ph);
@@ -129,7 +152,7 @@ function sceneCuts(t) {   // 1.0 to 5.0: a colour and a vial per beat
   vial(spin(n, t, 20), W / 2, H / 2 + 30 + bounce, 860 * pop);
   if (ph < .1) { x.save(); x.globalAlpha = (1 - ph / .1) * .5; fill('#fff'); x.restore(); }
   // corner caption, TV style
-  x.save(); x.font = '600 26px Plex'; x.fillStyle = '#fff'; x.globalAlpha = .9; x.fillText(`${NAME[n]} · ${NO_AREA[n].toUpperCase()} RESEARCH`, 70, H - 70); x.restore();
+  x.save(); x.font = '600 26px Plex'; x.fillStyle = '#fff'; x.globalAlpha = .9; x.fillText(`${NAME[n]} · ${NO_AREA[n].toUpperCase()} RESEARCH`, 70, 80); x.restore();
 }
 function sceneSlam(t) {   // 5.0 to 8.0: EVERY / LOT / TESTED.
   const i = Math.floor((t - 5) / BEAT), cols = ['#FF5A1F', '#1F4FD8', '#0E9A5B', '#6E3FD8', '#D08000', '#FF5A1F'];
@@ -142,28 +165,61 @@ function sceneSlam(t) {   // 5.0 to 8.0: EVERY / LOT / TESTED.
     vial(spin('05', t), lerp(-200, 260, k), H / 2 + 60, 620, 1); vial(spin('09', t + .7), lerp(W + 200, W - 260, k), H / 2 + 60, 620, 1);
   }
 }
-function sceneFusion(t) {  // 8.0 to 12.0
-  fusion(t);
-  const order = ['01', '05', '09', '11'], i = clamp(Math.floor((t - 8) / 1), 0, 3), ph = (t - 8) % 1;
-  const a = order[i], b = order[Math.min(3, i + 1)];
-  vial(spin(a, t, 14), W / 2, H / 2 + 40, 900, 1);
-  if (ph > .85 && i < 3) { vial(spin(b, t, 14), W / 2, H / 2 + 40, 900, (ph - .85) / .15); x.save(); x.globalAlpha = (ph - .85) / .15 * .6; fill('#fff'); x.restore(); }
-  flare(lerp(-200, W + 200, clamp((t - 8.8) / 1.4)), 300, t > 8.8 && t < 10.2 ? 1 : 0);
-  if (t > 8.4 && t < 10.2) slam('SIX AREAS.', W / 2, 170, 150, 8.5, t, { split: 4 });
-  if (t > 10.2) slam('ONE COLOR EACH.', W / 2, 170, 140, 10.25, t, { split: 4 });
+function sceneFusion(t) {  // 8.0 to 12.0: hard-edged rings of the six area colours zoom out of the vial; split wipes swap the compound
+  const order = ['01', '09', '05', '04', '11', '01'], pal = ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8', '#4E6077'];
+  const seg = (t - 8) / .8, i = clamp(Math.floor(seg), 0, 4), ph = seg - Math.floor(seg);
+  const rot = pal.slice(i).concat(pal.slice(0, i));
+  // rings: largest first, each a solid colour, zooming outward, a little faster on the beat
+  const beatPh = ((t - 8) % BEAT) / BEAT, push = (1 - beatPh) * 26;
+  const step = 150, maxR = Math.hypot(W, H) / 2 + step, base = ((t - 8) * 260) % step;
+  const n = Math.ceil(maxR / step) + 1;
+  for (let k = n + 2; k >= 0; k--) {
+    const r = base + k * step + push * (k / n); if (r <= 0) continue;
+    flower(FLOWER, W / 2, H / 2 + 20, r * 2.15, (k % 2 ? 1 : -1) * (t - 8) * .35 + k * .12, rot[k % 6], 'nonzero');
+  }
+  // the split wipe at each swap: the next pair of colours slides in from both sides
+  if (ph > .78 && i < 4) {
+    const k = ease((ph - .78) / .22), w = W / 2 * k;
+    x.fillStyle = rot[1]; x.fillRect(0, 0, w, H); x.fillStyle = rot[2]; x.fillRect(W - w, 0, w, H);
+  }
+  // white disc behind the vial, like a spotlight, pulsing on the beat
+  x.save(); x.globalAlpha = .92; flower(FLOWER, W / 2, H / 2 + 20, 560 + (1 - beatPh) * 50, snap(t - 8) * .2, '#fff', 'nonzero'); x.restore();
+  const n0 = order[i];
+  vial(spin(n0, t, 18), W / 2, H / 2 + 30 - Math.abs(Math.sin(beatPh * Math.PI)) * 30, 820);
+  if (ph < .08 && t > 8.1) { x.save(); x.globalAlpha = (1 - ph / .08) * .7; fill('#fff'); x.restore(); }
+  flare(lerp(-200, W + 200, clamp((t - 9.2) / 1.2)), 260, t > 9.2 && t < 10.4 ? .9 : 0);
+  const o = { split: 5, col: '#fff' };
+  if (t > 8.3 && t < 10.1) slam('SIX AREAS.', W / 2, 150, 150, 8.35, t, o);
+  if (t > 10.1) slam('ONE COLOR EACH.', W / 2, 150, 140, 10.15, t, o);
 }
-function sceneGrid(t) {    // 12.0 to 15.5: twelve vials pop in on the eighth notes
+function sceneGrid(t) {    // 11.6 to 17.5: twelve vials pop in on the eighth notes, then hold and bounce in a wave with their names
   fill('#F4F2EC');
-  const cw = 270, ch = 330, gx = (W - cw * 6 - 20 * 5) / 2, gy = 300;
+  const cw = 236, ch = 262, gx = (W - cw * 6 - 22 * 5) / 2, gy = 236;
   GRID.forEach((n, i) => {
     const t0 = 11.62 + i * .25, k = back((t - t0) / .3); if (t < t0) return;
-    const c = i % 6, r = Math.floor(i / 6), X = gx + c * (cw + 20), Y = gy + r * (ch + 20);
-    x.save(); x.translate(X + cw / 2, Y + ch / 2); x.scale(k, k);
+    const c = i % 6, r = Math.floor(i / 6), X = gx + c * (cw + 22), Y = gy + r * (ch + 62);
+    const wave = t > 14.8 ? -Math.max(0, Math.sin((t - 14.8) * Math.PI * 2 - i * .55)) * 22 : 0;
+    x.save(); x.translate(X + cw / 2, Y + ch / 2 + wave); x.scale(k, k);
     x.fillStyle = AREA[NO_AREA[n]][0]; x.beginPath(); x.roundRect(-cw / 2, -ch / 2, cw, ch, 26); x.fill();
-    x.restore(); vial(HERO[n], X + cw / 2, Y + ch / 2 + 8, ch * 1.05 * k, 1, false);
+    x.restore(); vial(HERO[n], X + cw / 2, Y + ch / 2 + 8 + wave, ch * 1.05 * k, 1, false);
+    if (t > 14.9) { const a = ease((t - 14.9 - i * .05) / .3); x.save(); x.globalAlpha = a; x.font = '800 26px Outfit'; x.textAlign = 'center'; x.fillStyle = '#111319';
+      x.fillText(LABEL[n], X + cw / 2, Y + ch + 40); x.restore(); }
   });
-  if (t > 14.9) { x.save(); x.fillStyle = '#111319'; x.fillRect(0, 0, W, 0); x.restore(); }
-  slam('TWELVE COMPOUNDS.', W / 2, 165, 130, 14.95, t, { col: '#111319', split: 3 });
+  slam('TWELVE COMPOUNDS.', W / 2, 160, 130, 14.95, t, { col: '#111319', split: 3 });
+}
+const LABEL = { '01': 'RT-3', '02': 'TZ-2', '06': 'MOTS-c', '08': 'NAD+', '09': 'BPC+TB', '05': 'GHK-Cu', '10': 'GHK+BT', '04': 'TESAMORELIN', '07': 'CJC+IPA', '11': 'SELANK', '12': 'SEMAX', '03': 'BAC WATER' };
+function sceneBloom(t) {   // 17.5 to 18.7: the flower alone, blooming in and turning a petal per beat over the colour rays
+  rays(t);
+  const k = back((t - 17.55) / .45), pal = ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8'];
+  const spinTo = ease((t - 17.5) / 1.1) * Math.PI * 2;
+  for (let i = 4; i >= 0; i--) { const kk = back((t - 17.55 - i * .06) / .45); if (kk > 0) flower(FLOWER, W / 2, H / 2, (520 + i * 70) * kk, spinTo * (1 + i * .12), pal[i], 'nonzero'); }
+  if (k > 0) { flower(FLOWER, W / 2, H / 2, 470 * k, spinTo, '#0E1014', 'nonzero'); flower(MARK, W / 2, H / 2, 470 * k, spinTo, '#F7F4EE'); }
+}
+function rays(t) {
+  fill('#0E1014');
+  x.save(); x.translate(W / 2, H / 2 - 40); x.rotate(t * .25);
+  ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8', '#4E6077'].forEach((col, i) => { for (let j = 0; j < 2; j++) { const a = (i * 2 + j) * Math.PI / 6; x.fillStyle = col; x.globalAlpha = .28; x.beginPath(); x.moveTo(0, 0); x.arc(0, 0, 1400, a, a + Math.PI / 12); x.fill(); } });
+  x.restore();
 }
 function sceneEnd(t) {     // 15.5 to 20.0
   fill('#0E1014');
@@ -189,7 +245,6 @@ function sceneEnd(t) {     // 15.5 to 20.0
     x.fillStyle = '#F7F4EE'; x.beginPath(); x.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2); x.fill();
     x.font = `800 ${40 * a}px Outfit`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#111319'; x.fillText('zumatides.com/enter', cx, cy + 2); x.restore();
   }
-  if (t > 17.0) { x.save(); x.globalAlpha = .75; x.font = '600 22px Figtree'; x.textAlign = 'center'; x.fillStyle = '#B9BCC3'; x.fillText('For laboratory research use only. Not for human or veterinary use.', W / 2, H - 48); x.restore(); }
 }
 
 window.render = t => {
@@ -199,14 +254,16 @@ window.render = t => {
   else if (t < 8) sceneSlam(t);
   else if (t < 12) {
     sceneFusion(t);
-    if (t > 11.55) { const r = ease((t - 11.55) / .45) * 1500; x.save(); star(W / 2, H / 2, r); x.clip(); sceneGrid(t); x.restore(); }
+    if (t > 11.55) { const r = ease((t - 11.55) / .45) * 1500; x.save(); x.translate(W / 2, H / 2); x.rotate((t - 11.55) * 2.4); x.scale(r / 50, r / 50); x.translate(-FCX, -FCY); x.clip(FLOWER); x.setTransform(1, 0, 0, 1, 0, 0); sceneGrid(t); x.restore(); }
   }
-  else if (t < 15.5) {
+  else if (t < 17.5) {
     sceneGrid(t);
-    if (t > 15.2) { const r = lerp(1300, 0, ease((t - 15.2) / .3)); x.save(); x.beginPath(); x.rect(0, 0, W, H); x.arc(W / 2, H / 2, Math.max(0, r), 0, Math.PI * 2, true); x.fillStyle = '#000'; x.fill('evenodd'); x.restore(); }
+    if (t > 17.2) { const r = lerp(1600, 0, ease((t - 17.2) / .3)); const o = document.createElement('canvas'); o.width = W; o.height = H; const g = o.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'destination-out'; g.translate(W / 2, H / 2); g.rotate(-(t - 17.2) * 3); g.scale(Math.max(.001, r / 50), Math.max(.001, r / 50)); g.translate(-FCX, -FCY); g.fill(FLOWER); x.drawImage(o, 0, 0); }
   }
-  else sceneEnd(t);
-  bug(t > 1 && t < 15.5 ? 1 : 0);
+  else if (t < 18.7) sceneBloom(t);
+  else sceneEnd(t - 3);
+  bug(t > 1 && t < 11.6 ? 1 : 0, t);
+  byline(t);
   overlays(t);
   return true;
 };
