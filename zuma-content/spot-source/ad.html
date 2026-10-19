@@ -1,6 +1,7 @@
 <!doctype html><meta charset="utf-8">
-<!-- ZUMA spot, early-2000s TV: colour fields cut on the beat, spinning vials, slammed type, colour fusion, star wipe, chrome logo.
-     render(t) is deterministic; shoot.cjs steps t frame by frame and saves PNGs. 120 BPM, 20 s, 1920x1080. -->
+<!-- ZUMA spot, early-2000s TV: flat colour fields cut on the beat, filmed dancers keyed to black silhouettes (dance/dN, from
+     key.py), spinning vials, slammed type, the flower wipe, chrome logo. render(t) is deterministic once prep(t) has loaded
+     that moment's dancer frame; shoot.cjs awaits prep(t) then render(t). 120 BPM, 23.5 s, 1920x1080. -->
 <style>html,body{margin:0;background:#000}canvas{display:block}</style>
 <canvas id="c" width="1920" height="1080"></canvas>
 <script>
@@ -20,8 +21,9 @@ async function load() {
   for (const n of GRID) HERO[n] = await img(`../site3/src/img/hero-vial-${n}.webp`);
   const F = await (await fetch('final.json')).json(), Wd = await (await fetch('wordmark.json')).json();
   const FO = await (await fetch('flower_outer.json')).json(); FLOWER = new Path2D(FO.outer);
+  for (let i = 0; i < 10; i++) DN[i] = await (await fetch(`dance/d${i}/meta.json`)).json();
   LOCK = new Path2D(F.lock); MARK = new Path2D(F.mark); WORD = new Path2D(Wd.solid); LW = F.W; MW = F.mw; WW = Wd.w; WH = Wd.h;
-  window.READY = true;
+  pickStarts(); window.READY = true;
 }
 load();
 
@@ -58,19 +60,6 @@ function outlineText(text, cx, cy, size, col, alpha) {
   x.save(); x.globalAlpha = alpha; x.font = `900 ${size}px Outfit`; x.textAlign = 'center'; x.textBaseline = 'middle';
   x.transform(1, 0, -.16, 1, 0, 0); x.lineWidth = 6; x.strokeStyle = col; x.strokeText(text, cx + cy * .16, cy); x.restore();
 }
-function flare(px, py, a) {
-  if (a <= 0) return;
-  x.save(); x.globalCompositeOperation = 'lighter'; x.globalAlpha = a;
-  let g = x.createRadialGradient(px, py, 0, px, py, 260); g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(.15, 'rgba(255,240,220,.5)'); g.addColorStop(1, 'rgba(255,200,150,0)');
-  x.fillStyle = g; x.fillRect(px - 260, py - 260, 520, 520);
-  g = x.createLinearGradient(px - 900, py, px + 900, py); g.addColorStop(0, 'rgba(120,200,255,0)'); g.addColorStop(.5, 'rgba(200,235,255,.7)'); g.addColorStop(1, 'rgba(120,200,255,0)');
-  x.fillStyle = g; x.fillRect(px - 900, py - 3, 1800, 6);
-  const cx = W / 2, cy = H / 2;
-  [[.4, 60, '#7FD3FF'], [.7, 30, '#FFB7C5'], [1.3, 90, '#ABE9C3'], [1.7, 40, '#FFE97A']].forEach(([k, r, col]) => {
-    const gx = lerp(px, cx, k), gy = lerp(py, cy, k); x.globalAlpha = a * .25; x.fillStyle = col; x.beginPath();
-    for (let i = 0; i < 6; i++) { const an = i * Math.PI / 3; x.lineTo(gx + r * Math.cos(an), gy + r * Math.sin(an)); } x.fill(); });
-  x.restore();
-}
 function star(cx, cy, r) { x.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .45 : r; x.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); } x.closePath(); }
 // the byline, bottom left on every shot after the power-on (SKO-style): logo, site, the two disclaimer lines
 function byline(t) {
@@ -87,35 +76,45 @@ function byline(t) {
 function bug(a, t) { if (a <= 0) return; x.save(); x.globalAlpha = .6 * a; flower(MARK, W - 250, H - 78, 64, t * .8, '#fff'); x.translate(W - 205, H - 96); const k = 140 / WW; x.scale(k, k); x.fillStyle = '#fff'; x.fill(WORD, 'evenodd'); x.restore(); }
 function overlays(t) {
   x.save(); x.globalAlpha = .07; x.fillStyle = '#000'; for (let y = 0; y < H; y += 4) x.fillRect(0, y, W, 2); x.restore();
-  const g = x.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  const g = x.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.22)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
   const r = rng(Math.floor(t * 30) + 7); x.save(); x.globalAlpha = .05; for (let i = 0; i < 1400; i++) { x.fillStyle = r() > .5 ? '#fff' : '#000'; x.fillRect(r() * W, r() * H, 2, 2); } x.restore();
 }
 
-// ---------- metaballs for the colour fusion (low-res field, scaled up)
-const mb = document.createElement('canvas'); mb.width = 240; mb.height = 135; const mx = mb.getContext('2d'); const mi = mx.createImageData(240, 135);
-const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-function fusion(t) {
-  const cols = ['#1F4FD8', '#FF5A1F', '#0E9A5B', '#6E3FD8', '#D08000'].map(hex);
-  const balls = cols.map((col, i) => { const a = t * (.5 + i * .13) + i * 1.3; return { x: 120 + Math.cos(a) * (70 + i * 12), y: 67 + Math.sin(a * 1.3) * (44 - i * 4), r: 40 + 8 * Math.sin(t * 1.7 + i), col }; });
-  const d = mi.data;
-  for (let y = 0; y < 135; y++) for (let xx = 0; xx < 240; xx++) {
-    let f = 0, r = 0, g = 0, b = 0;
-    for (const B of balls) { const dx = xx - B.x, dy = y - B.y, v = B.r * B.r / (dx * dx + dy * dy + 1); f += v; r += B.col[0] * v; g += B.col[1] * v; b += B.col[2] * v; }
-    const o = (y * 240 + xx) * 4, k = clamp((f - 1) * 8), hi = clamp((f - 2.2) * .5) * 70;
-    d[o] = clamp(lerp(18, r / f, k) + hi * k, 0, 255); d[o + 1] = clamp(lerp(12, g / f, k) + hi * k, 0, 255); d[o + 2] = clamp(lerp(42, b / f, k) + hi * k, 0, 255); d[o + 3] = 255;
-  }
-  mx.putImageData(mi, 0, 0); x.save(); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.filter = 'blur(2px) saturate(1.45) contrast(1.1)'; x.drawImage(mb, -20, -20, W + 40, H + 40); x.restore();
+// ---------- the dancers: Higgsfield clips keyed to silhouettes. Clips 0-1 blue hoodie, 2-3 green ponytail, 4-5 orange cap,
+// 6-7 amber afro puff, 8-9 violet suit. Each entry is [clip, second of the clip where the shot starts].
+const DN = [], DF = new Map();
+const CUT_D = [[0, 0], [4, 0], [2, 0], [6, 0], [8, 0], [3, 0], [5, 0], [1, 0]];   // the eight beats of the colour cuts (starts set below)
+const FUS_D = [[0, 0], [2, 0], [4, 0], [7, 0], [9, 0]];                       // the five colour swaps
+const SLAM_D = [[5, 4.15], [7, 3.35], [9, 3.4]];                                 // freeze poses behind EVERY / LOT / TESTED.
+function dancerAt(t) {
+  if (t >= 1 && t < 5) { const i = clamp(Math.floor((t - 1) / BEAT), 0, 7), [clip, s0] = CUT_D[i]; return { clip, s: s0 + (t - 1 - i * BEAT), cx: i % 2 ? W * .7 : W * .3, h: H * .9 }; }
+  if (t >= 5 && t < 8) { const i = t < 5.5 ? 0 : t < 6 ? 1 : 2, [clip, s0] = SLAM_D[i], k = t - [5, 5.5, 6][i]; return { clip, s: s0, cx: W / 2, h: H * .92 * (1 + .06 * Math.max(0, 1 - k / .2)) }; }
+  if (t >= 8 && t < 11.6) { const i = clamp(Math.floor((t - 8) / .8), 0, 4), [clip, s0] = FUS_D[i]; return { clip, s: s0 + (t - 8 - i * .8), cx: W * .36, h: H * .82 }; }
+  return null;
 }
-
-// black silhouettes of the spin frames (the iPod-ad dancers, played by vials), cached per frame image
-const SIL = new Map();
-function sil(im) { if (!im) return null; if (SIL.has(im)) return SIL.get(im); const o = document.createElement('canvas'); o.width = im.width; o.height = im.height;
-  const g = o.getContext('2d'); g.drawImage(im, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#0A0A0C'; g.fillRect(0, 0, o.width, o.height); SIL.set(im, o); return o; }
-function dancer(n, t, cx, cy, h, phase, beatPh) {
-  const im = sil(spin(n, t + phase, 18)); if (!im) return;
-  const sway = Math.sin((t / BEAT + phase) * Math.PI) * .22, squash = 1 - .12 * Math.max(0, 1 - beatPh * 3), hop = -Math.abs(Math.sin((beatPh + phase) * Math.PI)) * 70;
-  const w = h * im.width / im.height;
-  x.save(); x.translate(cx, cy + h / 2 + hop); x.rotate(sway); x.scale(1 / squash * .98, squash); x.drawImage(im, -w / 2, -h, w, h); x.restore();
+const dKey = d => { const m = DN[d.clip]; return d.clip + '/' + clamp(Math.round(d.s * m.fps), 0, m.n - 1); };
+window.prep = async t => {
+  const d = dancerAt(t); if (!d) return; const k = dKey(d); if (DF.has(k)) return;
+  const [c0, f] = k.split('/'); DF.set(k, await img(`dance/d${c0}/${String(f).padStart(4, '0')}.webp`));
+  if (DF.size > 48) DF.delete(DF.keys().next().value);
+};
+function drawDancer(t) {
+  const d = dancerAt(t); if (!d) return; const im = DF.get(dKey(d)); if (!im) return;
+  const m = DN[d.clip], k = d.h / m.h, w = m.w * k;
+  x.drawImage(im, d.cx - w / 2, H - 18 - d.h, w, d.h);
+}
+// pick each shot's start: the liveliest stretch of its clip (most silhouette pixels changing), skipping the standing start
+function liveliest(clip, len, avoid) {
+  const e = DN[clip].energy, n = Math.round(len * 30); let best = 1.2, score = -1;
+  for (let f = 30; f + n < e.length; f++) {
+    const s0 = f / 30; if (avoid != null && Math.abs(s0 - avoid) < len + .3) continue;
+    let v = 0; for (let j = f; j < f + n; j++) v += e[j]; if (v > score) { score = v; best = s0; }
+  }
+  return best;
+}
+function pickStarts() {
+  CUT_D.forEach(d => d[1] = liveliest(d[0], BEAT));
+  FUS_D.forEach(d => { const used = CUT_D.find(c => c[0] === d[0]); d[1] = liveliest(d[0], .8, used ? used[1] : null); });
 }
 
 // ---------- the flower
@@ -141,15 +140,9 @@ function sceneCuts(t) {   // 1.0 to 5.0: a colour and a vial per beat
   const seq = ['01', '05', '09', '04', '11', '09', '05', '01'];
   const i = clamp(Math.floor((t - 1) / BEAT), 0, 7), ph = ((t - 1) % BEAT) / BEAT, n = seq[i], [br, lt] = AREA[NO_AREA[n]];
   fill(br);
-  // huge outlined name scrolling behind
-  x.save(); x.globalAlpha = .55; flower(MARK, W / 2, H / 2 + 20, 1500, snap(t - 1), lt); x.restore();
-  const others = seq.filter(m => m !== n);
-  dancer(others[i % others.length], t, 420, H / 2 + 40, 760, .3, ph);
-  dancer(others[(i + 2) % others.length], t, W - 420, H / 2 + 40, 760, .8, ph);
-  dancer(others[(i + 4) % others.length], t, W / 2 - 700, H / 2 + 120, 520, .55, ph);
-  dancer(others[(i + 1) % others.length], t, W / 2 + 700, H / 2 + 120, 520, .1, ph);
+  drawDancer(t);
   const pop = 1 + .1 * Math.max(0, 1 - ph * 4), bounce = -Math.abs(Math.sin(ph * Math.PI)) * 46;
-  vial(spin(n, t, 20), W / 2, H / 2 + 30 + bounce, 860 * pop);
+  vial(spin(n, t, 20), i % 2 ? W * .3 : W * .7, H / 2 + 30 + bounce, 800 * pop);
   if (ph < .1) { x.save(); x.globalAlpha = (1 - ph / .1) * .5; fill('#fff'); x.restore(); }
   // corner caption, TV style
   x.save(); x.font = '600 26px Plex'; x.fillStyle = '#fff'; x.globalAlpha = .9; x.fillText(`${NAME[n]} · ${NO_AREA[n].toUpperCase()} RESEARCH`, 70, 80); x.restore();
@@ -157,6 +150,7 @@ function sceneCuts(t) {   // 1.0 to 5.0: a colour and a vial per beat
 function sceneSlam(t) {   // 5.0 to 8.0: EVERY / LOT / TESTED.
   const i = Math.floor((t - 5) / BEAT), cols = ['#FF5A1F', '#1F4FD8', '#0E9A5B', '#6E3FD8', '#D08000', '#FF5A1F'];
   fill(cols[clamp(i, 0, 5)]);
+  drawDancer(t);
   if (t < 6) { slam(t < 5.5 ? 'EVERY' : 'LOT', W / 2, H / 2, 380, t < 5.5 ? 5 : 5.5, t, { shake: true }); }
   else {
     slam('TESTED.', W / 2, H / 2 - 40, 330, 6, t, { shake: true, from: 3 });
@@ -165,29 +159,15 @@ function sceneSlam(t) {   // 5.0 to 8.0: EVERY / LOT / TESTED.
     vial(spin('05', t), lerp(-200, 260, k), H / 2 + 60, 620, 1); vial(spin('09', t + .7), lerp(W + 200, W - 260, k), H / 2 + 60, 620, 1);
   }
 }
-function sceneFusion(t) {  // 8.0 to 12.0: hard-edged rings of the six area colours zoom out of the vial; split wipes swap the compound
-  const order = ['01', '09', '05', '04', '11', '01'], pal = ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8', '#4E6077'];
-  const seg = (t - 8) / .8, i = clamp(Math.floor(seg), 0, 4), ph = seg - Math.floor(seg);
-  const rot = pal.slice(i).concat(pal.slice(0, i));
-  // rings: largest first, each a solid colour, zooming outward, a little faster on the beat
-  const beatPh = ((t - 8) % BEAT) / BEAT, push = (1 - beatPh) * 26;
-  const step = 150, maxR = Math.hypot(W, H) / 2 + step, base = ((t - 8) * 260) % step;
-  const n = Math.ceil(maxR / step) + 1;
-  for (let k = n + 2; k >= 0; k--) {
-    const r = base + k * step + push * (k / n); if (r <= 0) continue;
-    flower(FLOWER, W / 2, H / 2 + 20, r * 2.15, (k % 2 ? 1 : -1) * (t - 8) * .35 + k * .12, rot[k % 6], 'nonzero');
-  }
-  // the split wipe at each swap: the next pair of colours slides in from both sides
-  if (ph > .78 && i < 4) {
-    const k = ease((ph - .78) / .22), w = W / 2 * k;
-    x.fillStyle = rot[1]; x.fillRect(0, 0, w, H); x.fillStyle = rot[2]; x.fillRect(W - w, 0, w, H);
-  }
-  // white disc behind the vial, like a spotlight, pulsing on the beat
-  x.save(); x.globalAlpha = .92; flower(FLOWER, W / 2, H / 2 + 20, 560 + (1 - beatPh) * 50, snap(t - 8) * .2, '#fff', 'nonzero'); x.restore();
-  const n0 = order[i];
-  vial(spin(n0, t, 18), W / 2, H / 2 + 30 - Math.abs(Math.sin(beatPh * Math.PI)) * 30, 820);
-  if (ph < .08 && t > 8.1) { x.save(); x.globalAlpha = (1 - ph / .08) * .7; fill('#fff'); x.restore(); }
-  flare(lerp(-200, W + 200, clamp((t - 9.2) / 1.2)), 260, t > 9.2 && t < 10.4 ? .9 : 0);
+function sceneFusion(t) {  // 8.0 to 11.6: five flat area colours on the chimes, each with its own dancer and vial; flat wipes between
+  const order = ['01', '09', '05', '04', '11'], pal = ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8'];
+  const seg = (t - 8) / .8, i = clamp(Math.floor(seg), 0, 4), ph = seg - Math.floor(seg), beatPh = ((t - 8) % BEAT) / BEAT;
+  fill(pal[i]);
+  drawDancer(t);
+  vial(spin(order[i], t, 18), W * .72, H / 2 + 40 - Math.abs(Math.sin(beatPh * Math.PI)) * 30, 800);
+  // the wipe into the next colour: two flat panels close from both sides
+  if (ph > .8 && i < 4) { const w = W / 2 * ease((ph - .8) / .2); x.fillStyle = pal[i + 1]; x.fillRect(0, 0, w, H); x.fillRect(W - w, 0, w, H); }
+  if (ph < .08 && t > 8.1) { x.save(); x.globalAlpha = (1 - ph / .08) * .6; fill('#fff'); x.restore(); }
   const o = { split: 5, col: '#fff' };
   if (t > 8.3 && t < 10.1) slam('SIX AREAS.', W / 2, 150, 150, 8.35, t, o);
   if (t > 10.1) slam('ONE COLOR EACH.', W / 2, 150, 140, 10.15, t, o);
@@ -208,24 +188,15 @@ function sceneGrid(t) {    // 11.6 to 17.5: twelve vials pop in on the eighth no
   slam('TWELVE COMPOUNDS.', W / 2, 160, 130, 14.95, t, { col: '#111319', split: 3 });
 }
 const LABEL = { '01': 'RT-3', '02': 'TZ-2', '06': 'MOTS-c', '08': 'NAD+', '09': 'BPC+TB', '05': 'GHK-Cu', '10': 'GHK+BT', '04': 'TESAMORELIN', '07': 'CJC+IPA', '11': 'SELANK', '12': 'SEMAX', '03': 'BAC WATER' };
-function sceneBloom(t) {   // 17.5 to 18.7: the flower alone, blooming in and turning a petal per beat over the colour rays
-  rays(t);
+function sceneBloom(t) {   // 17.5 to 18.7: the flower alone on flat ink, blooming in with one full turn
+  fill('#0E1014');
   const k = back((t - 17.55) / .45), pal = ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8'];
   const spinTo = ease((t - 17.5) / 1.1) * Math.PI * 2;
   for (let i = 4; i >= 0; i--) { const kk = back((t - 17.55 - i * .06) / .45); if (kk > 0) flower(FLOWER, W / 2, H / 2, (520 + i * 70) * kk, spinTo * (1 + i * .12), pal[i], 'nonzero'); }
   if (k > 0) { flower(FLOWER, W / 2, H / 2, 470 * k, spinTo, '#0E1014', 'nonzero'); flower(MARK, W / 2, H / 2, 470 * k, spinTo, '#F7F4EE'); }
 }
-function rays(t) {
-  fill('#0E1014');
-  x.save(); x.translate(W / 2, H / 2 - 40); x.rotate(t * .25);
-  ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8', '#4E6077'].forEach((col, i) => { for (let j = 0; j < 2; j++) { const a = (i * 2 + j) * Math.PI / 6; x.fillStyle = col; x.globalAlpha = .28; x.beginPath(); x.moveTo(0, 0); x.arc(0, 0, 1400, a, a + Math.PI / 12); x.fill(); } });
-  x.restore();
-}
 function sceneEnd(t) {     // 15.5 to 20.0
   fill('#0E1014');
-  x.save(); x.translate(W / 2, H / 2 - 40); x.rotate(t * .25);
-  ['#1F4FD8', '#0E9A5B', '#FF5A1F', '#D08000', '#6E3FD8', '#4E6077'].forEach((col, i) => { for (let j = 0; j < 2; j++) { const a = (i * 2 + j) * Math.PI / 6; x.fillStyle = col; x.globalAlpha = .28; x.beginPath(); x.moveTo(0, 0); x.arc(0, 0, 1400, a, a + Math.PI / 12); x.fill(); } });
-  x.restore();
   const k = back((t - 15.7) / .45);
   if (t > 15.7) {
     const lw = 980 * k, s = lw / LW;
