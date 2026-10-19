@@ -2613,7 +2613,7 @@ def get_trailing_nrtg(team_id, n_games=10):
         LIMIT ?
     """, DB_PATH, [team_id, team_id, team_id, n_games])
     if df.empty:
-        return 0.0
+        return 0.0, 0
 
     total_weight = 0.0
     weighted_sum = 0.0
@@ -2625,7 +2625,7 @@ def get_trailing_nrtg(team_id, n_games=10):
         weighted_sum += capped * weight
         total_weight += weight
 
-    return weighted_sum / total_weight if total_weight > 0 else 0.0
+    return (weighted_sum / total_weight if total_weight > 0 else 0.0), len(df)
 
 
 def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
@@ -2704,8 +2704,8 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     season_nrtg_diff = home_adj_nrtg - away_adj_nrtg
 
     # ── Trailing 10-game NRtg (captures momentum / hot teams) ──
-    home_recent_nrtg = get_trailing_nrtg(home_tid, n_games=10)
-    away_recent_nrtg = get_trailing_nrtg(away_tid, n_games=10)
+    home_recent_nrtg, home_recent_n = get_trailing_nrtg(home_tid, n_games=10)
+    away_recent_nrtg, away_recent_n = get_trailing_nrtg(away_tid, n_games=10)
     home_adj_recent = home_recent_nrtg - home_nrtg_attrition
     away_adj_recent = away_recent_nrtg - away_nrtg_attrition
     recent_nrtg_diff = home_adj_recent - away_adj_recent
@@ -2796,10 +2796,18 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     moji_diff = home_moji - away_moji
     moji_as_points = moji_diff * K["MOJO_SCALE"]
 
-    raw_power = (K["MOJI_WEIGHT"] * moji_as_points +
-                 K["NRTG_SEASON_WEIGHT"] * season_nrtg_diff +
-                 K["NRTG_RECENT_WEIGHT"] * recent_nrtg_diff +
-                 K["SYN_WEIGHT"] * synergy_as_points)
+    # The trailing term counts only as far as it has games behind it: with
+    # n < 10 current-season games its weight is 0.30 x n/10 and the other three
+    # terms are scaled back up to the full blend. On opening night (n = 0) it
+    # used to read 0.0 for both teams at full weight, which pulled every
+    # opening-week spread ~30% toward plain home court.
+    recent_w = K["NRTG_RECENT_WEIGHT"] * min(home_recent_n, away_recent_n, 10) / 10
+    rest_w = K["MOJI_WEIGHT"] + K["NRTG_SEASON_WEIGHT"] + K["SYN_WEIGHT"]
+    rest_scale = (rest_w + K["NRTG_RECENT_WEIGHT"] - recent_w) / rest_w
+    raw_power = (rest_scale * (K["MOJI_WEIGHT"] * moji_as_points +
+                               K["NRTG_SEASON_WEIGHT"] * season_nrtg_diff +
+                               K["SYN_WEIGHT"] * synergy_as_points) +
+                 recent_w * recent_nrtg_diff)
     # Home court + back-to-backs, once, after the blend.
     raw_power += situational_pts
 
@@ -2831,6 +2839,7 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
         "away_nrtg_attrition": round(away_nrtg_attrition, 1),
         "nrtg_diff": round(season_nrtg_diff, 1),
         "recent_nrtg_diff": round(recent_nrtg_diff, 1),
+        "recent_weight": round(recent_w, 3),
         "home_recent_nrtg": round(home_recent_nrtg, 1),
         "away_recent_nrtg": round(away_recent_nrtg, 1),
         "home_syn": round(home_syn, 1),
