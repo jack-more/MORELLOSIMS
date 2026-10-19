@@ -25,8 +25,10 @@ End every caption with: **For laboratory research use only. Not for human or vet
 - **Profile picture:** `x-pfp-ring.png` (recommended: the flower on ink inside a ring of the six area colours). Plain version: `x-pfp-ink.png`.
 - **Banner:** `x-banner-bloom.png` (recommended: the wordmark, "Every lot tested." and the flower blooming in the six colours). Alternative: `x-banner-v2.png` (six area columns with oversized vials).
 - **Name:** zuma · **Location:** On Solana · **Website:** zumatides.com/enter
-- **Bio (140 characters):** Twelve research compounds. Every lot tested, every report on-chain. For laboratory research use only. Founding members → zumatides.com/enter
-- **Spot:** `zuma-spot-2000s.mp4` (23.5 s, 1920×1080, with sound). Source in `../spot-source/`.
+- **Bio (143 characters):** Every lot tested — at the prices everyone deserves. Twelve research compounds, six areas. For laboratory research use only. zumatides.com/enter
+- **Website field:** zumatides.com
+- **Profile picture:** `x-pfp-lacquer-400.png`. **Header:** `x-banner-sun-1500.png`.
+- **Spot:** `zuma-spot-9x16.mp4` (vertical) and `zuma-spot-dancers.mp4` (16:9); older cut `zuma-spot-2000s.mp4` (23.5 s, 1920×1080, with sound). Source in `../spot-source/`.
 
 Launch thread:
 
