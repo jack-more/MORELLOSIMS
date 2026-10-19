@@ -8,7 +8,10 @@
 playoff run included, on early-March numbers. Now: if completed games
 exist that the stats haven't caught up to, fail loudly.
 
-Offseason (no completed game in the last LOOKBACK_DAYS) passes.
+Offseason (no completed game in the last LOOKBACK_DAYS) passes the stats
+checks. RAPM is checked every run, offseason included: MOJO is anchored on it
+(75% of offense, all of defense), and the table sat empty from the repo move
+through Oct 2026 because only the manual full pipeline collected it.
 """
 import os
 import sqlite3
@@ -22,10 +25,22 @@ MAX_LAG_DAYS = 3      # box scores may trail the latest final by this much
 MAX_GP_LAG = 3        # team season stats may trail games played by this many
 LOOKBACK_DAYS = 10    # "in season" = a counted game finished this recently
 REGULAR_SEASON_GAMES = 82
+MIN_RAPM_PLAYERS = 300  # nbarapm.com serves ~520; fewer means the collect broke
 
 
 def main():
     conn = sqlite3.connect(DB_PATH)
+    try:
+        n_rapm = conn.execute("SELECT COUNT(*) FROM player_rapm WHERE rapm_total IS NOT NULL").fetchone()[0]
+    except sqlite3.OperationalError:
+        n_rapm = 0
+    if n_rapm < MIN_RAPM_PLAYERS:
+        print(f"::error title=RAPM missing::player_rapm has {n_rapm} players (need {MIN_RAPM_PLAYERS}+); "
+              "MOJO would fall back to box score + team net rating")
+        print("Refusing to price picks without RAPM.")
+        return 1
+    print(f"RAPM OK: {n_rapm} players")
+
     today = datetime.now(timezone.utc).date()
     latest_game = conn.execute(
         "SELECT MAX(game_date) FROM games WHERE home_score IS NOT NULL AND season_id = ?",

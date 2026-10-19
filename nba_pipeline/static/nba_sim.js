@@ -871,7 +871,7 @@
                 badge.textContent = 'NEUTRAL';
             }
         }
-        document.getElementById('simVenue').addEventListener('change', function() { simUpdateHca(); });
+        document.getElementById('simVenue')?.addEventListener('change', function() { simUpdateHca(); });
 
         // ─── RENDER FUNCTIONS ───
         function simRenderAll(side) {
@@ -1703,7 +1703,7 @@
         }
 
         // Delegated click for box score rows (avoid inline onclick with quote issues)
-        document.getElementById('simBoxScores').addEventListener('click', function(e) {
+        document.getElementById('simBoxScores')?.addEventListener('click', function(e) {
             const row = e.target.closest('.sim-box-clickable');
             if (row) {
                 const key = row.dataset.shotKey;
