@@ -7,7 +7,7 @@ run; nothing published it since /nbasim/ became the data page. This copies it
 to members/dashboard/index.html with the brand applied and a members gate:
 the brand header, assets/brand/v2/dashboard.css over the page's own styles,
 lineups (with archetypes) open on every game, and a few markup rewrites that
-CSS cannot reach (team-coloured scheme tags, the sealed card's link).
+CSS cannot reach (old edge colours, the sealed card's link).
 
 The gate is a courtesy, not security: GitHub Pages serves the file to anyone.
 What has to stay private, tonight's picks, is sealed inside it under seal
@@ -29,7 +29,7 @@ OUT = os.path.join(REPO, "members", "dashboard", "index.html")
 HEAD = """
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020">
-<link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261020b">
+<link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261020c">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <meta name="robots" content="noindex">
 <style>
@@ -141,16 +141,12 @@ SWAPS = [
     ("\u25b2 HIDE LINEUPS", "Hide lineups"),
     (">SIM (desktop)</button>", ">Sim</button>"),
     # edge colours drawn for the old dark cards, readable on white
-    ('class="mc-spread ma-premium" style="color:#FFD600"', 'class="mc-spread ma-premium" style="color:#B97F00"'),
-    ('class="mc-spread ma-premium" style="color:#888"', 'class="mc-spread ma-premium" style="color:#8A938F"'),
     ('style="color:rgba(0,255,85,0.6)"', 'style="color:#14743C"'),
     ('style="color:rgba(255,80,80,0.5)"', 'style="color:#C4574A"'),
     ('style="color:rgba(255,255,255,0.3)"', 'style="color:#8A938F"'),
     ('class="formula-row" style="color:rgba(0,0,0,0.7)"', 'class="formula-row" style="color:#3FCB74"'),
 ]
 
-# team-coloured scheme tags: the team colour becomes the tag's left rule
-SCHEME_TAG = re.compile(r'class="scheme-tag" style="background:\s*([^;"]+);[^"]*"')
 # the sealed card sends members to Tonight's picks instead of checkout
 SEALED_CTA = re.compile(r'<a class="sealed-cta" href="[^"]*"[^>]*>[^<]*</a>')
 SLATE_DATE = re.compile(r'<span class="logo-date">([^<]+)</span>')
@@ -162,7 +158,6 @@ def build(src=SRC, out=OUT):
         html = html.replace(a, b)
     for a, b in SWAPS:
         html = html.replace(a, b)
-    html = SCHEME_TAG.sub(r'class="scheme-tag" style="--team:\1"', html)
     html = SEALED_CTA.sub('<a class="sealed-cta" href="/members/">Open the pick &rarr;</a>', html)
     html = re.sub(r"<title>[^<]*</title>", "<title>NBA dashboard · Morello Sims</title>", html, count=1)
     if "</head>" not in html or "<body" not in html or "</body>" not in html:
