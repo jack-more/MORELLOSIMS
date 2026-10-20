@@ -83,8 +83,10 @@ GATE_JS = """
         document.getElementById("ms-acct").textContent = user ? "Account" : "Sign in";
         if (!user) { gate.hidden = false; return; }
         firebase.firestore().collection("users").doc(user.uid).get().then(function (s) {
-          gate.hidden = active(s.exists ? s.data() : null);
-        }).catch(function () { gate.hidden = false; });
+          if (active(s.exists ? s.data() : null)) return true;
+          // whitelisted (friends & family): the member_picks rule decides
+          return firebase.firestore().collection("member_picks").limit(1).get().then(function () { return true; });
+        }).then(function (ok) { gate.hidden = ok; }).catch(function () { gate.hidden = false; });
       });
     }
     if (n < 150) setTimeout(function () { wait(n + 1); }, 100);
