@@ -134,3 +134,8 @@ SYNERGY_WEIGHT = 0.10       # portion of projection blend for synergy
 SYNERGY_SCALE = 0.15        # conversion: (home_syn - away_syn) × SCALE = spread points
 DSI_WEIGHT = 0.45           # reduced from 0.50
 NRTG_WEIGHT = 0.45          # reduced from 0.50
+
+# Role-aware minutes (analysis/roles.py, generate_frontend.project_minutes_by_role).
+# Off: the pick model keeps the proportional split and logs what role-aware
+# minutes would have priced as breakdown["role_shadow"]. NBA_ROLE_MINUTES=1 turns it on.
+ROLE_MINUTES = os.getenv("NBA_ROLE_MINUTES") == "1"
