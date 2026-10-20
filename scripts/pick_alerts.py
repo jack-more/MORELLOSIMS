@@ -42,7 +42,7 @@ STATE = os.path.join(REPO, "ops", "state", "pick_alerts.json")  # telegram/ is g
 LEGACY = os.path.join(REPO, "mlbsim", "posted_cards.json")
 OUT = os.path.join(REPO, "posters", "v2")
 ET = timezone(timedelta(hours=-4))
-MIN_CONF = 8
+MIN_CONF = 6   # same floor as capture_picks.MIN_TRACKED_CONF_GRADE
 UNLOCK_WORD = {"nba": "tip", "nfl": "kickoff"}
 PREMIUM = os.environ.get("TELEGRAM_PREMIUM_CHANNEL_ID", "").strip()
 

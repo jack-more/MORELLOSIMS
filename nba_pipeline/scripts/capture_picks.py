@@ -32,7 +32,7 @@ COUNTED_SEASON_TYPES = {2, 3, 5}
 PICKS_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "picks.csv")
 DAILY_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "daily_picks.json")
 PICK_LOG = os.path.join(os.path.dirname(__file__), "..", "data", "pick_log.json")
-MIN_TRACKED_CONF_GRADE = 8
+MIN_TRACKED_CONF_GRADE = 6   # owner 2026-10-20: C6/C7 are logged at small stakes (risk_amount)
 
 
 def conf_to_1_10(confidence):
@@ -52,6 +52,10 @@ def risk_amount(conf_1_10):
         return 100
     if conf_1_10 >= 8:
         return 50
+    if conf_1_10 == 7:
+        return 12.5   # 0.5u (25 $PP = 1u)
+    if conf_1_10 == 6:
+        return 6.25   # 0.25u
     if conf_1_10 >= 5:
         return 30
     return 20
