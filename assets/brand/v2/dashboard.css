@@ -1,0 +1,252 @@
+/* Members dashboard (/members/dashboard/): brand v2 over the NBA SIM page that
+   generate_frontend.py writes. Linked after the page's own <style>, so equal
+   selectors win here; inline team colours need !important.
+   scripts/publish_member_dashboard.py links it and rewrites the bits CSS cannot reach. */
+
+/* Palette: every colour on this page comes from these tokens. */
+:root{
+  --d-bar:#0B0F0D;          /* brand header bar */
+  --d-bg:#F3F5F4;           /* page */
+  --d-card:#FFFFFF;         /* cards, chips */
+  --d-inset:#F6F8F7;        /* panels inside cards, hovers */
+  --d-hover:#EEF6F1;
+  --d-line:#E1E6E3;--d-line-soft:#ECEFED;
+  --d-ink:#0B0F0D;--d-ink-2:#4E5752;--d-ink-3:#88918C;
+  --d-head-ink:#0B0F0D;     /* headings, team names */
+  --d-on-bg-2:#4E5752;      /* secondary text sitting on the page colour */
+  --d-dark:#0B0F0D;         /* active chips, trend headers, sim panels, mobile nav */
+  --d-dark-ink-2:#A9B3AE;
+  --d-arch:#1F78D1;--d-link:#1F78D1;
+  --d-pos:#14743C;--d-elite:#14743C;--d-warn:#8A5A00;
+  --d-pos-bg:#E5F4EA;--d-warn-bg:#FBEFD9;--d-neg-bg:#F8E6E3;
+  --d-court-1:#121614;--d-court-2:#1A1F1C;
+}
+:root{
+  --bg:var(--d-bg);--surface:var(--d-card);--surface-dark:var(--d-dark);
+  --border:1px solid var(--d-line);--border-thin:1px solid var(--d-line);
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 6px 20px rgba(0,0,0,.05);
+  --shadow-lg:0 2px 4px rgba(0,0,0,.06),0 14px 34px rgba(0,0,0,.09);
+  --ink:var(--d-ink);--green:var(--ms-green);--green-dark:var(--ms-green-deep);
+  --red:var(--ms-loss);--blue:var(--ms-blue);--amber:#E0A21B;
+  --font-display:var(--ms-font);--font-body:var(--ms-font);--font-mono:var(--ms-font);
+  --radius:6px;
+}
+body{background:var(--d-bg);color:var(--d-ink);font-family:var(--ms-font);font-variant-numeric:tabular-nums}
+:where(h1,h2,h3,.mc-abbr,.section-header h2,.rankings-title,.info-title,.trends-col-header,.lineup-team-header,
+  .combo-team,.sim-label,.sim-panel-header span,.sheet-name,.lineup-combos-header,.sim-empty-text){
+  font-family:var(--ms-font);font-weight:900;font-stretch:78%;letter-spacing:-.005em}
+
+/* ─ header: brand bar on top, the old logo row goes, tabs become a white sub-bar ─ */
+#ma-profile-btn,.ma-site-nav{display:none!important}
+.top-bar{display:none}
+.sticky-header{background:var(--d-card);border-bottom:1px solid var(--d-line);box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.filter-bar{background:var(--d-card);padding:0 16px}
+.filter-bar-inner{max-width:1180px;gap:4px}
+.filter-btn{font:700 14px/1 var(--ms-font);letter-spacing:.01em;text-transform:none;color:var(--d-ink-2);
+  background:transparent;border:0;border-radius:0;padding:16px 12px 14px;box-shadow:inset 0 -3px 0 transparent}
+.filter-btn:hover:not(.active){color:var(--d-head-ink);border:0;box-shadow:inset 0 -3px 0 var(--d-line)}
+.filter-btn.active{background:transparent;color:var(--d-head-ink);border:0;box-shadow:inset 0 -3px 0 var(--ms-green)}
+.ms-dash-title{max-width:1180px;margin:0 auto;padding:22px 16px 4px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ms-dash-title h1{font:900 34px/1 var(--ms-font);font-stretch:78%;color:var(--d-head-ink);letter-spacing:-.01em}
+.ms-dash-title span{font:600 14px var(--ms-font);color:var(--d-ink-2)}
+.content{max-width:1180px;padding:16px}
+
+/* ─ section heads, sort chips, notes ─ */
+.section-header{margin:6px 0 14px}
+.section-header h2{font-size:26px;color:var(--d-head-ink);letter-spacing:0}
+.section-sub{font:500 13px var(--ms-font);color:var(--d-ink-2);margin-top:6px}
+.proj-disclaimer{font:400 13.5px/1.55 var(--ms-font);color:var(--d-ink-2);background:var(--d-card);border:1px solid var(--d-line);
+  border-left:3px solid var(--ms-green);border-radius:4px;padding:12px 16px}
+.proj-disclaimer strong{color:var(--d-head-ink)}
+.sort-btn,.mojo-sort-btn,.wowy-tab,.wowy-chip{font:700 13px var(--ms-font);letter-spacing:0;text-transform:none;border:1px solid var(--d-line);
+  border-radius:999px;background:var(--d-card);color:var(--d-ink-2);padding:8px 14px}
+.sort-btn.active,.mojo-sort-btn.active,.wowy-tab.active,.wowy-chip.active{background:var(--d-dark);color:#fff;border-color:var(--d-dark)}
+.mojo-sort-bar,.wowy-tabs{border:0;gap:6px;border-radius:0;overflow:visible}
+
+/* ─ game card ─ */
+.matchup-card{border:1px solid var(--d-line);border-radius:8px;box-shadow:var(--shadow);margin-bottom:18px}
+.matchup-card:hover{transform:none;box-shadow:var(--shadow-lg)}
+.mc-header{padding:20px 22px 14px}
+.mc-abbr{font-size:30px;color:var(--d-head-ink)}
+.mc-mojo-rank{white-space:nowrap;font:700 12px var(--ms-font);color:var(--d-pos);letter-spacing:.02em}
+.mc-record{font:500 12px var(--ms-font);color:var(--d-ink-3)}
+.mc-spread{font:900 26px/1.05 var(--ms-font);font-stretch:78%}
+.mc-total{font:600 13px var(--ms-font);color:var(--d-ink-2);margin-top:2px}
+.mc-pick{font:700 13px var(--ms-font);color:#fff;background:var(--ms-green);border-radius:3px;padding:4px 10px;margin-top:8px}
+.mc-pick .pick-label{font-size:10px;letter-spacing:.08em;opacity:.8}
+.mc-conf-num{color:#fff!important;background:rgba(0,0,0,.28);font-size:11px;padding:1px 6px;border-radius:2px}
+.mc-implied,.mc-sim-proj{font:600 11px var(--ms-font);color:var(--d-ink-3);letter-spacing:.01em}
+.tow-bar{height:8px;border:0;border-radius:999px;box-shadow:none;margin:0 22px;background:var(--d-line)}
+.tow-fill.tow-away{border-right:2px solid #fff}
+.tow-mid{display:none}
+.tow-labels{font:600 12px var(--ms-font);color:var(--d-ink-2);padding:8px 22px 0}
+.mc-schemes{padding:12px 22px 6px;gap:6px}
+.scheme-tag{background:var(--d-card)!important;color:var(--d-ink)!important;text-shadow:none!important;border:1px solid var(--d-line);
+  border-left:4px solid var(--team,var(--d-dark));border-radius:3px;font:600 11.5px var(--ms-font);text-transform:none;letter-spacing:0;padding:4px 10px}
+.scheme-divider{font:600 11px var(--ms-font);color:var(--d-ink-3)}
+.moji-breakdown{margin:8px 22px 10px;padding:12px 14px;background:var(--d-inset);border:1px solid var(--d-line-soft);border-radius:4px}
+.moji-row{font:500 12px var(--ms-font)}
+.moji-label{font:800 10.5px var(--ms-font);letter-spacing:.06em;color:var(--d-ink-3)}
+.moji-val{font-weight:700;color:var(--d-head-ink);font-size:12px}
+.moji-edge-sm{font-weight:700;color:var(--d-ink-2);font-size:11px}
+.moji-bar-mini{height:6px;border:0;border-radius:999px;background:var(--d-line)}
+.moji-model-row{border-top:1px dashed var(--d-line)}
+.moji-model-formula{font:600 11px var(--ms-font);color:var(--d-ink-2)}
+.moji-model-formula strong{color:var(--d-head-ink);font-size:12px}
+.hca-badge,.b2b-badge,.out-badge{font:700 10.5px var(--ms-font);border-radius:2px;padding:3px 7px}
+.hca-badge{background:var(--d-pos-bg);color:var(--d-pos)}
+.out-badge{background:var(--d-warn-bg);color:var(--d-warn)}
+.mc-sportsbooks{display:inline-flex;vertical-align:middle;padding:4px 0 16px 22px;border-top:0;margin:0;gap:8px}  /* the books sit on one line */
+.sb-header{font:800 10px var(--ms-font);letter-spacing:.1em;color:var(--d-ink-3)}
+.sb-btn{font:700 12px var(--ms-font);background:var(--d-card);border:1px solid var(--d-line);border-radius:3px;padding:7px 12px}
+.sb-btn:hover{background:var(--d-inset);border-color:var(--d-ink-3);transform:none}
+.sb-btn-featured,.sb-btn-bovada,.pm-btn-kalshi,.pm-btn-dk{background:var(--d-card);border-width:1px}
+.expand-btn{font:700 13px var(--ms-font);letter-spacing:.01em;text-transform:none;color:var(--d-head-ink);background:var(--d-inset);border-top:1px solid var(--d-line);padding:12px}
+.expand-btn:hover{background:var(--d-hover);color:var(--d-head-ink)}
+
+/* lineups: open by default (publish script), starters first */
+.mc-expanded{border-top:1px solid var(--d-line)}
+.lineup-half{padding:14px 18px 10px}
+.lineup-half:first-child{border-right:1px solid var(--d-line-soft)}
+.lineup-team-header{font-size:17px;color:var(--d-head-ink);border-bottom-width:3px;padding-bottom:8px;margin-bottom:6px}
+.player-row{border-radius:4px;padding:8px 6px}
+.player-row:hover{background:var(--d-hover)}
+.pr-face{border:1px solid var(--d-line);width:40px;height:40px}
+.pr-name{font:700 14px var(--ms-font);color:var(--d-ink)}
+.pr-meta{font:600 12px var(--ms-font);color:var(--d-arch);margin-top:2px}
+.pr-stats{font:500 11px var(--ms-font);color:var(--d-ink-2)}
+.pr-mojo-num{font:900 24px/1 var(--ms-font);font-stretch:78%}
+.pr-mojo-range{font:500 10px var(--ms-font);color:var(--d-ink-3)}
+.mojo-good .pr-mojo-num,.combo-pds.mojo-good,.rank-mojo.mojo-good .rank-mojo-num{color:var(--d-head-ink)}
+.mojo-avg .pr-mojo-num,.combo-pds.mojo-avg,.rank-mojo.mojo-avg .rank-mojo-num{color:var(--d-ink-3)}
+.mojo-low .pr-mojo-num,.combo-pds.mojo-low,.rank-mojo.mojo-low .rank-mojo-num{color:var(--ms-loss)}
+.player-row.bench{opacity:.78}
+.mc-expanded.ms-bench-hidden .player-row.bench{display:none}
+.ms-bench-toggle{grid-column:1/-1;font:700 12.5px var(--ms-font);color:var(--d-link);background:var(--d-card);border:0;border-top:1px solid var(--d-line-soft);padding:11px;cursor:pointer}
+.ms-bench-toggle:hover{background:var(--d-inset)}
+.rw-status-badge{font:800 9.5px var(--ms-font)}
+
+/* sealed game: the pick is on Tonight's picks */
+.sealed-card .mc-header{padding:22px}
+.sealed-pick{background:var(--d-dark)!important;color:#fff!important}
+a.sealed-cta{display:inline-block;margin-top:10px;text-decoration:none;border:0!important;background:var(--ms-green)!important;color:#fff!important;border-radius:3px;font:700 13px var(--ms-font)!important;
+  letter-spacing:0!important;padding:9px 14px!important}
+
+/* ─ player stats tab ─ */
+.stat-spotlight-card{border:1px solid var(--d-line);box-shadow:var(--shadow);border-radius:6px;padding:14px 16px}
+.stat-spotlight-card:hover{transform:none}
+.prop-rank-num{font:700 10px var(--ms-font);color:var(--d-ink-3);background:var(--d-inset)}
+.prop-name{font:800 15px var(--ms-font);color:var(--d-ink)}
+.prop-team-opp{font:600 11px var(--ms-font);color:var(--d-ink-3)}
+.prop-meta{font:600 12px var(--ms-font);color:var(--d-arch)}
+.prop-face,.rank-face,.combo-face{border:1px solid var(--d-line)}
+.stat-summary-box{background:var(--d-inset);border:1px solid var(--d-line-soft);border-radius:4px}
+.stat-summary-line{font:800 14px var(--ms-font);color:var(--d-head-ink)}
+.stat-matchup-badge,.stat-line-ref,.prop-edge,.prop-note,.l5-val,.l5-hit-rate{font-family:var(--ms-font)}
+.prop-note{font-size:12px;color:var(--d-ink-2)}
+.stat-line-ref{font-size:11px;background:var(--d-inset);color:var(--d-ink-2)}
+.prop-bottom{border-top:1px solid var(--d-line-soft)}
+.l5-hit{background:var(--d-pos-bg);color:var(--d-pos)}
+.l5-miss{background:var(--d-neg-bg);color:var(--ms-loss)}
+
+/* rankings, projections */
+.rankings-section,.proj-matchup,.info-section{border:1px solid var(--d-line);box-shadow:var(--shadow);border-radius:8px}
+.rankings-header:hover{background:var(--d-inset)}
+.rankings-title{color:var(--d-head-ink)}
+.rankings-col-headers{font:800 10px var(--ms-font);letter-spacing:.08em;color:var(--d-ink-3)}
+.rank-row:hover,.rank-row:nth-child(even):hover{background:var(--d-hover)}
+.rank-name{font:700 14px var(--ms-font)}
+.rank-meta{font:600 12px var(--ms-font);color:var(--d-arch)}
+.rank-num{font:700 12px var(--ms-font);color:var(--d-ink-3)}
+.rank-mojo-num{font:900 24px var(--ms-font);font-stretch:78%}
+.proj-matchup-header{background:var(--d-dark);font:900 18px var(--ms-font);font-stretch:78%}
+.proj-pra{background:var(--d-pos-bg)}
+
+/* ─ trends ─ */
+.trends-col-header{font-size:18px;border-radius:4px;padding:12px;text-transform:none}
+.trends-col-header.hot{background:var(--d-dark);color:var(--ms-mint)}
+.trends-col-header.fade{background:var(--d-dark);color:#F08A7C}
+.trend-card{border:1px solid var(--d-line);border-radius:6px;padding:12px 14px}
+.trend-name{font:700 14px var(--ms-font);color:var(--d-ink)}
+.trend-meta{font:600 12px var(--ms-font);color:var(--d-arch)}
+.trend-stats{font:500 11.5px var(--ms-font);color:var(--d-ink-2)}
+.trend-delta{font:800 14px var(--ms-font)}
+.trend-pos,.combo-stat-item .positive{color:var(--d-pos)}
+.trend-neg,.combo-stat-item .negative{color:var(--ms-loss)}
+.combo-card{border:1px solid var(--d-line);box-shadow:var(--shadow);border-radius:8px}
+.combo-card.fade{border-color:#E7C3BD}
+.combo-type{font:800 10.5px var(--ms-font);letter-spacing:.08em;color:var(--d-ink-3)}
+.combo-team{color:var(--d-head-ink);font-size:18px}
+.combo-badge{font:800 11.5px var(--ms-font);letter-spacing:.04em}
+.combo-pname{font:700 13px var(--ms-font)}
+.combo-parch{font:600 11.5px var(--ms-font);color:var(--d-arch)}
+.combo-pds{font:900 18px var(--ms-font);font-stretch:78%}
+.combo-stat-item,.combo-trend-note{font-family:var(--ms-font)}
+.combo-stats,.combo-top{border-color:var(--d-line-soft)}
+.lineup-combos-header{color:var(--d-head-ink);font-size:22px;border-bottom:1px solid var(--d-line)}
+.wowy-select,.sim-select{border:1px solid var(--d-line);border-radius:4px;background-color:var(--d-card);font:600 14px var(--ms-font);color:var(--d-ink)}
+.wowy-table-wrap{border:1px solid var(--d-line);border-radius:6px}
+.wowy-table{font-family:var(--ms-font)}
+.wowy-table th{background:var(--d-dark);color:var(--d-dark-ink-2)}
+.wowy-table th.active-sort{color:var(--ms-mint)}
+
+/* MOJO player cards: keep the tiers, brand the type */
+.mc-player-name{font:900 14px var(--ms-font);font-stretch:78%}
+.mc-archetype{font:600 11px var(--ms-font);color:var(--d-arch)}
+.mc-mojo-num{font:900 34px/1 var(--ms-font);font-stretch:78%}
+
+/* ─ info tab ─ */
+.info-title{color:var(--d-head-ink);font-size:24px}
+.info-text{font:400 14.5px/1.65 var(--ms-font);color:var(--d-ink-2)}
+.info-formula{background:var(--d-dark);border-radius:4px}
+.formula-row{font:500 13px var(--ms-font)}
+.info-arch-card{background:var(--d-inset);border:1px solid var(--d-line-soft);border-radius:4px}
+.info-arch-name{font:800 15px var(--ms-font);color:var(--d-head-ink)}
+.info-arch-desc{font:400 12.5px/1.5 var(--ms-font);color:var(--d-ink-2)}
+.info-scheme-group h3{font:800 15px var(--ms-font);color:var(--d-head-ink)}
+.scheme-item{font:400 13px/1.5 var(--ms-font);color:var(--d-ink-2)}
+.info-footer{background:var(--d-dark)}
+
+/* ─ sim tab: navy court ─ */
+.sim-team-bar{border:1px solid var(--d-line);box-shadow:var(--shadow);border-radius:8px}
+.sim-label{font-size:13px;letter-spacing:.02em}
+.sim-team-btn{border:1px solid var(--d-line);border-radius:4px;font-family:var(--ms-font)}
+.sim-panel{background:var(--d-dark);border:0;border-radius:8px}
+.sim-panel-header{border-bottom:1px solid rgba(255,255,255,.08)}
+.sim-court{background:linear-gradient(180deg,var(--d-court-1) 0%,var(--d-court-2) 100%)}
+.sim-bench-zone{border-color:rgba(63,203,116,.28)}
+.sim-moji-badge{font-family:var(--ms-font);border-radius:3px}
+
+/* ─ player sheet + mobile nav ─ */
+.bottom-sheet{background:var(--d-dark)}
+.sheet-face{border-color:var(--ms-mint)}
+.sheet-mojo,.sheet-pair-rank{color:var(--ms-mint)}
+.sheet-bar-fill{background:var(--ms-mint)}
+.bottom-nav{background:var(--d-dark);border-top:1px solid rgba(255,255,255,.08)}
+.nav-btn{font:700 10.5px var(--ms-font);letter-spacing:.04em;color:var(--d-dark-ink-2)}
+.nav-btn.active{color:var(--ms-mint)}
+
+.ms-links a{white-space:nowrap}
+@media(max-width:420px){.ms-bar .in{padding:12px 16px}.ms-logo img{height:30px}.ms-links{gap:12px;font-size:12.5px}}
+@media(max-width:768px){
+  .filter-bar{display:none}                 /* the bottom nav carries the tabs on phones */
+  .sticky-header{border-bottom:0;box-shadow:none}
+  .ms-dash-title{padding:18px 16px 0}
+  .ms-dash-title h1{font-size:28px}
+  .content{padding:12px 16px}
+  .mc-header{padding:16px 14px 10px}
+  .mc-abbr{font-size:24px}
+  .mc-spread{font-size:21px}
+  .tow-bar{margin:0 14px}.tow-labels{padding:8px 14px 0}
+  .mc-schemes{padding-left:14px;padding-right:14px}
+  .mc-sportsbooks{padding-left:14px}
+  .moji-breakdown{margin:8px 14px 10px}
+  .lineup-half{padding:12px 12px 8px}
+  .lineup-half:first-child{border-right:0;border-bottom:1px solid var(--d-line-soft)}
+}
+
+/* page-colour text, brand bar, MOJO tiers: tokens too */
+.ms-bar{background:var(--d-bar)}
+.section-sub,.ms-dash-title span{color:var(--d-on-bg-2)}
+.section-header h2,.ms-dash-title h1{color:var(--d-head-ink)}
+.mojo-elite .pr-mojo-num,.combo-pds.mojo-elite,.rank-mojo.mojo-elite .rank-mojo-num{color:var(--d-elite)}
