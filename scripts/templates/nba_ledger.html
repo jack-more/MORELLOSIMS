@@ -4,217 +4,326 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NBA Ledger · Morello Sims</title>
-<meta name="description" content="Every Morello Sims NBA pick, by day, in units. Losses included.">
+<meta name="description" content="Every Morello Sims NBA pick, by day, in units, graded against the final score. 211-136-2, +147.24 units as posted on X, 2021–26.">
+<meta name="theme-color" content="#0B0F0D">
+<meta name="color-scheme" content="light">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,300..900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/brand/v2/note.css?v=20261020b">
 <style>
-:root{--sky:#10233F;--sky-deep:#173159;--paper:#F5F0ED;--paper-2:#FBF8F5;--ink:#14202E;--ink-2:#4B5868;--ink-3:#8A93A0;--rule:#DED5CA;--faint:#EFE8E0;--gold:#B9861B;--gold-soft:#F3E6C4;--win:#0F8A43;--loss:#B0201E;--push:#8A93A0}
+/* The ledger: the homepage's money layer up top, white cards below, and every settled pick as its note. */
+:root{
+  --green:#1FA255;--green-deep:#14743C;--mint:#3FCB74;--black:#0B0F0D;
+  --ink:#0B0F0D;--ink-2:#4E5752;--ink-3:#88918C;--line:#E3E8E5;--soft:#F3F6F4;--loss:#C4574A;--loss-deep:#A33E33;--blue:#1F78D1;
+  --font:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --max:1200px;--gut:clamp(16px,4vw,40px);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--paper);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--soft);color:var(--ink);font:400 16px/1.5 var(--font);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-.label{font-size:11px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--ink-3)}
-.pos{color:var(--win)}.neg{color:var(--loss)}
+img{display:block;max-width:100%}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.in{width:min(100% - 2 * var(--gut),var(--max));margin-inline:auto}
+.k{font:600 11px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
+.pos{color:var(--green-deep)}.neg{color:var(--loss)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border-radius:5px;background:var(--green);color:#fff;font:700 14px/1 var(--font);text-decoration:none}
 
-/* header: the poster sky */
-.sky{background:var(--sky);color:#fff;padding:0 16px 46px}
-.bar{max-width:1120px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;padding:16px 0}
-.brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:2px;font-size:12px;text-decoration:none}
-.brand img{width:22px;height:22px}
-.nav{display:flex;gap:18px;font-style:italic;font-weight:300;font-size:14px}
-.nav a{text-decoration:none;border-bottom:1px solid rgba(255,255,255,.55)}
-.nav a.on{border-color:#fff;font-weight:400}
-.head{max-width:1120px;margin:18px auto 0}
-.head h1{font-weight:200;font-size:clamp(44px,11vw,88px);letter-spacing:-2px;line-height:.92}
-.head p{font-style:italic;font-weight:300;font-size:15px;margin-top:10px}
-.seasons{display:flex;gap:8px;margin-top:14px}
-.seasons a{font-size:13px;text-decoration:none;border:1px solid rgba(255,255,255,.6);border-radius:3px;padding:6px 10px}
-.seasons a[aria-current="true"]{background:#fff;color:var(--sky-deep)}
+/* the money layer (same print as the homepage hero) */
+.mz{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.mz i,.mz span{position:absolute;display:block}
+.mz-lines{inset:0;background:repeating-radial-gradient(circle at 78% 22%,rgba(255,255,255,.22) 0 1.2px,transparent 1.2px 10px);mix-blend-mode:soft-light}
+.mz-lat{inset:0;background:#fff;opacity:.1;-webkit-mask:url(/assets/brand/v2/note-lattice.svg) 0 0/420px 210px repeat;mask:url(/assets/brand/v2/note-lattice.svg) 0 0/420px 210px repeat}
+.mz-ros{width:900px;height:900px;left:-320px;top:-300px;background:#fff;opacity:.16;-webkit-mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%;mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%}
+.mz-ros.r{left:auto;right:-360px;top:auto;bottom:-420px;opacity:.12}
+.mz-foil{top:0;bottom:0;right:clamp(14px,4vw,64px);width:46px;
+  background:linear-gradient(180deg,#cdd9e6 0%,#f4e6bf 12%,#c4ebd6 25%,#e6cbf2 38%,#cbe2f8 51%,#f7dac2 64%,#cfeedd 77%,#ddd0f5 90%,#cdd9e6 100%);background-size:100% 900px;
+  animation:mn-shine 7s linear infinite;opacity:.9;box-shadow:inset 1px 0 0 rgba(255,255,255,.8),inset -1px 0 0 rgba(0,0,0,.08)}
+.mz-foil:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.45) 0 1px,transparent 1px 5px)}
+.mz-foil:after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.16);-webkit-mask:url(/assets/brand/v2/mark.svg) center 18px/30px 30px repeat-y;mask:url(/assets/brand/v2/mark.svg) center 18px/30px 30px repeat-y}
+.mz-ser{left:clamp(6px,1.4vw,22px);top:50%;transform-origin:0 0;transform:rotate(-90deg) translateX(-50%);font:600 15px var(--mono);letter-spacing:.2em;color:#FF8A7A;white-space:nowrap}
+.mz-micro{left:0;right:0;bottom:22px;font:500 9px/1 var(--mono);letter-spacing:.3em;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-align:center}
+.mz-big{left:-2vw;bottom:-6vw;font:900 clamp(260px,34vw,520px)/.8 var(--font);font-stretch:75%;color:transparent;-webkit-text-stroke:2px rgba(255,255,255,.22);letter-spacing:-.02em}
+.foil-logo{position:relative;display:block;width:150px;height:46px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+.foil-logo i{position:absolute;inset:0;background:linear-gradient(115deg,#ffd6f2 0%,#c8efff 17%,#d6ffd6 33%,#fff2c2 49%,#ecd2ff 65%,#c5e6ff 81%,#ffdcc8 100%);background-size:300% 100%;
+  animation:mn-holo 7s ease-in-out infinite alternate;-webkit-mask:url(/assets/brand/v2/lockup-mask.svg) left center/contain no-repeat;mask:url(/assets/brand/v2/lockup-mask.svg) left center/contain no-repeat}
+.foil-logo i:after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.9) 47%,transparent 59%);background-size:260% 100%;animation:mn-glint 5s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.mz-foil,.foil-logo i,.foil-logo i:after,.iss i{animation:none}}
 
-main{max-width:1120px;margin:0 auto;padding:0 16px 60px}
-.card{background:#fff;border:1px solid var(--rule);border-radius:6px}
-.sec{margin-top:22px}
-.sec>.label{display:flex;justify-content:space-between;margin:0 2px 10px}
+/* header */
+.top{position:sticky;top:0;z-index:40;background:var(--black);color:#fff}
+.top .in{display:flex;align-items:center;justify-content:space-between;gap:20px;height:72px}
+.top nav{display:flex;align-items:center;gap:26px;font:600 14.5px var(--font)}
+.top nav a{text-decoration:none;opacity:.8;white-space:nowrap}
+.top nav a:hover,.top nav a.on{opacity:1}
+.top nav a.on{box-shadow:inset 0 -2px 0 var(--mint);padding-bottom:3px}
+.top nav .btn{opacity:1}
 
-/* summary */
-.summary{margin-top:-26px}
-.big{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 32px;padding:22px 22px 18px}
-.big .u{font-weight:200;font-size:clamp(64px,15vw,112px);letter-spacing:-3px;line-height:.85}
-.stats{display:flex;gap:28px;padding-bottom:6px}
-.stats b{display:block;font-weight:300;font-size:clamp(22px,5vw,30px);letter-spacing:-.5px}
-.stats span{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3);font-weight:600}
-.what{font-size:13px;color:var(--ink-2);line-height:1.5;padding:0 22px 18px}
-.what b{font-weight:600}
-.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid var(--rule)}
-@media(min-width:720px){.facts{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.fact{text-align:left;padding:14px 22px;border-left:1px solid var(--rule);border-top:1px solid var(--rule)}
-.fact:nth-child(-n+2){border-top:0}
-@media(min-width:720px){.fact{border-top:0}}
-.fact:nth-child(odd){border-left:0}
-@media(min-width:720px){.fact:nth-child(odd){border-left:1px solid var(--rule)}.fact:first-child{border-left:0}}
-.fact b{display:block;font-weight:400;font-size:20px}
-.fact span{font-size:12px;color:var(--ink-3)}
-.fact:hover{background:var(--paper-2)}
+/* hero: the iris field */
+.hero{background:linear-gradient(118deg,#0C5A2E 0%,#168F48 26%,#1FA255 46%,#22AE86 70%,#1F78D1 100%);color:#fff;position:relative;overflow:hidden}
+.hero:before{content:"";position:absolute;inset:0;background:radial-gradient(1200px 600px at 85% 30%,rgba(255,255,255,.14),transparent 60%),radial-gradient(900px 500px at 0% 100%,rgba(0,0,0,.12),transparent 60%);pointer-events:none}
+.hero .in{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);align-items:center;gap:36px 64px;padding:64px 0 128px}
+.iss{display:flex;align-items:center;gap:12px;font:600 13px/1 var(--mono);letter-spacing:.42em;text-transform:uppercase}
+.iss i{flex:none;width:26px;height:26px;background:linear-gradient(135deg,#ffd6f2,#c8efff 30%,#d6ffd6 50%,#fff2c2 70%,#ecd2ff);background-size:250% 250%;animation:mn-holo 6s ease-in-out infinite alternate;
+  -webkit-mask:url(/assets/brand/v2/mark-mask.svg) center/contain no-repeat;mask:url(/assets/brand/v2/mark-mask.svg) center/contain no-repeat;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+.hero h1{margin-top:22px;font:900 clamp(72px,10vw,150px)/.84 var(--font);font-stretch:75%;letter-spacing:-.02em;text-transform:uppercase;text-shadow:0 6px 30px rgba(0,0,0,.14)}
+.hero .lede{margin-top:20px;max-width:32em;font-size:clamp(16px,1.35vw,19px);line-height:1.55;color:rgba(255,255,255,.92)}
+.seasons{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.seasons a{font:600 13px/1 var(--mono);letter-spacing:.12em;text-decoration:none;padding:10px 14px;border-radius:999px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6)}
+.seasons a[aria-current="true"]{background:#fff;color:var(--ink);box-shadow:none}
+
+/* the lifetime panel, the same table as the X banner */
+.life{position:relative;background:rgba(255,255,255,.94);color:var(--ink);border-radius:18px;padding:24px 26px 18px;box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 24px 50px rgba(0,0,0,.2);overflow:hidden}
+.life:after{content:"";position:absolute;right:-110px;top:-120px;width:300px;height:300px;background:var(--green);opacity:.07;-webkit-mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%;mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%;pointer-events:none}
+.life h2{font:600 12px/1 var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--green-deep)}
+.life table{width:100%;border-collapse:collapse;margin-top:16px}
+.life th{font:600 10px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:0 0 10px;border-bottom:1px solid var(--line)}
+.life th:last-child,.life td:last-child{text-align:right}
+.life td{padding:13px 0;border-bottom:1px solid var(--line);font:800 19px/1 var(--font);font-stretch:85%}
+.life td:first-child{font:500 13px/1 var(--mono);letter-spacing:.06em;color:var(--ink-2)}
+.life td:last-child{color:var(--green-deep)}
+.life tr.tot td{border-bottom:0;border-top:3px double var(--green-deep);padding-top:15px;font-size:23px;font-weight:900;color:var(--ink)}
+.life tr.tot td:first-child{font-size:13px;font-weight:600;color:var(--ink)}
+.life p{margin-top:10px;font:500 10px/1.4 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+
+/* the season strip rides over the hero's edge */
+main{padding-bottom:64px}
+.card{background:#fff;border-radius:14px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 10px 30px rgba(11,15,13,.06)}
+.sum{position:relative;z-index:2;margin-top:-72px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,.05),0 20px 50px rgba(0,0,0,.14)}
+.sum:before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:linear-gradient(90deg,#14743C,#1FA255,#22AE86,#1F78D1,#E6B85C)}
+.sum:after{content:"";position:absolute;right:-120px;top:-150px;width:420px;height:420px;background:var(--green);opacity:.07;-webkit-mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%;mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%;pointer-events:none}
+.sum-top{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);align-items:end;gap:20px 48px;padding:30px 30px 22px}
+.sum .u{margin-top:12px;font:900 clamp(64px,8vw,112px)/.82 var(--font);font-stretch:75%;letter-spacing:-.02em}
+.sum dl{display:grid;grid-template-columns:1.45fr 1fr .8fr 1fr;gap:0}
+.sum dl div{padding:0 20px;border-left:1px solid var(--line)}
+.sum dd{font:900 clamp(26px,2.8vw,38px)/1 var(--font);font-stretch:78%;white-space:nowrap}
+.sum dt{margin-top:8px}
+.what{padding:0 30px 20px;font-size:14px;color:var(--ink-2)}
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--line)}
+.fact{text-align:left;padding:16px 30px;border-left:1px solid var(--line)}
+.fact:first-child{border-left:0}
+.fact b{display:block;font:800 22px/1.1 var(--font);font-stretch:85%}
+.fact span{display:block;margin-top:6px;font-size:12.5px;color:var(--ink-2)}
+.fact:hover{background:var(--soft)}
+
+.sec{margin-top:34px}
+.sh2{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 2px 12px}
+.sh2 h2{font:900 clamp(26px,3vw,36px)/1 var(--font);font-stretch:78%;text-transform:uppercase;letter-spacing:-.005em}
 
 /* chart */
-.chart{padding:14px 10px 8px;position:relative}
-.chart svg{width:100%;height:220px;display:block;touch-action:pan-y}
-.tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;border-radius:4px;padding:6px 10px;font-size:12px;white-space:nowrap;transform:translate(-50%,-130%);opacity:0;transition:opacity .12s}
+.chart{padding:18px 12px 10px;position:relative}
+.chart svg{width:100%;height:240px;display:block;touch-action:pan-y}
+.tip{position:absolute;pointer-events:none;background:var(--black);color:#fff;border-radius:6px;padding:7px 11px;font:600 12px var(--mono);letter-spacing:.04em;white-space:nowrap;transform:translate(-50%,-130%);opacity:0;transition:opacity .12s}
 
-/* months */
-.mtabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px}
-.mtab{flex:none;font-size:13px;border:1px solid var(--rule);background:#fff;border-radius:3px;padding:7px 12px;color:var(--ink-2)}
-.mtab[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:600}
-.months{display:grid;grid-template-columns:1fr;gap:12px}
+/* calendar */
+.mtabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 14px;padding-bottom:2px}
+.mtab{flex:none;font:600 13px/1 var(--font);background:#fff;border-radius:999px;padding:10px 14px;color:var(--ink-2);box-shadow:inset 0 0 0 1px var(--line)}
+.mtab[aria-pressed="true"]{background:var(--black);color:#fff;box-shadow:none}
+.months{display:grid;grid-template-columns:1fr;gap:14px}
 @media(min-width:640px){.months{grid-template-columns:1fr 1fr}}
 @media(min-width:980px){.months{grid-template-columns:1fr 1fr 1fr}}
-.month{padding:16px}
-.mh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
-.mh b{font-weight:300;font-size:24px}
-.mh span{font-weight:600;font-size:15px}
+.month{padding:18px}
+.mh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+.mh b{font:900 26px/1 var(--font);font-stretch:78%;text-transform:uppercase}
+.mh span{font:800 17px/1 var(--font);font-stretch:85%}
 .dow,.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.dow span{font-size:10px;color:var(--ink-3);text-align:center;letter-spacing:1px;font-weight:600}
-.day{aspect-ratio:1;border-radius:4px;background:var(--faint);display:flex;flex-direction:column;justify-content:space-between;padding:3px 4px;text-align:left;min-width:0}
-.day i{font-style:normal;font-size:10px;color:var(--ink-3)}
-.day b{font-size:clamp(10px,2.9vw,13px);font-weight:600;color:#fff;text-align:center;line-height:1}
+.dow span{font:600 10px var(--mono);color:var(--ink-3);text-align:center;letter-spacing:.1em}
+.day{aspect-ratio:1;border-radius:6px;background:#EEF2EF;display:flex;flex-direction:column;justify-content:space-between;padding:3px 4px;text-align:left;min-width:0}
+.day i{font:500 9.5px var(--mono);font-style:normal;color:var(--ink-3)}
+.day b{font:800 clamp(10px,2.9vw,13px)/1 var(--font);font-stretch:85%;color:#fff;text-align:center}
 .day.has i{color:rgba(255,255,255,.85)}
-.day.has:hover,.day.has:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
-.day.sel{outline:2px solid var(--ink);outline-offset:1px}
+.day.has:hover,.day.has:focus-visible,.day.sel{outline:2px solid var(--ink);outline-offset:1px}
 .day.off{visibility:hidden}
 
-/* list */
+/* every pick */
 .list{overflow:hidden}
-.lr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 16px;border-top:1px solid var(--faint);text-align:left;width:100%}
+.lr{display:grid;grid-template-columns:36px minmax(0,1fr) auto auto;gap:14px;align-items:center;width:100%;padding:13px 18px 13px 20px;border-top:1px solid var(--line);text-align:left;box-shadow:inset 4px 0 0 var(--tc,#88918C)}
 .lr:first-child{border-top:0}
-.lr:hover{background:var(--paper-2)}
-.res{font-weight:700;font-size:13px}
-.res.W{color:var(--win)}.res.L{color:var(--loss)}.res.P{color:var(--push)}
-.lr .p{font-weight:500;font-size:16px}
-.lr .m{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
-.lr .uu{font-weight:500;font-size:15px}
-.late{display:inline-block;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:1px}
-.more{display:block;width:100%;padding:14px;border-top:1px solid var(--rule);font-size:14px;color:var(--sky-deep)}
+.lr:hover{background:var(--soft)}
+.lr img{width:34px;height:34px;object-fit:contain}
+.lr .p{font:900 20px/1 var(--font);font-stretch:78%;text-transform:uppercase}
+.lr .m{display:block;margin-top:5px;font:500 12px/1.3 var(--mono);color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 8px;border-radius:999px;font:800 13px/1 var(--font);color:#fff}
+.res.W{background:var(--green-deep)}.res.L{background:var(--loss)}.res.P{background:var(--ink-3)}
+.lr .uu{min-width:68px;text-align:right;font:800 17px/1 var(--font);font-stretch:85%}
+.tier{display:inline-block;margin-left:8px;padding:3px 7px;border-radius:4px;font:700 10.5px/1 var(--mono);letter-spacing:.08em;vertical-align:3px;color:#fff}
+.tier.t6{background:#B06A35}.tier.t7{background:linear-gradient(180deg,#a9b4be,#7D8A96)}.tier.t8{background:#14743C}.tier.t9{background:#1F5FB0}.tier.t10{background:#15120A;color:#f3d27a;box-shadow:inset 0 0 0 1px #d9b25a}
+.late{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:4px;font:600 10px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#8A6416;box-shadow:inset 0 0 0 1px #C9A24A;vertical-align:3px}
+.more{display:block;width:100%;padding:15px;border-top:1px solid var(--line);font:700 14px var(--font);color:var(--green-deep)}
 
-/* day sheet */
-.scrim{position:fixed;inset:0;background:rgba(13,27,42,.4);opacity:0;pointer-events:none;transition:opacity .18s;z-index:30}
-.sheet{position:fixed;z-index:31;left:0;right:0;bottom:0;max-height:86vh;overflow:auto;background:var(--paper);border-radius:16px 16px 0 0;padding:18px 16px 28px;transform:translateY(105%);transition:transform .22s ease}
-.open .scrim{opacity:1;pointer-events:auto}.open .sheet{transform:none}
-@media(min-width:820px){.sheet{left:auto;top:0;bottom:0;width:460px;max-height:none;border-radius:0;transform:translateX(105%)}}
-.sh{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.sh h3{font-weight:300;font-size:26px}
+/* the day: every pick as its note, stamped */
+.scrim{position:fixed;inset:0;background:rgba(11,15,13,.5);opacity:0;pointer-events:none;transition:opacity .18s;z-index:50}
+.sheet{position:fixed;z-index:51;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:var(--soft);border-radius:18px 18px 0 0;padding:0 16px 32px;transform:translateY(105%);visibility:hidden;transition:transform .22s ease,visibility 0s .22s}
+.open .scrim{opacity:1;pointer-events:auto}.open .sheet{transform:none;visibility:visible;transition:transform .22s ease}
+@media(min-width:820px){.sheet{left:auto;top:0;bottom:0;width:540px;max-height:none;border-radius:0;transform:translateX(105%)}}
+.shd{position:sticky;top:0;z-index:2;margin:0 -16px;padding:16px 16px 14px;background:var(--black);color:#fff}
+.shd .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.shd h3{font:900 30px/1 var(--font);font-stretch:78%;text-transform:uppercase}
 .snav{display:flex;gap:6px}
-.snav button{border:1px solid var(--rule);background:#fff;border-radius:3px;width:38px;height:38px}
-.dtot{display:flex;gap:14px;align-items:baseline;padding:14px 0;margin:12px 0;border-top:3px double var(--ink);border-bottom:1px solid var(--rule)}
-.dtot b{font-weight:200;font-size:46px;letter-spacing:-1px;line-height:1}
-.dtot span{color:var(--ink-2);font-size:14px}
-.pk{background:#fff;border:1px solid var(--rule);border-radius:6px;margin-bottom:10px;overflow:hidden}
-.pk .t1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:14px 16px 10px}
-.pk .pick{font-weight:400;font-size:24px;letter-spacing:-.3px}
-.pk .pick small{font-size:13px;color:var(--ink-3)}
-.pk .mu{font-size:13px;color:var(--ink-2);margin-top:3px}
-.pk .rr{text-align:right}
-.pk .rr b{display:block;font-weight:600;font-size:13px;letter-spacing:1px}
-.pk .rr span{display:block;font-weight:300;font-size:24px;margin-top:2px}
-.pk dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;padding:10px 16px 14px;border-top:1px solid var(--faint);font-size:13px}
-.pk dt{color:var(--ink-3)}
-.pk dd{text-align:right}
-footer{margin-top:26px;font-size:12px;color:var(--ink-2);line-height:1.6;border-top:1px solid var(--rule);padding-top:16px}
-footer a{color:var(--sky-deep)}
-.subnav{display:flex;gap:16px;font-size:13px;font-weight:500;letter-spacing:.3px;margin-bottom:14px}
-.subnav a{text-decoration:none;opacity:.75;padding-bottom:3px;border-bottom:1px solid transparent}
-.subnav a.on{opacity:1;border-color:#fff}
-@media(max-width:400px){.brand span{display:none}}
-.brand{font-family:"Instrument Serif",Georgia,serif;font-size:27px;font-weight:400;letter-spacing:-.3px;text-transform:none;white-space:nowrap}
+.snav button{width:40px;height:40px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3);font-size:18px}
+.dtot{display:flex;gap:14px;align-items:baseline;margin-top:12px}
+.dtot b{font:900 44px/1 var(--font);font-stretch:78%}
+.dtot b.pos{color:var(--mint)}.dtot b.neg{color:#FF9B8E}
+.dtot span{font:500 13px var(--mono);letter-spacing:.06em;color:rgba(255,255,255,.75)}
+#dpicks{display:grid;gap:16px;margin-top:16px}
+.nwrap{filter:drop-shadow(0 12px 22px rgba(0,0,0,.16))}
+.mn-stamp.L{color:var(--loss-deep)}.mn-stamp.P{color:var(--ink-3)}
+.mn[data-tier="10"] .mn-stamp.L{color:#FF9B8E}
 
-/* brand v2 */
-html,body{font-family:var(--ms-font)!important}
-.sky{background:var(--ms-navy)!important}
-.brand{line-height:0}.brand img{height:40px!important;width:auto!important}
-.head h1{font-family:var(--ms-font)!important;font-weight:900!important;letter-spacing:-.02em!important}
-.nav{font-style:normal!important;font-weight:600!important}
-.nav a.on{border-color:var(--ms-mint)!important}
-.subnav{display:none!important}
-.title h2,.msg h2,.big .u,.u{font-family:var(--ms-font)!important}
-.title h2{font-weight:800!important;letter-spacing:-.02em!important}
-.big .u,.u{font-weight:900!important;letter-spacing:-.03em!important}
-.stats b{font-weight:800!important}
-.msg h2{font-weight:900!important;letter-spacing:-.015em!important}
-.g .teams{font-weight:600!important}
-@media(max-width:520px){.brand img{height:34px!important}.nav{gap:12px!important;font-size:13px!important}}
+/* footer */
+footer{background:var(--black);color:rgba(255,255,255,.7)}
+footer .in{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:18px 32px;padding:36px 0}
+footer nav{display:flex;flex-wrap:wrap;gap:6px 24px;font:600 14px var(--font)}
+footer nav a{color:#fff;text-decoration:none}
+footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,255,.12);font-size:13px;line-height:1.6}
+footer .fine a{color:#fff}
+
+@media(max-width:1100px){.hero .mz-foil,.hero .mz-ser{display:none}}
+@media(max-width:900px){
+  .hero .in{grid-template-columns:1fr;padding:48px 0 112px}
+  .sum-top{grid-template-columns:1fr;padding:26px 22px 18px}
+  .sum dl{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 0}
+  .sum dl div:nth-child(odd){border-left:0;padding-left:0}
+  .what{padding:0 22px 18px}
+  .facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fact{padding:14px 22px}
+  .fact:nth-child(3){border-left:0}
+  .fact:nth-child(n+3){border-top:1px solid var(--line)}
+}
+@media(max-width:560px){
+  .top .foil-logo{width:118px;height:36px}
+  .top nav{gap:16px;font-size:13.5px}
+  .top nav .opt{display:none}
+  .lr{grid-template-columns:28px minmax(0,1fr) auto;gap:10px;padding:12px 14px 12px 16px}
+  .lr img{width:28px;height:28px}
+  .lr .res{display:none}
+}
 </style>
 </head>
 <body>
-<header class="sky">
-  <div class="bar"><a class="brand" href="/" aria-label="Morello Sims"><img src="/assets/brand/v2/lockup-on-dark.svg" alt="Morello Sims"></a>
-    <nav class="nav"><a href="/">Picks</a><a class="on" href="/ledger/nba/">Ledger</a><a href="/members/">Members</a></nav></div>
-  <div class="head"><div class="subnav"><a href="/">Picks</a><a class="on" href="/ledger/nba/">Ledger</a></div><h1>The ledger</h1><p id="kick">NBA · every pick, losses included</p><div class="seasons" id="seasons"></div></div>
+
+<header class="top">
+  <div class="in">
+    <a href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
+    <nav aria-label="Main"><a class="opt" href="/">NBA</a><a class="opt" href="/members/">Members</a><a class="on" href="/ledger/nba/" aria-current="page">Ledger</a><a class="btn" href="/#plans">Get tonight’s picks</a></nav>
+  </div>
 </header>
 
-<main>
-  <section class="card summary">
-    <div class="big"><div class="u" id="units">—</div>
-      <div class="stats"><div><b id="rec">—</b><span>record</span></div><div><b id="roi">—</b><span>roi</span></div><div><b id="n">—</b><span>picks</span></div></div></div>
+<section class="hero" aria-labelledby="hero-h">
+  <div class="mz" aria-hidden="true"><i class="mz-lines"></i><i class="mz-lat"></i><i class="mz-ros"></i><i class="mz-ros r"></i><span class="mz-big">147</span><i class="mz-foil"></i><span class="mz-ser">MS 2126 0349 L · THE LEDGER</span><span class="mz-micro">MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP</span></div>
+  <div class="in">
+    <div>
+      <p class="iss"><i></i>Morello Sims · NBA</p>
+      <h1 id="hero-h">The ledger</h1>
+      <p class="lede" id="kick">Every pick the sim logged, graded against the final score. Tap any day to see that night’s notes.</p>
+      <div class="seasons" id="seasons"></div>
+    </div>
+    <aside class="life" aria-label="Lifetime record">
+      <h2>The ledger · lifetime</h2>
+      <table><thead><tr><th>Season</th><th>Record</th><th>Units</th></tr></thead><tbody id="life"></tbody></table>
+      <p>As posted on X · graded in public</p>
+    </aside>
+  </div>
+</section>
+
+<main class="in">
+  <section class="card sum" aria-label="Season summary">
+    <div class="sum-top">
+      <div><span class="k" id="sumk">This season</span><div class="u" id="units">—</div></div>
+      <dl><div><dd id="rec">—</dd><dt class="k">Record</dt></div><div><dd id="roi">—</dd><dt class="k">ROI</dt></div><div><dd id="n">—</dd><dt class="k">Picks</dt></div><div><dd id="risk">—</dd><dt class="k">Risked</dt></div></dl>
+    </div>
     <p class="what" id="what"></p>
     <div class="facts" id="facts"></div>
   </section>
 
-  <section class="sec"><div class="label"><span>Running units</span><span>tap a point</span></div>
+  <section class="sec"><div class="sh2"><h2>Running units</h2><span class="k">Tap a point</span></div>
     <div class="card chart"><svg id="chart" role="img" aria-label="Running units by day"></svg><div class="tip" id="tip"></div></div></section>
 
-  <section class="sec"><div class="label"><span>Every day</span><span>tap a day</span></div>
+  <section class="sec"><div class="sh2"><h2>Every day</h2><span class="k">Tap a day</span></div>
     <div class="mtabs" id="tabs"></div><div class="months" id="months"></div></section>
 
-  <section class="sec"><div class="label"><span>Every pick</span><span id="listk"></span></div>
+  <section class="sec"><div class="sh2"><h2>Every pick</h2><span class="k" id="listk"></span></div>
     <div class="card list" id="list"></div></section>
-
-  <footer id="note"></footer>
 </main>
+
+<footer>
+  <div class="in">
+    <a href="/" aria-label="Morello Sims"><span class="foil-logo" style="width:124px;height:38px"><i></i></span></a>
+    <nav aria-label="Footer"><a href="/">NBA</a><a href="/members/">Members</a><a href="/extra/">Extra</a><a href="/ledger/nba/">Ledger</a><a href="https://x.com/BIG_NBA_LOCKS">X</a></nav>
+    <p class="fine" id="note"></p>
+  </div>
+</footer>
 
 <div id="sheetwrap">
   <div class="scrim" id="scrim"></div>
   <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sht">
-    <div class="sh"><h3 id="sht">—</h3>
+    <div class="shd"><div class="row"><h3 id="sht">—</h3>
       <div class="snav"><button id="prev" aria-label="Previous pick day">‹</button><button id="next" aria-label="Next pick day">›</button><button id="close" aria-label="Close">✕</button></div></div>
-    <div class="dtot"><b id="dtot">—</b><span id="drec"></span></div>
+      <div class="dtot"><b id="dtot">—</b><span id="drec"></span></div></div>
     <div id="dpicks"></div>
   </aside>
 </div>
 
 <script>
+// the note's teams: city, nickname, colours, ESPN logo code, arena (data/reference/nba_teams_espn_2026.json)
+const TEAMS = {"ATL":["Atlanta","Hawks","#c8102e","#fdb927","atl","State Farm Arena"],"BOS":["Boston","Celtics","#008348","#ffffff","bos","TD Garden"],"BKN":["Brooklyn","Nets","#000000","#ffffff","bkn","Barclays Center"],"CHA":["Charlotte","Hornets","#008ca8","#1d1060","cha","Spectrum Center"],"CHI":["Chicago","Bulls","#ce1141","#000000","chi","United Center"],"CLE":["Cleveland","Cavaliers","#860038","#bc945c","cle","Rocket Arena"],"DAL":["Dallas","Mavericks","#0064b1","#bbc4ca","dal","American Airlines Center"],"DEN":["Denver","Nuggets","#0e2240","#fec524","den","Ball Arena"],"DET":["Detroit","Pistons","#1d428a","#c8102e","det","Little Caesars Arena"],"GSW":["Golden State","Warriors","#fdb927","#1d428a","gs","Chase Center"],"HOU":["Houston","Rockets","#ce0e2d","#000000","hou","Toyota Center"],"IND":["Indiana","Pacers","#0c2340","#ffd520","ind","Gainbridge Fieldhouse"],"LAC":["LA","Clippers","#12173f","#c8102e","lac","Intuit Dome"],"LAL":["Los Angeles","Lakers","#552583","#fdb927","lal","Crypto.com Arena"],"MEM":["Memphis","Grizzlies","#5d76a9","#12173f","mem","FedExForum"],"MIA":["Miami","Heat","#98002e","#000000","mia","Kaseya Center"],"MIL":["Milwaukee","Bucks","#00471b","#eee1c6","mil","Fiserv Forum"],"MIN":["Minnesota","Timberwolves","#266092","#79bc43","min","Target Center"],"NOP":["New Orleans","Pelicans","#0a2240","#b4975a","no","Smoothie King Center"],"NYK":["New York","Knicks","#1d428a","#f58426","ny","Madison Square Garden"],"OKC":["Oklahoma City","Thunder","#007ac1","#ef3b24","okc","Paycom Center"],"ORL":["Orlando","Magic","#0150b5","#9ca0a3","orl","Kia Center"],"PHI":["Philadelphia","76ers","#1d428a","#e01234","phi","Xfinity Mobile Arena"],"PHX":["Phoenix","Suns","#29127a","#e56020","phx","Mortgage Matchup Center"],"POR":["Portland","Trail Blazers","#e03a3e","#000000","por","Moda Center"],"SAC":["Sacramento","Kings","#5a2d81","#6a7a82","sac","Golden 1 Center"],"SAS":["San Antonio","Spurs","#000000","#c4ced4","sa","Frost Bank Center"],"TOR":["Toronto","Raptors","#d91244","#000000","tor","Scotiabank Arena"],"UTA":["Utah","Jazz","#4e008e","#79a3dc","utah","Delta Center"],"WAS":["Washington","Wizards","#e31837","#002b5c","wsh","Capital One Arena"]};
+// as posted on X; seasons after 2025-26 are itemized here and added from their own file
+const HIST = [["2021-24", 89, 43, 1, 117.64], ["2025-26", 122, 93, 1, 29.60]];
+const STAKE = {0.25: "¼U", 0.5: "½U"};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const dash = s => String(s).replace(/-/g, "–");
 const fmtU = (v, d = 1) => (Math.abs(v) < 0.05 && d === 1 ? "0.0" : (v > 0 ? "+" : "−") + Math.abs(v).toFixed(d)) + "u";
 const cls = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
+const pk = s => String(s).replace(/ -(?=\d)/, " −");
+const logo = a => TEAMS[a] ? `https://a.espncdn.com/i/teamlogos/nba/500/${TEAMS[a][4]}.png` : "";
 const VIEWS = {
-  all:     {f: () => true, what: "Every graded pick from the season, wins and losses."},
+  all: {f: () => true, what: "Every graded pick from the season, wins and losses. Tap a day or a pick for that night’s notes."},
 };
 let D, P, byDay, days, sel = null, month = "ALL", view = "all", showAll = false;
 
 const SEASON = new URLSearchParams(location.search).get("s") || "__SEASON__";
-fetch("seasons.json").then(r => r.json()).then(list => { if (list.length > 1)
-  document.getElementById("seasons").innerHTML = list.slice().reverse().map(s => `<a href="?s=${s}" aria-current="${s === SEASON}">${s}</a>`).join(""); }).catch(() => {});
-fetch(SEASON + ".json").then(r => r.json()).then(d => { D = d; document.title = `NBA Ledger ${d.season} · Morello Sims`;
-  document.getElementById("kick").textContent = `NBA ${d.season} · every pick, losses included`;
+fetch("seasons.json").then(r => r.json()).then(list => {
+  $("seasons").innerHTML = list.slice().reverse().map(s => `<a href="?s=${s}" aria-current="${s === SEASON}">${dash(s)}</a>`).join("");
+  const later = list.filter(s => s > HIST.at(-1)[0]);
+  return Promise.all(later.map(s => fetch(s + ".json").then(r => r.json()).then(d => [s, d.summary.w, d.summary.l, d.summary.p, d.summary.units]).catch(() => null)));
+}).catch(() => []).then(extra => life((extra || []).filter(Boolean)));
+fetch(SEASON + ".json").then(r => r.json()).then(d => { D = d; document.title = `NBA Ledger ${dash(d.season)} · Morello Sims`;
   const v = new URLSearchParams(location.search).get("view"); if (VIEWS[v]) view = v;
-  document.getElementById("scrim").onclick = closeDay; document.getElementById("close").onclick = closeDay;
-  document.getElementById("prev").onclick = () => step(-1); document.getElementById("next").onclick = () => step(1);
+  $("scrim").onclick = closeDay; $("close").onclick = closeDay;
+  $("prev").onclick = () => step(-1); $("next").onclick = () => step(1);
   document.addEventListener("keydown", e => { if (!sel) return; if (e.key === "Escape") closeDay(); if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
   init();
   const h = location.hash.match(/^#(\d{4}-\d{2}-\d{2})$/); if (h) openDay(h[1]);
 });
 
-function rec(ps) { const w = ps.filter(p => p.result === "W").length, l = ps.filter(p => p.result === "L").length, pu = ps.length - w - l; return `${w}-${l}${pu ? "-" + pu : ""}`; }
+function life(extra) {
+  const rows = HIST.concat(extra);
+  const t = rows.reduce((a, r) => [a[0] + r[1], a[1] + r[2], a[2] + r[3], a[3] + r[4]], [0, 0, 0, 0]);
+  const rec3 = (w, l, p) => `${w}–${l}${p ? "–" + p : ""}`, u = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "U";
+  $("life").innerHTML = rows.map(r => `<tr><td>${dash(r[0])}</td><td>${rec3(r[1], r[2], r[3])}</td><td class="${r[4] < 0 ? "neg" : ""}">${u(r[4])}</td></tr>`).join("")
+    + `<tr class="tot"><td>2021–${rows.at(-1)[0].slice(-2)}</td><td>${rec3(t[0], t[1], t[2])}</td><td>${u(t[3])}</td></tr>`;
+}
+
+function rec(ps) { const w = ps.filter(p => p.result === "W").length, l = ps.filter(p => p.result === "L").length, pu = ps.length - w - l; return `${w}–${l}${pu ? "–" + pu : ""}`; }
 function init() {
   P = D.picks.filter(VIEWS[view].f);
   byDay = {}; P.forEach(p => (byDay[p.date] = byDay[p.date] || []).push(p));
   days = Object.keys(byDay).sort();
   const tot = d => byDay[d].reduce((a, p) => a + p.units, 0);
   const units = P.reduce((a, p) => a + p.units, 0), risked = P.filter(p => p.result !== "P").reduce((a, p) => a + p.stake_u, 0);
-  const u = document.getElementById("units"); u.textContent = fmtU(units); u.className = "u " + cls(units);
-  document.getElementById("rec").textContent = rec(P);
-  document.getElementById("roi").textContent = (units >= 0 ? "+" : "−") + Math.abs(risked ? 100 * units / risked : 0).toFixed(1) + "%";
-  document.getElementById("n").textContent = P.length;
-  document.getElementById("what").innerHTML = VIEWS[view].what;
+  $("sumk").textContent = `${dash(D.season)} · every itemized pick`;
+  const u = $("units"); u.textContent = fmtU(units, 2); u.className = "u " + cls(units);
+  $("rec").textContent = rec(P);
+  $("roi").textContent = (units >= 0 ? "+" : "−") + Math.abs(risked ? 100 * units / risked : 0).toFixed(1) + "%";
+  $("n").textContent = P.length;
+  $("risk").textContent = risked.toFixed(1) + "u";
+  $("what").innerHTML = P.length ? VIEWS[view].what : "No settled picks yet this season. A pick shows up here the moment its game goes final.";
   const months = [...new Set(days.map(d => d.slice(0, 7)))];
   const mt = m => days.filter(d => d.startsWith(m)).reduce((a, d) => a + tot(d), 0);
   const mname = m => new Date(m + "-15").toLocaleString("en-US", {month: "short"});
@@ -222,34 +331,34 @@ function init() {
     const best = days.reduce((a, b) => tot(b) > tot(a) ? b : a), worst = days.reduce((a, b) => tot(b) < tot(a) ? b : a);
     const bestM = months.reduce((a, b) => mt(b) > mt(a) ? b : a);
     const up = days.filter(d => tot(d) > 0).length, down = days.filter(d => tot(d) < 0).length;
-    document.getElementById("facts").innerHTML = [
-      [fmtU(tot(best), 2), `best day · ${pretty(best, true)}`, `day:${best}`],
-      [fmtU(tot(worst), 2), `worst day · ${pretty(worst, true)}`, `day:${worst}`],
-      [fmtU(mt(bestM)), `best month · ${mname(bestM)}`, `month:${bestM}`],
-      [`${up} / ${down}`, `up days / down days`, `month:ALL`],
-    ].map(([b, s, a]) => `<button class="fact" data-a="${a}"><b>${b}</b><span>${s}</span></button>`).join("");
+    $("facts").innerHTML = [
+      [fmtU(tot(best), 2), `Best day · ${pretty(best, true)}`, `day:${best}`, "pos"],
+      [fmtU(tot(worst), 2), `Worst day · ${pretty(worst, true)}`, `day:${worst}`, cls(tot(worst))],
+      [fmtU(mt(bestM)), `Best month · ${mname(bestM)}`, `month:${bestM}`, "pos"],
+      [`${up} / ${down}`, `Up days / down days`, `month:ALL`, ""],
+    ].map(([b, s, a, c]) => `<button class="fact" data-a="${a}"><b class="${c}">${b}</b><span>${s}</span></button>`).join("");
     document.querySelectorAll(".fact").forEach(el => el.onclick = () => { const [k, v] = el.dataset.a.split(":");
-      if (k === "day") openDay(v); else { setMonth(v); document.getElementById("months").scrollIntoView({behavior: "smooth", block: "start"}); } });
-  }
-  document.getElementById("tabs").innerHTML = ["ALL", ...months].map(m =>
+      if (k === "day") openDay(v); else { setMonth(v); $("months").scrollIntoView({behavior: "smooth", block: "start"}); } });
+  } else $("facts").innerHTML = "";
+  $("tabs").innerHTML = ["ALL", ...months].map(m =>
     `<button class="mtab" data-m="${m}" aria-pressed="${m === month}">${m === "ALL" ? "All" : mname(m) + " " + fmtU(mt(m))}</button>`).join("");
   document.querySelectorAll(".mtab").forEach(el => el.onclick = () => setMonth(el.dataset.m));
-  const late = D.picks.filter(p => p.late).length;
-  document.getElementById("note").innerHTML = `1u = ${D.unit_pp} $PP; plays are sized in units. Spreads graded at the posted price, −110 unless another price was logged. ` +
-    `Only finished games appear. Picks without a pregame timestamp are marked on their day. ` +
-    `Before ${pretty(D.summary.first)} the season was tracked as totals only, so those days aren't itemized. Updated ${D.generated}. ` +
-    `<a href="/extra/">Extra</a>`;
+  $("note").innerHTML = `1u = ${D.unit_pp} $PP; plays are sized in units. Spreads graded at the posted price, −110 unless another price was logged. ` +
+    `Only finished games appear. Picks without a pregame timestamp are marked “logged late” on their day. ` +
+    (D.summary.first ? `Before ${pretty(D.summary.first)} the season was tracked as totals only, so those days aren’t itemized. ` : "") +
+    `Updated ${D.generated}. Simulations, not guarantees · 21+ · 1-800-GAMBLER`;
   render(); chart();
   if (sel && !byDay[sel]) closeDay();
 }
 function pretty(d, short) { const x = new Date(d + "T12:00:00"); return x.toLocaleDateString("en-US", short ? {month: "short", day: "numeric"} : {weekday: "short", month: "short", day: "numeric"}); }
-function color(v) { if (Math.abs(v) < 0.05) return "var(--push)"; const a = Math.min(1, .38 + Math.abs(v) / 3 * .62);
-  return v > 0 ? `rgba(15,138,67,${a})` : `rgba(176,32,30,${a})`; }
+function color(v) { if (Math.abs(v) < 0.05) return "#AEB6B1"; const a = Math.min(1, .4 + Math.abs(v) / 3 * .6);
+  return v > 0 ? `rgba(20,116,60,${a})` : `rgba(196,87,74,${a})`; }
 function setMonth(m) { month = m; showAll = false; document.querySelectorAll(".mtab").forEach(t => t.setAttribute("aria-pressed", t.dataset.m === m)); render(); }
+function tierChip(c) { return c >= 6 ? `<i class="tier t${Math.min(10, c)}">C${Math.min(10, c)}</i>` : ""; }
 function render() {
   const ms = [...new Set(days.map(d => d.slice(0, 7)))].filter(m => month === "ALL" || m === month);
   const dt = d => byDay[d] ? byDay[d].reduce((a, p) => a + p.units, 0) : null;
-  document.getElementById("months").innerHTML = ms.map(m => {
+  $("months").innerHTML = ms.map(m => {
     const [y, mo] = m.split("-").map(Number), first = new Date(y, mo - 1, 1).getDay(), n = new Date(y, mo, 0).getDate();
     const mtot = days.filter(d => d.startsWith(m)).reduce((a, d) => a + dt(d), 0);
     let cells = ""; for (let i = 0; i < first; i++) cells += `<span class="day off"></span>`;
@@ -261,52 +370,105 @@ function render() {
   document.querySelectorAll(".day.has").forEach(b => b.onclick = () => openDay(b.dataset.d));
   const ps = P.filter(p => month === "ALL" || p.date.startsWith(month)).slice().reverse();
   const shown = showAll ? ps : ps.slice(0, 40);
-  document.getElementById("listk").textContent = `${ps.length} picks`;
-  document.getElementById("list").innerHTML = shown.map(p => `<button class="lr" data-d="${p.date}"><span class="res ${p.result}">${p.result}</span>
-    <span><span class="p">${p.pick.replace(/ -(?=\d)/, " −")}</span>${p.late ? `<span class="late">logged late</span>` : ""}<span class="m">${p.away} @ ${p.home} · ${pretty(p.date, true)} · ${p.final || ""}</span></span>
-    <span class="uu ${cls(p.units)}">${fmtU(p.units, 2)}</span></button>`).join("")
+  $("listk").textContent = `${ps.length} picks`;
+  $("list").innerHTML = shown.map(p => { const side = p.pick.split(" ")[0], T = TEAMS[side];
+    return `<button class="lr" data-d="${p.date}" style="--tc:${T ? T[2] : "#88918C"}">${T ? `<img src="${logo(side)}" alt="">` : "<span></span>"}
+    <span><span class="p">${esc(pk(p.pick))}</span>${tierChip(p.conf)}${p.late ? `<span class="late">logged late</span>` : ""}<span class="m">${esc(p.away)} @ ${esc(p.home)} · ${pretty(p.date, true)}${p.final ? " · " + esc(p.final) : ""}</span></span>
+    <span class="res ${p.result}">${p.result}</span><span class="uu ${cls(p.units)}">${fmtU(p.units, 2)}</span></button>`; }).join("")
     + (ps.length > shown.length ? `<button class="more" id="more">Show all ${ps.length} picks</button>` : "");
   document.querySelectorAll(".lr").forEach(b => b.onclick = () => openDay(b.dataset.d));
-  const more = document.getElementById("more"); if (more) more.onclick = () => { showAll = true; render(); };
+  const more = $("more"); if (more) more.onclick = () => { showAll = true; render(); };
 }
 function chart() {
-  const svg = document.getElementById("chart"), W = svg.clientWidth || 700, H = 220, pad = 26;
+  const svg = $("chart"), W = svg.clientWidth || 700, H = 240, pad = 28, padB = 34;
   if (!days.length) { svg.innerHTML = ""; return; }
   let run = 0; const pts = days.map(d => { run += byDay[d].reduce((a, p) => a + p.units, 0); return {d, v: run}; });
   const xs = i => pad + i * (W - 2 * pad) / Math.max(1, pts.length - 1);
   const lo = Math.min(0, ...pts.map(p => p.v)), hi = Math.max(0, ...pts.map(p => p.v));
-  const ys = v => H - pad - (v - lo) * (H - 2 * pad) / ((hi - lo) || 1);
+  const ys = v => H - padB - (v - lo) * (H - pad - padB) / ((hi - lo) || 1);
   const path = pts.map((p, i) => `${i ? "L" : "M"}${xs(i).toFixed(1)},${ys(p.v).toFixed(1)}`).join("");
+  let lastX = -1e9; const ticks = pts.map((p, i) => [p, i]).filter(([p, i]) => (!i || p.d.slice(0, 7) !== pts[i - 1].d.slice(0, 7)) && xs(i) - lastX > 44 && (lastX = xs(i), true));
+  const end = pts.at(-1);
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.innerHTML = `<line x1="${pad}" x2="${W - pad}" y1="${ys(0)}" y2="${ys(0)}" stroke="#DED5CA" stroke-width="1" stroke-dasharray="3 4"/>
-    <path d="${path} L${xs(pts.length - 1)},${ys(0)} L${xs(0)},${ys(0)} Z" fill="rgba(49,135,220,.08)"/>
-    <path d="${path}" fill="none" stroke="#14202E" stroke-width="1.8" stroke-linejoin="round"/>
+  svg.innerHTML = `<defs><linearGradient id="g-fill" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#1FA255" stop-opacity=".22"/><stop offset=".6" stop-color="#22AE86" stop-opacity=".18"/><stop offset="1" stop-color="#1F78D1" stop-opacity=".2"/></linearGradient>
+      <linearGradient id="g-line" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#14743C"/><stop offset=".65" stop-color="#1FA255"/><stop offset="1" stop-color="#1F78D1"/></linearGradient></defs>
+    <line x1="${pad}" x2="${W - pad}" y1="${ys(0)}" y2="${ys(0)}" stroke="#C9D2CC" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="${pad}" y="${ys(0) - 6}" font-family="IBM Plex Mono" font-size="10" letter-spacing="1.5" fill="#88918C">0U</text>
+    ${ticks.map(([p, i]) => `<line x1="${xs(i)}" x2="${xs(i)}" y1="${H - padB + 6}" y2="${H - padB + 11}" stroke="#C9D2CC"/><text x="${xs(i)}" y="${H - 8}" text-anchor="${i ? "middle" : "start"}" font-family="IBM Plex Mono" font-size="10" letter-spacing="1.5" fill="#88918C">${new Date(p.d + "T12:00:00").toLocaleString("en-US", {month: "short"}).toUpperCase()}</text>`).join("")}
+    <path d="${path} L${xs(pts.length - 1)},${ys(0)} L${xs(0)},${ys(0)} Z" fill="url(#g-fill)"/>
+    <path d="${path}" fill="none" stroke="url(#g-line)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
     ${pts.map((p, i) => `<circle cx="${xs(i)}" cy="${ys(p.v)}" r="13" fill="transparent" data-i="${i}" style="cursor:pointer"/>`).join("")}
-    <circle cx="${xs(pts.length - 1)}" cy="${ys(pts.at(-1).v)}" r="3.5" fill="#3187DC"/>
-    <text x="${W - pad}" y="${ys(pts.at(-1).v) - 12}" text-anchor="end" font-family="Inter" font-weight="600" font-size="14" fill="#14202E">${fmtU(pts.at(-1).v)}</text>`;
-  const tip = document.getElementById("tip");
+    <circle cx="${xs(pts.length - 1)}" cy="${ys(end.v)}" r="8" fill="#1F78D1" opacity=".18"/><circle cx="${xs(pts.length - 1)}" cy="${ys(end.v)}" r="4" fill="#1F78D1"/>
+    <text x="${W - pad}" y="${ys(end.v) - 14}" text-anchor="end" font-family="Archivo" font-weight="900" font-stretch="78%" font-size="20" fill="#0B0F0D">${fmtU(end.v, 2)}</text>`;
+  const tip = $("tip");
   svg.querySelectorAll("circle[data-i]").forEach(c => { const p = pts[+c.dataset.i];
-    const show = () => { const r = svg.getBoundingClientRect(), k = r.width / W; tip.style.left = (c.cx.baseVal.value * k + 10) + "px"; tip.style.top = (c.cy.baseVal.value * k + 14) + "px";
+    const show = () => { const r = svg.getBoundingClientRect(), k = r.width / W; tip.style.left = (c.cx.baseVal.value * k + 12) + "px"; tip.style.top = (c.cy.baseVal.value * k + 18) + "px";
       tip.textContent = `${pretty(p.d, true)} · ${fmtU(p.v)} running`; tip.style.opacity = 1; };
     c.onmouseenter = show; c.onmouseleave = () => tip.style.opacity = 0; c.onclick = () => openDay(p.d); });
 }
+
+// a settled pick as its note (the same note members get, scripts/templates/pick_note.html), stamped with the result
+function noteOf(p, no) {
+  const [abbr, lineRaw] = p.pick.split(" "), T = TEAMS[abbr];
+  if (!T) return null;
+  const home = abbr === p.home, opp = home ? p.away : p.home, O = TEAMS[opp] || [opp, opp];
+  const ml = p.type !== "spread", book = parseFloat(String(lineRaw).replace("−", "-"));
+  const num = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1);
+  const odds = String(p.odds || "").replace("-", "−");
+  const line = ml ? odds || "ML" : isNaN(book) ? esc(lineRaw) : num(book);
+  const sm = p.sim_margin, simTxt = sm == null ? "—" : sm >= 0 ? `${T[1]} by ${(+sm).toFixed(1)}` : `${T[1]} lose by ${Math.abs(sm).toFixed(1)}`;
+  const tier = p.conf >= 6 ? Math.min(10, p.conf) : null, u = +p.stake_u, stake = STAKE[u] || `${+u.toFixed(2)}U`;
+  const word = p.result === "W" ? "WIN" : p.result === "L" ? "LOSS" : "PUSH";
+  const d = new Date(p.date + "T12:00:00"), stampDate = d.toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"}).toUpperCase().replace(",", "");
+  const yy = p.date.slice(2, 4) + p.date.slice(5, 7), id = `s${no}`;
+  const label = `${pk(p.pick)} ${p.odds || ""}, ${word} ${fmtU(p.units, 2)}. Final ${p.final}.`;
+  return `<div class="nwrap"><div class="note-fit" role="img" aria-label="${esc(label)}">
+  <div class="mn" aria-hidden="true"${tier ? ` data-tier="${tier}"` : ""} style="--tc:${T[2]};--tc2:${T[3]}">
+    <div class="mn-iris"></div><div class="mn-lat"></div><div class="mn-ros"></div><div class="mn-vig"></div><div class="mn-foil"></div><div class="mn-patch"><i></i></div>
+    <div class="mn-win"><div><img src="${logo(abbr)}" alt=""></div></div>
+    <div class="mn-issuer"><i></i>Morello Sims</div>
+    <div class="mn-city">${esc(T[0])}</div><div class="mn-nick">${esc(T[1])}</div>
+    <div class="mn-den">${tier ? `<b>C${tier}</b><small>GRADE</small>` : `<b>${String(no).padStart(3, "0")}</b><small>No. · ${dash(D.season)}</small>`}</div>
+    <div class="mn-micro">MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS</div>
+    <div class="mn-big" data-t="${esc(abbr)}">${esc(abbr)}</div>
+    <div class="mn-pick"><span class="mn-k">The pick · NBA ${ml ? "moneyline" : "spread"}</span><div class="mn-line">${line}</div><div class="mn-terms">${ml ? "" : esc(odds) + "&nbsp;· "}${+u.toFixed(2)}&nbsp;unit${u === 1 ? "" : "s"}&nbsp;· ${home ? "vs" : "at"}&nbsp;${esc(O[1])}</div></div>
+    <div class="mn-ser"><span style="font-size:20px">MS</span> <span style="font-size:22px">${yy}</span> <span style="font-size:25px">${p.date.slice(8, 10)}</span><span style="font-size:28px">${String(no).padStart(3, "0")}</span> <span style="font-size:31px">${p.result}</span></div>
+    <div class="mn-ros2"><i></i><div><b>${stake}</b><small>STAKE</small></div></div>
+    <div class="mn-data">
+      <div class="mn-row"><div><span class="mn-k">Book</span><b>${esc(abbr)} ${line}</b></div><div><span class="mn-k">Sim</span><b>${esc(simTxt)}</b></div><div class="e"><span class="mn-k">Edge</span><b>${p.edge != null ? (+p.edge).toFixed(1) + " pts" : "—"}</b></div><div><span class="mn-k">Result</span><b class="${cls(p.units)}">${fmtU(p.units, 2)}</b></div></div>
+      <div class="mn-fin"><span>Final · ${esc(p.final || "—")}</span><span class="mn-log">${p.late ? "Logged late" : p.logged ? "Logged " + esc(p.logged) : ""}</span></div>
+    </div>
+    <div class="mn-stamp ${p.result}"><svg width="300" height="300" viewBox="0 0 300 300"><circle cx="150" cy="150" r="142" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="150" cy="150" r="129" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="150" cy="150" r="92" fill="none" stroke="currentColor" stroke-width="2.5"/><path id="${id}a" d="M 39,150 A 111,111 0 0 1 261,150" fill="none"/><path id="${id}b" d="M 32,150 A 118,118 0 0 0 268,150" fill="none"/><text font-family="IBM Plex Mono" font-size="17" font-weight="500" letter-spacing="4" fill="currentColor"><textPath href="#${id}a" startOffset="50%" text-anchor="middle">GRADED IN PUBLIC</textPath></text><text font-family="IBM Plex Mono" font-size="15" font-weight="500" letter-spacing="3" fill="currentColor"><textPath href="#${id}b" startOffset="50%" text-anchor="middle">${stampDate} · No. ${String(no).padStart(4, "0")}</textPath></text></svg><div><b>${word}</b><span>${fmtU(p.units, 2).toUpperCase()}</span></div></div>
+  </div></div></div>`;
+}
+// notes are drawn at 1080 wide; scale each to its box, and shrink long nicknames to the room
+function fitNotes(root) {
+  root.querySelectorAll(".note-fit").forEach(f => {
+    const go = () => { if (f.clientWidth) f.style.setProperty("--s", f.clientWidth / 1080); };
+    go(); if (window.ResizeObserver) new ResizeObserver(go).observe(f);
+    noteFonts.then(() => shrinkNote(f));
+  });
+}
+// measured in the note's own fonts (a fallback face runs wider and would shrink every line)
+const noteFonts = document.fonts ? Promise.all([document.fonts.load('condensed 900 100px "Archivo"'), document.fonts.load('600 25px "IBM Plex Mono"')]).catch(() => {}) : Promise.resolve();
+function shrinkNote(f) {
+  const n = f.querySelector(".mn-nick"); let fs = 158;            // long nicknames shrink to the room before the foil strip
+  while (n && n.scrollWidth > 540 && fs > 90) { fs -= 4; n.style.fontSize = fs + "px"; }
+  const l = f.querySelector(".mn-line"); let ls = 330;           // a double-digit line clears the stake rosette
+  if (l) l.style.width = "max-content";
+  while (l && l.offsetWidth > 600 && ls > 200) { ls -= 10; l.style.fontSize = ls + "px"; }
+}
 function openDay(d) {
-  if (!byDay[d]) { view = "all"; init(); if (!byDay[d]) return; }   // a late-only day: show it under Everything
+  if (!byDay[d]) { view = "all"; init(); if (!byDay[d]) return; }
   sel = d; const ps = byDay[d], t = ps.reduce((a, p) => a + p.units, 0);
-  document.getElementById("sht").textContent = pretty(d);
-  const dt = document.getElementById("dtot"); dt.textContent = fmtU(t, 2); dt.className = cls(t);
-  document.getElementById("drec").textContent = `${rec(ps)} · ${ps.length} pick${ps.length > 1 ? "s" : ""}`;
-  document.getElementById("dpicks").innerHTML = ps.map(p => {
-    const side = p.pick.split(" ")[0], team = (D.teams[side] || {});
-    const word = p.result === "W" ? "WIN" : p.result === "L" ? "LOSS" : "PUSH";
-    return `<div class="pk"><div class="t1"><div><div class="pick">${p.pick.replace(/ -(?=\d)/, " −")} <small>${p.odds || ""}</small></div>
-        <div class="mu">${p.away} @ ${p.home} · final ${p.final || "—"}</div></div>
-        <div class="rr"><b class="res ${p.result}">${word}</b><span class="${cls(p.units)}">${fmtU(p.units, 2)}</span></div></div>
-      <dl>${p.sim_margin != null ? `<dt>The sim</dt><dd>${team.name || side} ${p.sim_margin >= 0 ? "by" : "losing by"} ${Math.abs(p.sim_margin).toFixed(1)}</dd>` : ""}
-        ${p.edge != null ? `<dt>Edge vs line</dt><dd>${(+p.edge).toFixed(1)} pts</dd>` : ""}
-        <dt>Stake</dt><dd>${p.stake_u}u</dd>
-        <dt>Logged</dt><dd>${p.logged || "—"}${p.late ? `<span class="late">logged late</span>` : " · before tip"}</dd></dl></div>`; }).join("");
+  $("sht").textContent = pretty(d);
+  const dt = $("dtot"); dt.textContent = fmtU(t, 2); dt.className = cls(t);
+  $("drec").textContent = `${rec(ps)} · ${ps.length} pick${ps.length > 1 ? "s" : ""}`;
+  const box = $("dpicks");
+  box.innerHTML = ps.map(p => noteOf(p, D.picks.indexOf(p) + 1) || `<div class="card" style="padding:16px"><b>${esc(pk(p.pick))}</b> · ${p.result} ${fmtU(p.units, 2)}</div>`).join("");
   document.getElementById("sheetwrap").className = "open";
+  $("sheet").scrollTop = 0;
+  fitNotes(box);
   history.replaceState(null, "", location.search + "#" + d); render();
 }
 function closeDay() { sel = null; document.getElementById("sheetwrap").className = ""; history.replaceState(null, "", location.pathname + location.search); render(); }

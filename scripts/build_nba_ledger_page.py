@@ -40,6 +40,8 @@ def _log_index():
     idx = {}
     path = os.path.join(REPO, "nba_pipeline", "data", "pick_log.json")
     for p in json.load(open(path)) if os.path.exists(path) else []:
+        if p.get("sealed") or "side" not in p:
+            continue                                   # sealed until tip: no side to match, never settled yet
         sd = p.get("slate_date", "")
         try:
             d = sd[:10] if sd[:1].isdigit() else datetime.strptime(

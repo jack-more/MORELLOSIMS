@@ -5,7 +5,7 @@
 <meta name="robots" content="noindex">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,300..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/brand/v2/note.css?v=20261020a">
+<link rel="stylesheet" href="/assets/brand/v2/note.css?v=20261020b">
 <link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020">
 <link rel="stylesheet" href="/morello-auth.css?v=20261020-members">
 <style>
@@ -151,7 +151,7 @@ function note(p, i) {
     <div class="mn-den"><b>C${tier}</b><small>GRADE</small></div>
     <div class="mn-micro">MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS</div>
     <div class="mn-big" data-t="${esc(abbr)}">${esc(abbr)}</div>
-    <div class="mn-pick"><span class="mn-k">The pick · NBA spread</span><div class="mn-line">${num(book)}</div><div class="mn-terms">${esc(odds)} · ${+u.toFixed(2)} unit${u === 1 ? "" : "s"} · ${abbr === home ? "vs" : "at"} ${esc(O[1])}</div></div>
+    <div class="mn-pick"><span class="mn-k">The pick · NBA spread</span><div class="mn-line">${num(book)}</div><div class="mn-terms">${esc(odds)}&nbsp;· ${+u.toFixed(2)}&nbsp;unit${u === 1 ? "" : "s"}&nbsp;· ${abbr === home ? "vs" : "at"}&nbsp;${esc(O[1])}</div></div>
     <div class="mn-ser"><span style="font-size:20px">MS</span> <span style="font-size:22px">${esc(String(p.date || "").slice(2, 4) + String(p.date || "").slice(5, 7))}</span> <span style="font-size:25px">${esc(String(p.date || "").slice(8, 10))}</span><span style="font-size:28px">${String(i + 1).padStart(2, "0")}</span> <span style="font-size:31px">A</span></div>
     <div class="mn-ros2"><i></i><div><b>${stake}</b><small>STAKE</small></div></div>
     <div class="mn-data">
@@ -166,9 +166,17 @@ function fitNotes() {
   document.querySelectorAll(".note-fit").forEach(f => {
     const go = () => { if (f.clientWidth) f.style.setProperty("--s", f.clientWidth / 1080); };
     go(); if (window.ResizeObserver) new ResizeObserver(go).observe(f);
-    const n = f.querySelector(".mn-nick"); let fs = 158;
-    while (n && n.scrollWidth > 540 && fs > 90) { fs -= 4; n.style.fontSize = fs + "px"; }
+    noteFonts.then(() => shrinkNote(f));
   });
+}
+// measured in the note's own fonts (a fallback face runs wider and would shrink every line)
+const noteFonts = document.fonts ? Promise.all([document.fonts.load('condensed 900 100px "Archivo"'), document.fonts.load('600 25px "IBM Plex Mono"')]).catch(() => {}) : Promise.resolve();
+function shrinkNote(f) {
+  const n = f.querySelector(".mn-nick"); let fs = 158;            // long nicknames shrink to the room before the foil strip
+  while (n && n.scrollWidth > 540 && fs > 90) { fs -= 4; n.style.fontSize = fs + "px"; }
+  const l = f.querySelector(".mn-line"); let ls = 330;           // a double-digit line clears the stake rosette
+  if (l) l.style.width = "max-content";
+  while (l && l.offsetWidth > 600 && ls > 200) { ls -= 10; l.style.fontSize = ls + "px"; }
 }
 
 function notes(list) {
