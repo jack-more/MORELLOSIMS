@@ -447,7 +447,7 @@ def compute_stats_from_csv(csv_path):
         reader = csv.DictReader(f)
         for row in reader:
             total_picks += 1
-            risk = int(float(row.get("risk", 0) or 0))
+            risk = float(row.get("risk", 0) or 0)
             total_risked += risk
 
             result = row.get("result", "").strip()
