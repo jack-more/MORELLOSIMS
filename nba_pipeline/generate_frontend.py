@@ -3709,6 +3709,39 @@ def _seal_daily_snapshot(snapshot, slate_iso):
     return {**snapshot, "games": games}
 
 
+# Hover (desktop) / tap (phone) explanations on the members dashboard's game cards.
+# publish_member_dashboard.py wires up [data-tip]; the wording lives here with the markup.
+BOARD_TIPS = {
+    "moji": "MOJI, 0 to 99: tonight's lineup quality. Each player's MOJO weighted by projected minutes, "
+            "with fatigue and injuries priced in. 40% of the sim's line.",
+    "nrtg": "Net rating: points scored minus points allowed per 100 possessions, this season "
+            "(last season until games are played). 10% of the line.",
+    "l10": "Net rating over the last 10 games. It counts for more as games are played, up to 30% of the line.",
+    "syn": "Synergy, 0 to 99: how tonight's lineup has played together, from 2- to 5-man on/off data. "
+           "20% of the line.",
+    "book": "The sportsbook spread for each team. Minus is the favorite: -1.5 means win by 2 or more.",
+    "sim": "The sim's own spread for each team, built from the four columns plus home court and rest.",
+    "side": "The team the sim likes at the book's number.",
+    "edge": "Points between the sim's line and the book's. Bigger edge, higher grade.",
+    "grade": "C1 to C10, from the size of the edge. Picks are logged from C6: C6 is 0.25u, C7 0.5u, "
+             "C8 and C9 2u, C10 4u.",
+    "rank": "Where this team's lineup MOJO ranks in the league tonight.",
+    "hca": "Points the sim adds for home court, measured from last season.",
+    "ou": "The book's total next to the sim's projected total.",
+}
+
+
+def _pick_floor():
+    """Lowest grade capture_picks logs (MIN_TRACKED_CONF_GRADE), loaded once."""
+    global _PICK_FLOOR
+    if _PICK_FLOOR is None:
+        _PICK_FLOOR = _capture_module().MIN_TRACKED_CONF_GRADE
+    return _PICK_FLOOR
+
+
+_PICK_FLOOR = None
+
+
 def _tip_et(tip_at):
     """'7:00 PM ET' from the schedule's UTC tip time; 'Tonight' when unknown."""
     from utils.seal import store
@@ -3727,6 +3760,7 @@ def render_sealed_matchup_card(m, idx):
     cta = f'<a class="sealed-cta" href="{url}" target="_blank" rel="noopener">Get it now &rarr;</a>' if url else ""
     h_logo, a_logo = get_team_logo_url(ha), get_team_logo_url(aa)
     a_name, h_name = TEAM_FULL_NAMES.get(aa, aa), TEAM_FULL_NAMES.get(ha, ha)
+    ac, hc = TEAM_COLORS.get(aa, "#333"), TEAM_COLORS.get(ha, "#333")
     return f"""
     <div class="matchup-card gc sealed-card" data-conf="{conf}" data-edge="0" data-total="0" data-idx="{idx}">
         <div class="mc-header gc-top">
@@ -3735,9 +3769,9 @@ def render_sealed_matchup_card(m, idx):
         </div>
         <div class="gc-sealed-body">
             <div class="gc-matchup">
-                <span><img src="{a_logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><b>{aa}</b> <small>{m['a_wins']}-{m['a_losses']}</small></span>
+                <span style="--tc:{ac}"><img src="{a_logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><b>{aa}</b> <small>{m['a_wins']}-{m['a_losses']}</small></span>
                 <i>at</i>
-                <span><img src="{h_logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><b>{ha}</b> <small>{m['h_wins']}-{m['h_losses']}</small></span>
+                <span style="--tc:{hc}"><img src="{h_logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><b>{ha}</b> <small>{m['h_wins']}-{m['h_losses']}</small></span>
             </div>
             <div class="mc-center">
                 <div class="mc-pick sealed-pick"><span class="pick-label">C{conf}</span> &#128274; {store.sealed_text({"sport": "nba"})}</div>
@@ -5827,13 +5861,13 @@ def render_matchup_card(m, idx, team_map):
     def _hi(mine, theirs):
         return ' class="hi"' if mine > theirs else ""
 
-    def _team_row(abbr, name, logo, wins, losses, rank, off, dfn, moji, nrtg, l10, syn,
+    def _team_row(abbr, name, logo, color, wins, losses, rank, off, dfn, moji, nrtg, l10, syn,
                   o_moji, o_nrtg, o_l10, o_syn, book, sim):
         scheme = " · ".join(x for x in (off, dfn) if x)
         side = ' class="side"' if abbr == pick_team else ""
         return f"""
-            <tr{side}>
-                <td class="t"><img src="{logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><div class="gc-id"><b>{abbr}</b><span class="gc-name">{name}</span><small>{wins}-{losses} · MOJO #{rank}{'<span class="gc-scheme"> · ' + scheme + '</span>' if scheme else ''}</small></div></td>
+            <tr{side} style="--tc:{color}">
+                <td class="t"><img src="{logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><div class="gc-id"><b>{abbr}</b><span class="gc-name">{name}</span><small>{wins}-{losses} · <span class="tip" data-tip="{BOARD_TIPS['rank']}">MOJO #{rank}</span>{'<span class="gc-scheme"> · ' + scheme + '</span>' if scheme else ''}</small></div></td>
                 <td{_hi(moji, o_moji)}>{moji:.1f}</td>
                 <td class="x{' hi' if nrtg > o_nrtg else ''}">{nrtg:+.1f}</td>
                 <td class="x{' hi' if l10 > o_l10 else ''}">{l10:+.1f}</td>
@@ -5845,15 +5879,15 @@ def render_matchup_card(m, idx, team_map):
     away_book = "—" if spread_proj else _line(-spread)
     home_book = "—" if spread_proj else _line(spread)
     board_rows = (
-        _team_row(aa, a_name, a_logo, m['a_wins'], m['a_losses'], m['a_mojo_rank'], a_off, a_def,
+        _team_row(aa, a_name, a_logo, ac, m['a_wins'], m['a_losses'], m['a_mojo_rank'], a_off, a_def,
                   away_moji, away_nrtg, away_recent_nrtg, away_syn,
                   home_moji, home_nrtg, home_recent_nrtg, home_syn, away_book, _line(-proj_spread_val))
-        + _team_row(ha, h_name, h_logo, m['h_wins'], m['h_losses'], m['h_mojo_rank'], h_off, h_def,
+        + _team_row(ha, h_name, h_logo, hc, m['h_wins'], m['h_losses'], m['h_mojo_rank'], h_off, h_def,
                     home_moji, home_nrtg, home_recent_nrtg, home_syn,
                     away_moji, away_nrtg, away_recent_nrtg, away_syn, home_book, _line(proj_spread_val))
     )
 
-    notes = [f"Home court +{hca_pts:.1f} {ha}"]
+    notes = [f'<span class="tip" data-tip="{BOARD_TIPS["hca"]}">Home court +{hca_pts:.1f} {ha}</span>']
     if home_b2b:
         notes.append(f"{ha} on a back-to-back")
     if away_b2b:
@@ -5863,19 +5897,27 @@ def render_matchup_card(m, idx, team_map):
     if home_out_n:
         notes.append(f"{ha}: {home_out_n} out")
 
+    floor = _pick_floor()
     if spread_proj:
         call_html = '<span class="gc-k">No book line yet</span>'
+        why_html = "The sim has priced this game. It waits for a book line before it grades it."
     else:
-        call_html = (f'<span class="gc-k">Sim side</span><b>{pick_text}</b>'
-                     f'<span class="gc-k">Edge</span><b>{edge_abs:.1f} pts</b>'
-                     f'<span class="gc-k">Grade</span><b>C{conf_10}</b>')
+        call_html = (f'<span class="gc-k tip" data-tip="{BOARD_TIPS["side"]}">Sim side</span><b>{pick_text}</b>'
+                     f'<span class="gc-k tip" data-tip="{BOARD_TIPS["edge"]}">Edge</span><b>{edge_abs:.1f} pts</b>'
+                     f'<span class="gc-k tip" data-tip="{BOARD_TIPS["grade"]}">Grade</span><b>C{conf_10}</b>')
+        side_sim = _line(proj_spread_val if pick_team == ha else -proj_spread_val)
+        sim_says = "The sim makes it a pick'em." if side_sim == "PK" else f"The sim has {pick_team} {side_sim}."
+        why_html = (f"The book has {pick_text}. {sim_says} "
+                    f"That's {edge_abs:.1f} points of value on {pick_team}. "
+                    + (f"C{conf_10} is under the C{floor} bar, so it isn't a pick." if conf_10 < floor
+                       else f"C{conf_10} clears the C{floor} bar."))
 
     sim_fav = ha if proj_spread_val <= 0 else aa
     how_html = (f'40% MOJI ({moji_weighted:+.1f}) + 10% NRtg ({0.10 * nrtg_diff:+.1f}) + 30% last 10 ({0.30 * recent_nrtg_diff:+.1f}) '
                 f'+ 20% synergy ({syn_weighted:+.1f}) + home court and rest ({situational_pts:+.1f}) = sim {sim_fav} {(-abs(proj_spread_val)):+.1f}')
 
     tip_txt = _tip_et(m.get("tip_at"))
-    ou_txt = f"O/U {total:.1f}" + ("" if total_proj else "") + (f" · sim {proj_total:.1f}" if proj_total else "")
+    ou_txt = f"O/U {total:.1f}" + (f" · sim {proj_total:.1f}" if proj_total else "")
 
     # Partner links, one quiet row
     book_odds = m.get("bookmaker_odds", [])
@@ -5914,14 +5956,14 @@ def render_matchup_card(m, idx, team_map):
     <div class="matchup-card gc" data-conf="{conf_10}" data-edge="{abs(spread_edge):.1f}" data-total="{total}" data-idx="{idx}">
         <div class="mc-header gc-top">
             <span class="gc-when">{tip_txt} · {a_name} at {h_name}</span>
-            <span class="gc-ou ma-premium">{ou_txt}</span>
+            <span class="gc-ou ma-premium tip" data-tip="{BOARD_TIPS['ou']}">{ou_txt}</span>
         </div>
         <table class="gc-board">
-            <thead><tr><th class="t">Team</th><th>MOJI</th><th class="x">NRtg</th><th class="x">Last 10</th><th class="x">Synergy</th><th>Book</th><th class="ma-premium">Sim</th></tr></thead>
+            <thead><tr><th class="t">Team</th><th><span class="tip" data-tip="{BOARD_TIPS['moji']}">MOJI</span></th><th class="x"><span class="tip" data-tip="{BOARD_TIPS['nrtg']}">NRtg</span></th><th class="x"><span class="tip" data-tip="{BOARD_TIPS['l10']}">Last 10</span></th><th class="x"><span class="tip" data-tip="{BOARD_TIPS['syn']}">Synergy</span></th><th><span class="tip" data-tip="{BOARD_TIPS['book']}">Book</span></th><th class="ma-premium"><span class="tip" data-tip="{BOARD_TIPS['sim']}">Sim</span></th></tr></thead>
             <tbody>{board_rows}
             </tbody>
         </table>
-        <div class="gc-call ma-premium">{call_html}<span class="gc-notes">{" · ".join(notes)}</span></div>
+        <div class="gc-call ma-premium">{call_html}<span class="gc-notes">{" · ".join(notes)}</span><p class="gc-why">{why_html}</p></div>
         <details class="gc-how ma-premium"><summary>How the sim got there</summary><p>{how_html}</p></details>
         <div class="gc-books"><span class="gc-k">Bet it</span>{books_html}</div>
 

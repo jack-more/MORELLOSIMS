@@ -138,7 +138,7 @@ section.pad{padding:96px 0}
 .board .row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.4fr) 110px 90px 130px;align-items:center;gap:16px;padding:18px 24px}
 .board .row+.row{border-top:1px solid var(--line)}
 .board .m{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px}
-.board .m b{font:900 22px/1 var(--font);font-stretch:78%}
+.board .m b{font:900 22px/1 var(--font);font-stretch:78%;text-decoration:underline;text-decoration-color:var(--tc);text-decoration-thickness:4px;text-underline-offset:7px}
 .board .m span{color:var(--ink-2);font-weight:500;margin-right:4px}
 .board .m i{font-style:normal;color:var(--ink-3);margin-right:4px}
 .board .v{color:var(--ink-3);font-size:14px}
@@ -546,11 +546,13 @@ fetch("/nbasim/slate.json", {cache: "no-cache"}).then(r => r.json()).then(d => {
   const games = d.games || [], teams = d.teams || {};
   const tip = g => new Date(g.tip).toLocaleTimeString("en-US", {timeZone: "America/New_York", hour: "numeric", minute: "2-digit"});
   const nick = a => (teams[a] && teams[a].nick) || a;
+  const TC = {"ATL":"#E03A3E","BOS":"#007A33","BKN":"#000000","CHA":"#1D1160","CHI":"#CE1141","CLE":"#860038","DAL":"#00538C","DEN":"#0E2240","DET":"#C8102E","GSW":"#1D428A","HOU":"#CE1141","IND":"#002D62","LAC":"#C8102E","LAL":"#552583","MEM":"#5D76A9","MIA":"#98002E","MIL":"#00471B","MIN":"#0C2340","NOP":"#0C2340","NYK":"#F58426","OKC":"#007AC1","ORL":"#0077C0","PHI":"#006BB6","PHX":"#1D1160","POR":"#E03A3E","SAC":"#5A2D81","SAS":"#C4CED4","TOR":"#CE1141","UTA":"#002B5C","WAS":"#002B5C"};   // generate_frontend.TEAM_COLORS
+  const ab = a => `<b style="--tc:${TC[a] || "#0B0F0D"}">${a}</b>`;
   const state = g => g.state === "post" ? `<span class="st fin">Final ${g.away_score}–${g.home_score}</span>`
     : g.state === "in" ? `<span class="st live">Live</span>` : `<span class="st">${tip(g)} ET</span>`;
   $("t-count").textContent = games.length ? `${d.title || "Tonight"} · ${games.length} game${games.length === 1 ? "" : "s"}` : "No games tonight";
   $("t-games").innerHTML = games.map(g => `<div class="row">
-      <div class="m"><b>${g.away}</b><span>${nick(g.away)}</span><i>at</i><b>${g.home}</b><span>${nick(g.home)}</span></div>
+      <div class="m">${ab(g.away)}<span>${nick(g.away)}</span><i>at</i>${ab(g.home)}<span>${nick(g.home)}</span></div>
       <div class="v">${g.venue || ""}</div>
       <div class="n"><small>Spread</small>${g.line || "—"}</div>
       <div class="n"><small>Total</small>${g.total ? g.total.toFixed(1) : "—"}</div>
