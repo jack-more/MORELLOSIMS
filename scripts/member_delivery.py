@@ -35,6 +35,8 @@ import tg_members
 
 ET = timezone(timedelta(hours=-4))
 RESEND_URL = "https://api.resend.com/emails/batch"
+RESEND_ONE = "https://api.resend.com/emails"      # single sends carry the note as an inline image
+NOTE_CID = "pick-note"
 FROM = os.environ.get("MEMBER_EMAIL_FROM", "").strip() or "Morello Sims <picks@morellosims.com>"
 MEMBERS_URL = "https://morellosims.com/members/"
 UNLOCK_WORD = {"nba": "tip", "nfl": "kickoff"}
@@ -138,7 +140,20 @@ def active_emails():
     return sorted(out)
 
 
-def message(p, when_label):
+def note_png(p, when_label):
+    """The pick's note (render_pick_note.py) as PNG bytes, or None (no Chrome, not a spread...)."""
+    import tempfile
+    try:
+        import render_pick_note
+        with tempfile.TemporaryDirectory() as d:
+            out = render_pick_note.render(p, os.path.join(d, "note.png"), when_label=when_label)
+            return open(out, "rb").read() if out else None
+    except Exception as e:                       # the email goes out without the card
+        print(f"  WARN pick note not rendered: {type(e).__name__}")
+        return None
+
+
+def message(p, when_label, with_note=False):
     sport = (p.get("sport") or "nba").upper()
     sim = p.get("sim_projection")
     subject = f"{sport} pick · {p.get('matchup')}" + (f" · {when_label}" if when_label else "")
@@ -149,8 +164,11 @@ def message(p, when_label):
         lines.append(f"The sim: {sim}")
     lines.append(f"Logged {logged}. The public card stays sealed until {UNLOCK_WORD.get(p.get('sport'), 'tip')}.")
     text = "\n".join(lines) + f"\n\nTonight's picks: {MEMBERS_URL}\nEvery pick, graded: https://morellosims.com/ledger/nba/\n"
+    note = (f'<img src="cid:{NOTE_CID}" width="520" alt="{p.get("pick_text")} {_odds(p)}, confidence {p.get("conf")}" '
+            'style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:18px;margin:0 0 20px">') if with_note else ""
     html = (
         '<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:24px;color:#10202E">'
+        + note +
         f'<div style="font:600 12px/1.4 Arial,sans-serif;letter-spacing:.12em;color:#5E6B66">MORELLO SIMS · {sport} · MEMBERS</div>'
         f'<div style="font-size:30px;font-weight:700;margin:14px 0 4px">{p.get("pick_text")} {_odds(p)}</div>'
         f'<div style="font-size:16px">{p.get("matchup")}' + (f' · {when_label}' if when_label else '') + '</div>'
@@ -162,6 +180,30 @@ def message(p, when_label):
         '<a href="https://morellosims.com/ledger/nba/" style="color:#5E6B66">morellosims.com/ledger</a>. '
         'Simulations, not guarantees. 21+. 1-800-GAMBLER.</div></div>')
     return subject, text, html
+
+
+def send_with_note(p, when_label, to, png, key):
+    """One email per member with the note inline (cid). Returns the addresses Resend
+    refused (all of them if it refuses the first), for the text batch to cover."""
+    import base64
+    import time
+    import requests
+    subject, text, html = message(p, when_label, with_note=True)
+    att = [{"filename": f"{doc_id(p['id'])}.png", "content": base64.b64encode(png).decode(),
+            "content_type": "image/png", "content_id": NOTE_CID}]
+    failed = []
+    for n, addr in enumerate(to):
+        r = requests.post(RESEND_ONE, json={"from": FROM, "to": [addr], "subject": subject, "text": text,
+                                            "html": html, "attachments": att}, timeout=30,
+                          headers={"Authorization": f"Bearer {key}",
+                                   "Idempotency-Key": f"{doc_id(p['id'])}-note-{hashlib.sha256(recipient_key(addr).encode()).hexdigest()[:16]}"})
+        if r.status_code >= 300:
+            print(f"  WARN member email with note: HTTP {r.status_code} {r.text[:200]}")
+            if n == 0:
+                return list(to)
+            failed.append(addr)
+        time.sleep(0.6)                          # Resend's default limit is 2 requests a second
+    return failed
 
 
 def email(p, when_label, dry=False, skip=()):
@@ -176,8 +218,15 @@ def email(p, when_label, dry=False, skip=()):
         print(f"  members: nobody new to email · {p.get('matchup')}")
         return []
     import requests
-    subject, text, html = message(p, when_label)
     key = os.environ["RESEND_API_KEY"].strip()
+    png = note_png(p, when_label)
+    everyone = list(to)
+    if png:
+        to = send_with_note(p, when_label, to, png, key)
+        print(f"  members: emailed {len(everyone) - len(to)} member(s) with the note · {p.get('matchup')}")
+        if not to:
+            return [recipient_key(a) for a in everyone]
+    subject, text, html = message(p, when_label)
     ok = True
     for i in range(0, len(to), 100):
         batch = [{"from": FROM, "to": [addr], "subject": subject, "text": text, "html": html} for addr in to[i:i + 100]]
@@ -189,4 +238,4 @@ def email(p, when_label, dry=False, skip=()):
             print(f"  WARN member email batch {i // 100}: HTTP {r.status_code} {r.text[:200]}")
             ok = False
     print(f"  members: emailed {len(to)} member(s) · {p.get('matchup')}")
-    return [recipient_key(a) for a in to] if ok else None
+    return [recipient_key(a) for a in everyone] if ok else None
