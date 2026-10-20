@@ -289,7 +289,7 @@ def render_sport_block(picks, sport, hero_color, baseline=None, era=None, archiv
         hero_title = f'{sport_upper} SIM: {agg["wins"]}-{agg["losses"]} RECORD ({agg["roi"]:+.0f}% ROI)'
     css_class = "post-nba-picks" if sport == "nba" else "post-mlb-picks"
     methodology = (
-        '<a href="/nbasim/" style="color:#2a9d5f;">nbasim</a>' if sport == "nba"
+        '<a href="/ledger/nba/" style="color:#2a9d5f;">the ledger</a>' if sport == "nba"
         else '<a href="/mlbsim/" style="color:#FFEA00;">mlbsim</a>'
     )
     method_text = (
