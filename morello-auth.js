@@ -613,7 +613,7 @@
     // NBA only — the same three sets as the homepage
     return `
       <h2>Get the picks</h2>
-      <p class="ma-subtitle">Every pick logged before tip, graded in public.</p>
+      <p class="ma-subtitle">Every pick graded in public, wins and losses.</p>
       <div class="ma-pricing-grid">
         <div class="ma-pricing-card">
           <div>
