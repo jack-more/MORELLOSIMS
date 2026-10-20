@@ -4,7 +4,8 @@
 <meta name="description" content="Members: tonight's NBA picks the moment the sim logs them.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,300..900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,300..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/brand/v2/note.css?v=20261020a">
 <link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020">
 <link rel="stylesheet" href="/morello-auth.css?v=20261020-members">
 <style>
@@ -57,6 +58,16 @@ html,body{font-family:var(--ms-font)!important}
 .msg h2{font-weight:900!important;letter-spacing:-.015em!important}
 .g .teams{font-weight:600!important}
 @media(max-width:520px){.brand img{height:34px!important}.nav{gap:12px!important;font-size:13px!important}}
+/* green field, white cards, like the dashboard */
+html,body{background:#1FA255!important}
+.label.day{color:rgba(255,255,255,.88)!important}
+.foot,.foot a{color:rgba(255,255,255,.85)!important}
+.card{border:0!important;box-shadow:0 14px 34px rgba(0,0,0,.14)}
+/* tonight's picks as notes (assets/brand/v2/note.css): one per pick, its tier its own design */
+.notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}
+.notes .note-fit{border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.18)}
+.notes .note-fit>.mn{border-radius:44px}
+@media(max-width:620px){.notes{grid-template-columns:1fr}}
 </style></head>
 <body>
 
@@ -107,6 +118,64 @@ function passLine(u) {
   return `Your pass runs until ${t} ET.`;
 }
 
+// the note's teams: city, nickname, colours, ESPN logo code, arena (data/reference/nba_teams_espn_2026.json)
+const TEAMS = {"ATL":["Atlanta","Hawks","#c8102e","#fdb927","atl","State Farm Arena"],"BOS":["Boston","Celtics","#008348","#ffffff","bos","TD Garden"],"BKN":["Brooklyn","Nets","#000000","#ffffff","bkn","Barclays Center"],"CHA":["Charlotte","Hornets","#008ca8","#1d1060","cha","Spectrum Center"],"CHI":["Chicago","Bulls","#ce1141","#000000","chi","United Center"],"CLE":["Cleveland","Cavaliers","#860038","#bc945c","cle","Rocket Arena"],"DAL":["Dallas","Mavericks","#0064b1","#bbc4ca","dal","American Airlines Center"],"DEN":["Denver","Nuggets","#0e2240","#fec524","den","Ball Arena"],"DET":["Detroit","Pistons","#1d428a","#c8102e","det","Little Caesars Arena"],"GSW":["Golden State","Warriors","#fdb927","#1d428a","gs","Chase Center"],"HOU":["Houston","Rockets","#ce0e2d","#000000","hou","Toyota Center"],"IND":["Indiana","Pacers","#0c2340","#ffd520","ind","Gainbridge Fieldhouse"],"LAC":["LA","Clippers","#12173f","#c8102e","lac","Intuit Dome"],"LAL":["Los Angeles","Lakers","#552583","#fdb927","lal","Crypto.com Arena"],"MEM":["Memphis","Grizzlies","#5d76a9","#12173f","mem","FedExForum"],"MIA":["Miami","Heat","#98002e","#000000","mia","Kaseya Center"],"MIL":["Milwaukee","Bucks","#00471b","#eee1c6","mil","Fiserv Forum"],"MIN":["Minnesota","Timberwolves","#266092","#79bc43","min","Target Center"],"NOP":["New Orleans","Pelicans","#0a2240","#b4975a","no","Smoothie King Center"],"NYK":["New York","Knicks","#1d428a","#f58426","ny","Madison Square Garden"],"OKC":["Oklahoma City","Thunder","#007ac1","#ef3b24","okc","Paycom Center"],"ORL":["Orlando","Magic","#0150b5","#9ca0a3","orl","Kia Center"],"PHI":["Philadelphia","76ers","#1d428a","#e01234","phi","Xfinity Mobile Arena"],"PHX":["Phoenix","Suns","#29127a","#e56020","phx","Mortgage Matchup Center"],"POR":["Portland","Trail Blazers","#e03a3e","#000000","por","Moda Center"],"SAC":["Sacramento","Kings","#5a2d81","#6a7a82","sac","Golden 1 Center"],"SAS":["San Antonio","Spurs","#000000","#c4ced4","sa","Frost Bank Center"],"TOR":["Toronto","Raptors","#d91244","#000000","tor","Scotiabank Arena"],"UTA":["Utah","Jazz","#4e008e","#79a3dc","utah","Delta Center"],"WAS":["Washington","Wizards","#e31837","#002b5c","wsh","Capital One Arena"]};
+const STAKE = {0.25: "¼U", 0.5: "½U"};
+const num = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1);
+const etTime = d => d.toLocaleTimeString("en-US", {timeZone: "America/New_York", hour: "numeric", minute: "2-digit"});
+
+function note(p, i) {
+  const [abbr, lineRaw] = String(p.pick_text || "").split(" ");
+  const [away, home] = [p.away, p.home].every(Boolean) ? [p.away, p.home] : String(p.matchup || "").split(" @ ");
+  const T = TEAMS[abbr], book = parseFloat(String(lineRaw).replace("−", "-"));
+  if ((p.bet_type || "spread") !== "spread" || !T || isNaN(book)) return null;
+  const opp = abbr === home ? away : home, O = TEAMS[opp] || [opp, opp];
+  let sim = parseFloat(String(String(p.sim_projection || "").split(" ")[1] || "").replace("−", "-"));
+  // a logged pick always has the sim on its side of the book; records written before the
+  // away-side sign fix in sync_to_picks_json carry the sim line flipped
+  if (!isNaN(sim) && sim > book) sim = -sim;
+  const edge = isNaN(sim) ? null : Math.abs(book - sim);
+  const simTxt = isNaN(sim) ? "—" : sim < 0 ? `${T[1]} by ${+Math.abs(sim).toFixed(1)}` : sim === 0 ? "Pick'em" : `${T[1]} +${sim}`;
+  const u = Number(p.units) || 0, stake = STAKE[u] || `${+u.toFixed(2)}U`;
+  const start = p.start ? new Date(p.start) : null;
+  const logged = p.logged_at && p.logged_at.toDate ? p.logged_at.toDate() : p.captured_at ? new Date(p.captured_at) : null;
+  const tier = Math.max(6, Math.min(10, Number(p.conf) || 6));
+  const odds = String(p.odds || "").replace("-", "−");
+  const label = `${p.pick_text} ${p.odds}, C${tier}, ${stake} stake. Sim: ${simTxt}.`;
+  return `<div class="note-fit" role="img" aria-label="${esc(label)}">
+  <div class="mn" aria-hidden="true" data-tier="${tier}" style="--tc:${T[2]};--tc2:${T[3]}">
+    <div class="mn-iris"></div><div class="mn-lat"></div><div class="mn-ros"></div><div class="mn-vig"></div><div class="mn-foil"></div><div class="mn-patch"><i></i></div>
+    <div class="mn-win"><div><img src="https://a.espncdn.com/i/teamlogos/nba/500/${T[4]}.png" alt=""></div></div>
+    <div class="mn-issuer"><i></i>Morello Sims</div>
+    <div class="mn-city">${esc(T[0])}</div><div class="mn-nick">${esc(T[1])}</div>
+    <div class="mn-den"><b>C${tier}</b><small>GRADE</small></div>
+    <div class="mn-micro">MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS</div>
+    <div class="mn-big" data-t="${esc(abbr)}">${esc(abbr)}</div>
+    <div class="mn-pick"><span class="mn-k">The pick · NBA spread</span><div class="mn-line">${num(book)}</div><div class="mn-terms">${esc(odds)} · ${+u.toFixed(2)} unit${u === 1 ? "" : "s"} · ${abbr === home ? "vs" : "at"} ${esc(O[1])}</div></div>
+    <div class="mn-ser"><span style="font-size:20px">MS</span> <span style="font-size:22px">${esc(String(p.date || "").slice(2, 4) + String(p.date || "").slice(5, 7))}</span> <span style="font-size:25px">${esc(String(p.date || "").slice(8, 10))}</span><span style="font-size:28px">${String(i + 1).padStart(2, "0")}</span> <span style="font-size:31px">A</span></div>
+    <div class="mn-ros2"><i></i><div><b>${stake}</b><small>STAKE</small></div></div>
+    <div class="mn-data">
+      <div class="mn-row"><div><span class="mn-k">Book</span><b>${esc(abbr)} ${num(book)}</b></div><div><span class="mn-k">Sim</span><b>${esc(simTxt)}</b></div><div class="e"><span class="mn-k">Edge</span><b>${edge === null ? "—" : edge.toFixed(1) + " pts"}</b></div><div><span class="mn-k">Tip</span><b>${start ? etTime(start) : esc(p.game_time || "Tonight")}</b></div></div>
+      <div class="mn-fin"><span>${esc((TEAMS[away] || [, away])[1])} at ${esc((TEAMS[home] || [, home])[1])}${TEAMS[home] && TEAMS[home][5] ? " · " + esc(TEAMS[home][5]) : ""}</span><span class="mn-log">${logged ? "Logged " + etTime(logged) + " ET" : ""}</span></div>
+    </div>
+  </div></div>`;
+}
+
+// the notes are drawn at 1080 wide; scale each to its box, and shrink long nicknames to the room
+function fitNotes() {
+  document.querySelectorAll(".note-fit").forEach(f => {
+    const go = () => { if (f.clientWidth) f.style.setProperty("--s", f.clientWidth / 1080); };
+    go(); if (window.ResizeObserver) new ResizeObserver(go).observe(f);
+    const n = f.querySelector(".mn-nick"); let fs = 158;
+    while (n && n.scrollWidth > 540 && fs > 90) { fs -= 4; n.style.fontSize = fs + "px"; }
+  });
+}
+
+function notes(list) {
+  const made = list.map(note), cards = list.filter((p, i) => !made[i]).map(card);
+  return (made.some(Boolean) ? `<div class="notes">${made.filter(Boolean).join("")}</div>` : "") + cards.join("");
+}
+
 function card(p) {
   const logged = p.logged_at && p.logged_at.toDate ? p.logged_at.toDate().toLocaleTimeString("en-US", {timeZone: "America/New_York", hour: "numeric", minute: "2-digit"}) + " ET" : "";
   return `<article class="card pick">
@@ -128,13 +197,14 @@ function showPicks(user, u) {
       || ((b.logged_at?.toMillis?.() || 0) - (a.logged_at?.toMillis?.() || 0)));
     const tonight = picks.filter(p => p.date === today), earlier = picks.filter(p => p.date !== today);
     let html = `<div class="label day">Tonight · ${new Date().toLocaleDateString("en-US", {timeZone: "America/New_York", weekday: "long", month: "short", day: "numeric"})}</div>`;
-    html += tonight.length ? tonight.map(card).join("") : `<div class="card msg"><h2>No pick yet tonight.</h2>
+    html += tonight.length ? notes(tonight) : `<div class="card msg"><h2>No pick yet tonight.</h2>
       <p>The sim logs a pick when it finds an edge against the line, usually by early afternoon ET. It shows up here
       the second it's logged, and we email you. Some nights the sim passes.</p></div>`;
     html += `<div class="card msg"><div class="label">Members dashboard</div><h2 style="margin-top:8px">Every game, the court sim, player MOJO and trends.</h2>
       <div class="btns"><a class="btn" href="/members/dashboard/">Open the dashboard</a></div></div>`;
-    if (earlier.length) html += `<div class="label day">Last night</div>` + earlier.map(card).join("");
+    if (earlier.length) html += `<div class="label day">Last night</div>` + notes(earlier);
     main.innerHTML = html + foot;
+    fitNotes();
   }, err => {
     msg("Your picks didn't load.", `Your account shows a pass, but the members list wouldn't open (${esc(err.code || "error")}).
       Sign out and back in; if it persists, reply to any pick email and we'll fix it.`,
