@@ -14,20 +14,17 @@
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=Libre+Caslon+Display&family=Libre+Caslon+Text:ital@0;1&family=Libre+Franklin:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/morello-auth.css?v=20261020-brand">
 <link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020c">
 <style>
-/* Green and white, like the members dashboard. The bank note pick sheet is the one ornate piece. */
+/* Green and white, like the members dashboard. The pick note is the one ornate piece. */
 :root{
   --green:#1FA255;--green-deep:#14743C;--mint:#3FCB74;--black:#0B0F0D;
   --ink:#0B0F0D;--ink-2:#4E5752;--ink-3:#88918C;--line:#E3E8E5;--soft:#F5F8F6;--loss:#C4574A;--blue:#1F78D1;
   --font:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
   --max:1200px;--gut:clamp(16px,4vw,40px);
-  /* the pick sheet's own inks */
-  --paper:#F7F5EF;--emerald:#17543C;--serial:#A3392B;--cobalt:#2447B5;
-  --display:"Libre Caslon Display","Libre Caslon Text",Georgia,serif;--caslon:"Libre Caslon Text",Georgia,serif;
-  --sans:"Libre Franklin","Helvetica Neue",Arial,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
@@ -80,46 +77,61 @@ h2{font-size:clamp(34px,4.2vw,54px)}
 .note{position:relative;transform:rotate(-2.2deg);filter:drop-shadow(0 30px 40px rgba(0,0,0,.28)) drop-shadow(0 6px 10px rgba(0,0,0,.18))}
 .note-cap{margin-top:22px;text-align:center;font:600 13px var(--font);color:rgba(255,255,255,.85);transform:rotate(-2.2deg)}
 
-/* ---------- the pick card: drawn at 1080×1350, scaled to fit ---------- */
-.pc-fit{--s:.42593;position:relative;width:clamp(340px,34vw,460px);aspect-ratio:1080/1350;overflow:hidden;flex:none}
-.pc{position:absolute;left:0;top:0;width:1080px;height:1350px;transform:scale(var(--s));transform-origin:0 0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-feature-settings:"lnum" 1;overflow:hidden}
-.pc-frame{position:absolute;left:0;top:0;width:1080px;height:1350px;clip-path:inset(18px 19px 19px 20px)} /* trims stray edge pixels in the frame scan; the ornament starts ~22px in */
-.pc-body{position:absolute;left:172px;top:160px;width:736px;height:1030px;display:flex;flex-direction:column;align-items:center;text-align:center}
-.pc-head{width:100%;display:flex;justify-content:space-between;align-items:baseline}
-.pc-head b{font-family:var(--display);font-weight:400;font-size:34px;color:var(--emerald)}
-.pc-head span{font-family:var(--mono);font-size:20px;letter-spacing:3px;color:var(--serial)}
-.pc .dbl{width:100%}
-.pc .dbl.top{margin-top:14px}
-.pc .micro{width:100%;margin-top:6px}
-.pc-team{display:flex;align-items:center;gap:20px;margin-top:34px}
-.pc-team img{width:88px;height:88px}
-.pc-team span{font-family:var(--caslon);font-size:40px}
-.pc-line{font-family:var(--display);font-size:236px;line-height:.92;color:var(--emerald);margin-top:6px}
-.pc-terms{font-family:var(--mono);font-size:22px;letter-spacing:4px;color:var(--ink-2)}
-.pc-div{width:100%;display:flex;align-items:center;gap:16px;margin-top:30px;font-family:var(--mono);font-size:18px;letter-spacing:4px;color:var(--emerald)}
-.pc-div:before,.pc-div:after{content:"";flex-grow:1;height:1px;background:var(--emerald)}
-.pc-final{font-family:var(--display);font-size:72px;line-height:1.05;margin-top:14px}
-.pc-final span{color:var(--ink-2)}
-.pc-sim{font-family:var(--caslon);font-style:italic;font-size:60px;line-height:1.05;margin-top:18px}
-.pc-why{font-size:26px;line-height:1.45;color:var(--ink-2);margin-top:8px}
-.pc-sim+.pc-why{margin-top:10px}
-.pc-arena{width:470px;height:210px;object-fit:contain;margin-top:18px}
-.pc-arena.beside-stamp{width:400px;transform:translateX(-150px)}
-.pc-cap.beside-stamp{transform:translateX(-150px)}  /* graded card: arena left, stamp in its own lane right */
-.pc-cap{font-family:var(--mono);font-size:18px;letter-spacing:2.5px;color:var(--emerald);margin-top:4px}
-.pc-grow{flex-grow:1}
-.pc-foot{width:100%;display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-family:var(--mono);font-size:18px;letter-spacing:2px;color:var(--ink-2)}
-.pc-foot span:last-child{color:var(--serial)}
-/* the rubber stamp: cobalt, inked through a texture mask */
-.stamp{position:absolute;left:595px;top:765px;width:340px;height:340px;transform:rotate(-13deg) scale(.8);color:var(--cobalt);opacity:.92;mix-blend-mode:multiply;
+/* ---------- the pick note: drawn at 1080×1350, scaled to fit (patterns: scripts/make_note_patterns.py) ---------- */
+.pn-fit{--s:.42593;position:relative;width:clamp(340px,34vw,460px);aspect-ratio:1080/1350;flex:none}
+.pn{position:absolute;left:0;top:0;width:1080px;height:1350px;transform:scale(var(--s));transform-origin:0 0;border-radius:40px;overflow:hidden;
+  background:#FBFAF6;color:var(--ink);font-family:var(--font);font-variant-numeric:tabular-nums;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+.pn:before{content:"";position:absolute;inset:0;background:radial-gradient(900px 700px at 50% 62%,rgba(255,255,255,.9),transparent 70%),
+  repeating-linear-gradient(115deg,rgba(23,84,60,.035) 0 2px,transparent 2px 9px)}
+.pn-frame{position:absolute;inset:0;background:var(--green-deep);-webkit-mask:url(/assets/brand/v2/note-frame.svg) 0 0/100% 100%;mask:url(/assets/brand/v2/note-frame.svg) 0 0/100% 100%}
+.pn-mk{position:absolute;font-family:var(--mono);text-transform:uppercase}
+/* the team band */
+.pn-band{position:absolute;left:76px;right:76px;top:76px;height:418px;border-radius:18px;overflow:hidden;background:var(--tc);color:#fff}
+.pn-band:before{content:"";position:absolute;inset:0;background:linear-gradient(155deg,rgba(255,255,255,.16),transparent 45%),linear-gradient(0deg,rgba(0,0,0,.22),transparent 60%)}
+.pn-lat{position:absolute;inset:0;background:#fff;opacity:.14;-webkit-mask:url(/assets/brand/v2/note-lattice.svg) 0 0/480px 240px repeat;mask:url(/assets/brand/v2/note-lattice.svg) 0 0/480px 240px repeat}
+.pn-band .pn-stripe{position:absolute;left:0;right:0;bottom:0;height:14px;background:var(--tc2)}
+.pn-top{position:absolute;left:44px;right:44px;top:38px;display:flex;align-items:center;justify-content:space-between}
+.pn-top img{height:58px;width:auto}
+.pn-top span{font:500 22px var(--mono);letter-spacing:.2em;opacity:.9}
+.pn-team{position:absolute;left:44px;right:44px;bottom:52px;display:flex;align-items:center;gap:34px}
+.pn-medal{position:relative;flex:none;width:214px;height:214px;border-radius:50%;background:#fff;box-shadow:0 0 0 8px rgba(255,255,255,.22),0 18px 40px rgba(0,0,0,.25)}
+.pn-medal:before{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--tc);opacity:.22;-webkit-mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%;mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%}
+.pn-medal img{position:absolute;left:32px;top:32px;width:150px;height:150px;object-fit:contain}
+.pn-city{display:block;font:700 30px/1 var(--font);letter-spacing:.22em;text-transform:uppercase;opacity:.88}
+.pn-nick{display:block;margin-top:10px;font:900 172px/.82 var(--font);font-stretch:75%;letter-spacing:-.01em;text-transform:uppercase;text-shadow:0 4px 24px rgba(0,0,0,.18)}
+/* the pick and its stake */
+.pn-pick{position:absolute;left:96px;right:96px;top:536px;display:flex;align-items:flex-end;justify-content:space-between}
+.pn-k{display:block;font:500 21px var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--green-deep)}
+.pn-line{margin-top:6px;font:900 300px/.8 var(--font);font-stretch:75%;letter-spacing:-.02em;color:var(--ink)}
+.pn-terms{margin-top:22px;font:500 24px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-2)}
+.pn-den{position:relative;flex:none;width:262px;height:262px;margin-bottom:-6px}
+.pn-den .pn-ros{position:absolute;inset:0;background:var(--tc);opacity:.9;-webkit-mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%;mask:url(/assets/brand/v2/note-rosette.svg) center/100% 100%}
+.pn-den .pn-core{position:absolute;inset:62px;border-radius:50%;background:#FBFAF6;box-shadow:0 0 0 5px var(--tc),0 0 0 11px #FBFAF6;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.pn-den b{font:900 78px/.9 var(--font);font-stretch:75%;color:var(--tc)}
+.pn-den small{margin-top:4px;font:500 15px var(--mono);letter-spacing:.24em;color:var(--ink-2)}
+/* book · sim · edge */
+.pn-row{position:absolute;left:96px;right:96px;top:884px;display:grid;grid-template-columns:1fr 1.25fr .9fr;border-top:4px double var(--green-deep);border-bottom:1px solid rgba(0,0,0,.14)}
+.pn-row>div{padding:24px 0 22px}
+.pn-row>div+div{padding-left:30px;border-left:1px solid rgba(0,0,0,.14)}
+.pn-row b{display:block;margin-top:10px;font:800 46px/1 var(--font);font-stretch:85%;color:var(--ink)}
+.pn-row .edge b{color:var(--green-deep)}
+.pn-final{position:absolute;left:96px;top:1040px}
+.pn-final b{display:block;margin-top:8px;font:800 60px/1 var(--font);font-stretch:85%}
+.pn-final b i{font-style:normal;color:var(--ink-3);margin:0 6px}
+.pn-game{position:absolute;left:96px;right:380px;top:1150px;display:flex;align-items:center;gap:12px;font:600 26px var(--font);color:var(--ink-2)}
+.pn-game img{width:44px;height:44px;object-fit:contain}
+.pn-game span{margin-left:8px}
+.pn-foot{position:absolute;left:96px;right:380px;bottom:84px;display:flex;justify-content:space-between;align-items:baseline;padding-top:14px;border-top:1px solid rgba(0,0,0,.14);
+  font:500 19px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2)}
+.pn-ser{position:absolute;right:96px;top:532px;font:500 22px var(--mono);letter-spacing:.24em;color:#B8352A}
+/* the settled stamp, inked through a texture */
+.pn-stamp{position:absolute;left:712px;top:1016px;width:300px;height:300px;transform:rotate(-12deg) scale(.86);color:var(--green-deep);opacity:.94;mix-blend-mode:multiply;
   -webkit-mask-image:url(/assets/brand/stamp-ink.png);mask-image:url(/assets/brand/stamp-ink.png);-webkit-mask-size:100% 100%;mask-size:100% 100%}
-.stamp svg{position:absolute;left:0;top:0}
-.stamp-core{position:absolute;left:70px;top:70px;width:200px;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-.stamp-core b{font-family:var(--display);font-weight:400;font-size:86px;line-height:.9;letter-spacing:2px}
-.stamp-core span{font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:2px}
-.stamp-core small{font-family:var(--mono);font-size:13px;letter-spacing:3px;border-top:2px solid var(--cobalt);padding-top:4px;margin-top:4px}
-.pc .micro{overflow:hidden;white-space:nowrap;font-family:var(--mono);font-size:8px;line-height:11px;letter-spacing:2px;color:var(--emerald);user-select:none}
-.pc .dbl{height:0;border-top:3px double var(--emerald)}
+.pn-stamp svg{position:absolute;inset:0}
+.pn-stamp div{position:absolute;inset:64px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.pn-stamp b{font:900 92px/.86 var(--font);font-stretch:75%;letter-spacing:.02em}
+.pn-stamp span{margin-top:6px;font:600 28px var(--mono);letter-spacing:.12em}
 
 /* the numbers strip rides over the hero's edge */
 .strip{position:relative;z-index:2;margin-top:-64px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#fff;border-radius:12px;box-shadow:0 1px 0 rgba(0,0,0,.05),0 20px 50px rgba(0,0,0,.12)}
@@ -260,7 +272,7 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
   .hero .in{padding:40px 0 100px;gap:32px}
   .hero .cells div{padding-right:16px;margin-right:16px}
   .hero .cta .btn{flex:1 1 100%}
-  .pc-fit{width:min(84vw,380px)}
+  .pn-fit{width:min(84vw,380px)}
   section.pad{padding:64px 0}
   .strip>div{padding:20px}
   .board .row{padding:16px}
@@ -296,38 +308,42 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
     </div>
     <div class="note-wrap">
       <div class="note">
-      <div class="pc-fit" role="img" aria-label="A graded pick from the public ledger: New York Knicks +5.0 at the Spurs, spread, −110, 2 units, logged 6:20 AM ET before tip. Final: Knicks 94, Spurs 90. The sim had the Knicks by 1.0; they won by 4. Win, +1.82 units.">
-        <div class="pc" aria-hidden="true">
-          <img class="pc-frame" src="/posters/assets/brand/frame-cert.png" alt="" width="1080" height="1350">
-          <div class="pc-body">
-            <div class="pc-head"><b>Morello Sims</b><span>NBA No. 0216</span></div>
-            <div class="dbl top"></div>
-            <div class="micro">EVERY PICK GRADED IN PUBLIC · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC</div>
-            <div class="pc-team"><img src="/posters/assets/nba-team-logos/espn-ny.png" alt="" width="88" height="88"><span>New York Knicks</span></div>
-            <div class="pc-line">+5.0</div>
-            <div class="pc-terms">SPREAD · −110 · 2U</div>
-            <div class="pc-div">FINAL</div>
-            <div class="pc-final">Knicks 94 <span>·</span> Spurs 90</div>
-            <div class="pc-why">The sim had the Knicks by 1.0. They won by 4.</div>
-            <img class="pc-arena beside-stamp" src="/assets/brand/arena-sas.webp" alt="" width="470" height="210">
-            <div class="pc-cap beside-stamp">FROST BANK CENTER · SAT JUN 13</div>
-            <div class="pc-grow"></div>
-            <div class="dbl"></div>
-            <div class="pc-foot"><span>LOGGED 6:20 AM ET · BEFORE TIP</span><span>MS 2526 0216 A</span></div>
+      <div class="pn-fit" role="img" aria-label="A graded pick from the public ledger: New York Knicks +5.0 at the Spurs, spread, −110, 2 units, logged 6:20 AM ET before tip. The sim had the Knicks by 1.0, so 6.0 points of edge. Final: Knicks 94, Spurs 90. Win, +1.82 units.">
+        <div class="pn" aria-hidden="true" style="--tc:#006BB6;--tc2:#F58426">
+          <div class="pn-frame"></div>
+          <div class="pn-band">
+            <div class="pn-lat"></div>
+            <div class="pn-top"><img src="/assets/brand/v2/lockup-on-dark.svg" alt="" width="189" height="58"><span>NBA · No. 0216</span></div>
+            <div class="pn-team">
+              <div class="pn-medal"><img src="/posters/assets/nba-team-logos/espn-ny.png" alt="" width="150" height="150"></div>
+              <div><span class="pn-city">New York</span><span class="pn-nick">Knicks</span></div>
+            </div>
+            <div class="pn-stripe"></div>
           </div>
-          <div class="stamp">
-            <svg width="340" height="340" viewBox="0 0 340 340">
-              <circle cx="170" cy="170" r="162" fill="none" stroke="#2447B5" stroke-width="8"/>
-              <circle cx="170" cy="170" r="149" fill="none" stroke="#2447B5" stroke-width="2"/>
-              <circle cx="170" cy="170" r="104" fill="none" stroke="#2447B5" stroke-width="2.5"/>
-              <path id="stamp-top" d="M 44,170 A 126,126 0 0 1 296,170" fill="none"/>
-              <path id="stamp-bot" d="M 36,170 A 134,134 0 0 0 304,170" fill="none"/>
-              <text font-family="IBM Plex Mono, monospace" font-size="19" font-weight="500" letter-spacing="5" fill="#2447B5"><textPath href="#stamp-top" startOffset="50%" text-anchor="middle">GRADED IN PUBLIC</textPath></text>
-              <text font-family="IBM Plex Mono, monospace" font-size="16" font-weight="500" letter-spacing="4" fill="#2447B5"><textPath href="#stamp-bot" startOffset="50%" text-anchor="middle">MORELLO SIMS · No. 0216</textPath></text>
-              <text x="22" y="176" font-family="Libre Caslon Display, serif" font-size="22" fill="#2447B5">★</text>
-              <text x="300" y="176" font-family="Libre Caslon Display, serif" font-size="22" fill="#2447B5">★</text>
+          <div class="pn-ser">MS 2526 0216 A</div>
+          <div class="pn-pick">
+            <div><span class="pn-k">The pick</span><div class="pn-line">+5.0</div><div class="pn-terms">Spread · −110 · 2 units</div></div>
+            <div class="pn-den"><div class="pn-ros"></div><div class="pn-core"><b>2U</b><small>STAKE</small></div></div>
+          </div>
+          <div class="pn-row">
+            <div><span class="pn-k">Book</span><b>NYK +5.0</b></div>
+            <div><span class="pn-k">Sim</span><b>Knicks by 1</b></div>
+            <div class="edge"><span class="pn-k">Edge</span><b>6.0 pts</b></div>
+          </div>
+          <div class="pn-final"><span class="pn-k">Final</span><b>NYK 94<i>·</i>SAS 90</b></div>
+          <div class="pn-game"><img src="/posters/assets/nba-team-logos/espn-ny.png" alt="" width="44" height="44"><img src="/posters/assets/nba-team-logos/espn-sa.png" alt="" width="44" height="44"><span>Knicks at Spurs · Sat, Jun 13</span></div>
+          <div class="pn-foot"><span>Logged 6:20 AM ET · before tip</span></div>
+          <div class="pn-stamp">
+            <svg width="300" height="300" viewBox="0 0 300 300">
+              <circle cx="150" cy="150" r="142" fill="none" stroke="currentColor" stroke-width="8"/>
+              <circle cx="150" cy="150" r="129" fill="none" stroke="currentColor" stroke-width="2"/>
+              <circle cx="150" cy="150" r="92" fill="none" stroke="currentColor" stroke-width="2.5"/>
+              <path id="pn-st-top" d="M 39,150 A 111,111 0 0 1 261,150" fill="none"/>
+              <path id="pn-st-bot" d="M 32,150 A 118,118 0 0 0 268,150" fill="none"/>
+              <text font-family="IBM Plex Mono, monospace" font-size="17" font-weight="500" letter-spacing="4" fill="currentColor"><textPath href="#pn-st-top" startOffset="50%" text-anchor="middle">GRADED IN PUBLIC</textPath></text>
+              <text font-family="IBM Plex Mono, monospace" font-size="15" font-weight="500" letter-spacing="3" fill="currentColor"><textPath href="#pn-st-bot" startOffset="50%" text-anchor="middle">JUN 13 2026 · No. 0216</textPath></text>
             </svg>
-            <div class="stamp-core"><b>WIN</b><span>+1.82U</span><small>JUN 13 2026</small></div>
+            <div><b>WIN</b><span>+1.82U</span></div>
           </div>
         </div>
       </div>
@@ -465,8 +481,8 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
 const $ = id => document.getElementById(id);
 function track(n, p){ try { window.morelloAuth && window.morelloAuth.trackEvent(n, p); } catch(_){} }
 
-// the pick cards are drawn at 1080×1350 and scaled to whatever width the layout gives them
-document.querySelectorAll(".pc-fit").forEach(f => {
+// the pick note is drawn at 1080×1350 and scaled to whatever width the layout gives it
+document.querySelectorAll(".pn-fit").forEach(f => {
   const fit = () => { if (f.clientWidth) f.style.setProperty("--s", f.clientWidth / 1080); };
   fit(); if (window.ResizeObserver) new ResizeObserver(fit).observe(f); else addEventListener("resize", fit);
 });
