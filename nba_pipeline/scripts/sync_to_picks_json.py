@@ -38,7 +38,7 @@ PICK_LOG = DATA / "pick_log.json"
 DAILY = DATA / "daily_picks.json"
 
 UNIT_SIZE_DEFAULT = 50  # used when CSV row has no `risk` value
-MIN_TRACKED_CONF = 8
+MIN_TRACKED_CONF = 6   # same floor as capture_picks.MIN_TRACKED_CONF_GRADE
 
 # Stakes are frozen at capture: `units` is the CSV `risk` written by
 # capture_picks.py / inject_pick.py. It is never recomputed from confidence
@@ -136,7 +136,8 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     side_team, line, pick_text = parse_side(side_raw)
 
     try:
-        risk = int(float(row.get("risk") or 0)) or UNIT_SIZE_DEFAULT
+        risk = float(row.get("risk") or 0) or UNIT_SIZE_DEFAULT
+        risk = int(risk) if risk == int(risk) else risk   # 0.25u / 0.5u stakes are 6.25 / 12.5 $PP
     except (ValueError, TypeError):
         risk = UNIT_SIZE_DEFAULT
 
@@ -159,12 +160,15 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     # risk amount. Mirrors capture_picks.py's risk_amount() ladder:
     #   risk 100 -> C:10  (max-confidence plays)
     #   risk 50 -> C:8+   (premium plays)
-    #   risk 30 -> C:5-7  (mid-tier, not tracked)
+    #   risk 30 -> C:5    (legacy mid-tier, not tracked)
+    #   risk 12.5 -> C:7, risk 6.25 -> C:6  (0.5u / 0.25u, tracked since 2026-10-20)
     #   risk 20 -> C:1-4  (light, not tracked)
     if conf == 0 and risk:
         if risk >= 100: conf = 10
         elif risk >= 50: conf = 8
         elif risk >= 30: conf = 5
+        elif risk == 12.5: conf = 7
+        elif risk == 6.25: conf = 6
         elif risk > 0:   conf = 1
 
     if conf < MIN_TRACKED_CONF:

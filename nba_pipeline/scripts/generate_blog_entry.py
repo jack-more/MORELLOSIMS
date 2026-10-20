@@ -58,7 +58,7 @@ def load_picks_for_date(target_date):
                         "matchup": row["matchup"],
                         "side": row["side"],
                         "pick_type": row["type"],
-                        "risk": int(float(row["risk"])) if row["risk"] else 30,
+                        "risk": float(row["risk"]) if row["risk"] else 30,
                         "conf_1_10": 7,
                         "confidence": 65,
                         "spread_edge": 0,

@@ -112,7 +112,7 @@ def main():
         if reason:
             errors.append(f"counted row fails capture rule ({reason}): {k}")
         lg = logs.get((r["date"], r["matchup"], r["side"]))
-        if lg is not None and lg.get("risk") is not None and str(lg["risk"]) != str(int(float(r["risk"] or 0))):
+        if lg is not None and lg.get("risk") is not None and abs(float(lg["risk"]) - float(r["risk"] or 0)) > 1e-9:
             errors.append(f"stake {r['risk']} differs from capture record {lg['risk']}: {k}")
         if res in SETTLED:
             want = compute_profit(res, float(r["risk"] or 0), row_odds(r))
