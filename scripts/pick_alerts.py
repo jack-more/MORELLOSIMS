@@ -174,6 +174,10 @@ def run(dry=False):
                 # never the record itself: Actions logs are public.
                 print(f"  WARN member page {p.get('matchup')}: {type(e).__name__}: "
                       f"{getattr(e, 'message', '') or str(e).splitlines()[0][:160]}")
+                if type(e).__name__ == "PermissionDenied":
+                    who, proj = member_delivery.tg_members.identity()
+                    print(f"  WARN member page: service account {who} (project {proj}) needs "
+                          f"Cloud Datastore User on the Firestore project")
         if readable and member_delivery.email_enabled() and picks_store.ref_in(st["site"], pid) \
                 and not picks_store.ref_in(st["email"], pid):
             try:
