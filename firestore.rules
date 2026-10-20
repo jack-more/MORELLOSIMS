@@ -9,6 +9,22 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Tonight's picks for paying members — written only by the pick pipeline
+    // (scripts/member_delivery.py, admin SDK). Readable by a signed-in account
+    // with an active pass: the same rule as hasActiveAccess in functions/index.js.
+    function hasActivePass() {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return u.get('tier', 'free') == 'admin'
+        || (u.get('accessExpiresAt', null) is timestamp && u.accessExpiresAt > request.time)
+        || (u.get('checkoutMode', '') == 'subscription' && u.get('tier', 'free') != 'free');
+    }
+    match /member_picks/{pickId} {
+      allow read: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && hasActivePass();
+      allow write: if false;
+    }
+
     // FnF whitelist — read-only, managed via Firebase console
     match /fnf_whitelist/{email} {
       allow read: if request.auth != null;

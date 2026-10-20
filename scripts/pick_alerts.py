@@ -5,9 +5,11 @@ Owner rule (2026-09-30): X posts are blurred unless Jack says otherwise.
 For every newly published pick (MLB picks/mlb.json, NBA picks/nba.json):
   1. DM Jack the full pick (the real card for MLB) with a button
      "Post to X unblurred" — tg_channel_bot.py handles the tap;
-  2. members: when TELEGRAM_PREMIUM_CHANNEL_ID is set, post the full v3
-     card + pick text to the premium channel (the paid product — seal mode
-     keeps every public copy sealed until first pitch / tip);
+  2. members (the paid product; seal mode keeps every public copy sealed
+     until first pitch / tip): the full pick goes to the members page
+     (Firestore member_picks, read by /members/) and to every active member's
+     inbox (member_delivery.py); and, when TELEGRAM_PREMIUM_CHANNEL_ID is set,
+     the full v3 card + pick text to the premium Telegram channel;
   3. post the SEALED card to X (render_sealed.py) — matchup, time,
      confidence and log time only; the side never leaves the DM.
 
@@ -31,6 +33,7 @@ from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import member_delivery  # noqa: E402
 import ops_tg  # noqa: E402
 import picks_store  # noqa: E402
 
@@ -120,6 +123,8 @@ def run(dry=False):
     st = load(STATE, {"dm": [], "x_sealed": [], "x_open": []})
     if PREMIUM:
         st.setdefault("premium", [])
+    st.setdefault("site", [])
+    st.setdefault("email", [])
     # picks already receipted by the old post_daily_cards flow count as sent
     legacy = load(LEGACY, {})
     for pid in legacy.get("receipts", []):
@@ -159,6 +164,20 @@ def run(dry=False):
                 ok = ops_tg.send(premium_text(p), chat=PREMIUM)
             if ok:
                 st["premium"].append(ref)
+        # the members page first, then the inbox: the email links to the page
+        if readable and member_delivery.enabled() and not picks_store.ref_in(st["site"], pid):
+            try:
+                if member_delivery.publish(p, picks_store.start_label(p), dry=dry):
+                    st["site"].append(ref)
+            except Exception as e:
+                print(f"  WARN member page {p.get('matchup')}: {type(e).__name__}")
+        if readable and member_delivery.email_enabled() and picks_store.ref_in(st["site"], pid) \
+                and not picks_store.ref_in(st["email"], pid):
+            try:
+                if member_delivery.email(p, picks_store.start_label(p), dry=dry):
+                    st["email"].append(ref)
+            except Exception as e:
+                print(f"  WARN member email {p.get('matchup')}: {type(e).__name__}")
         if not picks_store.ref_in(st["x_sealed"], pid) and not picks_store.ref_in(st["x_open"], pid):
             try:
                 path = card_path(p, sealed=True)
