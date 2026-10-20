@@ -233,6 +233,9 @@ jobs:
       - name: Build the data page at /nbasim/
         run: python3 scripts/build_data_page.py   # the data side: slate + game reports, sim sealed until tip
 
+      - name: Publish the members dashboard at /members/dashboard/
+        run: python3 scripts/publish_member_dashboard.py   # NBA SIM dashboard, branded and gated; picks sealed in it
+
 
       - name: Commit and push
         run: |
@@ -241,6 +244,7 @@ jobs:
           DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
 
           git add nbasim/index.html nbasim/slate.json
+          if [ -f members/dashboard/index.html ]; then git add members/dashboard/index.html; fi
           git add picks/nba.json
           git add nba_pipeline/db/nba_sim.db
           # snapshot history moved out of the DB (utils/snapshot_archive.py)
@@ -347,6 +351,9 @@ jobs:
       - name: Build the data page at /nbasim/
         run: python3 scripts/build_data_page.py   # the data side: slate + game reports, sim sealed until tip
 
+      - name: Publish the members dashboard at /members/dashboard/
+        run: python3 scripts/publish_member_dashboard.py   # NBA SIM dashboard, branded and gated; picks sealed in it
+
 
       - name: Commit and push
         run: |
@@ -355,6 +362,7 @@ jobs:
           DATE=$(TZ='America/Los_Angeles' date '+%b %d %I:%M %p PST')
 
           git add nbasim/index.html nbasim/slate.json
+          if [ -f members/dashboard/index.html ]; then git add members/dashboard/index.html; fi
           git add picks/nba.json
           git add nba_pipeline/db/nba_sim.db
           # snapshot history moved out of the DB (utils/snapshot_archive.py)
