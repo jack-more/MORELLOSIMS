@@ -9,6 +9,7 @@ import json
 import math
 import re
 from datetime import datetime, timedelta, timezone
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -20,7 +21,8 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(__file__))
 
 from db.connection import read_query
-from config import DB_PATH, CURRENT_SEASON
+from config import DB_PATH, CURRENT_SEASON, previous_season
+from utils import priors as _priors
 
 # Odds API removed — was returning 401 (expired key) and all lines come from
 # RotoWire scrape anyway. Keeping stub functions so callers don't break.
@@ -135,6 +137,26 @@ def _build_orapm_percentiles():
 
 
 _build_orapm_percentiles()
+
+# ─── Season priors (utils/priors.py) ─────────────────────────────
+# One prior line per rostered player, written by seed_season.py: last season,
+# or a composite for anyone without one (back from a lost season, rookies,
+# signings). _get_full_roster weighs this season's games against it.
+_PRIORS = _priors.load(DB_PATH, CURRENT_SEASON)
+
+
+def _fill_prior_percentiles():
+    """Players with no RAPM yet take their draft slot's percentiles from the
+    priors: on box score alone MOJO lands ~25 points lower than everyone
+    else's (every rookie hit the 33 floor)."""
+    for pid, line in _PRIORS.items():
+        if pid not in _ORAPM_PERCENTILES and line.get("orapm_pctl") is not None:
+            _ORAPM_PERCENTILES[pid] = int(line["orapm_pctl"])
+        if pid not in _DRAPM_PERCENTILES and line.get("drapm_pctl") is not None:
+            _DRAPM_PERCENTILES[pid] = int(line["drapm_pctl"])
+
+
+_fill_prior_percentiles()
 
 # ─── Play Type Intelligence Cache ────────────────────────────────
 # Loaded at module load — enables scheme-aware usage redistribution.
@@ -1691,10 +1713,19 @@ def is_back_to_back(team_tricode, game_date=None):
     return team_tricode in _PLAYED_ON_CACHE[prev]
 
 
+_ROSTER_STATS = ("pts_pg", "ast_pg", "reb_pg", "stl_pg", "blk_pg", "ts_pct", "usg_pct", "net_rating",
+                 "minutes_per_game", "off_rating", "def_rating")
+
+
 def _get_full_roster(team_abbr):
-    """Get full rotation roster (mpg > 5) with archetypes."""
-    return read_query(f"""
-        SELECT p.player_id, p.full_name, ps.pts_pg, ps.ast_pg, ps.reb_pg,
+    """Get full rotation roster (mpg > 5) with archetypes.
+
+    Each line is this season's games weighed against the player's prior
+    (utils/priors.py) so one box score can't replace a season; the rotation
+    cut is on the blended minutes, so a starter who played 3 minutes on
+    opening night stays in it."""
+    df = read_query(f"""
+        SELECT p.player_id, p.full_name, ps.gp, ps.pts_pg, ps.ast_pg, ps.reb_pg,
                ps.stl_pg, ps.blk_pg, ps.ts_pct, ps.usg_pct, ps.net_rating,
                ps.minutes_per_game, ps.off_rating, ps.def_rating,
                ra.listed_position,
@@ -1705,9 +1736,16 @@ def _get_full_roster(team_abbr):
         JOIN teams t ON ps.team_id = t.team_id
         LEFT JOIN player_archetypes pa ON ps.player_id = pa.player_id AND ps.season_id = pa.season_id
         WHERE ps.season_id = '{CURRENT_SEASON}' AND t.abbreviation = ?
-              AND ps.minutes_per_game > 5
-        ORDER BY ps.minutes_per_game DESC
     """, DB_PATH, [team_abbr])
+    if _PRIORS and not df.empty:
+        for i in df.index:
+            prior = _PRIORS.get(int(df.at[i, "player_id"]))
+            if prior:
+                b = _priors.blend({c: df.at[i, c] for c in ("gp",) + _ROSTER_STATS}, prior)
+                for c in _ROSTER_STATS:
+                    df.at[i, c] = b[c]
+    df = df[df["minutes_per_game"].fillna(0) > 5]
+    return df.sort_values("minutes_per_game", ascending=False).reset_index(drop=True)
 
 
 _NAME_SUFFIXES = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
@@ -3185,10 +3223,34 @@ def get_team_mojo_rankings():
     return {abbr: rank + 1 for rank, (abbr, _) in enumerate(team_mojo)}
 
 
+# A few games into a season a team's ratings are mostly noise: one game's margin
+# has sd ~14 against ~4.6 for last season's line as a guess at this one, so
+# last season's row counts as 14^2 / 4.6^2 ~ 10 games until this season has more.
+TEAM_PRIOR_GAMES = 10
+_TEAM_RATINGS = ("pace", "off_rating", "def_rating", "net_rating", "fg3a_rate")
+
+
+def _blend_team_priors(teams):
+    prev = {}
+    for _, r in read_query("SELECT * FROM team_season_stats WHERE season_id = ? ORDER BY rowid", DB_PATH,
+                           [previous_season(CURRENT_SEASON)]).iterrows():
+        prev[int(r["team_id"])] = r   # newest row per team (2024-25 has duplicates)
+    for i in teams.index:
+        p = prev.get(int(teams.at[i, "team_id"]))
+        gp = float(teams.at[i, "gp"] or 0)
+        if p is None:
+            continue
+        for c in _TEAM_RATINGS:
+            cur, pv = teams.at[i, c], p.get(c)
+            if pd.notna(cur) and pd.notna(pv):
+                teams.at[i, c] = (gp * cur + TEAM_PRIOR_GAMES * pv) / (gp + TEAM_PRIOR_GAMES)
+    return teams
+
+
 def get_matchups():
     """Generate matchups from the Odds API slate (or fallback to hardcoded)."""
     teams = read_query(f"""
-        SELECT t.team_id, t.abbreviation, t.full_name,
+        SELECT t.team_id, t.abbreviation, t.full_name, ts.gp,
                ts.pace, ts.off_rating, ts.def_rating, ts.net_rating, ts.fg3a_rate,
                cp.off_scheme_label, cp.def_scheme_label, cp.pace_category,
                cp.primary_playstyle, cp.secondary_playstyle
@@ -3198,6 +3260,7 @@ def get_matchups():
         WHERE ts.season_id = '{CURRENT_SEASON}'
         ORDER BY ts.net_rating DESC
     """, DB_PATH)
+    teams = _blend_team_priors(teams)
 
     # ── Get real W-L records from games table ──
     records = read_query(f"""

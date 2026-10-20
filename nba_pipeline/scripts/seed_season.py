@@ -6,9 +6,14 @@ MOJI (player_value_scores), synergy (pair_synergy / lineup_stats), rosters,
 team ratings and coaching schemes would all read as zero. This script seeds
 the new season from the previous one, mapped onto the NEW rosters:
 
-  * player tables (value scores, season stats, archetypes, play types):
-    last season's row for every player on a new-season roster, team_id set
-    to his new team. Rookies get no seed (the model's defaults apply).
+  * player tables (value scores, archetypes, play types): last season's row
+    for every player on a new-season roster, team_id set to his new team.
+  * player_season_stats: the prior line from utils/priors.py, also stored in
+    player_priors (the model blends real games into it): last season's line,
+    or a composite for players without a full one (back from a lost season,
+    rookies by draft slot, signings). A seeded copy of a short last-season
+    sample (Tatum's 16 games) is replaced by the composite; real new-season
+    rows are never touched.
   * pair_synergy / lineup_stats / lineup_players: only pairs and lineups whose
     players are all still teammates on the same new team.
   * team tables (team_season_stats, coaching_profiles, team_playtypes):
@@ -36,11 +41,11 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from config import DB_PATH, CURRENT_SEASON, previous_season  # noqa: E402
+from utils import priors  # noqa: E402
 
 PLAYER_TABLES = [
-    # (table, key columns besides season_id)
+    # (table, key columns besides season_id); player_season_stats is seeded from priors
     ("player_value_scores", ("player_id",)),
-    ("player_season_stats", ("player_id",)),
     ("player_archetypes", ("player_id",)),
     ("player_playtypes", ("player_id", "play_type", "type_grouping")),
 ]
@@ -104,6 +109,35 @@ def seed(db_path, to_season, from_season):
                 rec["updated_at"] = f"seed:{from_season}"
             rows.append([rec[k] for k in c])
         report[table] = insert_rows(con, table, c, rows)
+
+    # ── player_season_stats: prior lines ──
+    c = cols(con, "player_season_stats")
+    stats = [x for x in c if x not in priors.ID_COLS]
+    have = {r[0]: dict(zip(stats, r[1:])) for r in con.execute(
+        f"SELECT player_id, {', '.join(stats)} FROM player_season_stats WHERE season_id = ?", [to_season])}
+    old = {r[0]: dict(zip(stats, r[1:])) for r in con.execute(
+        f"SELECT player_id, {', '.join(stats)} FROM player_season_stats WHERE season_id = ?", [from_season])}
+    try:
+        pri, info = priors.build(con, to_season)
+        priors.store(con, to_season, pri)
+    except Exception as e:  # never cost the run its seed: fall back to last season's lines
+        print(f"WARNING: priors failed ({e!r}); seeding {from_season} lines only")
+        pri = {pid: {"line": old[pid], "source": from_season, "games": old[pid]["gp"]} for pid in roster if pid in old}
+        info = {"draft_fit_n": 0}
+    rows, replaced = [], 0
+    for pid, p in pri.items():
+        if pid in have:
+            # only an untouched copy of last season's row gives way to a composite
+            if p["source"] == from_season or have[pid] != old.get(pid):
+                continue
+            con.execute("DELETE FROM player_season_stats WHERE player_id = ? AND season_id = ?", [pid, to_season])
+            replaced += 1
+        rec = dict(p["line"], player_id=pid, team_id=roster[pid], season_id=to_season)
+        rows.append([rec.get(k) for k in c])
+    report["player_season_stats"] = insert_rows(con, "player_season_stats", c, rows)
+    report["player_season_stats (composite replaced a short copy)"] = replaced
+    report["player_priors"] = f"{len(pri)} ({sum(p['source'] != from_season for p in pri.values())} composite, "\
+                              f"draft fit on {info['draft_fit_n']} rookies)"
 
     # ── team-level priors ──
     for table, keys in TEAM_TABLES:
