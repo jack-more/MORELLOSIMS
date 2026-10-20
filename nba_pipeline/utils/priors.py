@@ -18,6 +18,15 @@ prior line for everyone on a new-season roster:
     season_win_sim.py prices rookies. Minutes are expected minutes (mpg x
     share of games played), so rookies who sat count as sitting. Undrafted
     players and signings with no NBA line get the line of the last pick.
+  * summer league (collectors/espn_summer_league.py): for anyone on a draft-slot
+    or pick-60 line, his summer per-36 numbers, translated to NBA per-36 by a
+    fit on everyone who played the previous summer and the season after, are
+    blended into the composite's per-36 profile at SL_GAME_WEIGHT games per
+    summer game. Leave-one-out on the 2025 class: per-36 error drops ~25% on
+    rebounds, assists, blocks and threes (points flat), which is what places
+    a rookie's archetype. MOJO error doesn't move (13.5 either way): a
+    rookie's MOJO is mostly RAPM, and July doesn't predict it, so the RAPM
+    percentiles stay on draft slot.
   * RAPM: MOJO scores a player with RAPM on its percentile scale and one
     without on box score alone, which lands ~25 points lower (every rookie
     hit the 33 floor). A player with no RAPM gets the ORAPM / DRAPM
@@ -44,6 +53,9 @@ RECENCY = (1.0, 0.8)  # weight per game: last season, the one before
 DRAFT_GAMES = 20     # weight of the draft-slot line, in games
 PRIOR_GAMES = 15     # weight of the prior against this season's real games
 LAST_PICK = 60
+SL_GAME_WEIGHT = 5   # one summer league game = 5 games of the draft-slot line (best of 0-99 in the LOO)
+SL_MIN_MINUTES = 40
+COUNTING = ("pts", "reb", "ast", "stl", "blk", "tov", "fg3a", "fta")
 ID_COLS = ("player_id", "team_id", "season_id")
 # per-game averages combine by games; rates and ratings by minutes
 PER_GAME = {"gp", "minutes_total", "minutes_per_game", "pts_pg", "reb_pg", "ast_pg", "stl_pg", "blk_pg",
@@ -119,11 +131,13 @@ def draft_fit(con, draft_prev, line_season, cols):
         return None, len(pts)
     x = np.array([p[0] for p in pts])
     fits = {}
-    for c in cols + ["orapm_pctl", "drapm_pctl"]:
+    for c in cols + ["orapm_pctl", "drapm_pctl", "_mpg_played"]:
         if c in ("gp", "minutes_total"):
             continue
         if c == "minutes_per_game":
             y = np.array([(p[1]["minutes_per_game"] or 0) * min(1, (p[1]["gp"] or 0) / 82) for p in pts])
+        elif c == "_mpg_played":               # the minutes his per-game numbers were made in
+            y = np.array([float(p[1]["minutes_per_game"] or 0) for p in pts])
         else:
             y = np.array([np.nan if p[1].get(c) is None else float(p[1][c]) for p in pts])
         ok = ~np.isnan(y)
@@ -142,6 +156,41 @@ def draft_fit(con, draft_prev, line_season, cols):
     return f, len(pts)
 
 
+def summer_lines(con, year):
+    """{player_id: {"g", "min", per-36 counting stats}} from summer_league_games ({} without the table)."""
+    try:
+        rows = con.execute(f"""SELECT player_id, COUNT(*), SUM(min), {', '.join(f'SUM({k})' for k in COUNTING)},
+                                      SUM(fga) + 0.44 * SUM(fta) + SUM(tov)
+                               FROM summer_league_games WHERE year = ? AND player_id IS NOT NULL
+                               GROUP BY player_id""", [year]).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    # use36: possessions used per 36 (shots, trips, turnovers), the summer stand-in for usage
+    return {r[0]: {"g": r[1], "min": r[2], **{k: 36 * (v or 0) / r[2] for k, v in zip(COUNTING + ("use",), r[3:])}}
+            for r in rows if (r[2] or 0) >= SL_MIN_MINUTES}
+
+
+def summer_translation(con, year, nba_season, cols):
+    """{stat: (a, b)}: NBA per-36 = a + b x summer per-36, on players with both (300+ NBA minutes)."""
+    sl, nba = summer_lines(con, year), season_lines(con, nba_season, cols)
+    both = [p for p in sl if p in nba and (nba[p]["minutes_total"] or 0) >= 300 and nba[p]["minutes_per_game"]]
+    if len(both) < 30:
+        return None, len(both)
+    fits = {}
+    for k in COUNTING:
+        y = [(nba[p][f"{k}_pg"] or 0) * 36 / nba[p]["minutes_per_game"] for p in both]
+        b, a = np.polyfit([sl[p][k] for p in both], y, 1)
+        fits[k] = (float(a), float(b))
+    pool = [p for p in both if nba[p].get("usg_pct") is not None]
+    b, a = np.polyfit([sl[p]["use"] for p in pool], [nba[p]["usg_pct"] for p in pool], 1)
+    fits["usg_pct"] = (float(a), float(b))
+    for pct, k in (("ast_pct", "ast"), ("reb_pct", "reb")):   # share stats follow the per-36 ones
+        pool = [L for L in nba.values() if (L["minutes_total"] or 0) >= 300 and L.get(pct) is not None]
+        b, a = np.polyfit([(L[f"{k}_pg"] or 0) * 36 / L["minutes_per_game"] for L in pool], [L[pct] for L in pool], 1)
+        fits[pct] = (float(a), float(b))
+    return fits, len(both)
+
+
 def build(con, season, context_path=None):
     """{player_id: {"line": {...}, "source": str, "games": float}} for every player on a `season` roster."""
     cols = stat_cols(con)
@@ -155,6 +204,8 @@ def build(con, season, context_path=None):
     yr = int(season[:4])
     fit, n_fit = draft_fit(con, drafts.get(str(yr - 1), []), old, cols) if drafts else (None, 0)
     o_pct, _ = rapm_pctls(con)
+    summer = summer_lines(con, yr)
+    trans, n_trans = summer_translation(con, yr - 1, old, cols)
     slot = {}
     for y in (yr, yr - 1):                     # this year's class and last year's (unplayed or barely)
         for d in drafts.get(str(y), []):
@@ -179,13 +230,29 @@ def build(con, season, context_path=None):
         if not parts:
             continue                           # nothing to go on: end of bench, as before
         line = combine(parts, cols)
+        s = summer.get(pid) if trans and real < MIN_GP else None
+        if s:
+            wc, ws = sum(w for _, w in parts), SL_GAME_WEIGHT * s["g"]
+            basis = sum(w * (L.get("_mpg_played") or L.get("minutes_per_game") or 0) for L, w in parts) / wc
+            for k in COUNTING:
+                comp36 = (line.get(f"{k}_pg") or 0) * 36 / basis if basis else 0.0
+                a, b = trans[k]
+                v36 = (wc * comp36 + ws * max(0.0, a + b * s[k])) / (wc + ws)
+                line[f"{k}_pg"], line[f"{k}_per36"] = v36 * basis / 36, v36
+            for pct, k in (("ast_pct", "ast"), ("reb_pct", "reb")):
+                a, b = trans[pct]
+                line[pct] = a + b * line[f"{k}_per36"]
+            if line.get("usg_pct") is not None:
+                a, b = trans["usg_pct"]
+                line["usg_pct"] = (wc * line["usg_pct"] + ws * (a + b * s["use"])) / (wc + ws)
+            label.append(f"{yr} summer league {s['g']}g")
         if pid not in o_pct and fit:
             slot_line = fit(pick)
             line["orapm_pctl"], line["drapm_pctl"] = slot_line.get("orapm_pctl"), slot_line.get("drapm_pctl")
         line["gp"] = int(round(sum(w for _, w in parts)))
         line["minutes_total"] = (line.get("minutes_per_game") or 0) * line["gp"]
         out[pid] = {"line": line, "source": " + ".join(label), "games": float(sum(w for _, w in parts))}
-    return out, {"draft_fit_n": n_fit}
+    return out, {"draft_fit_n": n_fit, "summer_fit_n": n_trans, "summer_players": len(summer)}
 
 
 def _num(v):
@@ -198,7 +265,7 @@ def blend(current, prior, prior_games=PRIOR_GAMES):
     out = dict(current)
     for c, pv in prior.items():
         cv = _num(current.get(c))
-        if c in ("gp", "minutes_total") or c.endswith("_pctl") or pv is None:
+        if c in ("gp", "minutes_total") or c.endswith("_pctl") or c.startswith("_") or pv is None:
             continue
         if cv is None:
             out[c] = pv

@@ -158,6 +158,18 @@ def _fill_prior_percentiles():
 
 _fill_prior_percentiles()
 
+# Every rostered player's archetype this season (seed_season.py assigns one to
+# players with no history). Scheme fit reads archetypes off last season's pair
+# rows, which only exist for players who were teammates; a new pair falls back
+# to these instead of both players reading as wings.
+_ARCHETYPES = {}
+try:
+    _ARCHETYPES = {int(r["player_id"]): r["archetype_label"] for _, r in read_query(
+        "SELECT player_id, archetype_label FROM player_archetypes WHERE season_id = ?",
+        DB_PATH, [CURRENT_SEASON]).iterrows()}
+except (sqlite3.OperationalError, pd.errors.DatabaseError):
+    pass
+
 # ─── Play Type Intelligence Cache ────────────────────────────────
 # Loaded at module load — enables scheme-aware usage redistribution.
 # Maps player_id → {play_type: {ppp, poss_pct, possessions, poss_share}}
@@ -2416,8 +2428,10 @@ def _compute_lineup_scheme_mult(player_ids, pair_lookup, scheme_type, quality_fa
     for a, b in combinations(player_ids, 2):
         key = (min(a, b), max(a, b))
         pair_data = pair_lookup.get(key)
-        arch_a = pair_data["arch_a"] if pair_data else ""
-        arch_b = pair_data["arch_b"] if pair_data else ""
+        if pair_data and pair_data["arch_a"] and pair_data["arch_b"]:
+            arch_a, arch_b = pair_data["arch_a"], pair_data["arch_b"]
+        else:
+            arch_a, arch_b = _ARCHETYPES.get(a, ""), _ARCHETYPES.get(b, "")
 
         pair_cat = _classify_pair_category(arch_a, arch_b)
         base_mult = SCHEME_INTERACTION.get((pair_cat, scheme_type), 1.0)

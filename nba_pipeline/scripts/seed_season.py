@@ -14,6 +14,11 @@ the new season from the previous one, mapped onto the NEW rosters:
     rookies by draft slot, signings). A seeded copy of a short last-season
     sample (Tatum's 16 games) is replaced by the composite; real new-season
     rows are never touched.
+  * player_archetypes: last season's archetype where he has one; anyone else
+    on a roster (rookies, players back from a lost season, signings) gets the
+    nearest archetype from his prior line (analysis/archetypes.py).
+  * summer_league_games: this summer's ESPN box scores, fetched once
+    (collectors/espn_summer_league.py), feed the rookies' composites.
   * pair_synergy / lineup_stats / lineup_players: only pairs and lineups whose
     players are all still teammates on the same new team.
   * team tables (team_season_stats, coaching_profiles, team_playtypes):
@@ -137,7 +142,13 @@ def seed(db_path, to_season, from_season):
     report["player_season_stats"] = insert_rows(con, "player_season_stats", c, rows)
     report["player_season_stats (composite replaced a short copy)"] = replaced
     report["player_priors"] = f"{len(pri)} ({sum(p['source'] != from_season for p in pri.values())} composite, "\
-                              f"draft fit on {info['draft_fit_n']} rookies)"
+                              f"draft fit on {info['draft_fit_n']} rookies, summer league for " \
+                              f"{sum('summer league' in p['source'] for p in pri.values())})"
+    try:
+        from analysis.archetypes import assign_new_players
+        report["player_archetypes (assigned to new players)"] = assign_new_players(con, to_season, from_season)
+    except Exception as e:  # a role is a refinement; never cost the run its seed
+        print(f"WARNING: archetype assignment failed ({e!r})")
 
     # ── team-level priors ──
     for table, keys in TEAM_TABLES:
@@ -211,6 +222,20 @@ def main():
     if not have_prior:
         print(f"No {from_season} player values to seed from; nothing to do")
         return
+
+    year = int(args.to_season[:4])
+    con = sqlite3.connect(args.db)
+    try:
+        have_summer = con.execute("SELECT COUNT(*) FROM summer_league_games WHERE year = ?", [year]).fetchone()[0]
+    except sqlite3.OperationalError:
+        have_summer = 0
+    con.close()
+    for y in ((year - 1, year) if not have_summer else ()):   # once a season; stored games are skipped
+        try:
+            from collectors.espn_summer_league import collect
+            print(f"Summer league {y}: {collect(args.db, y)} games fetched")
+        except Exception as e:
+            print(f"WARNING: summer league {y} fetch failed ({e!r}); composites go without it")
 
     report = seed(args.db, args.to_season, from_season)
     print(f"Seeded {args.to_season} from {from_season} (rows inserted; 0 = already present):")
