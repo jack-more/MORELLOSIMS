@@ -195,8 +195,11 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     sim_edge = meta.get("spread_edge")
     sim_projection: str | None = None
     if sim_spread is not None:
-        sign = "+" if sim_spread > 0 else ""
-        sim_projection = f"{side_team} {sign}{sim_spread}"
+        # sim_spread is the home team's line; turn it to the picked side's,
+        # or an away pick reads with the wrong sign (NYK +5 showed "NYK +1.0"
+        # when the sim had NYK -1)
+        mine = float(sim_spread) if side_team == home else -float(sim_spread)
+        sim_projection = f"{side_team} {mine:+.1f}" if mine else f"{side_team} PK"
 
     def _num(raw):
         raw = (raw or "").strip()
