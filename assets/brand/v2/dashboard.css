@@ -3,18 +3,19 @@
    selectors win here; inline team colours need !important.
    scripts/publish_member_dashboard.py links it and rewrites the bits CSS cannot reach. */
 
-/* Palette: every colour on this page comes from these tokens. */
+/* Palette: every colour on this page comes from these tokens.
+   Brand green page, white cards, black header and type. */
 :root{
   --d-bar:#0B0F0D;          /* brand header bar */
-  --d-bg:#F3F5F4;           /* page */
+  --d-bg:#1FA255;           /* page */
   --d-card:#FFFFFF;         /* cards, chips */
-  --d-inset:#F6F8F7;        /* panels inside cards, hovers */
+  --d-inset:#F5F8F6;        /* panels inside cards, hovers */
   --d-hover:#EEF6F1;
-  --d-line:#E1E6E3;--d-line-soft:#ECEFED;
+  --d-line:#E3E8E5;--d-line-soft:#EEF1EF;
   --d-ink:#0B0F0D;--d-ink-2:#4E5752;--d-ink-3:#88918C;
   --d-head-ink:#0B0F0D;     /* headings, team names */
-  --d-on-bg-2:#4E5752;      /* secondary text sitting on the page colour */
-  --d-dark:#0B0F0D;         /* active chips, trend headers, sim panels, mobile nav */
+  --d-on-bg-2:rgba(0,0,0,.62); /* secondary text sitting on the page colour */
+  --d-dark:#0B0F0D;         /* active chips, trend headers, mobile nav */
   --d-dark-ink-2:#A9B3AE;
   --d-arch:#1F78D1;--d-link:#1F78D1;
   --d-pos:#14743C;--d-elite:#14743C;--d-warn:#8A5A00;
@@ -39,13 +40,13 @@ body{background:var(--d-bg);color:var(--d-ink);font-family:var(--ms-font);font-v
 /* ─ header: brand bar on top, the old logo row goes, tabs become a white sub-bar ─ */
 #ma-profile-btn,.ma-site-nav{display:none!important}
 .top-bar{display:none}
-.sticky-header{background:var(--d-card);border-bottom:1px solid var(--d-line);box-shadow:0 1px 0 rgba(0,0,0,.03)}
-.filter-bar{background:var(--d-card);padding:0 16px}
+.sticky-header{background:var(--d-bar);border-bottom:1px solid rgba(255,255,255,.08);box-shadow:none}
+.filter-bar{background:var(--d-bar);padding:0 16px}
 .filter-bar-inner{max-width:1180px;gap:4px}
-.filter-btn{font:700 14px/1 var(--ms-font);letter-spacing:.01em;text-transform:none;color:var(--d-ink-2);
+.filter-btn{font:700 14px/1 var(--ms-font);letter-spacing:.01em;text-transform:none;color:#A9B3AE;
   background:transparent;border:0;border-radius:0;padding:16px 12px 14px;box-shadow:inset 0 -3px 0 transparent}
-.filter-btn:hover:not(.active){color:var(--d-head-ink);border:0;box-shadow:inset 0 -3px 0 var(--d-line)}
-.filter-btn.active{background:transparent;color:var(--d-head-ink);border:0;box-shadow:inset 0 -3px 0 var(--ms-green)}
+.filter-btn:hover:not(.active){color:#fff;border:0;box-shadow:inset 0 -3px 0 rgba(255,255,255,.2)}
+.filter-btn.active{background:transparent;color:#fff;border:0;box-shadow:inset 0 -3px 0 var(--ms-mint)}
 .ms-dash-title{max-width:1180px;margin:0 auto;padding:22px 16px 4px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .ms-dash-title h1{font:900 34px/1 var(--ms-font);font-stretch:78%;color:var(--d-head-ink);letter-spacing:-.01em}
 .ms-dash-title span{font:600 14px var(--ms-font);color:var(--d-ink-2)}
@@ -55,54 +56,52 @@ body{background:var(--d-bg);color:var(--d-ink);font-family:var(--ms-font);font-v
 .section-header{margin:6px 0 14px}
 .section-header h2{font-size:26px;color:var(--d-head-ink);letter-spacing:0}
 .section-sub{font:500 13px var(--ms-font);color:var(--d-ink-2);margin-top:6px}
-.proj-disclaimer{font:400 13.5px/1.55 var(--ms-font);color:var(--d-ink-2);background:var(--d-card);border:1px solid var(--d-line);
-  border-left:3px solid var(--ms-green);border-radius:4px;padding:12px 16px}
+.proj-disclaimer{font:400 13.5px/1.55 var(--ms-font);color:var(--d-ink-2);background:var(--d-card);border:0;
+  border-left:3px solid var(--d-ink);border-radius:4px;padding:12px 16px}
 .proj-disclaimer strong{color:var(--d-head-ink)}
 .sort-btn,.mojo-sort-btn,.wowy-tab,.wowy-chip{font:700 13px var(--ms-font);letter-spacing:0;text-transform:none;border:1px solid var(--d-line);
   border-radius:999px;background:var(--d-card);color:var(--d-ink-2);padding:8px 14px}
 .sort-btn.active,.mojo-sort-btn.active,.wowy-tab.active,.wowy-chip.active{background:var(--d-dark);color:#fff;border-color:var(--d-dark)}
 .mojo-sort-bar,.wowy-tabs{border:0;gap:6px;border-radius:0;overflow:visible}
 
-/* ─ game card ─ */
-.matchup-card{border:1px solid var(--d-line);border-radius:8px;box-shadow:var(--shadow);margin-bottom:18px}
-.matchup-card:hover{transform:none;box-shadow:var(--shadow-lg)}
-.mc-header{padding:20px 22px 14px}
-.mc-abbr{font-size:30px;color:var(--d-head-ink)}
-.mc-mojo-rank{white-space:nowrap;font:700 12px var(--ms-font);color:var(--d-pos);letter-spacing:.02em}
-.mc-record{font:500 12px var(--ms-font);color:var(--d-ink-3)}
-.mc-spread{font:900 26px/1.05 var(--ms-font);font-stretch:78%}
-.mc-total{font:600 13px var(--ms-font);color:var(--d-ink-2);margin-top:2px}
-.mc-pick{font:700 13px var(--ms-font);color:#fff;background:var(--ms-green);border-radius:3px;padding:4px 10px;margin-top:8px}
-.mc-pick .pick-label{font-size:10px;letter-spacing:.08em;opacity:.8}
-.mc-conf-num{color:#fff!important;background:rgba(0,0,0,.28);font-size:11px;padding:1px 6px;border-radius:2px}
-.mc-implied,.mc-sim-proj{font:600 11px var(--ms-font);color:var(--d-ink-3);letter-spacing:.01em}
-.tow-bar{height:8px;border:0;border-radius:999px;box-shadow:none;margin:0 22px;background:var(--d-line)}
-.tow-fill.tow-away{border-right:2px solid #fff}
-.tow-mid{display:none}
-.tow-labels{font:600 12px var(--ms-font);color:var(--d-ink-2);padding:8px 22px 0}
-.mc-schemes{padding:12px 22px 6px;gap:6px}
-.scheme-tag{background:var(--d-card)!important;color:var(--d-ink)!important;text-shadow:none!important;border:1px solid var(--d-line);
-  border-left:4px solid var(--team,var(--d-dark));border-radius:3px;font:600 11.5px var(--ms-font);text-transform:none;letter-spacing:0;padding:4px 10px}
-.scheme-divider{font:600 11px var(--ms-font);color:var(--d-ink-3)}
-.moji-breakdown{margin:8px 22px 10px;padding:12px 14px;background:var(--d-inset);border:1px solid var(--d-line-soft);border-radius:4px}
-.moji-row{font:500 12px var(--ms-font)}
-.moji-label{font:800 10.5px var(--ms-font);letter-spacing:.06em;color:var(--d-ink-3)}
-.moji-val{font-weight:700;color:var(--d-head-ink);font-size:12px}
-.moji-edge-sm{font-weight:700;color:var(--d-ink-2);font-size:11px}
-.moji-bar-mini{height:6px;border:0;border-radius:999px;background:var(--d-line)}
-.moji-model-row{border-top:1px dashed var(--d-line)}
-.moji-model-formula{font:600 11px var(--ms-font);color:var(--d-ink-2)}
-.moji-model-formula strong{color:var(--d-head-ink);font-size:12px}
-.hca-badge,.b2b-badge,.out-badge{font:700 10.5px var(--ms-font);border-radius:2px;padding:3px 7px}
-.hca-badge{background:var(--d-pos-bg);color:var(--d-pos)}
-.out-badge{background:var(--d-warn-bg);color:var(--d-warn)}
-.mc-sportsbooks{display:inline-flex;vertical-align:middle;padding:4px 0 16px 22px;border-top:0;margin:0;gap:8px}  /* the books sit on one line */
-.sb-header{font:800 10px var(--ms-font);letter-spacing:.1em;color:var(--d-ink-3)}
-.sb-btn{font:700 12px var(--ms-font);background:var(--d-card);border:1px solid var(--d-line);border-radius:3px;padding:7px 12px}
-.sb-btn:hover{background:var(--d-inset);border-color:var(--d-ink-3);transform:none}
-.sb-btn-featured,.sb-btn-bovada,.pm-btn-kalshi,.pm-btn-dk{background:var(--d-card);border-width:1px}
-.expand-btn{font:700 13px var(--ms-font);letter-spacing:.01em;text-transform:none;color:var(--d-head-ink);background:var(--d-inset);border-top:1px solid var(--d-line);padding:12px}
-.expand-btn:hover{background:var(--d-hover);color:var(--d-head-ink)}
+/* ─ game card: the board (generate_frontend.render_matchup_card) ─ */
+.matchup-card{border:0;border-radius:10px;box-shadow:0 1px 0 rgba(0,0,0,.06),0 12px 30px rgba(0,0,0,.12);margin-bottom:18px;overflow:hidden}
+.matchup-card:hover{transform:none;box-shadow:0 1px 0 rgba(0,0,0,.06),0 16px 38px rgba(0,0,0,.16)}
+.gc-top{display:flex;justify-content:space-between;align-items:center;gap:6px 16px;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid var(--d-line);font:600 13px var(--ms-font);color:var(--d-ink-2)}
+.gc-when{font-weight:700;color:var(--d-ink)}
+.gc-board{width:100%;border-collapse:collapse}
+.gc-board th{font:700 10.5px var(--ms-font);letter-spacing:.08em;text-transform:uppercase;color:var(--d-ink-3);text-align:right;padding:12px 14px 8px;white-space:nowrap}
+.gc-board td{font:600 15px var(--ms-font);color:var(--d-ink-2);text-align:right;padding:14px;border-top:1px solid var(--d-line-soft);white-space:nowrap}
+.gc-board .t{text-align:left;padding-left:20px;white-space:normal;width:46%}
+.gc-board th:last-child,.gc-board td:last-child{padding-right:20px}
+.gc-board td.hi{color:var(--d-ink);font-weight:800}
+.gc-board td.bk{color:var(--d-ink);font-weight:800;font-size:16px}
+.gc-board td.sim{color:var(--ms-green-deep);font-weight:800;font-size:16px}
+.gc-board tr.side td.t{box-shadow:inset 3px 0 0 var(--ms-green)}
+.gc-logo{display:inline-block;vertical-align:middle;width:38px;height:38px;object-fit:contain;margin-right:12px}
+.gc-id{display:inline-block;vertical-align:middle;max-width:calc(100% - 54px)}
+.gc-id b{font:900 21px/1 var(--ms-font);font-stretch:78%;color:var(--d-ink);margin-right:6px}
+.gc-name{font:600 14px var(--ms-font);color:var(--d-ink)}
+.gc-id small{display:block;margin-top:5px;font:500 12px/1.4 var(--ms-font);color:var(--d-ink-3)}
+.gc-call{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 8px;padding:14px 20px;background:var(--d-inset);border-top:1px solid var(--d-line)}
+.gc-k{font:700 10.5px var(--ms-font);letter-spacing:.08em;text-transform:uppercase;color:var(--d-ink-3)}
+.gc-call b{font:800 15px var(--ms-font);color:var(--d-ink);margin-right:14px}
+.gc-notes{margin-left:auto;font:500 12.5px var(--ms-font);color:var(--d-ink-2)}
+.gc-how{border-top:1px solid var(--d-line-soft);padding:0 20px}
+.gc-how summary{cursor:pointer;list-style:none;padding:12px 0;font:700 12.5px var(--ms-font);color:var(--d-ink-2)}
+.gc-how summary::-webkit-details-marker{display:none}
+.gc-how summary:after{content:"+";float:right;font-weight:600;color:var(--d-ink-3)}
+.gc-how[open] summary:after{content:"\2013"}
+.gc-how p{padding:0 0 14px;font:500 12.5px/1.6 var(--ms-font);color:var(--d-ink-2)}
+.gc-books{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 20px 16px;border-top:1px solid var(--d-line-soft)}
+.gc-books .gc-k{margin-right:4px}
+.gc-book{display:inline-flex;align-items:baseline;gap:6px;padding:7px 12px;border:1px solid var(--d-line);border-radius:4px;text-decoration:none;font:700 12.5px var(--ms-font);color:var(--d-ink)}
+.gc-book span{font-weight:500;color:var(--d-ink-3)}
+.gc-book:hover{border-color:var(--d-ink);color:var(--d-ink)}
+.expand-btn{font:700 13px var(--ms-font);letter-spacing:.01em;text-transform:none;color:var(--d-ink);background:var(--d-inset);border-top:1px solid var(--d-line);padding:12px}
+.expand-btn:hover{background:var(--d-hover);color:var(--d-ink)}
+/* the sim tab is off the members dashboard */
+.filter-btn[data-tab="sim"],.nav-btn[data-tab="sim"],#tab-sim{display:none!important}
 
 /* lineups: open by default (publish script), starters first */
 .mc-expanded{border-top:1px solid var(--d-line)}
@@ -127,10 +126,18 @@ body{background:var(--d-bg);color:var(--d-ink);font-family:var(--ms-font);font-v
 .rw-status-badge{font:800 9.5px var(--ms-font)}
 
 /* sealed game: the pick is on Tonight's picks */
-.sealed-card .mc-header{padding:22px}
-.sealed-pick{background:var(--d-dark)!important;color:#fff!important}
-a.sealed-cta{display:inline-block;margin-top:10px;text-decoration:none;border:0!important;background:var(--ms-green)!important;color:#fff!important;border-radius:3px;font:700 13px var(--ms-font)!important;
-  letter-spacing:0!important;padding:9px 14px!important}
+.gc-sealed-body{display:flex;align-items:center;justify-content:space-between;gap:14px 20px;flex-wrap:wrap;padding:18px 20px}
+.gc-matchup{display:flex;align-items:center;gap:14px}
+.gc-matchup span{display:inline-flex;align-items:center}
+.gc-matchup .gc-logo{margin-right:10px}
+.gc-matchup b{font:900 22px/1 var(--ms-font);font-stretch:78%;color:var(--d-ink);margin-right:6px}
+.gc-matchup small{font:500 12px var(--ms-font);color:var(--d-ink-3)}
+.gc-matchup i{font:600 13px var(--ms-font);font-style:normal;color:var(--d-ink-3)}
+.sealed-card .mc-center{display:flex;align-items:center;gap:10px;flex-wrap:wrap;text-align:left;min-width:0}
+.sealed-pick{display:inline-flex;align-items:center;gap:8px;margin:0;padding:9px 14px;border-radius:4px;background:var(--d-ink)!important;color:#fff!important;font:700 13px var(--ms-font)}
+.sealed-pick .pick-label{background:var(--ms-green);color:#fff;opacity:1;font-size:11px;letter-spacing:.04em;padding:2px 6px;border-radius:2px;margin:0}
+a.sealed-cta{display:inline-block;margin:0;text-decoration:none;border:0!important;background:var(--ms-green)!important;color:#fff!important;border-radius:4px;
+  font:700 13px var(--ms-font)!important;letter-spacing:0!important;padding:10px 16px!important}
 
 /* ─ player stats tab ─ */
 .stat-spotlight-card{border:1px solid var(--d-line);box-shadow:var(--shadow);border-radius:6px;padding:14px 16px}
@@ -229,18 +236,20 @@ a.sealed-cta{display:inline-block;margin-top:10px;text-decoration:none;border:0!
 .ms-links a{white-space:nowrap}
 @media(max-width:420px){.ms-bar .in{padding:12px 16px}.ms-logo img{height:30px}.ms-links{gap:12px;font-size:12.5px}}
 @media(max-width:768px){
+  .gc-board th.x,.gc-board td.x,.gc-name,.gc-scheme{display:none}
+  .gc-call b{margin-right:8px}
+  .gc-board .t{padding-left:14px;width:auto}
+  .gc-board th:last-child,.gc-board td:last-child{padding-right:14px}
+  .gc-board th,.gc-board td{padding-left:10px;padding-right:10px}
+  .gc-logo{width:30px;height:30px;margin-right:10px}
+  .gc-id{max-width:calc(100% - 42px)}
+  .gc-top,.gc-call,.gc-how,.gc-books,.gc-sealed-body{padding-left:14px;padding-right:14px}
+  .gc-notes{margin-left:0;flex-basis:100%}
   .filter-bar{display:none}                 /* the bottom nav carries the tabs on phones */
   .sticky-header{border-bottom:0;box-shadow:none}
   .ms-dash-title{padding:18px 16px 0}
   .ms-dash-title h1{font-size:28px}
   .content{padding:12px 16px}
-  .mc-header{padding:16px 14px 10px}
-  .mc-abbr{font-size:24px}
-  .mc-spread{font-size:21px}
-  .tow-bar{margin:0 14px}.tow-labels{padding:8px 14px 0}
-  .mc-schemes{padding-left:14px;padding-right:14px}
-  .mc-sportsbooks{padding-left:14px}
-  .moji-breakdown{margin:8px 14px 10px}
   .lineup-half{padding:12px 12px 8px}
   .lineup-half:first-child{border-right:0;border-bottom:1px solid var(--d-line-soft)}
 }

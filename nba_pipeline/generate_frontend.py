@@ -3592,6 +3592,7 @@ def get_matchups():
                 "rw_lineups": rw_lineups,
                 "bookmaker_odds": bookmaker_lines.get((home_abbr, away_abbr), []),
                 "prediction_markets": prediction_market_data.get((home_abbr, away_abbr), {}),
+                "tip_at": slate_schedule.get((home_abbr, away_abbr), {}).get("tip_utc"),
             })
 
     # ── Save daily picks snapshot for automated logging ──
@@ -3708,40 +3709,39 @@ def _seal_daily_snapshot(snapshot, slate_iso):
     return {**snapshot, "games": games}
 
 
+def _tip_et(tip_at):
+    """'7:00 PM ET' from the schedule's UTC tip time; 'Tonight' when unknown."""
+    from utils.seal import store
+    tip = store.parse_ts(tip_at)
+    return tip.astimezone(store.ET).strftime("%-I:%M %p ET") if tip else "Tonight"
+
+
 def render_sealed_matchup_card(m, idx):
     """Public card for a game whose pick is sealed: matchup, tip, confidence."""
     from utils.seal import store
     ha, aa = m["home_abbr"], m["away_abbr"]
     info = _SEALED_GAMES.get((aa, ha), {})
-    tip = store.parse_ts(info.get("tip_at"))
-    tip_txt = tip.astimezone(store.ET).strftime("%-I:%M %p ET") if tip else "TONIGHT"
+    tip_txt = _tip_et(info.get("tip_at"))
     conf = info.get("conf") or ""
     url = store.whop_url()
-    cta = (f'<a class="sealed-cta" href="{url}" target="_blank" rel="noopener" '
-           f'style="display:inline-block;margin-top:8px;padding:6px 12px;border:2px solid #00FF55;'
-           f'color:#00FF55;font-weight:700;letter-spacing:1px;text-decoration:none;">GET IT NOW →</a>') if url else ""
+    cta = f'<a class="sealed-cta" href="{url}" target="_blank" rel="noopener">Get it now &rarr;</a>' if url else ""
     h_logo, a_logo = get_team_logo_url(ha), get_team_logo_url(aa)
+    a_name, h_name = TEAM_FULL_NAMES.get(aa, aa), TEAM_FULL_NAMES.get(ha, ha)
     return f"""
-    <div class="matchup-card sealed-card" data-conf="{conf}" data-edge="0" data-total="0" data-idx="{idx}">
-        <div class="mc-header">
-            <div class="mc-team mc-away">
-                <img src="{a_logo}" class="mc-logo" alt="{aa}" onerror="this.style.display='none'">
-                <div class="mc-team-info">
-                    <span class="mc-abbr">{aa}</span>
-                    <span class="mc-record">{m['a_wins']}-{m['a_losses']}</span>
-                </div>
+    <div class="matchup-card gc sealed-card" data-conf="{conf}" data-edge="0" data-total="0" data-idx="{idx}">
+        <div class="mc-header gc-top">
+            <span class="gc-when">{tip_txt} · {a_name} at {h_name}</span>
+            <span class="gc-ou">Sealed until tip</span>
+        </div>
+        <div class="gc-sealed-body">
+            <div class="gc-matchup">
+                <span><img src="{a_logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><b>{aa}</b> <small>{m['a_wins']}-{m['a_losses']}</small></span>
+                <i>at</i>
+                <span><img src="{h_logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><b>{ha}</b> <small>{m['h_wins']}-{m['h_losses']}</small></span>
             </div>
             <div class="mc-center">
                 <div class="mc-pick sealed-pick"><span class="pick-label">C{conf}</span> &#128274; {store.sealed_text({"sport": "nba"})}</div>
-                <div class="mc-total">TIP {tip_txt}</div>
                 {cta}
-            </div>
-            <div class="mc-team mc-home">
-                <div class="mc-team-info right">
-                    <span class="mc-abbr">{ha}</span>
-                    <span class="mc-record">{m['h_wins']}-{m['h_losses']}</span>
-                </div>
-                <img src="{h_logo}" class="mc-logo" alt="{ha}" onerror="this.style.display='none'">
             </div>
         </div>
     </div>
@@ -5692,81 +5692,14 @@ def render_matchup_card(m, idx, team_map):
     spread_proj = m.get("spread_is_projected", True)
     total_proj = m.get("total_is_projected", True)
 
-    # Spread display
-    if spread <= 0:
-        spread_display = f"{ha} {spread:+.1f}"
-    else:
-        spread_display = f"{aa} {-spread:+.1f}"
-
-    spread_tag = ' <span class="proj-tag">(PROJ. SPREAD)</span>' if spread_proj else ""
-    total_tag = ' <span class="proj-tag">(PROJ O/U)</span>' if total_proj else ""
-
-    # Implied scores from spread + total
-    implied_home = (total - spread) / 2
-    implied_away = (total + spread) / 2
-    implied_html = f'<div class="mc-implied">{aa} {implied_away:.0f} — {ha} {implied_home:.0f}</div>'
-
-    # SIM projection line — show what the SIM thinks vs the book
-    # Display using FAVORITE convention (same as the book line display)
-    proj_spread_val = m.get("proj_spread", 0)
-    if not spread_proj:
-        # Show SIM projection when we have a real sportsbook line to compare
-        if proj_spread_val <= 0:
-            sim_fav_team = ha
-            sim_fav_spread = proj_spread_val  # already negative
-        else:
-            sim_fav_team = aa
-            sim_fav_spread = -proj_spread_val  # flip to negative (fav convention)
-
-        # Edge = how much the SIM disagrees with the book (always positive magnitude)
-        # spread_edge = proj_spread - spread (home perspective)
-        edge_abs = abs(spread_edge)
-
-        # Determine which team the SIM favors MORE than the book
-        if spread_edge < 0:
-            edge_team = ha  # SIM likes home more than book
-        elif spread_edge > 0:
-            edge_team = aa  # SIM likes away more than book
-        else:
-            edge_team = ""
-
-        sim_proj_html = f'<div class="mc-sim-proj ma-premium">{sim_fav_team} {sim_fav_spread:+.1f} (SIM) · EDGE {edge_abs:.1f} {edge_team}</div>'
-    else:
-        sim_proj_html = ""
-
-    # Tug of war bar — use full rotation for MOJI tug-of-war (injury-adjusted)
-    home_mojo_sum = 0
-    away_mojo_sum = 0
     home_roster = get_team_roster(ha, 15)
     away_roster = get_team_roster(aa, 15)
-    for _, r in home_roster.head(5).iterrows():
-        _pid = int(r.get("player_id", 0) or 0)
-        _adj = _INJURY_ADJUSTED_VS.get(_pid)
-        ds, _ = compute_mojo_score(r, injury_adjusted_composite=_adj)
-        home_mojo_sum += ds
-    for _, r in away_roster.head(5).iterrows():
-        _pid = int(r.get("player_id", 0) or 0)
-        _adj = _INJURY_ADJUSTED_VS.get(_pid)
-        ds, _ = compute_mojo_score(r, injury_adjusted_composite=_adj)
-        away_mojo_sum += ds
-
-    total_ds = home_mojo_sum + away_mojo_sum
-    home_pct = (home_mojo_sum / total_ds * 100) if total_ds > 0 else 50
 
     # Coaching schemes
     h_off = h.get("off_scheme_label", "") or ""
     h_def = h.get("def_scheme_label", "") or ""
     a_off = a.get("off_scheme_label", "") or ""
     a_def = a.get("def_scheme_label", "") or ""
-
-    # Edge color — based on TRUE edge vs book (not raw power gap)
-    spread_edge = m.get("spread_edge", 0)
-    if abs(spread_edge) > 3:
-        edge_color = "#00FF55"
-    elif abs(spread_edge) > 1:
-        edge_color = "#FFD600"
-    else:
-        edge_color = "#888"
 
     # Build player rows for expanded view with RotoWire status
     rw_lineups = m.get("rw_lineups", {})
@@ -5853,35 +5786,10 @@ def render_matchup_card(m, idx, team_map):
     # Confidence: 1-10 scale from distance to 50 (toss-up)
     conf_grade_100 = min(100, int(abs(conf_pct - 50) * 2.5 + 20))
     conf_10 = max(1, min(10, round(conf_grade_100 / 10)))
-    if conf_10 >= 8:
-        conf_color = "#00FF55"
-    elif conf_10 >= 6:
-        conf_color = "#7FFF00"
-    elif conf_10 >= 4:
-        conf_color = "#FFD600"
-    elif conf_10 >= 2:
-        conf_color = "#FF8C00"
-    else:
-        conf_color = "#FF3333"
-
-    # O/U pick data
-    ou_dir = m.get("ou_direction", "OVER")
-    ou_text = m.get("ou_pick_text", f"O {total:.1f}")
-    ou_conf = m.get("ou_conf", 5)
-    ou_edge = m.get("ou_edge", 0)
-    ou_sign = "+" if ou_edge > 0 else ""
-    if ou_conf >= 7:
-        ou_color = "#00FF55"
-    elif ou_conf >= 5:
-        ou_color = "#FFD600"
-    else:
-        ou_color = "#FF8C00"
-
     # ── MOJI Breakdown ──
     bd = m.get("spread_breakdown", {})
     home_moji = bd.get("home_moji", 0)
     away_moji = bd.get("away_moji", 0)
-    moji_diff = bd.get("moji_diff", 0)
     moji_pts = bd.get("moji_pts", 0)
     home_nrtg = bd.get("home_nrtg", 0)
     away_nrtg = bd.get("away_nrtg", 0)
@@ -5891,7 +5799,6 @@ def render_matchup_card(m, idx, team_map):
     away_recent_nrtg = bd.get("away_recent_nrtg", 0)
     home_syn = bd.get("home_syn", 50)
     away_syn = bd.get("away_syn", 50)
-    syn_diff = bd.get("syn_diff", 0)
     syn_pts = bd.get("syn_pts", 0)
     home_b2b = bd.get("home_b2b", False)
     away_b2b = bd.get("away_b2b", False)
@@ -5903,122 +5810,75 @@ def render_matchup_card(m, idx, team_map):
     hca_pts = bd.get("hca_pts", _MOJI_CONSTANTS["HCA_MEASURED"])
     situational_pts = bd.get("situational_pts", hca_pts)
 
-    # B2B badge HTML — ▼ arrow = fatigue penalty (weaker), not a spread line
-    b2b_badges = ""
-    if home_b2b:
-        b2b_badges += f'<span class="b2b-badge" style="color:#FF6B6B">{ha} B2B \u25BC2</span>'
-    if away_b2b:
-        b2b_badges += f'<span class="b2b-badge" style="color:#FF6B6B">{aa} B2B \u25BC2.5</span>'
-
-    # OUT player count badges
-    out_badges = ""
-    if home_out_n > 0:
-        out_badges += f'<span class="out-badge">{ha}: {home_out_n} OUT</span>'
-    if away_out_n > 0:
-        out_badges += f'<span class="out-badge">{aa}: {away_out_n} OUT</span>'
-
-    # MOJI bar visualization
-    moji_total = home_moji + away_moji
-    moji_home_pct = (home_moji / moji_total * 100) if moji_total > 0 else 50
-
-    # Which team MOJI favors
-    if moji_diff > 0:
-        moji_fav = ha
-        moji_fav_val = f"+{abs(moji_diff):.1f}"
-    elif moji_diff < 0:
-        moji_fav = aa
-        moji_fav_val = f"+{abs(moji_diff):.1f}"
-    else:
-        moji_fav = "EVEN"
-        moji_fav_val = ""
-
-    # Which team season NRtg favors
-    if nrtg_diff > 0:
-        nrtg_fav = ha
-        nrtg_fav_val = f"+{abs(nrtg_diff):.1f}"
-    elif nrtg_diff < 0:
-        nrtg_fav = aa
-        nrtg_fav_val = f"+{abs(nrtg_diff):.1f}"
-    else:
-        nrtg_fav = "EVEN"
-        nrtg_fav_val = ""
-
-    # Which team L10 NRtg favors
-    if recent_nrtg_diff > 0:
-        l10_fav = ha
-        l10_fav_val = f"+{abs(recent_nrtg_diff):.1f}"
-    elif recent_nrtg_diff < 0:
-        l10_fav = aa
-        l10_fav_val = f"+{abs(recent_nrtg_diff):.1f}"
-    else:
-        l10_fav = "EVEN"
-        l10_fav_val = ""
-
     # Model weighting computations (must match _MOJI_CONSTANTS: 40/10/30/20)
     moji_weighted = 0.40 * moji_pts
     nrtg_weighted = 0.10 * nrtg_diff + 0.30 * recent_nrtg_diff
     syn_weighted = 0.20 * syn_pts
     proj_spread_val = m.get("proj_spread", 0)
 
-    # Which team SYN favors
-    if syn_diff > 0:
-        syn_fav = ha
-        syn_fav_val = f"+{abs(syn_diff):.1f}"
-    elif syn_diff < 0:
-        syn_fav = aa
-        syn_fav_val = f"+{abs(syn_diff):.1f}"
+    # ── The board: one row per team, away on top, the book and the sim side by side ──
+    def _line(v):
+        return "PK" if abs(v) < 0.05 else f"{v:+.1f}"
+
+    pick_team = pick_text.split(" ")[0] if pick_text else ""
+    edge_abs = abs(spread_edge)
+    proj_total = m.get("proj_total")
+
+    def _hi(mine, theirs):
+        return ' class="hi"' if mine > theirs else ""
+
+    def _team_row(abbr, name, logo, wins, losses, rank, off, dfn, moji, nrtg, l10, syn,
+                  o_moji, o_nrtg, o_l10, o_syn, book, sim):
+        scheme = " · ".join(x for x in (off, dfn) if x)
+        side = ' class="side"' if abbr == pick_team else ""
+        return f"""
+            <tr{side}>
+                <td class="t"><img src="{logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><div class="gc-id"><b>{abbr}</b><span class="gc-name">{name}</span><small>{wins}-{losses} · MOJO #{rank}{'<span class="gc-scheme"> · ' + scheme + '</span>' if scheme else ''}</small></div></td>
+                <td{_hi(moji, o_moji)}>{moji:.1f}</td>
+                <td class="x{' hi' if nrtg > o_nrtg else ''}">{nrtg:+.1f}</td>
+                <td class="x{' hi' if l10 > o_l10 else ''}">{l10:+.1f}</td>
+                <td class="x{' hi' if syn > o_syn else ''}">{syn:.1f}</td>
+                <td class="bk">{book}</td>
+                <td class="sim ma-premium">{sim}</td>
+            </tr>"""
+
+    away_book = "—" if spread_proj else _line(-spread)
+    home_book = "—" if spread_proj else _line(spread)
+    board_rows = (
+        _team_row(aa, a_name, a_logo, m['a_wins'], m['a_losses'], m['a_mojo_rank'], a_off, a_def,
+                  away_moji, away_nrtg, away_recent_nrtg, away_syn,
+                  home_moji, home_nrtg, home_recent_nrtg, home_syn, away_book, _line(-proj_spread_val))
+        + _team_row(ha, h_name, h_logo, m['h_wins'], m['h_losses'], m['h_mojo_rank'], h_off, h_def,
+                    home_moji, home_nrtg, home_recent_nrtg, home_syn,
+                    away_moji, away_nrtg, away_recent_nrtg, away_syn, home_book, _line(proj_spread_val))
+    )
+
+    notes = [f"Home court +{hca_pts:.1f} {ha}"]
+    if home_b2b:
+        notes.append(f"{ha} on a back-to-back")
+    if away_b2b:
+        notes.append(f"{aa} on a back-to-back")
+    if away_out_n:
+        notes.append(f"{aa}: {away_out_n} out")
+    if home_out_n:
+        notes.append(f"{ha}: {home_out_n} out")
+
+    if spread_proj:
+        call_html = '<span class="gc-k">No book line yet</span>'
     else:
-        syn_fav = "EVEN"
-        syn_fav_val = ""
+        call_html = (f'<span class="gc-k">Sim side</span><b>{pick_text}</b>'
+                     f'<span class="gc-k">Edge</span><b>{edge_abs:.1f} pts</b>'
+                     f'<span class="gc-k">Grade</span><b>C{conf_10}</b>')
 
-    breakdown_html = f"""
-        <div class="moji-breakdown">
-            <div class="moji-row">
-                <span class="moji-label">MOJI</span>
-                <span class="moji-val">{aa} {away_moji:.1f}</span>
-                <div class="moji-bar-mini">
-                    <div class="moji-bar-away" style="width:{100-moji_home_pct:.0f}%; background:{ac};"></div>
-                    <div class="moji-bar-home" style="width:{moji_home_pct:.0f}%; background:{hc};"></div>
-                </div>
-                <span class="moji-val">{ha} {home_moji:.1f}</span>
-                <span class="moji-edge-sm">{moji_fav} {moji_fav_val}</span>
-            </div>
-            <div class="moji-row">
-                <span class="moji-label">NRtg</span>
-                <span class="moji-val">{aa} {away_nrtg:+.1f}</span>
-                <div class="moji-mid-spacer"></div>
-                <span class="moji-val">{ha} {home_nrtg:+.1f}</span>
-                <span class="moji-edge-sm">{nrtg_fav} {nrtg_fav_val}</span>
-            </div>
-            <div class="moji-row">
-                <span class="moji-label">L10</span>
-                <span class="moji-val">{aa} {away_recent_nrtg:+.1f}</span>
-                <div class="moji-mid-spacer"></div>
-                <span class="moji-val">{ha} {home_recent_nrtg:+.1f}</span>
-                <span class="moji-edge-sm">{l10_fav} {l10_fav_val}</span>
-            </div>
-            <div class="moji-row">
-                <span class="moji-label">SYN</span>
-                <span class="moji-val">{aa} {away_syn:.1f}</span>
-                <div class="moji-mid-spacer"></div>
-                <span class="moji-val">{ha} {home_syn:.1f}</span>
-                <span class="moji-edge-sm">{syn_fav} {syn_fav_val}</span>
-            </div>
-            <div class="moji-row moji-model-row ma-premium">
-                <span class="moji-label">MODEL</span>
-                <span class="moji-model-formula">40% MOJI ({moji_weighted:+.1f}) + 10% NRtg ({0.10 * nrtg_diff:+.1f}) + 30% L10 ({0.30 * recent_nrtg_diff:+.1f}) + 20% SYN ({syn_weighted:+.1f}) + HCA/B2B ({situational_pts:+.1f}) = <strong>PROJ {ha if proj_spread_val <= 0 else aa} {(-abs(proj_spread_val)):+.1f}</strong></span>
-            </div>
-            <div class="moji-row moji-tags">
-                <span class="hca-badge">HCA \u25B2{hca_pts:.1f} {ha}</span>
-                {b2b_badges}
-                {out_badges}
-            </div>
-        </div>"""
+    sim_fav = ha if proj_spread_val <= 0 else aa
+    how_html = (f'40% MOJI ({moji_weighted:+.1f}) + 10% NRtg ({0.10 * nrtg_diff:+.1f}) + 30% last 10 ({0.30 * recent_nrtg_diff:+.1f}) '
+                f'+ 20% synergy ({syn_weighted:+.1f}) + home court and rest ({situational_pts:+.1f}) = sim {sim_fav} {(-abs(proj_spread_val)):+.1f}')
 
-    # Sportsbook odds buttons row
+    tip_txt = _tip_et(m.get("tip_at"))
+    ou_txt = f"O/U {total:.1f}" + ("" if total_proj else "") + (f" · sim {proj_total:.1f}" if proj_total else "")
+
+    # Partner links, one quiet row
     book_odds = m.get("bookmaker_odds", [])
-
-    # Affiliate link templates
     AFFILIATE_LINKS = {
         "draftkings": "https://sportsbook.draftkings.com",
         "draftkings_predictions": "https://predictions.draftkings.com/r/pd/jack0_FC/PREDICT/US-CA",
@@ -6029,172 +5889,41 @@ def render_matchup_card(m, idx, team_map):
         "bethog": "https://bethog.com/r/alphamale",
         "kalshi": "https://kalshi.com/sign-up/?referral=88acd325-1cbe-44b0-9358-f0cf92cf9fc7",
     }
-
     BOOK_DISPLAY = {
-        "draftkings": "DK",
-        "fanduel": "FD",
-        "betmgm": "MGM",
-        "bovada": "BOV",
-        "pointsbetus": "PBU",
-        "bethog": "BetHOG",
+        "draftkings": "DraftKings", "fanduel": "FanDuel", "betmgm": "BetMGM",
+        "bovada": "Bovada", "pointsbetus": "PointsBet", "bethog": "BetHOG",
     }
-
-    BOOK_COLORS = {
-        "draftkings": "#53d337",
-        "draftkings_predictions": "#53d337",
-        "fanduel": "#1493ff",
-        "betmgm": "#c4a44a",
-        "bovada": "#cc0000",
-        "pointsbetus": "#ed1c24",
-        "bethog": "#ff6b00",
-        "kalshi": "#00C480",
-    }
-
-    sportsbook_btns = ""
-    if book_odds:
-        # Determine pick side for edge display
-        pick_side = ha if proj_spread_val <= 0 else aa
-
-        btns_html = ""
-        for bk in book_odds:
-            bk_key = bk["key"]
-            bk_name = BOOK_DISPLAY.get(bk_key, bk_key.upper()[:3])
-            bk_color = BOOK_COLORS.get(bk_key, "#888")
-            bk_spread = bk["spread"]  # home perspective
-            bk_link = AFFILIATE_LINKS.get(bk_key, "#")
-
-            # Display spread from favorite perspective (same convention as main display)
-            if bk_spread <= 0:
-                disp_team = ha
-                disp_spread = bk_spread
-            else:
-                disp_team = aa
-                disp_spread = -bk_spread
-
-            # Calculate edge: difference between model and this book's line
-            edge_val = abs(proj_spread_val - bk_spread)
-            edge_class = "sb-edge-hot" if edge_val >= 2.5 else "sb-edge-mild" if edge_val >= 1 else "sb-edge-none"
-
-            btns_html += f'''<a href="{bk_link}" target="_blank" rel="noopener" class="sb-btn" style="border-color:{bk_color}40">
-                <span class="sb-name" style="color:{bk_color}">{bk_name}</span>
-                <span class="sb-line">{disp_team} {disp_spread:+.1f}</span>
-                <span class="{edge_class}">{edge_val:+.1f}</span>
-            </a>'''
-
-        sportsbook_btns = f'''
-        <!-- Sportsbook Odds -->
-        <div class="mc-sportsbooks">
-            <span class="sb-header">BOOKS</span>
-            {btns_html}
-        </div>'''
-
-    # BetHOG button — always rendered regardless of Odds API status
-    bethog_btn = f'''
-        <div class="mc-sportsbooks mc-bethog-row">
-            <a href="{AFFILIATE_LINKS['bethog']}" target="_blank" rel="noopener" class="sb-btn sb-btn-featured" style="border-color:{BOOK_COLORS['bethog']}60">
-                <svg class="sb-logo" style="height:16px;width:16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#1a1a1a"/><path d="M6 6h5l3 3-3 3H6V6zm0 6h6l3 3-3 3H6v-6z" fill="#fff"/></svg>
-                <span class="sb-name" style="color:{BOOK_COLORS['bethog']}">BetHOG</span>
-                <span class="sb-line">BET NOW</span>
-            </a>
-        </div>'''
-
-    # Bovada button: always rendered beside the other partner CTAs
-    bovada_btn = f'''
-        <div class="mc-sportsbooks mc-bovada-row">
-            <a href="{AFFILIATE_LINKS['bovada']}" target="_blank" rel="noopener" class="sb-btn sb-btn-bovada" style="border-color:{BOOK_COLORS['bovada']}60">
-                <span class="sb-name" style="color:{BOOK_COLORS['bovada']}">BOVADA</span>
-                <span class="sb-line">JOIN NOW</span>
-            </a>
-        </div>'''
-
-    # Prediction Markets row. Market CTAs should stay visible even when a
-    # probability feed does not return a slate match.
-    pm_data = m.get("prediction_markets", {})
-    kalshi_data = pm_data.get("kalshi") if pm_data else None
-    kalshi_line = "TRADE NOW"
-
+    books = []
+    for bk in book_odds:
+        bk_spread = bk["spread"]  # home perspective
+        disp = f"{ha} {_line(bk_spread)}" if bk_spread <= 0 else f"{aa} {_line(-bk_spread)}"
+        books.append((AFFILIATE_LINKS.get(bk["key"], "#"), BOOK_DISPLAY.get(bk["key"], bk["key"].upper()[:3]), disp))
+    kalshi_data = (m.get("prediction_markets") or {}).get("kalshi")
+    kalshi_line = "Trade"
     if kalshi_data:
-        k_home = kalshi_data["home_prob"]
-        k_away = kalshi_data["away_prob"]
-        # Show the favorite's probability
-        if k_home >= k_away:
-            k_team = ha
-            k_prob = k_home
-        else:
-            k_team = aa
-            k_prob = k_away
+        k_team, k_prob = (ha, kalshi_data["home_prob"]) if kalshi_data["home_prob"] >= kalshi_data["away_prob"] else (aa, kalshi_data["away_prob"])
         kalshi_line = f"{k_team} {k_prob*100:.0f}%"
-
-    prediction_btns = f'''
-        <!-- Prediction Markets -->
-        <div class="mc-sportsbooks mc-prediction-markets">
-            <span class="sb-header">MARKETS</span>
-            <a href="{AFFILIATE_LINKS['kalshi']}" target="_blank" rel="noopener" class="sb-btn pm-btn pm-btn-kalshi" style="border-color:{BOOK_COLORS['kalshi']}40">
-            <svg class="sb-logo" style="height:16px;width:16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="#00C480"/><path d="M8 6l4 6-4 6h3l4-6-4-6H8z" fill="#fff"/></svg>
-                <span class="sb-name" style="color:{BOOK_COLORS['kalshi']}">KALSHI</span>
-                <span class="sb-line">{kalshi_line}</span>
-            </a>
-            <a href="{AFFILIATE_LINKS['draftkings_predictions']}" target="_blank" rel="noopener" class="sb-btn pm-btn pm-btn-dk" style="border-color:{BOOK_COLORS['draftkings_predictions']}40">
-                <span class="sb-name" style="color:{BOOK_COLORS['draftkings_predictions']}">DK</span>
-                <span class="sb-line">PREDICT</span>
-            </a>
-        </div>'''
+    books += [(AFFILIATE_LINKS["kalshi"], "Kalshi", kalshi_line),
+              (AFFILIATE_LINKS["draftkings_predictions"], "DK Predict", "Predict"),
+              (AFFILIATE_LINKS["bethog"], "BetHOG", "Bet"),
+              (AFFILIATE_LINKS["bovada"], "Bovada", "Join")]
+    books_html = "".join(f'<a class="gc-book" href="{u}" target="_blank" rel="noopener"><b>{n}</b><span>{t}</span></a>'
+                         for u, n, t in books)
 
     return f"""
-    <div class="matchup-card" data-conf="{conf_10}" data-edge="{abs(spread_edge):.1f}" data-total="{total}" data-idx="{idx}">
-        <div class="mc-header">
-            <div class="mc-team mc-away">
-                <img src="{a_logo}" class="mc-logo" alt="{aa}" onerror="this.style.display='none'">
-                <div class="mc-team-info">
-                    <span class="mc-abbr">{aa}</span>
-                    <span class="mc-mojo-rank">MOJO #{m['a_mojo_rank']}</span>
-                    <span class="mc-record">{m['a_wins']}-{m['a_losses']}</span>
-                </div>
-            </div>
-            <div class="mc-center">
-                <div class="mc-spread ma-premium" style="color:{edge_color}">{spread_display}{spread_tag}</div>
-                <div class="mc-total">O/U {total:.1f}{total_tag}</div>
-                <div class="mc-pick ma-premium"><span class="pick-label">SPREAD</span> {pick_text} <span class="mc-conf-num" style="color:{conf_color}">{conf_10}</span></div>
-                {implied_html}
-                {sim_proj_html}
-            </div>
-            <div class="mc-team mc-home">
-                <div class="mc-team-info right">
-                    <span class="mc-abbr">{ha}</span>
-                    <span class="mc-mojo-rank">MOJO #{m['h_mojo_rank']}</span>
-                    <span class="mc-record">{m['h_wins']}-{m['h_losses']}</span>
-                </div>
-                <img src="{h_logo}" class="mc-logo" alt="{ha}" onerror="this.style.display='none'">
-            </div>
+    <div class="matchup-card gc" data-conf="{conf_10}" data-edge="{abs(spread_edge):.1f}" data-total="{total}" data-idx="{idx}">
+        <div class="mc-header gc-top">
+            <span class="gc-when">{tip_txt} · {a_name} at {h_name}</span>
+            <span class="gc-ou ma-premium">{ou_txt}</span>
         </div>
-
-        <!-- Tug of war bar -->
-        <div class="tow-bar">
-            <div class="tow-fill tow-away" style="width:{100-home_pct:.1f}%; background:{ac};"></div>
-            <div class="tow-fill tow-home" style="width:{home_pct:.1f}%; background:{hc};"></div>
-            <div class="tow-mid"></div>
-        </div>
-        <div class="tow-labels">
-            <span>{aa} MOJO {away_mojo_sum}</span>
-            <span>{ha} MOJO {home_mojo_sum}</span>
-        </div>
-
-        <!-- Schemes row -->
-        <div class="mc-schemes">
-            <div class="scheme-tag" style="background:{ac}; color:{TEAM_SECONDARY.get(aa, '#fff')}">{a_off}</div>
-            <div class="scheme-tag" style="background:{ac}; color:{TEAM_SECONDARY.get(aa, '#fff')}">{a_def}</div>
-            <div class="scheme-divider">vs</div>
-            <div class="scheme-tag" style="background:{hc}; color:{TEAM_SECONDARY.get(ha, '#fff')}">{h_off}</div>
-            <div class="scheme-tag" style="background:{hc}; color:{TEAM_SECONDARY.get(ha, '#fff')}">{h_def}</div>
-        </div>
-
-        <!-- MOJI Breakdown -->
-        {breakdown_html}
-
-        {sportsbook_btns}
-        {prediction_btns}
-        {bethog_btn}
-        {bovada_btn}
+        <table class="gc-board">
+            <thead><tr><th class="t">Team</th><th>MOJI</th><th class="x">NRtg</th><th class="x">Last 10</th><th class="x">Synergy</th><th>Book</th><th class="ma-premium">Sim</th></tr></thead>
+            <tbody>{board_rows}
+            </tbody>
+        </table>
+        <div class="gc-call ma-premium">{call_html}<span class="gc-notes">{" · ".join(notes)}</span></div>
+        <details class="gc-how ma-premium"><summary>How the sim got there</summary><p>{how_html}</p></details>
+        <div class="gc-books"><span class="gc-k">Bet it</span>{books_html}</div>
 
         <!-- Expand button -->
         <button class="expand-btn" onclick="toggleExpand(this)">
