@@ -91,7 +91,7 @@ def note_data(p, n=1, when_label=None):
         "tier": tier, "tc": t["color"], "tc2": t["alt"],
         "logo": f"https://a.espncdn.com/i/teamlogos/nba/500/{logo}.png",
         "city": t["location"], "nick": t["name"], "abbr": abbr,
-        "line": _num(book), "terms": f"{str(p.get('odds') or '').replace('-', '−')} · {u:g} unit{'' if u == 1 else 's'} · {'vs' if abbr == home else 'at'} {o_name}",
+        "line": _num(book), "terms": f"{str(p.get('odds') or '').replace('-', '−')}\u00a0· {u:g}\u00a0unit{'' if u == 1 else 's'}\u00a0· {'vs' if abbr == home else 'at'}\u00a0{o_name}",
         "ser": f"{date[8:10]}{n:02d}", "stake": STAKE.get(u, f"{u:g}U"),
         "book": f"{abbr} {_num(book)}", "sim": sim_txt,
         "edge": "—" if sim is None else f"{abs(book - sim):.1f} pts", "tip": str(tip).replace(" ET", ""),
