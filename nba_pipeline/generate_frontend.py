@@ -8,6 +8,7 @@ import os
 import json
 import math
 import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 import requests
@@ -1766,9 +1767,11 @@ _NAME_SUFFIXES = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
 def _normalize_name(name):
     """Strip suffixes (Jr., III, etc.) and lowercase for matching.
 
-    Returns list of name parts with suffixes removed.
+    Returns list of name parts with suffixes removed, accents dropped
+    (RotoWire writes "Nikola Jokic", the roster "Nikola Jokić").
     Example: "Jimmy Butler III" → ["jimmy", "butler"]
     """
+    name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
     parts = name.lower().strip().split()
     while parts and parts[-1] in _NAME_SUFFIXES:
         parts.pop()
