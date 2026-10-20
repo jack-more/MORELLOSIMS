@@ -170,7 +170,10 @@ def run(dry=False):
                 if member_delivery.publish(p, picks_store.start_label(p), dry=dry):
                     st["site"].append(ref)
             except Exception as e:
-                print(f"  WARN member page {p.get('matchup')}: {type(e).__name__}")
+                # Google's reason (role missing, API disabled, no database) and
+                # never the record itself: Actions logs are public.
+                print(f"  WARN member page {p.get('matchup')}: {type(e).__name__}: "
+                      f"{getattr(e, 'message', '') or str(e).splitlines()[0][:160]}")
         if readable and member_delivery.email_enabled() and picks_store.ref_in(st["site"], pid) \
                 and not picks_store.ref_in(st["email"], pid):
             try:
