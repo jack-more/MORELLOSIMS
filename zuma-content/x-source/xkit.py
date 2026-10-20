@@ -69,10 +69,10 @@ if KIND == 'pfp':
     sc.view_settings.exposure = -0.3
 
 else:
-    NOS = ['01', '09', '05', '04', '11', '03']            # one per area: metabolic, tissue, dermal, endocrine, neuro, supplies
+    NOS = ['01', '08', '09', '05', '04', '11']            # RT-3, NAD+, BPC+TB, GHK-Cu, Tesamorelin, Selank: blue, blue, green, orange, amber, violet
     xs = [3.0 + k * 3.55 for k in range(len(NOS))]
     for k, n in enumerate(NOS):
-        rr, _ = make_vial(n); rr.location = (xs[k], (k % 2) * 0.9, 0); rr.rotation_euler = (0, 0, math.radians(-14 + k * 5))
+        rr, _ = make_vial(n); rr.location = (xs[k], (k % 2) * 0.9, 0); rr.rotation_euler = (0, 0, math.radians(-7 + k * 2))   # labels all face the camera; a little variety, none turned away
     # paper sweep: floor curving up into a wall far behind
     import bmesh
     bm = bmesh.new(); path = [(y, 0.0) for y in range(-60, 14)]
