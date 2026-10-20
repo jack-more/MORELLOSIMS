@@ -29,7 +29,7 @@ OUT = os.path.join(REPO, "members", "dashboard", "index.html")
 HEAD = """
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020">
-<link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261020c">
+<link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261020d">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <meta name="robots" content="noindex">
 <style>
@@ -127,6 +127,58 @@ document.querySelectorAll(".sealed-card .mc-center").forEach(function (c) {
 </script>
 """
 
+# Explanations: hover on desktop, tap on a phone. Game-card terms carry their
+# wording in data-tip (generate_frontend.BOARD_TIPS); on desktop, archetypes take
+# theirs from the Info tab and MOJO numbers get a short read.
+TIPS_JS = """
+<script>
+(function () {
+  var hover = window.matchMedia("(hover: hover)").matches;
+  var desc = {};
+  document.querySelectorAll(".info-arch-card").forEach(function (c) {
+    var n = c.querySelector(".info-arch-name"), d = c.querySelector(".info-arch-desc");
+    if (n && d) desc[n.textContent.trim()] = d.textContent.trim();
+  });
+  if (hover) document.querySelectorAll(".player-row[data-arch]").forEach(function (r) {
+    var a = r.getAttribute("data-arch"), meta = r.querySelector(".pr-meta"), mojo = r.querySelector(".pr-mojo");
+    if (meta && desc[a]) { meta.setAttribute("data-tip", a + ": " + desc[a]); meta.classList.add("tip"); }
+    if (mojo) mojo.setAttribute("data-tip", "MOJO " + r.getAttribute("data-mojo") + ", on a 33 to 99 scale: player impact, " +
+      "25% box score and 75% lineup impact. Tonight's likely range: " + r.getAttribute("data-range") + ".");
+  });
+  var tip = document.createElement("div"), cur = null;
+  tip.className = "ms-tip"; tip.setAttribute("role", "tooltip");
+  document.body.appendChild(tip);
+  function show(el) {
+    cur = el; tip.textContent = el.getAttribute("data-tip"); tip.classList.add("on");
+    var r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    var x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), document.documentElement.clientWidth - w - 8);
+    var y = r.top - h - 10;
+    if (y < 8) y = r.bottom + 10;
+    tip.style.left = x + "px"; tip.style.top = (y + window.scrollY) + "px";
+  }
+  function hide() { cur = null; tip.classList.remove("on"); }
+  if (hover) {
+    document.addEventListener("mouseover", function (e) { var el = e.target.closest("[data-tip]"); if (el && el !== cur) show(el); });
+    document.addEventListener("mouseout", function (e) { var el = e.target.closest("[data-tip]"); if (el && !el.contains(e.relatedTarget)) hide(); });
+  }
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-tip]");
+    if (!el) return hide();
+    if (hover) return;
+    e.preventDefault(); e.stopPropagation();
+    cur === el ? hide() : show(el);
+  }, true);
+  window.addEventListener("scroll", function () { if (!hover) hide(); }, {passive: true});
+  document.querySelectorAll(".gc [data-tip]").forEach(function (el) { el.tabIndex = 0; });
+  // keyboard focus only: a tap also focuses, and the click handler owns taps
+  document.addEventListener("focusin", function (e) {
+    var el = e.target.closest && e.target.closest("[data-tip]");
+    if (el && el.matches(":focus-visible")) show(el); else if (!el) hide();
+  });
+})();
+</script>
+"""
+
 TITLE = """
 <div class="ms-dash-title"><h1>NBA dashboard</h1><span>{date}</span></div>
 """
@@ -171,7 +223,7 @@ def build(src=SRC, out=OUT):
     if k != -1:
         html = html[:k] + TITLE.format(date=date) + html[k:]
     j = html.rindex("</body>")
-    html = html[:j] + LINEUPS_JS + GATE_JS + html[j:]
+    html = html[:j] + LINEUPS_JS + TIPS_JS + GATE_JS + html[j:]
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
