@@ -95,7 +95,12 @@ function passActive(u) {
   return u.checkoutMode === "subscription" && !!u.tier && u.tier !== "free";
 }
 
+// whitelisted accounts (friends & family): the Firestore rule is the source
+// of truth, so ask it with a one-doc read instead of copying the list here
+const rulesAllow = () => firebase.firestore().collection("member_picks").limit(1).get().then(() => true, () => false);
+
 function passLine(u) {
+  if (!u || u.tier === "fnf") return "You're on the friends & family list.";
   const exp = u.accessExpiresAt && u.accessExpiresAt.toMillis ? u.accessExpiresAt.toMillis() : 0;
   if (!exp) return "Your pass is active.";
   const t = new Date(exp).toLocaleString("en-US", {timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
@@ -156,7 +161,7 @@ async function onUser(user) {
     u = await readUser(user.uid).catch(() => u);
   }
   if (PAID) { try { history.replaceState(null, "", location.pathname); } catch (_) {} }
-  if (passActive(u)) return showPicks(user, u);
+  if (passActive(u) || await rulesAllow()) return showPicks(user, u);
   if (PAID) {
     return msg("Your payment is still confirming.", "Stripe hasn't confirmed it yet. Refresh in a minute. Please don't buy again.",
       `<button class="btn" onclick="location.reload()">Refresh</button>`);

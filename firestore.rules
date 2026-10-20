@@ -9,19 +9,28 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Tonight's picks for paying members — written only by the pick pipeline
+    // Tonight's picks for members — written only by the pick pipeline
     // (scripts/member_delivery.py, admin SDK). Readable by a signed-in account
-    // with an active pass: the same rule as hasActiveAccess in functions/index.js.
+    // with an active pass (the same rule as hasActiveAccess in functions/index.js)
+    // or on the whitelist: EMAIL_WHITELIST in morello-auth.js, the fnf_whitelist
+    // collection, or tier fnf. member_delivery.active_emails emails the same set.
+    // The members pages ask this rule (a one-doc read) instead of re-checking.
     function hasActivePass() {
       let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return u.get('tier', 'free') == 'admin'
+      return u.get('tier', 'free') in ['admin', 'fnf']
         || (u.get('accessExpiresAt', null) is timestamp && u.accessExpiresAt > request.time)
         || (u.get('checkoutMode', '') == 'subscription' && u.get('tier', 'free') != 'free');
     }
+    function whitelisted() {
+      let email = request.auth.token.get('email', '').lower();
+      return email in ['jaidanmorello@gmail.com', 'webb.little19@gmail.com',
+                       'samlittle2@gmail.com', 'kynanbarer@gmail.com']
+        || (email != '' && exists(/databases/$(database)/documents/fnf_whitelist/$(email)));
+    }
     match /member_picks/{pickId} {
       allow read: if request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && hasActivePass();
+        && (whitelisted()
+            || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && hasActivePass()));
       allow write: if false;
     }
 

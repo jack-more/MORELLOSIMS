@@ -60,6 +60,7 @@
   // ── Pre-assigned email → tier whitelist ──
   // These users get their tier immediately on sign-up/sign-in,
   // even before Firestore or Cloud Functions are fully deployed.
+  // Keep firestore.rules whitelisted() in step (member emails read this list).
   const EMAIL_WHITELIST = {
     'jaidanmorello@gmail.com': 'admin',
     'webb.little19@gmail.com': 'fnf',
