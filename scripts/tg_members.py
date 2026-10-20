@@ -28,6 +28,16 @@ _db = None
 RENEW_URL = "https://morellosims.com/#plans"
 
 
+def identity():
+    """(client_email, project_id) of the configured service account: the
+    principal an IAM grant has to name. Never the key."""
+    try:
+        sa = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT", "") or "{}")
+    except ValueError:
+        return ("?", "?")
+    return (sa.get("client_email", "?"), sa.get("project_id", "?"))
+
+
 def db():
     """Firestore client, or None when no service account is configured."""
     global _db

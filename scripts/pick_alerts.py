@@ -125,6 +125,7 @@ def run(dry=False):
         st.setdefault("premium", [])
     st.setdefault("site", [])
     st.setdefault("email", [])
+    st.setdefault("email_to", [])
     # picks already receipted by the old post_daily_cards flow count as sent
     legacy = load(LEGACY, {})
     for pid in legacy.get("receipts", []):
@@ -174,11 +175,22 @@ def run(dry=False):
                 # never the record itself: Actions logs are public.
                 print(f"  WARN member page {p.get('matchup')}: {type(e).__name__}: "
                       f"{getattr(e, 'message', '') or str(e).splitlines()[0][:160]}")
-        if readable and member_delivery.email_enabled() and picks_store.ref_in(st["site"], pid) \
-                and not picks_store.ref_in(st["email"], pid):
+                if type(e).__name__ == "PermissionDenied":
+                    who, proj = member_delivery.tg_members.identity()
+                    print(f"  WARN member page: service account {who} (project {proj}) needs "
+                          f"Cloud Datastore User on the Firestore project")
+        # every member gets each pick once, including members who join after
+        # it first went out, until the game starts (email_to: "ref|recipient")
+        start = picks_store.start_time(p)
+        live = start is None or datetime.now(timezone.utc) < start
+        if readable and live and member_delivery.email_enabled() and picks_store.ref_in(st["site"], pid):
             try:
-                if member_delivery.email(p, picks_store.start_label(p), dry=dry):
-                    st["email"].append(ref)
+                had = [e.split("|", 1)[1] for e in st["email_to"] if e.split("|", 1)[0] == ref]
+                sent = member_delivery.email(p, picks_store.start_label(p), dry=dry, skip=had)
+                if sent is not None:
+                    st["email_to"] += [f"{ref}|{k}" for k in sent]
+                    if not picks_store.ref_in(st["email"], pid):
+                        st["email"].append(ref)
             except Exception as e:
                 print(f"  WARN member email {p.get('matchup')}: {type(e).__name__}")
         if not picks_store.ref_in(st["x_sealed"], pid) and not picks_store.ref_in(st["x_open"], pid):
