@@ -22,8 +22,9 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(__file__))
 
 from db.connection import read_query
-from config import DB_PATH, CURRENT_SEASON, previous_season
+from config import DB_PATH, CURRENT_SEASON, previous_season, ROLE_MINUTES
 from utils import priors as _priors
+from analysis import roles as _roles
 
 # Odds API removed — was returning 401 (expired key) and all lines come from
 # RotoWire scrape anyway. Keeping stub functions so callers don't break.
@@ -168,6 +169,16 @@ try:
     _ARCHETYPES = {int(r["player_id"]): r["archetype_label"] for _, r in read_query(
         "SELECT player_id, archetype_label FROM player_archetypes WHERE season_id = ?",
         DB_PATH, [CURRENT_SEASON]).iterrows()}
+except (sqlite3.OperationalError, pd.errors.DatabaseError):
+    pass
+
+# Role scores (analysis/roles.py) route an OUT player's minutes to teammates
+# who play his spot. The z-score scale is last season's rotation players, so
+# a first-week line can't move it.
+_ROLE_REF = None
+try:
+    _ROLE_REF = _roles.fit_reference(read_query(
+        "SELECT * FROM player_season_stats WHERE season_id = ?", DB_PATH, [previous_season(CURRENT_SEASON)]))
 except (sqlite3.OperationalError, pd.errors.DatabaseError):
     pass
 
@@ -1727,7 +1738,8 @@ def is_back_to_back(team_tricode, game_date=None):
 
 
 _ROSTER_STATS = ("pts_pg", "ast_pg", "reb_pg", "stl_pg", "blk_pg", "ts_pct", "usg_pct", "net_rating",
-                 "minutes_per_game", "off_rating", "def_rating")
+                 "minutes_per_game", "off_rating", "def_rating",
+                 "ast_per36", "fg3a_per36", "fg3_pct", "blk_per36", "reb_per36")
 
 
 def _get_full_roster(team_abbr):
@@ -1741,6 +1753,7 @@ def _get_full_roster(team_abbr):
         SELECT p.player_id, p.full_name, ps.gp, ps.pts_pg, ps.ast_pg, ps.reb_pg,
                ps.stl_pg, ps.blk_pg, ps.ts_pct, ps.usg_pct, ps.net_rating,
                ps.minutes_per_game, ps.off_rating, ps.def_rating,
+               ps.ast_per36, ps.fg3a_per36, ps.fg3_pct, ps.blk_per36, ps.reb_per36,
                ra.listed_position,
                pa.archetype_label, pa.position_group, pa.confidence as arch_confidence
         FROM player_season_stats ps
@@ -1843,11 +1856,57 @@ def _resolve_out_ids(lineup_info, roster, team_abbr, context=""):
     return out_ids, unmatched
 
 
-def project_minutes(roster_df, out_player_ids):
+def _recent_presence(team_abbr, n_games=10):
+    """{player_id: share of the team's last n current-season games he played}.
+
+    An OUT player who has already sat most of them is mostly priced into his
+    teammates' season minutes. {} before the team has 3 games."""
+    try:
+        df = read_query(f"""
+            SELECT e.game_id, e.player_id, e.sec FROM espn_player_games e
+            JOIN teams t ON e.team_id = t.team_id
+            WHERE t.abbreviation = ? AND e.season_id = '{CURRENT_SEASON}' AND e.season_type = 2
+              AND e.game_id IN (
+                SELECT e2.game_id FROM espn_player_games e2 JOIN teams t2 ON e2.team_id = t2.team_id
+                WHERE t2.abbreviation = ? AND e2.season_id = '{CURRENT_SEASON}' AND e2.season_type = 2
+                GROUP BY e2.game_id ORDER BY MAX(e2.game_date) DESC LIMIT {int(n_games)})
+        """, DB_PATH, [team_abbr, team_abbr])
+    except (sqlite3.OperationalError, pd.errors.DatabaseError):
+        return {}
+    n = df["game_id"].nunique() if not df.empty else 0
+    if n < 3:
+        return {}
+    played = df[df["sec"].fillna(0) > 0].groupby("player_id")["game_id"].nunique()
+    return {int(p): float(c) / n for p, c in played.items()}
+
+
+def project_minutes_by_role(roster_df, out_player_ids, team_abbr=None):
+    """Role-aware minutes (analysis/roles.py): an OUT player's minutes go to
+    teammates who play his spot (size first, then on-ball load), and only
+    the share a 2025-26 walk-forward says the rotation actually picks up
+    (scripts/backtest_roles.py: minutes MAE 8.11 -> 5.86 on Feb-Apr games).
+
+    Returns {player_id: projected_minutes} for available players."""
+    if _ROLE_REF is None or roster_df.empty:
+        return project_minutes(roster_df, out_player_ids, role_aware=False)
+    roles = _roles.roles_for_frame(roster_df, _ROLE_REF)
+    base = {int(r["player_id"]): float(r["minutes_per_game"] or 0) for _, r in roster_df.iterrows()}
+    out = {int(p) for p in out_player_ids}
+    fresh = _recent_presence(team_abbr) if team_abbr else {}
+    fresh = {p: fresh.get(p, 0.0) for p in out} if fresh else None
+    return _roles.project_minutes(base, out, roles, fresh=fresh)
+
+
+def project_minutes(roster_df, out_player_ids, role_aware=None, team_abbr=None):
     """Redistribute minutes from OUT players to remaining rotation.
+
+    With role_aware (default: config ROLE_MINUTES), routes them by role
+    instead (project_minutes_by_role).
 
     Returns {player_id: projected_minutes} for available players.
     """
+    if ROLE_MINUTES if role_aware is None else role_aware:
+        return project_minutes_by_role(roster_df, out_player_ids, team_abbr)
     available = roster_df[~roster_df["player_id"].isin(out_player_ids)].copy()
     out_players = roster_df[roster_df["player_id"].isin(out_player_ids)]
 
@@ -2719,8 +2778,8 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     away_out_ids, away_out_unmatched = _resolve_out_ids(away_lineup, away_roster, away_abbr, "spread model")
 
     # ── Project minutes ──
-    home_proj_min = project_minutes(home_roster, home_out_ids)
-    away_proj_min = project_minutes(away_roster, away_out_ids)
+    home_proj_min = project_minutes(home_roster, home_out_ids, team_abbr=home_abbr)
+    away_proj_min = project_minutes(away_roster, away_out_ids, team_abbr=away_abbr)
 
     # ── Compute MOJI ──
     home_moji, home_player_mojo, _ = compute_adjusted_mojo(home_roster, home_out_ids, home_proj_min)
@@ -2869,6 +2928,32 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     proj_spread = -raw_power
     proj_spread = round(proj_spread * 2) / 2  # round to nearest 0.5
 
+    # ── Shadow: the same blend with role-aware minutes (analysis/roles.py) ──
+    # Swaps in role-routed MOJI and its injury attrition; synergy keeps the
+    # live minutes. Logged only while config.ROLE_MINUTES is off.
+    role_shadow = None
+    if not ROLE_MINUTES and (home_out_ids or away_out_ids):
+        try:
+            h_rm = project_minutes(home_roster, home_out_ids, role_aware=True, team_abbr=home_abbr)
+            a_rm = project_minutes(away_roster, away_out_ids, role_aware=True, team_abbr=away_abbr)
+            h_rmoji, _, _ = compute_adjusted_mojo(home_roster, home_out_ids, h_rm)
+            a_rmoji, _, _ = compute_adjusted_mojo(away_roster, away_out_ids, a_rm)
+            d_attr = (K["NRTG_MOJO_ATTRITION"] * (max(0, home_full_moji - h_rmoji) - max(0, away_full_moji - a_rmoji))
+                      - (home_nrtg_attrition - away_nrtg_attrition))
+            shadow_power = raw_power + (
+                rest_scale * K["MOJI_WEIGHT"] * K["MOJO_SCALE"] * ((h_rmoji - a_rmoji) - moji_diff)
+                - (rest_scale * K["NRTG_SEASON_WEIGHT"] + recent_w) * d_attr)
+            role_shadow = {
+                "home_moji": round(float(h_rmoji), 1), "away_moji": round(float(a_rmoji), 1),
+                "raw_power": round(float(shadow_power), 1),
+                "spread": round(-float(shadow_power) * 2) / 2,
+            }
+            if role_shadow["spread"] != proj_spread:
+                logger.info("ROLE SHADOW: %s@%s live %+.1f -> role-aware minutes %+.1f",
+                            away_abbr, home_abbr, proj_spread, role_shadow["spread"])
+        except Exception as e:  # shadow must never break pricing
+            logger.warning("role shadow failed for %s@%s: %r", away_abbr, home_abbr, e)
+
     # ── Total (keep existing logic) ──
     h_ortg = (home_data.get("off_rating", 111.7) or 111.7)
     h_drtg = (home_data.get("def_rating", 111.7) or 111.7)
@@ -2914,6 +2999,7 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
         "home_collapse": round(home_collapse_penalty, 1),
         "away_collapse": round(away_collapse_penalty, 1),
         "raw_power": round(raw_power, 1),
+        "role_shadow": role_shadow,
     }
 
     b2b_tag = (' B2B:'+home_abbr if home_b2b else '') + (' B2B:'+away_abbr if away_b2b else '')
