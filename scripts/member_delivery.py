@@ -17,11 +17,18 @@ tg_members.pass_active: admin, an unexpired accessExpiresAt, or a live
 recurring subscription. Addresses come from Firebase Auth (the users doc is
 written by the Stripe webhook, which doesn't store one).
 
+Plus the whitelist, which that rule never saw: the site grants admin / FnF
+from EMAIL_WHITELIST in morello-auth.js (in the browser, nothing is written
+to Firestore), onUserCreate grants FnF from the fnf_whitelist collection, and
+tier "fnf" itself isn't one hasActiveAccess counts.
+
 Nothing here prints the side: Actions logs are public.
 """
 
 import hashlib
+import hmac
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import tg_members
@@ -39,6 +46,30 @@ def enabled():
 
 def email_enabled():
     return enabled() and bool(os.environ.get("RESEND_API_KEY", "").strip())
+
+
+AUTH_JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "morello-auth.js")
+WHITELIST_TIERS = ("admin", "fnf")
+
+
+def site_whitelist():
+    """Emails EMAIL_WHITELIST in morello-auth.js grants a member tier."""
+    try:
+        src = open(AUTH_JS, encoding="utf-8").read()
+    except OSError:
+        return set()
+    m = re.search(r"EMAIL_WHITELIST\s*=\s*\{(.*?)\}", src, re.S)
+    if not m:
+        return set()
+    return {e.lower() for e, tier in re.findall(r"'([^']+@[^']+)'\s*:\s*'([^']+)'", m.group(1))
+            if tier in WHITELIST_TIERS}
+
+
+def recipient_key(addr):
+    """Short keyed hash of an address for the committed state file (the repo
+    is public): records who already has a pick without naming them."""
+    salt = os.environ.get("PICKS_SEAL_KEY", "").encode() or b"morello"
+    return hmac.new(salt, addr.lower().encode(), hashlib.sha256).hexdigest()[:12]
 
 
 def doc_id(pick_id):
@@ -84,7 +115,10 @@ def active_emails():
               d.collection("users").where("checkoutMode", "==", "subscription")):
         for snap in q.stream():
             docs[snap.id] = snap.to_dict()
-    uids = [uid for uid, u in docs.items() if tg_members.pass_active(u)]
+    for snap in d.collection("users").where("tier", "==", "fnf").stream():
+        docs[snap.id] = snap.to_dict()
+    uids = [uid for uid, u in docs.items()
+            if tg_members.pass_active(u) or u.get("tier") in WHITELIST_TIERS]
     from firebase_admin import auth
     out = {}
     for i in range(0, len(uids), 100):
@@ -96,6 +130,11 @@ def active_emails():
         e = (docs[uid].get("email") or "").lower()
         if e and e not in out:
             out[e] = uid
+    for e in site_whitelist():
+        out.setdefault(e, None)
+    for snap in d.collection("fnf_whitelist").stream():
+        if "@" in snap.id:
+            out.setdefault(snap.id.lower(), None)
     return sorted(out)
 
 
@@ -125,26 +164,29 @@ def message(p, when_label):
     return subject, text, html
 
 
-def email(p, when_label, dry=False):
-    """Send the pick to every active member. True when every batch was accepted."""
-    to = active_emails() if not dry else []
+def email(p, when_label, dry=False, skip=()):
+    """Send the pick to every active member not in `skip` (recipient_key
+    values). Returns the keys of the members it went to, or None when a batch
+    was refused."""
+    to = [a for a in active_emails() if recipient_key(a) not in set(skip)] if not dry else []
     if dry:
         print(f"  [dry] member email: {p.get('matchup')} ({p.get('date')})")
-        return True
+        return []
     if not to:
-        print("  members: no active passes — nothing to email")
-        return True
+        print(f"  members: nobody new to email · {p.get('matchup')}")
+        return []
     import requests
     subject, text, html = message(p, when_label)
     key = os.environ["RESEND_API_KEY"].strip()
     ok = True
     for i in range(0, len(to), 100):
         batch = [{"from": FROM, "to": [addr], "subject": subject, "text": text, "html": html} for addr in to[i:i + 100]]
+        chunk = "".join(sorted(recipient_key(a) for a in to[i:i + 100]))
         r = requests.post(RESEND_URL, json=batch, timeout=30,
                           headers={"Authorization": f"Bearer {key}",
-                                   "Idempotency-Key": f"{doc_id(p['id'])}-{i}"})
+                                   "Idempotency-Key": f"{doc_id(p['id'])}-{hashlib.sha256(chunk.encode()).hexdigest()[:16]}"})
         if r.status_code >= 300:
             print(f"  WARN member email batch {i // 100}: HTTP {r.status_code} {r.text[:200]}")
             ok = False
-    print(f"  members: emailed {len(to)} active member(s) · {p.get('matchup')}")
-    return ok
+    print(f"  members: emailed {len(to)} member(s) · {p.get('matchup')}")
+    return [recipient_key(a) for a in to] if ok else None
