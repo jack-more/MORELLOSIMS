@@ -39,10 +39,6 @@ main{max-width:1120px;margin:0 auto;padding:0 16px 60px}
 
 /* summary */
 .summary{margin-top:-26px}
-.views{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--rule)}
-.views button{padding:13px 6px;font-size:13px;color:var(--ink-2);border-left:1px solid var(--rule);line-height:1.25}
-.views button:first-child{border-left:0}
-.views button[aria-pressed="true"]{color:var(--ink);font-weight:600;box-shadow:inset 0 -3px 0 var(--sky)}
 .big{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 32px;padding:22px 22px 18px}
 .big .u{font-weight:200;font-size:clamp(64px,15vw,112px);letter-spacing:-3px;line-height:.85}
 .stats{display:flex;gap:28px;padding-bottom:6px}
@@ -141,9 +137,6 @@ footer a{color:var(--sky-deep)}
 
 <main>
   <section class="card summary">
-    <div class="views" id="views" role="group" aria-label="Which picks">
-      <button data-v="all">Every<br>pick</button><button data-v="before">Logged<br>before tip</button><button data-v="spreads">Spreads<br>before tip</button>
-    </div>
     <div class="big"><div class="u" id="units">—</div>
       <div class="stats"><div><b id="rec">—</b><span>record</span></div><div><b id="roi">—</b><span>roi</span></div><div><b id="n">—</b><span>picks</span></div></div></div>
     <p class="what" id="what"></p>
@@ -177,8 +170,6 @@ const fmtU = (v, d = 1) => (Math.abs(v) < 0.05 && d === 1 ? "0.0" : (v > 0 ? "+"
 const cls = v => v > 0 ? "pos" : v < 0 ? "neg" : "";
 const VIEWS = {
   all:     {f: () => true, what: "Every graded pick from the season, wins and losses."},
-  before:  {f: p => !p.late, what: "Only picks with a pregame timestamp on record."},
-  spreads: {f: p => !p.late && p.type === "spread", what: "Spreads with a pregame timestamp on record."},
 };
 let D, P, byDay, days, sel = null, month = "ALL", view = "all", showAll = false;
 
@@ -188,7 +179,6 @@ fetch("seasons.json").then(r => r.json()).then(list => { if (list.length > 1)
 fetch(SEASON + ".json").then(r => r.json()).then(d => { D = d; document.title = `NBA Ledger ${d.season} · Morello Sims`;
   document.getElementById("kick").textContent = `NBA ${d.season} · every pick, losses included`;
   const v = new URLSearchParams(location.search).get("view"); if (VIEWS[v]) view = v;
-  document.querySelectorAll("#views button").forEach(b => b.onclick = () => { view = b.dataset.v; month = "ALL"; init(); });
   document.getElementById("scrim").onclick = closeDay; document.getElementById("close").onclick = closeDay;
   document.getElementById("prev").onclick = () => step(-1); document.getElementById("next").onclick = () => step(1);
   document.addEventListener("keydown", e => { if (!sel) return; if (e.key === "Escape") closeDay(); if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
@@ -198,7 +188,6 @@ fetch(SEASON + ".json").then(r => r.json()).then(d => { D = d; document.title = 
 
 function rec(ps) { const w = ps.filter(p => p.result === "W").length, l = ps.filter(p => p.result === "L").length, pu = ps.length - w - l; return `${w}-${l}${pu ? "-" + pu : ""}`; }
 function init() {
-  document.querySelectorAll("#views button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === view));
   P = D.picks.filter(VIEWS[view].f);
   byDay = {}; P.forEach(p => (byDay[p.date] = byDay[p.date] || []).push(p));
   days = Object.keys(byDay).sort();

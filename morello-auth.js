@@ -592,8 +592,8 @@
         <button class="ma-btn-primary" onclick="window.morelloAuth.openModal('pricing')">Get the picks</button>
       ` : ''}
       ${(tier === 'pickmaker_nba' || tier === 'pickmaker_mlb' || tier === 'pickmaker_dual' || tier === 'all_access' || tier === 'admin') ? `
-        <button class="ma-btn-primary" id="ma-tg-join" onclick="window.morelloAuth.joinTelegram()">Join the members channel</button>
-        <div class="ma-tg-note" id="ma-tg-note">Opens Telegram. Your link works once, only for you.</div>
+        <a class="ma-btn-primary" href="/members/" style="display:block;text-align:center;text-decoration:none">Open tonight's picks</a>
+        <div class="ma-tg-note">Every pick shows up there the moment it's logged, and lands in your inbox.</div>
       ` : ''}
       ${(tier === 'pickmaker_nba' || tier === 'pickmaker_mlb' || tier === 'pickmaker_dual') ? `
         <button class="ma-btn-secondary" onclick="window.morelloAuth.openModal('pricing')">Buy another pass</button>
@@ -613,7 +613,7 @@
     // NBA only — the same three sets as the homepage
     return `
       <h2>Get the picks</h2>
-      <p class="ma-subtitle">Every pick logged before tip, graded in public.</p>
+      <p class="ma-subtitle">Every pick graded in public, wins and losses.</p>
       <div class="ma-pricing-grid">
         <div class="ma-pricing-card">
           <div>
@@ -752,7 +752,7 @@
           priceId: STRIPE_CONFIG.prices[product],
           uid: currentUser.uid,
           email: currentUser.email,
-          successUrl: window.location.origin + '?checkout=success',
+          successUrl: window.location.origin + '/members/?paid=1',
           cancelUrl: window.location.href
         })
       });

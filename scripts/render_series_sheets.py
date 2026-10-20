@@ -253,7 +253,7 @@ def record():
         vf = F("cond", 92)
         d.text((cx - text_w(d, v, vf) / 2, y), v, font=vf, fill=col)
         d.text((cx - text_w(d, lab, F("mono_b", 22)) / 2, y + s(112)), lab, font=F("mono_b", 22), fill=MUTED)
-    footer(img, frame, "MORELLOSIMS.COM", "EVERY PICK LOGGED BEFORE THE GAME")
+    footer(img, frame, "MORELLOSIMS.COM", "EVERY PICK GRADED IN PUBLIC")
     return finish(img)
 
 
@@ -364,7 +364,7 @@ def ledger(sport):
         bf = fit_font(d, b2, "mono_b", s(20), (x1 - x0) * 0.46, min_size=s(13))
         d.text((x1 - text_w(d, b2, bf), ry + s(14)), b2, font=bf, fill=MUTED)
 
-    footer(img, frame, "MORELLOSIMS.COM", "EVERY PICK LOGGED BEFORE THE GAME")
+    footer(img, frame, "MORELLOSIMS.COM", "EVERY PICK GRADED IN PUBLIC")
     return finish(img)
 
 

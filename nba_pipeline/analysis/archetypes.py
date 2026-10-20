@@ -294,3 +294,72 @@ class ArchetypeAnalyzer:
                     names = [name_map.get(int(pid), "?") for pid in top["player_id"]]
                     print(f"    {arch} ({len(arch_players)} players): {', '.join(names)}")
             print()
+
+
+# Listed position -> position groups a new player can be placed in (rosters list G / F / C)
+_GROUPS_FOR = {pos: [g for g, members in POSITION_GROUPS.items() if pos in members]
+               for members in POSITION_GROUPS.values() for pos in members}
+
+
+def assign_new_players(conn, season: str, ref_season: str) -> int:
+    """Archetype for every rostered `season` player who has none: the nearest
+    `ref_season` archetype centroid in his position group(s), on the same
+    weighted, standardized features the clustering uses, from his `season`
+    line (a prior or composite before he has played, utils/priors.py).
+
+    The K-Means clusters only cover players with MIN_MINUTES_FOR_CLUSTERING
+    minutes in the season they were fit on, so rookies, players back from a
+    lost season and new signings had no role at all: usage redistribution
+    and scheme fit read them as a blank. Everyone is placed against
+    `ref_season`'s clusters, including players clustered in an earlier season:
+    the label names repeat every season but the clusters behind them move
+    (2024-25 "Slasher" was Edwards / Harden / DeRozan, 2025-26's is Clifford /
+    Sion James / Smart), and every seeded player carries `ref_season`'s.
+    Returns the rows inserted."""
+    feats = CLUSTERING_FEATURES
+    have = {r[0] for r in conn.execute("SELECT player_id FROM player_archetypes WHERE season_id = ?", [season])}
+    ref = conn.execute(
+        f"""SELECT pa.position_group, pa.archetype_label, pa.archetype_id, {', '.join('ps.' + f for f in feats)}
+            FROM player_archetypes pa JOIN player_season_stats ps
+              ON ps.player_id = pa.player_id AND ps.season_id = pa.season_id
+            WHERE pa.season_id = ?""", [ref_season]).fetchall()
+    groups = {}
+    for g in POSITION_GROUPS:
+        rows = [r for r in ref if r[0] == g]
+        if len(rows) < 8:
+            continue
+        w = np.array([POSITION_FEATURE_WEIGHTS.get(g, {}).get(f, 1.0) for f in feats])
+        X = np.array([[v or 0 for v in r[3:]] for r in rows], dtype=float) * w
+        scaler = StandardScaler().fit(X)
+        Xs = scaler.transform(X)
+        labels = sorted({r[1] for r in rows})
+        cents = np.array([Xs[[r[1] == lab for r in rows]].mean(axis=0) for lab in labels])
+        ids = {lab: max({r[2] for r in rows if r[1] == lab}, key=[r[2] for r in rows if r[1] == lab].count)
+               for lab in labels}
+        own = np.linalg.norm(Xs - cents[[labels.index(r[1]) for r in rows]], axis=1)
+        groups[g] = (w, scaler, labels, cents, ids, float(np.percentile(own, 95)))
+    targets = conn.execute(
+        f"""SELECT ra.player_id, ra.listed_position, {', '.join('ps.' + f for f in feats)}
+            FROM roster_assignments ra JOIN player_season_stats ps
+              ON ps.player_id = ra.player_id AND ps.season_id = ra.season_id
+            WHERE ra.season_id = ? AND ps.minutes_per_game > 0""", [season]).fetchall()
+    out = []
+    for pid, pos, *vals in targets:
+        if pid in have:
+            continue
+        best = None
+        for g in _GROUPS_FOR.get(pos or "", []) or list(POSITION_GROUPS):
+            if g not in groups:
+                continue
+            w, scaler, labels, cents, ids, spread = groups[g]
+            x = scaler.transform((np.array([v or 0 for v in vals], dtype=float) * w)[None, :])[0]
+            d = np.linalg.norm(cents - x, axis=1)
+            i = int(d.argmin())
+            if best is None or d[i] < best[0]:
+                best = (float(d[i]), g, labels[i], ids[labels[i]], max(0.0, 1.0 - d[i] / spread), x)
+        if best:
+            d, g, lab, aid, conf, x = best
+            out.append((pid, season, g, int(aid), lab, round(conf, 3), json.dumps([round(float(v), 4) for v in x])))
+    conn.executemany("INSERT INTO player_archetypes (player_id, season_id, position_group, archetype_id, "
+                     "archetype_label, confidence, feature_vector) VALUES (?, ?, ?, ?, ?, ?, ?)", out)
+    return len(out)
