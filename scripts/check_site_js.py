@@ -15,7 +15,7 @@ import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGES = ["index.html", "ledger/nba/index.html", "nbasim/index.html", "nfl/index.html", "extra/index.html",
-         "scripts/templates/nba_ledger.html", "scripts/templates/data_page.html", "morello-auth.js"]
+         "scripts/templates/nba_ledger.html", "morello-auth.js"]
 
 bad = 0
 for rel in PAGES:

@@ -357,7 +357,7 @@ table_html = f'''
 # Methodology footer (keep existing text)
 footer_html = '''
                     <p class="blog-body-text" style="font-size:11px; color:#555; margin-top:12px;">
-                        All picks sourced from the NBA SIM pipeline &mdash; scheme detection, archetype clustering (K-Means on 16 features), Dynamic Score rankings, and lineup synergy. Lines via The Odds API. Full methodology at <a href="/nbasim/" style="color:#2a9d5f;">nbasim</a>.
+                        All picks sourced from the NBA SIM pipeline &mdash; scheme detection, archetype clustering (K-Means on 16 features), Dynamic Score rankings, and lineup synergy. Lines via The Odds API. Every pick graded at <a href="/ledger/nba/" style="color:#2a9d5f;">the ledger</a>.
                     </p>
 
 '''

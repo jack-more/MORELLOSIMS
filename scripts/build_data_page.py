@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""The data side: /nbasim/ — tonight's slate and a report for every game.
+"""Tonight's slate as data: nbasim/slate.json (the homepage's tonight board reads it).
 
-Writes nbasim/slate.json (data) and nbasim/index.html (template). Public and
+The /nbasim/ page itself is gone; nbasim/index.html is a redirect to the homepage
+so old links land somewhere. The slate is public and
 free, so it follows one rule: the sim's number IS the pick, so a game's sim
 line and total are written ONLY once that game has tipped. Before tip the
 report shows the book's line, both teams' ratings and rotations, and "sealed".
@@ -129,6 +130,13 @@ def sims_after_tip(slate_day, games):
     return sims, picks
 
 
+# the data page is retired; old /nbasim/ links go to the homepage
+REDIRECT = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Morello Sims</title>'
+            '<meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=/">'
+            '<link rel="canonical" href="https://morellosims.com/"></head>'
+            '<body><a href="/">Morello Sims</a></body></html>\n')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date")
@@ -151,10 +159,8 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "slate.json"), "w") as f:
         json.dump(data, f, separators=(",", ":"))
-    with open(os.path.join(HERE, "templates", "data_page.html")) as f:
-        tpl = f.read()
     with open(os.path.join(OUT, "index.html"), "w") as f:
-        f.write(tpl)
+        f.write(REDIRECT)
     sealed = sum(1 for g in games if not g["sim"])
     print(f"nbasim: {d} {title} · {len(games)} games · {sealed} sealed · ratings {snap}")
 
