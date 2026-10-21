@@ -126,6 +126,15 @@ SLOPE = min(CURVE_HI, max(CURVE_LO, CURVE_SHRINK * CURVE_DEFAULT))
 BOX = ["fga", "fta", "tov", "fg3a", "fg3m", "off_poss", "oreb", "dreb", "och", "dch", "pts", "used", "min"]
 MONTHS = (("Oct-Nov", (10, 11)), ("Dec-Jan", (12, 1)), ("Feb-Mar", (2, 3)), ("Apr", (4,)))
 RUNS = ("main", "leaky", "nopt")
+# the main run with one piece taken out, to see what each is worth: (inputs, engine layers off)
+ABLATIONS = {"no_lineups": ("main", ("lineups",)),       # fives drawn by minutes alone
+             "no_history": ("nohist", ()),               # lineup plan without the coach's real fives
+             "no_pairs": ("main", ("pairs",)),           # no pair or unit chemistry on the floor
+             "no_wowy": ("nowowy", ()),                  # no role WOWY for missing regulars
+             "no_load": ("main", ("load",)),
+             "no_spacing": ("main", ("spacing",)),
+             "no_scheme": ("main", ("scheme",)),
+             "no_fatigue": ("main", ("fatigue",))}       # fatigue and back-to-backs
 LABEL = {"main": "sim (point-in-time, impact 0)", "leaky": "sim leaky (end-of-season RAPM)",
          "nopt": "sim, no play-type data (fully point-in-time)",
          "base_home": "baseline: home court +1.7", "base_nrtg": "baseline: net rating to date + 1.7"}
@@ -315,6 +324,26 @@ class Season:
             imp = n * sum(self.imp_sum.get(p, 0.0) for p in ps)       # the leaky run subtracts this
             self.stints[r.game_date].append((int(r.team_id), ps, raw, imp, float(n)))
         self.stint_rows, self.stint_skipped = len(st), skipped
+        # the fives each coach played, game by game (context.lineup_history's rows), for the lineup plan
+        lh = collections.defaultdict(lambda: collections.defaultdict(float))
+        ldate = {}
+        for gid, tid, date, *es, sec in con.execute(
+                "SELECT l.game_id, l.team_id, g.game_date, l.e1, l.e2, l.e3, l.e4, l.e5, l.sec "
+                "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
+                "WHERE g.season_id=? AND g.counts_regular=1", (SEASON,)):
+            ps = tuple(sorted(p for p in (emap.get(str(e)) for e in es) if p))
+            if len(ps) == 5 and sec:
+                lh[(int(tid), gid)][ps] += sec / 60
+                ldate[(int(tid), gid)] = date
+        hist = collections.defaultdict(list)
+        for (tid, gid), fives in lh.items():
+            total = sum(fives.values())
+            hist[tid].append((ldate[(tid, gid)], frozenset(p for f in fives for p in f),
+                              {f: m * 48.0 / total for f, m in fives.items()}))
+        self.lhist = {}
+        for tid, g in hist.items():
+            g.sort(key=lambda x: x[0])
+            self.lhist[tid] = (np.array([x[0] for x in g]), g)
 
     # ---------------------------------------------------------------- point-in-time reads
     def _k(self, dates, D):
@@ -435,7 +464,7 @@ class Season:
         return out
 
     # ---------------------------------------------------------------- the team dict
-    def base_team(self, tid, D, lg, tonight=None, starters=(), playtypes=True):
+    def base_team(self, tid, D, lg, tonight=None, starters=(), playtypes=True, use_wowy=True):
         """Everything players.team_inputs builds except the impact-dependent keys
         (off, def, V, U, plan), from data before D. tonight=None: everyone available.
         playtypes=False: no 2025-26 play-type data at all (2024-25 league mix and per-type PPP)."""
@@ -451,7 +480,7 @@ class Season:
         n, T = len(pids), len(TYPES)
         rate = {p: self.rates(p, D, lg) for p in set(pids) | set(full)}
         gone = [x for x in out_ids if full.get(x, 0) >= 20]
-        wowy = self.wowy(tid, D, pids, gone) if gone else {}
+        wowy = self.wowy(tid, D, pids, gone) if gone and use_wowy else {}
         role = {}
         for pid in pids:
             du = de = w = 0.0
@@ -493,6 +522,8 @@ class Season:
         out["g"] = np.array([rate[p]["g"] for p in pids])
         out["pos"] = [self.pos(p) for p in pids]
         out["starters"] = [i for i, p in enumerate(pids) if p in set(starters)]
+        ld, lg_rows = self.lhist.get(tid, (np.array([]), []))
+        out["H"] = lineups.history(lg_rows[:self._k(ld, D)], pids, gone)
         out["tdef"] = np.array([self.tdef.get(tid, {}).get(t, 1.0) for t in TYPES])
         out["out"] = sorted(out_ids)
         out["gone"] = gone
@@ -814,6 +845,9 @@ def main():
                 teams[tid] = {run: S.finish(base if run != "nopt" else base_np, ctxs[run], run == "leaky")
                               for run in RUNS}
                 teams[tid]["base"] = base
+                teams[tid]["nowowy"] = S.finish(S.base_team(tid, D, lg, tonight, starters, use_wowy=False),
+                                                ctxs["main"], False)
+                teams[tid]["nohist"] = S.finish(dict(base, H={}), ctxs["main"], False)
             pace = (S.pace(h, D, lg) + S.pace(a, D, lg)) / 2
             b2b = {"home_b2b": (h, _day_before(D)) in S.sched, "away_b2b": (a, _day_before(D)) in S.sched}
             gi = len(meta_games)
@@ -824,6 +858,9 @@ def main():
                 kw = {"sims": args.sims, "pace": pace, "hca": HCA, "seed": 1000 + gi,
                       "impact_w": IMPACT_W if run == "leaky" else 0.0, **b2b}
                 game_tasks.append(("game", (gi, run), _lean(teams[h][run]), _lean(teams[a][run]), lg_small, kw))
+            for name, (inp, off) in ABLATIONS.items():
+                kw = {"sims": args.sims, "pace": pace, "hca": HCA, "seed": 1000 + gi, "impact_w": 0.0, "off": off, **b2b}
+                game_tasks.append(("game", (gi, name), _lean(teams[h][inp]), _lean(teams[a][inp]), lg_small, kw))
             nr_h, nr_a = S.nrtg(h, D), S.nrtg(a, D)
 
             def rot(t):
@@ -867,7 +904,7 @@ def main():
             f"{D} {run} {v['scale']:.3f}" for (D, run), v in sorted(scales.items())))
         for task in game_tasks:
             gi, run = task[1]
-            task[5]["scale"] = scales[(meta_games[gi]["cal_date"], run)]["scale"]
+            task[5]["scale"] = scales[(meta_games[gi]["cal_date"], run if run in RUNS else "main")]["scale"]
         t0 = time.time()
         done = 0
         for kind, (gi, run), r in pool.imap_unordered(_sim_task, game_tasks, chunksize=2):
@@ -876,7 +913,7 @@ def main():
             g[f"{run}_sd_raw"] = r["sd_raw"]
             g[f"{run}_total"] = r["home_pts"] + r["away_pts"]
             g[f"{run}_p_home_13"] = r["p_home_13"]
-            g[f"{run}_scale"] = scales[(g["cal_date"], run)]["scale"]
+            g[f"{run}_scale"] = scales[(g["cal_date"], run if run in RUNS else "main")]["scale"]
             done += 1
             if done % 100 == 0:
                 el = time.time() - t0

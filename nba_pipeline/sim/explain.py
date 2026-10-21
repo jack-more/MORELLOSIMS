@@ -50,7 +50,8 @@ def _team_detail(t, roster, info):
         last = lambda i: t["names"][i].split()[-1] if t["names"][i].split()[-1] not in ("Jr.", "II", "III") else t["names"][i].split()[-2]
         for five, mins, net, imp, chem in t["plan"]["units"][:6]:
             units.append({"five": [last(i) for i in five], "pids": [int(t["pids"][i]) for i in five],
-                          "min": round(mins, 1), "net": round(net, 1),
+                          "min": round(mins, 1), "played": round(t["plan"].get("played", {}).get(five, 0.0), 1),
+                          "net": round(net, 1),
                           "impact": round(imp, 1), "chem": round(chem, 1),
                           "start": five == t["plan"]["start"], "close": five == t["plan"]["close"]})
     return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids), "units": units}

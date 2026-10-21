@@ -1,21 +1,27 @@
 """Tonight's lineup plan: which fives play, and for how long.
 
-Coaches stack minutes on their best units and break them up only as the
-rotation demands. So every valid five from the ten-man rotation is scored
-(the five's impact plus its chemistry: pair values and the unit's own track
-record, per 100 possessions) and the minutes are solved as a linear program:
-put the most minutes on the strongest fives, subject to
+The plan starts from the fives this coach actually plays. For every five of
+tonight's rotation that has shared the floor, its history is the minutes per
+game the coach gave it in the games all five played (recent games count most,
+and games the same regulars missed count triple). Those fives keep their real
+minutes first. Only the minutes they cannot cover (a starter out, a new
+signing) go to fives the coach has not used, and among those the strongest
+(impact plus chemistry: pair values and the unit's own record, per 100
+possessions) get them. The minutes are solved as a linear program subject to
 
-  - every player's projected minutes (soft: a shortfall costs more than any five gains)
+  - every player's projected minutes (soft: a miss either way costs more than any five gains)
   - 48 minutes in all
-  - the starters together long enough to open both halves, the best five long enough to close
-  - no unit beyond a realistic stint total (the starting five 20, any other 9)
-  - position balance: one to three guards, at least one big, at most two centers
+  - the starters together long enough to open both halves, the closing five long enough to close
+  - no unit beyond a realistic stint total (the starting five 20, any other 9) unless
+    the coach plays it more
+  - for fives the coach has never used: one to three guards, at least one big, at most
+    two centers (relaxed step by step only if the rotation can't fill 48 minutes)
 
 The engine then plays the plan: starters open each half, the closing five
 finishes, and the other two-minute stretches draw from the remaining minutes.
 """
 
+import collections
 import itertools
 
 import numpy as np
@@ -26,8 +32,13 @@ from sim.context import SYN_SHARE
 GUARDS, BIGS = {"PG", "SG"}, {"PF", "C"}
 START_MIN, CLOSE_MIN = 12.0, 4.0          # starters open each half (6 + 6), the closers finish (4)
 CAP_START, CAP_OTHER = 20.0, 9.0
-SHORT_COST = 60.0                         # per minute a player misses his projection
+SHORT_COST = 60.0                         # per minute a player misses his projection, either way
 CLOSER_MIN = 20.0                         # closers come from players projected for 20+ minutes
+REAL_BONUS = 25.0                         # per minute of a five's real minutes: the coach's own lineups first
+NEW_COST = 8.0                            # per minute of a five the coach has never played
+HALF_LIFE = 20                            # team games: the coach's recent lineups count most
+LIKE_TONIGHT = 3.0                        # a game the same regulars missed tells most about tonight
+SEEN_MIN = 0.5                            # minutes per game for a five to count as one the coach plays
 
 
 def valid(pos, need_big=True):
@@ -35,6 +46,29 @@ def valid(pos, need_big=True):
     b = sum(p in BIGS for p in pos)
     c = sum(p == "C" for p in pos)
     return 1 <= g <= 3 and (b >= 1 or not need_big) and c <= 2
+
+
+def history(games, pids, gone=()):
+    """{bitmask of rotation indices: minutes per game} the coach has given each five of
+    tonight's rotation, over the games all five played. games: context.lineup_history rows
+    for this team (only games before tonight); gone: tonight's missing regulars."""
+    idx = {p: i for i, p in enumerate(pids)}
+    gone = set(gone)
+    num = collections.defaultdict(float)
+    den = collections.defaultdict(float)                 # weight by mask of rotation players who played
+    k = len(games)
+    for j, (_date, played, fives) in enumerate(games):
+        w = 0.5 ** ((k - 1 - j) / HALF_LIFE) * (LIKE_TONIGHT if gone and not gone & played else 1.0)
+        den[sum(1 << idx[p] for p in played if p in idx)] += w
+        for f, m in fives.items():
+            if all(p in idx for p in f):
+                num[sum(1 << idx[p] for p in f)] += w * m
+    out = {}
+    for F, s in num.items():
+        d = sum(w for M, w in den.items() if M & F == F)
+        if d > 0 and s / d >= SEEN_MIN:
+            out[F] = s / d
+    return out
 
 
 def strength(team, five):
@@ -46,18 +80,21 @@ def strength(team, five):
 
 
 def plan(team):
-    """{"units": [(five, minutes, net, impact, chemistry)], "start": five, "close": five} or None.
-    A rotation without 48 minutes of bigs gets small-ball fives too."""
-    return _plan(team, True) or _plan(team, False)
+    """{"units": [(five, minutes, net, impact, chemistry)], "start": five, "close": five,
+    "played": {five: the coach's minutes per game}} or None (fewer than five players).
+    The coach's own fives are always allowed; new fives must be position-balanced, then
+    may be small, then anything, until the rotation fills 48 minutes."""
+    return _plan(team, True) or _plan(team, False) or _plan(team, None)
 
 
 def _plan(team, need_big):
     n = len(team["min"])
     if n < 5:
         return None
-    fives = [f for f in itertools.combinations(range(n), 5) if valid([team["pos"][i] for i in f], need_big)]
-    if not fives:
-        return None
+    H = team.get("H") or {}
+    mask = lambda f: sum(1 << i for i in f)
+    fives = [f for f in itertools.combinations(range(n), 5)
+             if mask(f) in H or need_big is None or valid([team["pos"][i] for i in f], need_big)]
     st = tuple(sorted(team.get("starters") or []))
     if len(st) != 5:
         st = tuple(sorted(np.argsort(-team["min"])[:5].tolist()))
@@ -65,34 +102,43 @@ def _plan(team, need_big):
         fives.append(st)
     scores = [strength(team, f) for f in fives]
     net = np.array([s[0] for s in scores])
+    h = np.array([H.get(mask(f), 0.0) for f in fives])
     core = [k for k, f in enumerate(fives) if all(team["min"][i] >= CLOSER_MIN for i in f)]
-    close = fives[max(core, key=lambda k: net[k])] if core else st      # the best five of the regulars
+    played_core = [k for k in core if h[k] > 0]
+    close = fives[max(played_core or core, key=lambda k: net[k])] if core else st   # the best five of the regulars
     F = len(fives)
-    # variables: minutes per five (F), then each player's shortfall (n)
-    c = np.concatenate([-net, np.full(n, SHORT_COST)])
-    A_eq = np.zeros((1, F + n)); A_eq[0, :F] = 1
-    b_eq = [48.0]
+    cap = np.array([48.0 if need_big is None else max(h[k], CAP_START if f in (st, close) else CAP_OTHER)
+                    for k, f in enumerate(fives)])
+    # variables: each five's minutes within its history (F), beyond it (F), then each
+    # player's shortfall (n) and excess (n) against his projection
+    c = np.concatenate([-(net + REAL_BONUS), -(net - np.where(h > 0, 0.0, NEW_COST)),
+                        np.full(2 * n, SHORT_COST)])
+    A_eq = np.zeros((n + 1, 2 * F + 2 * n))
+    b_eq = np.zeros(n + 1)
+    A_eq[n, :2 * F] = 1
+    b_eq[n] = 48.0
+    for k, f in enumerate(fives):                        # each player's minutes + shortfall - excess = projection
+        A_eq[list(f), k] = A_eq[list(f), F + k] = 1
+    A_eq[np.arange(n), 2 * F + np.arange(n)] = 1
+    A_eq[np.arange(n), 2 * F + n + np.arange(n)] = -1
+    b_eq[:n] = team["min"]
     A_ub, b_ub = [], []
-    for p in range(n):                                   # minutes(p) + shortfall(p) >= projection, minutes(p) <= projection
-        row = np.zeros(F + n)
-        for k, f in enumerate(fives):
-            if p in f:
-                row[k] = 1
-        lo = -row.copy(); lo[F + p] = -1
-        A_ub.append(lo); b_ub.append(-float(team["min"][p]))
-        A_ub.append(row); b_ub.append(float(team["min"][p]) + 0.5)
-    bounds = []
-    for f in fives:
-        lo = (START_MIN if f == st else 0.0) + (CLOSE_MIN if f == close else 0.0)
-        hi = max(lo, CAP_START if f in (st, close) else CAP_OTHER)
-        bounds.append((lo, hi))
-    bounds += [(0, None)] * n
+    for f, lo in ((st, START_MIN), (close, CLOSE_MIN)):
+        k = fives.index(f)
+        cap[k] = max(cap[k], START_MIN + CLOSE_MIN if st == close else lo)
+        row = np.zeros(2 * F + 2 * n)
+        row[k] = row[F + k] = -1
+        A_ub.append(row); b_ub.append(-(START_MIN + CLOSE_MIN if st == close else lo))
+    within = np.minimum(h, cap)
+    bounds = ([(0, within[k]) for k in range(F)] + [(0, cap[k] - within[k]) for k in range(F)]
+              + [(0, None)] * (2 * n))
     res = linprog(c, A_ub=np.array(A_ub), b_ub=np.array(b_ub), A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
     if not res.success:
         return None
-    t = res.x[:F]
+    t = res.x[:F] + res.x[F:2 * F]
     units = sorted(((fives[k], float(t[k]), *scores[k]) for k in range(F) if t[k] > 0.05), key=lambda u: -u[1])
-    return {"units": units, "start": st, "close": close}
+    return {"units": units, "start": st, "close": close,
+            "played": {fives[k]: float(h[k]) for k in range(F) if h[k] > 0}}
 
 
 def draw(rng, plan_, S, segments):

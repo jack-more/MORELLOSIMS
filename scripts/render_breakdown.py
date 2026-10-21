@@ -126,7 +126,7 @@ def explain_step(g, name, pts):
     if name.startswith("Home court"):
         return f"{h}'s measured home edge" + (" and the back-to-back" if "back" in name else "") + "."
     if name == "Lineup plan":
-        return f"Minutes go to each coach's strongest fives; {fav}'s best units get more of the game than a random rotation would give them."
+        return f"Minutes go to the fives each coach actually plays, for as long as he plays them; {fav}'s gain more from tonight's units than minutes alone would give them."
     if name == "Usage load":
         if g["teams"][other]["out"]:
             return (f"{other} is missing {_hurt_out(g, other)}. Their possessions go to teammates above their normal usage, "
@@ -174,13 +174,17 @@ def units_table(g, abbr):
     units = g["teams"][abbr].get("units") or []
     color = g["home_color"] if abbr == g["home"] else g["away_color"]
     per12 = g["pace"] / 100 / 4
+    coach = lambda u: f'{u["played"]:.0f}' if u.get("played", 0) >= 0.5 else "new"
     rows = "".join(
         f'<tr><td class="five"><span class="faces">{"".join(face(p, "hs xs") for p in u.get("pids", []))}</span>{e(" · ".join(u["five"]))}'
         + ('<span class="tag st">Starts</span>' if u["start"] else "") + ('<span class="tag cl">Closes</span>' if u["close"] else "")
-        + f'</td><td>{u["min"]:.0f}</td><td class="{"pos" if u["net"] > 0 else "neg"}">{u["net"]:+.1f}</td>'
+        + f'</td><td>{u["min"]:.0f}</td><td>{coach(u)}</td>'
+        f'<td class="{"pos" if u["net"] > 0 else "neg"}">{u["net"]:+.1f}</td>'
         f'<td>{u["net"] * per12:+.1f}</td><td>{u["chem"]:+.1f}</td></tr>' for u in units)
     return (f'<div class="rot" style="--tc:{color}"><h4>{logo(abbr, "lg sm")}{e(abbr)} <span>tonight’s units</span></h4><table class="units"><thead><tr>'
-            f'<th>Five</th><th title="Minutes the plan gives this five">Min</th><th title="Net per 100 possessions: impact + chemistry">Net/100</th>'
+            f'<th>Five</th><th title="Minutes the plan gives this five">Min</th>'
+            f'<th title="Minutes per game the coach has played this five when all five were available; new = never together">Coach</th>'
+            f'<th title="Net per 100 possessions: impact + chemistry">Net/100</th>'
             f'<th title="The same, per 12 minutes together">Per 12</th><th title="Pairs plus the unit’s own record, per 100">Chem</th></tr></thead>'
             f'<tbody>{rows}</tbody></table></div>')
 
@@ -296,7 +300,7 @@ def card(g, d):
   <ol class="steps">
     <li><h3>Who's playing</h3><p class="lede">Tonight's rotations: RotoWire's starters and injury list, minutes for a 240-minute game, each player's numbers from his own games.</p>
       <div class="rots">{rotation_table(g, g['away'])}{rotation_table(g, g['home'])}</div></li>
-    <li><h3>Tonight's units</h3><p class="lede">Every possible five from each rotation, scored on its players' impact plus its chemistry (its pairs and its own record together). Minutes go to the strongest fives first, the way a coach stacks his best units, inside each player's minutes. Starters open both halves; the best five of the regulars closes.</p>
+    <li><h3>Tonight's units</h3><p class="lede">The fives each coach actually plays, from every game's lineup data: each keeps the minutes per game he gives it when all five are available (the Coach column; recent games and games without tonight's missing players count most). Only minutes those fives can't cover, when a regular is out or a new player is in, go to new fives, strongest first on impact plus chemistry, inside each player's minutes. Tonight's starters open both halves; the best five of the regulars closes.</p>
       <div class="rots">{units_table(g, g['away'])}{units_table(g, g['home'])}</div></li>
     <li><h3>Every possession</h3><p class="lede">About {g['pace']:.0f} possessions each. Each one: who ends it (usage), how (his play types), what it's worth against these five defenders and this scheme, then a shot, a turnover or a putback.</p>
       <div class="env">
