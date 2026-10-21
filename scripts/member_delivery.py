@@ -129,11 +129,16 @@ def active_members():
             if tg_members.pass_active(u) or u.get("tier") in WHITELIST_TIERS]
     from firebase_admin import auth
     out = {}
-    for i in range(0, len(uids), 100):
-        res = auth.get_users([auth.UidIdentifier(u) for u in uids[i:i + 100]])
-        for user in res.users:
-            if user.email and not user.disabled:
-                out[user.email.lower()] = user.uid
+    try:
+        for i in range(0, len(uids), 100):
+            res = auth.get_users([auth.UidIdentifier(u) for u in uids[i:i + 100]])
+            for user in res.users:
+                if user.email and not user.disabled:
+                    out[user.email.lower()] = user.uid
+    except auth.InsufficientPermissionError:
+        # the Actions service account has Firestore rights but no Firebase Auth
+        # role: the users doc's email (written by onUserCreate) stands in
+        print("  members: no Firebase Auth access, addresses from users docs")
     for uid in uids:                                     # fall back to the users doc
         e = (docs[uid].get("email") or "").lower()
         if e and e not in out:
@@ -161,19 +166,20 @@ def sync_feeds(dry=False):
     d = tg_members.db()
     if d is None:
         return (0, 0)
-    from firebase_admin import auth, firestore
+    from firebase_admin import firestore
     since = (datetime.now(ET) - timedelta(days=FEED_DAYS - 1)).strftime("%Y-%m-%d")
     feed = [s.to_dict() for s in d.collection("member_picks").where("date", ">=", since).stream()]
     feed.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("logged_at") or "")))
     key = hashlib.sha256(repr(feed).encode()).hexdigest()[:16]
     uids = set()
     for addr, uid in active_members().items():
-        if uid is None:
-            try:
-                uid = auth.get_user_by_email(addr).uid
-            except auth.UserNotFoundError:
-                continue                                  # whitelisted but never signed up
-        uids.add(uid)
+        if uid is not None:
+            uids.add(uid)
+            continue
+        # whitelisted: find the account by the email onUserCreate stored
+        # (no match means the address never signed up)
+        for snap in d.collection("users").where("email", "in", list({addr, addr.lower()})).stream():
+            uids.add(snap.id)
     if dry:
         print(f"  [dry] member feeds: {len(feed)} pick(s) for {len(uids)} member(s)")
         return (len(uids), 0)
