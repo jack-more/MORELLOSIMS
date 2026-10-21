@@ -161,6 +161,19 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
     usg = {int(p): float(u) for p, u in zip(roster.player_id, roster.usg_pct) if u and u == u}
     pids = list(mins)
     n, T = len(pids), len(TYPES)
+    # role WOWY: for each regular who is OUT tonight, each teammate's measured usage and
+    # efficiency change in the games that regular missed (shrunk by how many there were)
+    full = rotation(roster, set(), ())
+    wowy = context.role_wowy(con)
+    gone = [x for x in out_ids if full.get(x, 0) >= 20]
+    role = {}
+    for pid in pids:
+        du = de = w = 0.0
+        for x in gone:
+            r = wowy.get((pid, x))
+            if r:
+                du, de, w = du + r[0] * r[2], de + r[1] * r[3], max(w, r[2])
+        role[pid] = (du, de, w)
     out = {"pids": pids, "names": [names.get(p, str(p)) for p in pids],
            "min": np.array([mins[p] for p in pids]), "usg": np.zeros(n), "tov": np.zeros(n),
            "mix": np.zeros((n, T)), "ppp": np.zeros((n, T)), "p3": np.zeros((n, T)),
@@ -170,7 +183,8 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
         fga, fta, tov, fg3a, poss, oreb, dreb, ochances, dchances, pts = _box(con, pid)
         used = fga + 0.44 * fta + tov
         # usage: the season line (this season's games over his multi-season prior), else his ESPN rate
-        out["usg"][i] = usg.get(pid) or _shrink(used / poss if poss else 0.2, poss, 0.20, K_BOX)
+        out["usg"][i] = max(0.05, (usg.get(pid) or _shrink(used / poss if poss else 0.2, poss, 0.20, K_BOX))
+                            + role[pid][0])
         out["tov"][i] = _shrink(tov / used if used else lg["tov"], used, lg["tov"], K_BOX / 4)
         share3 = _shrink(fg3a / fga if fga else lg["fg3_share"], fga, lg["fg3_share"], K_BOX / 4)
         out["oreb"][i] = _shrink(oreb / ochances if ochances else lg["oreb"], ochances, lg["oreb"], K_BOX / 4)
@@ -195,7 +209,7 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
                 dvals.append(out["dppp"][i, j])
         # level: the play-type mix sets how he scores; his box score sets how well
         # (points per possession he ends, shrunk toward the league)
-        per_use = _shrink(pts / used if used else lg["pts_per_use"], used, lg["pts_per_use"], K_BOX)
+        per_use = _shrink(pts / used if used else lg["pts_per_use"], used, lg["pts_per_use"], K_BOX) + role[pid][1]
         model = (1 - out["tov"][i]) * float(out["mix"][i] @ out["ppp"][i])
         if model > 0:
             out["ppp"][i] *= per_use / model
@@ -207,11 +221,15 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
 
     # load: his share of the floor's possessions at full strength, against which
     # tonight's share (a star out, a low-usage five) moves his efficiency along his curve
-    full = rotation(roster, set(), ())
     full_uw = {p: (usg.get(p) or 0.2) ** USG_POWER for p in full}
     floor_uw = sum(full_uw[p] * m / 48.0 for p, m in full.items())
+    floor_tonight = float((out["uw"] * out["min"] / 48.0).sum())
     curves = context.load_curves(con)
-    out["s_norm"] = out["uw"] / floor_uw
+    # where role WOWY measured tonight's role, that role is his normal (no load penalty on it);
+    # elsewhere the full-strength share is, and the curve prices the extra
+    w = np.array([role[p][2] for p in pids])
+    out["s_norm"] = w * out["uw"] / floor_tonight + (1 - w) * out["uw"] / floor_uw
+    out["role"] = {p: role[p] for p in pids if role[p][2] > 0}
     out["slope"] = np.array([min(CURVE_HI, max(CURVE_LO, CURVE_SHRINK * curves.get(p, CURVE_DEFAULT)))
                              for p in pids])
     # gravity
@@ -229,6 +247,13 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
             v = prior.get(tuple(sorted((arch.get(pids[a], ""), arch.get(pids[b], "")))), 0.0)
         V[a, b] = V[b, a] = v
     out["V"] = V
+    # five-man units with a track record: value by bitmask of rotation indices
+    idx = {p: i for i, p in enumerate(pids)}
+    U = np.zeros(1 << n)
+    for ps, v in context.units(con)[0].items():
+        if all(p in idx for p in ps):
+            U[sum(1 << idx[p] for p in ps)] = v
+    out["U"] = U
     # scheme: what this team allows per play type
     tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone() if abbr else None
     tdef = context.team_defense(con, tid[0], lg["team_def"]) if tid else {}

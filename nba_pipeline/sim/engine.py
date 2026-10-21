@@ -26,6 +26,7 @@ import itertools
 
 import numpy as np
 
+from sim.context import SYN_SHARE
 from sim.players import TYPES
 
 SEGMENTS = 24                 # two-minute stretches; the floor five is re-drawn each one
@@ -45,7 +46,6 @@ LOAD_LO, LOAD_HI = 0.88, 1.05
 FATIGUE_FROM, FATIGUE_PER_MIN, B2B_FATIGUE_FROM = 34.0, 0.01, 32.0
 # back-to-back: points per game, measured (generate_frontend._MOJI_CONSTANTS, nba_sim.db OLS)
 B2B_HOME, B2B_ROAD = 2.0, 2.5
-SYN_SHARE = 0.25              # a five's synergy: its ten pair values / 4 (each player sits in four pairs)
 LAYERS = ("load", "spacing", "pairs", "scheme", "fatigue")   # simulate(off=...) switches any of them off
 
 
@@ -76,6 +76,7 @@ def _floor(team, lineups, lg):
     space = team["g"][lineups].sum(-1) - lg["spacing"]
     V = team["V"]
     syn = sum(V[lineups[..., a], lineups[..., b]] for a, b in PAIRS) * SYN_SHARE
+    syn = syn + team["U"][(1 << lineups).sum(-1)]          # the unit's own track record
     return space, syn
 
 
@@ -173,6 +174,7 @@ def simulate(home, away, lg, sims=5000, seed=7, pace=None, hca=1.68, impact_w=0.
     hp += still * (rng.random(S) < 0.5)
     ap += still & ~(hp > ap)
     return {"margin": hp - ap, "home_pts": hp, "away_pts": ap, "home_box": hbox, "away_box": abox,
+            "home_lineups": lh, "away_lineups": la, "home_syn_grid": syn_h, "away_syn_grid": syn_a,
             "home_spacing": float(sp_h.mean()), "away_spacing": float(sp_a.mean()),
             "home_syn": float(syn_h.mean()), "away_syn": float(syn_a.mean())}
 
@@ -191,4 +193,4 @@ def average_team(lg, n=10):
             "oreb": np.full(n, lg["oreb"]), "dreb": np.full(n, lg["dreb"]),
             "off": np.zeros(n), "def": np.zeros(n),
             "s_norm": np.full(n, 0.2), "slope": np.zeros(n), "g": np.full(n, lg["spacing"] / 5),
-            "V": np.zeros((n, n))}
+            "V": np.zeros((n, n)), "U": np.zeros(1 << n)}

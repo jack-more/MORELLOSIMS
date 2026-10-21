@@ -10,6 +10,8 @@
                  (player_potential, the curves the old model read)
   gravity        3PA volume x 3P%: what a shooter does to spacing
   team defense   each team's PPP allowed per play type over league (its scheme)
+  units          a five-man unit's own track record beyond its players and pairs
+  role WOWY      a player's usage and efficiency with and without each regular teammate
 """
 
 import collections
@@ -111,6 +113,88 @@ def pairs(con):
              "fit_sd": round(float(np.sqrt(ctau2)), 2), "fit_pairings": len(prior)}
     _CACHE["pairs"] = (syn, prior, arch, notes)
     return _CACHE["pairs"]
+
+
+SYN_SHARE = 0.25          # a five's chemistry: its ten pair values / 4 (each player sits in four pairs)
+
+
+def units(con):
+    """{sorted 5 player ids: per 100}: a five-man unit's own track record beyond its
+    players' impacts, its team's average and its ten pairs, shrunk the same way."""
+    if "units" in _CACHE:
+        return _CACHE["units"]
+    syn, _, _, _ = pairs(con)
+    seasons = (CURRENT_SEASON, previous_season(CURRENT_SEASON))
+    emap = {str(e): p for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
+    imp = impacts(con)
+    team = collections.defaultdict(lambda: np.zeros(2))
+    unit = collections.defaultdict(lambda: np.zeros(2))
+    for r in con.execute(
+            "SELECT l.team_id, l.e1, l.e2, l.e3, l.e4, l.e5, l.pts, l.opp_pts, l.poss, l.opp_poss "
+            "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
+            "WHERE g.season_id IN (?,?)", seasons):
+        ps = tuple(sorted(p for p in (emap.get(str(e)) for e in r[1:6]) if p))
+        n = (r[8] or 0) + (r[9] or 0)
+        if len(ps) < 5 or n <= 0:
+            continue
+        resid = 100 * ((r[6] or 0) - (r[7] or 0)) / (n / 2) - sum(imp.get(p, 0.0) for p in ps)
+        team[r[0]] += (resid * n, n)
+        unit[(r[0], ps)] += (resid * n, n)
+    raw = {}
+    for (tid, ps), (s_, n) in unit.items():
+        if n < 100:
+            continue
+        chem = SYN_SHARE * sum(syn.get(ab, 0.0) for ab in itertools.combinations(ps, 2))
+        raw[ps] = (s_ / n - team[tid][0] / team[tid][1] - chem, NOISE / n)
+    est = np.array([e for e, _ in raw.values()])
+    nz = np.array([z for _, z in raw.values()])
+    tau2 = _tau2(est, nz, 0.25)
+    out = {ps: ex * tau2 / (tau2 + z) for ps, (ex, z) in raw.items()}
+    _CACHE["units"] = (out, {"units": len(out), "unit_sd": round(float(np.sqrt(tau2)), 2)})
+    return _CACHE["units"]
+
+
+def role_wowy(con):
+    """{(player, teammate): (usage change, pts-per-use change, usage weight, efficiency weight)}
+    in the games the teammate missed against the games they played together (ESPN logs,
+    same team, the teammate on the roster at the time). Weights shrink small samples."""
+    if "wowy" in _CACHE:
+        return _CACHE["wowy"]
+    seasons = (CURRENT_SEASON, previous_season(CURRENT_SEASON))
+    games = collections.defaultdict(dict)        # (team, season) -> {game: date}
+    played = collections.defaultdict(dict)       # (team, season) -> {player: {game: (used, pts, poss)}}
+    mins = collections.defaultdict(lambda: collections.defaultdict(float))
+    for gid, tid, pid, season, date, dnp, sec, fga, fta, tov, pts, poss in con.execute(
+            "SELECT game_id, team_id, player_id, season_id, game_date, dnp, sec, fga, fta, tov, pts, off_poss "
+            "FROM espn_player_games WHERE season_id IN (?,?) AND counts_regular=1", seasons):
+        key = (tid, season)
+        games[key][gid] = date
+        if not dnp and (sec or 0) > 0:
+            played[key].setdefault(pid, {})[gid] = ((fga or 0) + 0.44 * (fta or 0) + (tov or 0), pts or 0, poss or 0)
+            mins[key][pid] += (sec or 0) / 60
+    out = {}
+    for key, roster in played.items():
+        for x, xg in roster.items():
+            if len(xg) < 20 or mins[key][x] / len(xg) < 20:
+                continue                                  # only regulars' absences move roles
+            first, last = min(games[key][g] for g in xg), max(games[key][g] for g in xg)
+            span = {g for g, d in games[key].items() if first <= d <= last}
+            for a, ag in roster.items():
+                if a == x:
+                    continue
+                w_ = [ag[g] for g in ag if g in xg]
+                wo = [ag[g] for g in ag if g in span and g not in xg]
+                if len(w_) < 10 or len(wo) < 3:
+                    continue
+                uw, pw, nw = map(sum, zip(*w_))
+                uo, po, no = map(sum, zip(*wo))
+                if nw <= 0 or no <= 0 or uw <= 0 or uo <= 0:
+                    continue
+                d_usg = uo / no - uw / nw
+                d_eff = po / uo - pw / uw
+                out[(a, x)] = (d_usg, d_eff, len(wo) / (len(wo) + 5.0), uo / (uo + 300.0))
+    _CACHE["wowy"] = out
+    return out
 
 
 def load_curves(con):
