@@ -185,8 +185,8 @@ def seal_entries(entries: list, keep=LOG_KEEP, should_seal=None) -> list:
         return entries
     out = []
     for e in entries:
-        if not isinstance(e, dict) or store.is_raw_sealed(e):
-            out.append(e)
+        if not isinstance(e, dict) or store.is_raw_sealed(e) or e.get("voided"):
+            out.append(e)                          # sealed already, or voided before tip: public now
         elif (should_seal is None or should_seal(e)) and store.before_start(e):
             out.append(store.seal_record(e, keep, kind="nba_entry"))
         else:

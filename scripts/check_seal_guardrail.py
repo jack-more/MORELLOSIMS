@@ -36,6 +36,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -47,12 +48,13 @@ F_NBA = "picks/nba.json"
 F_CSV = "nba_pipeline/data/picks.csv"
 F_LOG = "nba_pipeline/data/pick_log.json"
 F_DAILY = "nba_pipeline/data/daily_picks.json"
+F_SLATE = "nbasim/slate.json"
 F_MLB_LOG = "mlbsim/picks_log.csv"
 F_SHADOW = "reports/shadow_mlb.json"
 F_DB = "nba_pipeline/db/nba_sim.db"
 F_NFL = "picks/nfl.json"
 F_SHADOW_NFL = "reports/shadow_nfl.json"
-STRUCTURED = {F_MLB, F_NBA, F_CSV, F_LOG, F_DAILY, F_MLB_LOG, F_SHADOW, F_DB, F_NFL, F_SHADOW_NFL}
+STRUCTURED = {F_MLB, F_NBA, F_CSV, F_LOG, F_DAILY, F_MLB_LOG, F_SHADOW, F_DB, F_NFL, F_SHADOW_NFL, F_SLATE}
 LOG_FORBIDDEN = ("side", "line_value", "direction", "confidence", "sim_spread", "spread_edge",
                  "sim_total", "raw_edge", "conf_label", "ml_odds", "pick_text", "ou_pick_text",
                  "ou_conf", "ou_edge", "pick_team", "run_diff", "model_prob", "model_prob_raw",
@@ -202,6 +204,18 @@ def check_entries(c, path, entries, keep_label, staged, must_seal):
             c.err(path, f"{keep_label} #{i} ({e.get('matchup') or e.get('game_pk')}) is in plaintext before its game starts")
 
 
+def check_slate(c, text, staged):
+    """The homepage slate (build_data_page.py): the book's line is public; the sim's
+    numbers and the pick appear only once a game has tipped."""
+    data = _load_json(text) or {}
+    now = datetime.now(timezone.utc)
+    for g in data.get("games") or []:
+        tip = store.parse_ts((g.get("tip") or "").replace("Z", "+00:00"))
+        before = g.get("state") == "pre" and (tip is None or tip > now)
+        if before and (g.get("sim") or g.get("pick")) and F_SLATE in staged:
+            c.err(F_SLATE, f"{g.get('away')} @ {g.get('home')} shows the sim or a pick before tip")
+
+
 def check_db(c, staged):
     blob = staged_blob(F_DB, binary=True)
     if not blob:
@@ -282,7 +296,8 @@ def main():
     check_csv(c, F_MLB_LOG, current(F_MLB_LOG, staged), "pick", staged)
 
     log = _load_json(current(F_LOG, staged))
-    check_entries(c, F_LOG, log if isinstance(log, list) else [], "pick_log entry", staged, lambda e: True)
+    # a pick voided before tip is no longer a secret (its ledger row is public with the reason)
+    check_entries(c, F_LOG, log if isinstance(log, list) else [], "pick_log entry", staged, lambda e: not e.get("voided"))
 
     nba_pending = {(s["date"], s["matchup"]) for s in c.secrets if s["sport"] == "nba"}
     daily = _load_json(current(F_DAILY, staged)) or {}
@@ -305,6 +320,7 @@ def main():
     check_entries(c, F_SHADOW_NFL, list((shadow_nfl.get("rows") or {}).values()), "nfl shadow row", staged,
                   lambda r: _nfl_key(r) in nfl_pending)
 
+    check_slate(c, current(F_SLATE, staged), staged)
     if F_DB in staged:
         check_db(c, staged)
     scan_text(c, sorted(staged))
