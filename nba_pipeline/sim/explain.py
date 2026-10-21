@@ -38,7 +38,7 @@ def _team_detail(t, roster, info):
         mix = t["mix"][i]
         top = [LABEL[players.TYPES[j]] for j in np.argsort(-mix)[:2]]
         role = t.get("role", {}).get(pid)
-        rows.append({"name": t["names"][i], "starter": pid in starters, "min": round(float(t["min"][i]), 1),
+        rows.append({"name": t["names"][i], "pid": int(pid), "starter": pid in starters, "min": round(float(t["min"][i]), 1),
                      "usg": round(float(t["usg"][i]) * 100, 1),
                      "per_use": round(float((1 - t["tov"][i]) * (mix @ t["ppp"][i])), 2),
                      "plays": top, "gravity": round(float(t["g"][i]), 2),
@@ -49,7 +49,8 @@ def _team_detail(t, roster, info):
     if t.get("plan"):
         last = lambda i: t["names"][i].split()[-1] if t["names"][i].split()[-1] not in ("Jr.", "II", "III") else t["names"][i].split()[-2]
         for five, mins, net, imp, chem in t["plan"]["units"][:6]:
-            units.append({"five": [last(i) for i in five], "min": round(mins, 1), "net": round(net, 1),
+            units.append({"five": [last(i) for i in five], "pids": [int(t["pids"][i]) for i in five],
+                          "min": round(mins, 1), "net": round(net, 1),
                           "impact": round(imp, 1), "chem": round(chem, 1),
                           "start": five == t["plan"]["start"], "close": five == t["plan"]["close"]})
     return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids), "units": units}
@@ -80,8 +81,8 @@ def explain(home, away, lineups, lines, lg, con, scale, sims):
     book = lines.get((home, away), {})
     edges = np.arange(-40, 42, 2)
     hist = np.histogram(np.clip(mg, -39.9, 39.9), bins=edges)[0]
-    box = lambda t, b: sorted(({"name": n, "pts": round(float(p), 1), "min": round(float(m), 1)}
-                               for n, p, m in zip(t["names"], b.mean(0), t["min"])), key=lambda x: -x["pts"])[:6]
+    box = lambda t, b: sorted(({"name": n, "pid": int(pid), "pts": round(float(p), 1), "min": round(float(m), 1)}
+                               for n, pid, p, m in zip(t["names"], t["pids"], b.mean(0), t["min"])), key=lambda x: -x["pts"])[:6]
     return {
         "game": f"{away}@{home}", "home": home, "away": away,
         "home_name": gf.TEAM_FULL_NAMES.get(home, home), "away_name": gf.TEAM_FULL_NAMES.get(away, away),
