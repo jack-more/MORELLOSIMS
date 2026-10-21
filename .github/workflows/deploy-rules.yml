@@ -1,0 +1,56 @@
+name: Deploy Firestore rules
+
+# Publishes firestore.rules to the live project. deploy.yml ships Hosting only,
+# so the live ruleset stayed on the February version: no member_picks rule,
+# which refused /members/ for every account, admin and paying ones included.
+# The rules only grant reads; every write goes through the admin SDK.
+
+on:
+  push:
+    branches: [main]
+    paths: [firestore.rules]
+  workflow_dispatch:
+
+concurrency:
+  group: firestore-rules
+  cancel-in-progress: false
+
+jobs:
+  rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy rules
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::error::Missing GitHub secret FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS."
+            exit 1
+          fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          trap 'rm -f "$RUNNER_TEMP/sa.json"' EXIT
+          if ! GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
+               npx --yes firebase-tools@13 deploy --only firestore:rules --project morello-sims --non-interactive; then
+            echo "::error::The service account can't publish Firestore rules. Grant it the Firebase Rules Admin role in Google Cloud IAM and re-run, or paste firestore.rules into the Firebase console (Firestore > Rules > Publish)."
+            exit 1
+          fi
+
+      # An unauthenticated read of a missing tail_counts doc: 404 under the
+      # repo rules (public read), 403 under the old ones
+      - name: Check the live rules
+        run: |
+          for i in 1 2 3 4 5 6 7 8; do             # a new ruleset takes up to a minute to reach every server
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://firestore.googleapis.com/v1/projects/morello-sims/databases/(default)/documents/tail_counts/rules-check")
+            echo "tail_counts probe: HTTP $code"
+            [ "$code" = 404 ] && exit 0
+            sleep 15
+          done
+          exit 1
