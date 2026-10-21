@@ -1,7 +1,8 @@
 name: Members-only pick cards
 
 # Re-renders tonight's slate and puts the full cards of the picked games in
-# Firestore member_cards, the same step update-lines runs after the dashboard.
+# Firestore member_cards, and the possession-sim breakdown in member_breakdowns:
+# the same steps update-lines runs after the dashboard.
 # On demand only: it commits nothing, captures no pick and sends nothing.
 
 on:
@@ -36,3 +37,13 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
         run: python3 scripts/publish_member_cards.py
+
+      # every game through the possession sim, step by step, for /members/breakdown/; never fails the run
+      - name: Members breakdown (possession sim, Firestore member_breakdowns)
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: |
+          (cd nba_pipeline && python -m sim.explain --slate --out "$RUNNER_TEMP/walk.json")
+          python3 scripts/publish_member_breakdown.py "$RUNNER_TEMP/walk.json"

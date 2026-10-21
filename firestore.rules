@@ -41,6 +41,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Tonight's breakdown, every game through the possession sim (publish_member_breakdown.py), same readers
+    match /member_breakdowns/{day} {
+      allow read: if request.auth != null
+        && (whitelisted()
+            || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && hasActivePass()));
+      allow write: if false;
+    }
+
     // Full dashboard cards of tonight's picked games (publish_member_cards.py), same readers as member_picks
     match /member_cards/{cardId} {
       allow read: if request.auth != null

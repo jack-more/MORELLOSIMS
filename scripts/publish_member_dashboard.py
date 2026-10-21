@@ -30,7 +30,7 @@ OUT = os.path.join(REPO, "members", "dashboard", "index.html")
 
 HEAD = """
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261021c">
+<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261021d">
 <link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261021e">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <meta name="robots" content="noindex">
@@ -59,7 +59,7 @@ BAR = """
   <a href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
   <nav aria-label="Main"><a class="opt" href="/">Home</a><a href="/ledger/nba/">Ledger</a><a class="on" href="/members/" aria-current="page">Members<span class="lg"> zone</span></a><a class="acct" href="#" id="ms-acct">Account</a></nav>
 </div></header>
-<div class="ms-zone"><div class="in"><span class="k">Members zone</span><nav aria-label="Members zone"><a href="/members/">Tonight’s picks</a><a class="on" href="/members/dashboard/" aria-current="page">Lineups + info</a></nav></div></div>
+<div class="ms-zone"><div class="in"><span class="k">Members zone</span><nav aria-label="Members zone"><a href="/members/">Tonight’s picks</a><a href="/members/breakdown/">Breakdown</a><a class="on" href="/members/dashboard/" aria-current="page">Lineups + info</a></nav></div></div>
 </div>
 <div id="ms-gate"><div class="box">
   <img src="/assets/brand/v2/lockup-on-dark.svg" alt="Morello Sims">
