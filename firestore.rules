@@ -2,9 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can read their own document
+    // The owner's account (admin in EMAIL_WHITELIST, morello-auth.js) reads
+    // every account and the free list for /admin/. Firebase Auth keeps one
+    // account per email, so the address can't be claimed by anyone else.
+    function isOwner() {
+      return request.auth != null && request.auth.token.get('email', '').lower() == 'jaidanmorello@gmail.com';
+    }
+
+    // Users can read their own document; the owner reads all of them
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if (request.auth != null && request.auth.uid == userId) || isOwner();
       // Only Cloud Functions can write (admin SDK bypasses rules)
       allow write: if false;
     }
@@ -41,9 +48,10 @@ service cloud.firestore {
     }
 
     // Email leads — written only by the emailCapture Cloud Function
-    // (admin SDK bypasses rules). No public access.
+    // (admin SDK bypasses rules). Only the owner reads them (/admin/).
     match /email_leads/{leadId} {
-      allow read, write: if false;
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     // Tail/fade votes — written only by the recordTail Cloud Function.

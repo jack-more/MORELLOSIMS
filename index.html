@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/morello-auth.css?v=20261020-brand">
-<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020c">
+<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261021b">
 <link rel="stylesheet" href="/assets/brand/v2/note.css?v=20261020b">
 <style>
 /* Green and white, like the members dashboard. The pick note is the one ornate piece. */
@@ -277,12 +277,10 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
 </head>
 <body>
 
-<header class="top">
-  <div class="in">
-    <a class="logo" href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
-    <nav aria-label="Main"><a class="on opt" href="/" aria-current="page">NBA</a><a class="opt" href="/members/">Members</a><a href="/ledger/nba/">Ledger</a><a href="#" id="signin">Sign in</a><a class="btn sm" href="#plans">Get tonight’s picks</a></nav>
-  </div>
-</header>
+<header class="ms-top"><div class="in">
+  <a href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
+  <nav aria-label="Main"><a class="opt on" href="/" aria-current="page">Home</a><a href="/ledger/nba/">Ledger</a><a href="/members/">Members<span class="lg"> zone</span></a><a class="acct" href="#" id="signin">Sign in</a><a class="ms-go" href="#plans">Get <span class="lg">tonight’s </span>picks</a></nav>
+</div></header>
 
 <section class="hero" aria-labelledby="hero-h">
   <div class="mz" aria-hidden="true"><i class="mz-lines"></i><i class="mz-lat"></i><i class="mz-ros"></i><i class="mz-vig"></i><span class="mz-big">147</span><i class="mz-foil"></i><span class="mz-ser">MS 2627 1020 0001 · SERIES 2026–27</span><span class="mz-micro">MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP · MORELLO SIMS · EVERY PICK GRADED IN PUBLIC · LOGGED BEFORE TIP</span></div>
@@ -504,6 +502,7 @@ function showMember(user, u) {
   $("member").hidden = !on;
   $("plan-notes").hidden = on;
   $("signin").textContent = user ? "Account" : "Sign in";
+  document.querySelectorAll(".ms-go").forEach(a => { a.hidden = on; });   // members don't need the buy button
   document.querySelectorAll('a.btn[href="#plans"], a.btn[href="/members/"][data-label]').forEach(a => {
     if (!a.dataset.label) a.dataset.label = a.textContent;
     a.textContent = on ? "Open tonight’s picks" : a.dataset.label;
@@ -521,7 +520,11 @@ function showMember(user, u) {
     return firebase.auth().onAuthStateChanged(async user => {
       if (!user) return showMember(null, null);
       const snap = await firebase.firestore().collection("users").doc(user.uid).get().catch(() => null);
-      showMember(user, snap && snap.exists ? snap.data() : null);
+      const u = snap && snap.exists ? snap.data() : null;
+      // whitelisted accounts (admin, friends & family) hold no pass on their users doc;
+      // the member_picks rule knows them, so a one-doc read settles it
+      const ok = passActive(u) || await firebase.firestore().collection("member_picks").limit(1).get().then(() => true, () => false);
+      showMember(user, ok && !passActive(u) ? Object.assign({}, u, {tier: "admin"}) : u);
     });
   }
   if (n < 100) setTimeout(() => waitAuth(n + 1), 100);

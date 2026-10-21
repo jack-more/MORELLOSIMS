@@ -5947,8 +5947,7 @@ def render_matchup_card(m, idx, team_map):
         kalshi_line = f"{k_team} {k_prob*100:.0f}%"
     books += [(AFFILIATE_LINKS["kalshi"], "Kalshi", kalshi_line),
               (AFFILIATE_LINKS["draftkings_predictions"], "DK Predict", "Predict"),
-              (AFFILIATE_LINKS["bethog"], "BetHOG", "Bet"),
-              (AFFILIATE_LINKS["bovada"], "Bovada", "Join")]
+              (AFFILIATE_LINKS["bovada"], "Bovada", "Join")]        # BetHOG wound down (owner, 2026-10-21)
     books_html = "".join(f'<a class="gc-book" href="{u}" target="_blank" rel="noopener"><b>{n}</b><span>{t}</span></a>'
                          for u, n, t in books)
 
