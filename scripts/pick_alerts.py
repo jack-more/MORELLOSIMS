@@ -116,6 +116,17 @@ def x_caption(p):
             f"Members have it now → morellosims.com")
 
 
+def voided_today(today):
+    """NBA/MLB picks of the day the owner voided before tip: they come off the members page."""
+    out = []
+    for sport, path in pick_sources():
+        for p in picks_store.load_picks(os.path.join(REPO, path)):
+            if (p.get("sport") or sport) == sport and p.get("date") == today and p.get("status") == "void":
+                p.setdefault("sport", sport)
+                out.append(p)
+    return out
+
+
 def run(dry=False):
     if dry:
         ops_tg.DRY = True
@@ -200,6 +211,15 @@ def run(dry=False):
                     st["x_sealed"].append(ref)
             except Exception as e:
                 print(f"  WARN sealed X post {pid}: {e}")
+    # a pick voided before tip comes off the members page
+    for p in voided_today(today):
+        if member_delivery.enabled() and picks_store.ref_in(st["site"], p["id"]):
+            try:
+                if member_delivery.retract(p, dry=dry):
+                    st["site"] = [r for r in st["site"] if not picks_store.ref_in([r], p["id"])]
+                    print(f"  members: {p.get('matchup')} voided, off the page")
+            except Exception as e:
+                print(f"  WARN member page retract {p.get('matchup')}: {type(e).__name__}")
     # members whose rules can't read member_picks get the picks on their own doc
     if member_delivery.enabled():
         try:
