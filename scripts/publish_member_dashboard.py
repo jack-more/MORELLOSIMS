@@ -28,7 +28,7 @@ OUT = os.path.join(REPO, "members", "dashboard", "index.html")
 
 HEAD = """
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020">
+<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261021b">
 <link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261020d">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <meta name="robots" content="noindex">
@@ -43,15 +43,17 @@ HEAD = """
 #ms-gate a,#ms-gate button{display:inline-flex;align-items:center;min-height:50px;padding:0 22px;border-radius:3px;font:700 16px var(--ms-font);text-decoration:none;cursor:pointer}
 #ms-gate a{background:var(--ms-green);color:#fff;border:0}
 #ms-gate button{background:transparent;color:#fff;border:1.5px solid #fff}
-.ms-bar{position:relative;z-index:50}
+/* one view: the members zone row replaces the old tab bars (Game Lines / Player Stats / Trends / Info) */
+.sticky-header,.bottom-nav{display:none!important}
 </style>
 """
 
 BAR = """
-<header class="ms-bar"><div class="in">
-  <a class="ms-logo" href="/" aria-label="Morello Sims"><img src="/assets/brand/v2/lockup-on-dark.svg" alt="Morello Sims"></a>
-  <nav class="ms-links" aria-label="Main"><a href="/members/">Tonight's picks</a><a class="on" href="/members/dashboard/">Dashboard</a><a class="opt" href="/ledger/nba/">Ledger</a><a href="#" id="ms-acct">Account</a></nav>
+<header class="ms-top"><div class="in">
+  <a href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
+  <nav aria-label="Main"><a class="opt" href="/">Home</a><a href="/ledger/nba/">Ledger</a><a class="on" href="/members/" aria-current="page">Members<span class="lg"> zone</span></a><a class="acct" href="#" id="ms-acct">Account</a></nav>
 </div></header>
+<div class="ms-zone"><div class="in"><span class="k">Members zone</span><nav aria-label="Members zone"><a href="/members/">Tonight’s picks</a><a class="on" href="/members/dashboard/" aria-current="page">Lineups + info</a></nav></div></div>
 <div id="ms-gate"><div class="box">
   <img src="/assets/brand/v2/lockup-on-dark.svg" alt="Morello Sims">
   <h2>The members dashboard.</h2>
@@ -182,7 +184,7 @@ TIPS_JS = """
 """
 
 TITLE = """
-<div class="ms-dash-title"><h1>NBA dashboard</h1><span>{date}</span></div>
+<div class="ms-dash-title"><h1>Lineups + info</h1><span>{date}</span></div>
 """
 
 # the dashboard's neon greens, mapped onto the brand
@@ -213,7 +215,7 @@ def build(src=SRC, out=OUT):
     for a, b in SWAPS:
         html = html.replace(a, b)
     html = SEALED_CTA.sub('<a class="sealed-cta" href="/members/">Open the pick &rarr;</a>', html)
-    html = re.sub(r"<title>[^<]*</title>", "<title>NBA dashboard · Morello Sims</title>", html, count=1)
+    html = re.sub(r"<title>[^<]*</title>", "<title>Lineups + info · Morello Sims</title>", html, count=1)
     if "</head>" not in html or "<body" not in html or "</body>" not in html:
         raise SystemExit(f"{src}: not a full page")
     html = html.replace("</head>", HEAD + "</head>", 1)

@@ -6,7 +6,7 @@
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,300..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/brand/v2/note.css?v=20261020b">
-<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261020">
+<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261021b">
 <link rel="stylesheet" href="/morello-auth.css?v=20261020-members">
 <style>
 :root{--sky:#10233F;--paper:#F5F0ED;--paper-2:#FBF8F5;--ink:#14202E;--ink-2:#4B5868;--ink-3:#8A93A0;--rule:#DED5CA;--green:#1FA255;--gold:#B9861B}
@@ -24,7 +24,8 @@ button{font:inherit;cursor:pointer}
 .head{max-width:760px;margin:18px auto 0}
 .head h1{font-weight:300;font-size:clamp(40px,10vw,72px);letter-spacing:-1.5px;line-height:.95}
 .head p{font-style:italic;font-weight:300;font-size:15px;margin-top:10px;opacity:.95}
-.wrap{max-width:760px;margin:-18px auto 0;padding:0 16px 80px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(16px,4vw,40px) 80px}
+.wrap>*{max-width:760px}   /* the picks read in one column, lined up with the header */
 .card{background:#fff;border:1px solid var(--rule);border-radius:6px;padding:22px;margin-bottom:14px}
 .label{font-size:11px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--ink-3)}
 .pick .side{font-size:clamp(30px,8vw,44px);font-weight:600;letter-spacing:-.5px;margin:8px 0 4px}
@@ -64,6 +65,26 @@ html,body{background:#1FA255!important}
 .foot,.foot a{color:rgba(255,255,255,.85)!important}
 .card{border:0!important;box-shadow:0 14px 34px rgba(0,0,0,.14)}
 /* tonight's picks as notes (assets/brand/v2/note.css): one per pick, its tier its own design */
+.ptitle{margin:28px 0 6px;color:#fff}
+.ptitle h1{font:900 clamp(40px,8vw,64px)/.95 var(--ms-font);font-stretch:78%;letter-spacing:-.01em}
+.ptitle p{margin-top:8px;font-size:15px;color:rgba(255,255,255,.88)}
+.daysum{margin:-2px 0 12px;font:600 14px var(--ms-font);color:#fff}
+.slip{padding:4px 18px 12px!important}
+.sl-h{display:grid;grid-template-columns:40px minmax(0,1fr) 56px 52px;gap:14px;padding:12px 0 8px;border-bottom:1px solid #E3E8E5;font:600 10.5px "IBM Plex Mono",monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+.sl-h span:nth-child(3),.sl-h span:nth-child(4){text-align:right}
+.sl{display:grid;grid-template-columns:40px minmax(0,1fr) 56px 52px;gap:14px;align-items:center;padding:14px 0;border-top:1px solid #E3E8E5}
+.sl-h+.sl{border-top:0}
+.sl img{width:40px;height:40px;object-fit:contain}
+.sl .sp b{font:900 26px/1 var(--ms-font);font-stretch:78%;letter-spacing:-.01em}
+.sl .sp .odds{font:600 15px var(--ms-font);color:var(--ink-2);margin-left:6px}
+.sl .sp small{display:block;margin-top:5px;font:500 12.5px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sl .tier{justify-self:end}
+.sl .stk{justify-self:end;font:900 22px/1 var(--ms-font);font-stretch:78%}
+.sl-f{margin-top:4px;padding-top:12px;border-top:1px solid #E3E8E5;font-size:13px;color:var(--ink-2);line-height:1.5}
+.sl-f a{color:var(--ink)}
+.tier{display:inline-block;padding:4px 8px;border-radius:5px;font:700 11px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;color:#fff;font-style:normal}
+.tier.t6{background:#B06A35}.tier.t7{background:linear-gradient(180deg,#a9b4be,#7D8A96)}.tier.t8{background:#14743C}.tier.t9{background:#1F5FB0}.tier.t10{background:#15120A;color:#f3d27a;box-shadow:inset 0 0 0 1px #d9b25a}
+.label.cards{margin:22px 0 10px;color:rgba(255,255,255,.88)!important}
 .notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}
 .notes .note-fit{border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.18)}
 .notes .note-fit>.mn{border-radius:44px}
@@ -71,13 +92,16 @@ html,body{background:#1FA255!important}
 </style></head>
 <body>
 
-<header class="sky">
-  <div class="bar"><a class="brand" href="/" aria-label="Morello Sims"><img src="/assets/brand/v2/lockup-on-dark.svg" alt="Morello Sims"></a>
-    <nav class="nav"><a href="/">Picks</a><a href="/ledger/nba/">Ledger</a><a href="/members/dashboard/">Dashboard</a><a class="on" href="/members/">Members</a></nav></div>
-  <div class="head"><h1>Tonight's picks</h1><p id="sub">Members only. Every pick the moment the sim logs it.</p></div>
-</header>
+<header class="ms-top"><div class="in">
+  <a href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
+  <nav aria-label="Main"><a class="opt" href="/">Home</a><a href="/ledger/nba/">Ledger</a><a class="on" href="/members/" aria-current="page">Members<span class="lg"> zone</span></a><a class="acct" href="#" id="ms-acct">Account</a></nav>
+</div></header>
+<div class="ms-zone"><div class="in"><span class="k">Members zone</span><nav aria-label="Members zone"><a class="on" href="/members/" aria-current="page">Tonight’s picks</a><a href="/members/dashboard/">Lineups + info</a></nav></div></div>
 
-<main class="wrap" id="main"><div class="card msg"><p>Loading…</p></div></main>
+<div class="wrap">
+  <div class="ptitle"><h1>Tonight’s picks</h1><p id="sub">Members only. Every pick the moment the sim logs it.</p></div>
+  <main id="main"><div class="card msg"><p>Loading…</p></div></main>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -92,6 +116,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const foot = `<p class="foot">Every pick is graded in public on the <a href="/ledger/nba/">ledger</a>.
   Simulations, not guarantees. 21+ · 1-800-GAMBLER.</p>`;
 let unsub = null;
+document.getElementById("ms-acct").addEventListener("click", e => { e.preventDefault(); if (window.morelloAuth) morelloAuth.openModal(morelloAuth.getCurrentUser() ? "profile" : "signin"); });
 
 function msg(title, body, buttons = "") {
   main.innerHTML = `<div class="card msg"><h2>${title}</h2><p>${body}</p>${buttons ? `<div class="btns">${buttons}</div>` : ""}</div>${foot}`;
@@ -179,6 +204,27 @@ function shrinkNote(f) {
   while (l && l.offsetWidth > 600 && ls > 200) { ls -= 10; l.style.fontSize = ls + "px"; }
 }
 
+// every pick on one card, in tip order: team, line, price, grade, stake, tip (the notes carry the detail)
+const startOf = p => p.start ? new Date(p.start) : null;
+function slip(list, foot) {
+  const rows = list.slice().sort((a, b) => (startOf(a) || 0) - (startOf(b) || 0)).map(p => {
+    const [abbr] = String(p.pick_text || "").split(" "), T = TEAMS[abbr];
+    const u = Number(p.units) || 0, stake = STAKE[u] || `${+u.toFixed(2)}U`, tier = Math.max(6, Math.min(10, Number(p.conf) || 6));
+    const start = startOf(p);
+    return `<div class="sl">${T ? `<img src="https://a.espncdn.com/i/teamlogos/nba/500/${T[4]}.png" alt="">` : "<span></span>"}
+      <div class="sp"><b>${esc(String(p.pick_text || "").replace(/ -(?=\d)/, " −"))}</b><span class="odds">${esc(String(p.odds || "").replace("-", "−"))}</span>
+        <small>${esc(p.matchup || "")} · ${start ? etTime(start) + " ET" : esc(p.game_time || "")}</small></div>
+      <i class="tier t${tier}">C${tier}</i><b class="stk">${stake}</b></div>`;
+  }).join("");
+  return `<div class="card slip"><div class="sl-h"><span></span><span>Pick · game · tip</span><span>Grade</span><span>Stake</span></div>${rows}${foot ? `<p class="sl-f">${foot}</p>` : ""}</div>`;
+}
+// "6 picks · 18.25U · first tip 7:00 PM ET"
+function daySum(list) {
+  const u = list.reduce((a, p) => a + (Number(p.units) || 0), 0);
+  const first = list.map(startOf).filter(Boolean).sort((a, b) => a - b)[0];
+  return `${list.length} pick${list.length === 1 ? "" : "s"} · ${+u.toFixed(2)}U total${first ? " · first tip " + etTime(first) + " ET" : ""}`;
+}
+
 function notes(list) {
   const made = list.map(note), cards = list.filter((p, i) => !made[i]).map(card);
   return (made.some(Boolean) ? `<div class="notes">${made.filter(Boolean).join("")}</div>` : "") + cards.join("");
@@ -229,12 +275,13 @@ function renderPicks(list) {
     || ((b.logged_at?.toMillis?.() || 0) - (a.logged_at?.toMillis?.() || 0)));
   const tonight = picks.filter(p => p.date === today), earlier = picks.filter(p => p.date !== today);
   let html = `<div class="label day">Tonight · ${new Date().toLocaleDateString("en-US", {timeZone: "America/New_York", weekday: "long", month: "short", day: "numeric"})}</div>`;
-  html += tonight.length ? notes(tonight) : `<div class="card msg"><h2>No pick yet tonight.</h2>
+  html += tonight.length
+    ? `<p class="daysum">${daySum(tonight)}</p>` + slip(tonight, `Bet the number shown or better. 1U is your normal bet. Lines move, so check your book before tip.`)
+      + `<div class="label cards">The pick cards</div>` + notes(tonight)
+    : `<div class="card msg"><h2>No pick yet tonight.</h2>
     <p>The sim logs a pick when it finds an edge against the line, usually by early afternoon ET. It shows up here
     the second it's logged, and we email you. Some nights the sim passes.</p></div>`;
-  html += `<div class="card msg"><div class="label">Members dashboard</div><h2 style="margin-top:8px">Every game, the court sim, player MOJO and trends.</h2>
-    <div class="btns"><a class="btn" href="/members/dashboard/">Open the dashboard</a></div></div>`;
-  if (earlier.length) html += `<div class="label day">Last night</div>` + notes(earlier);
+  if (earlier.length) html += `<div class="label day">Last night</div>` + slip(earlier, `Results go on the <a href="/ledger/nba/">ledger</a> once the games are final.`);
   main.innerHTML = html + foot;
   fitNotes();
 }
