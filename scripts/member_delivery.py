@@ -109,6 +109,12 @@ def publish(p, when_label, dry=False):
 
 def active_emails():
     """Addresses of every account with an active pass."""
+    return sorted(active_members())
+
+
+def active_members():
+    """{address: uid or None} for every account with an active pass, plus the
+    whitelist (uid None when the address has no users doc yet)."""
     d = tg_members.db()
     now = datetime.now(timezone.utc)
     docs = {}
@@ -137,7 +143,58 @@ def active_emails():
     for snap in d.collection("fnf_whitelist").stream():
         if "@" in snap.id:
             out.setdefault(snap.id.lower(), None)
-    return sorted(out)
+    return out
+
+
+FEED_DAYS = 2   # tonight and last night, the same window /members/ shows
+
+
+def sync_feeds(dry=False):
+    """Copy tonight's and last night's member_picks onto each active member's
+    own users doc (member_feed), and take it off everyone else's.
+
+    /members/ reads member_picks directly where the live Firestore rules allow
+    it. Where they don't (the deployed ruleset predates the member_picks rule),
+    the page reads the member's own users doc instead, which every ruleset lets
+    its owner read. Runs on every bot pass, so someone who buys after a pick
+    went out has it within one run. Returns (members fed, feeds cleared)."""
+    d = tg_members.db()
+    if d is None:
+        return (0, 0)
+    from firebase_admin import auth, firestore
+    since = (datetime.now(ET) - timedelta(days=FEED_DAYS - 1)).strftime("%Y-%m-%d")
+    feed = [s.to_dict() for s in d.collection("member_picks").where("date", ">=", since).stream()]
+    feed.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("logged_at") or "")))
+    key = hashlib.sha256(repr(feed).encode()).hexdigest()[:16]
+    uids = set()
+    for addr, uid in active_members().items():
+        if uid is None:
+            try:
+                uid = auth.get_user_by_email(addr).uid
+            except auth.UserNotFoundError:
+                continue                                  # whitelisted but never signed up
+        uids.add(uid)
+    if dry:
+        print(f"  [dry] member feeds: {len(feed)} pick(s) for {len(uids)} member(s)")
+        return (len(uids), 0)
+    fed = 0
+    for uid in uids:
+        ref = d.collection("users").document(uid)
+        snap = ref.get()
+        if snap.exists and (snap.to_dict() or {}).get("member_feed_key") == key:
+            continue
+        ref.set({"member_feed": feed, "member_feed_key": key,
+                 "member_feed_at": firestore.SERVER_TIMESTAMP}, merge=True)
+        fed += 1
+    cleared = 0
+    epoch = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    for snap in d.collection("users").where("member_feed_at", ">", epoch).stream():
+        if snap.id not in uids:
+            snap.reference.update({"member_feed": firestore.DELETE_FIELD,
+                                   "member_feed_key": firestore.DELETE_FIELD,
+                                   "member_feed_at": firestore.DELETE_FIELD})
+            cleared += 1
+    return (fed, cleared)
 
 
 def note_png(p, when_label):
