@@ -41,6 +41,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Full dashboard cards of tonight's picked games (publish_member_cards.py), same readers as member_picks
+    match /member_cards/{cardId} {
+      allow read: if request.auth != null
+        && (whitelisted()
+            || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && hasActivePass()));
+      allow write: if false;
+    }
+
     // FnF whitelist — read-only, managed via Firebase console
     match /fnf_whitelist/{email} {
       allow read: if request.auth != null;

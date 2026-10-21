@@ -236,6 +236,14 @@ jobs:
       - name: Publish the members dashboard at /members/dashboard/
         run: python3 scripts/publish_member_dashboard.py   # NBA SIM dashboard, branded and gated; picks sealed in it
 
+      # the picked games' full cards (sealed on the public page) for signed-in members; never fails the run
+      - name: Members-only cards of tonight's picks (Firestore member_cards)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: |
+          pip install -q firebase-admin || true
+          python3 scripts/publish_member_cards.py
+
 
       - name: Commit and push
         run: |
@@ -353,6 +361,14 @@ jobs:
 
       - name: Publish the members dashboard at /members/dashboard/
         run: python3 scripts/publish_member_dashboard.py   # NBA SIM dashboard, branded and gated; picks sealed in it
+
+      # the picked games' full cards (sealed on the public page) for signed-in members; never fails the run
+      - name: Members-only cards of tonight's picks (Firestore member_cards)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: |
+          pip install -q firebase-admin || true
+          python3 scripts/publish_member_cards.py
 
 
       - name: Commit and push
