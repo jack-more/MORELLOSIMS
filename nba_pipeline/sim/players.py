@@ -51,6 +51,8 @@ K_PLAYTYPE = 60.0       # pseudo-possessions of league average behind every play
 K_BOX = 400.0           # pseudo-possessions behind usage / TOV / 3PA / rebounding rates
 ROTATION = 10           # players who get minutes
 STARTER_MIN = 28.0      # a RotoWire starter's floor
+STARTER_MAX = 36.0      # and ceiling, before any minutes the bench can't absorb come back
+BENCH_MAX = 30.0
 MAX_MIN = 38.0
 # >1: the floor five defers to its high-usage players. 1.5 fits real scoring across usage tiers
 # (sim.validate, 274 players: 1.0 left the 30%+ usage stars 4.3 pts/36 short, 1.6 is flat, 2.2 overshoots)
@@ -137,18 +139,23 @@ def rotation(roster, out_ids, starters=()):
     avail = [(int(r.player_id), float(r.minutes_per_game or 0)) for r in roster.itertuples()
              if int(r.player_id) not in out_ids]
     starters = set(starters)
-    first = sorted([(p, max(m, STARTER_MIN)) for p, m in avail if p in starters], key=lambda x: -x[1])[:5]
-    rest = sorted([(p, m) for p, m in avail if p not in starters], key=lambda x: -x[1])
-    mins = dict(first + rest[:ROTATION - len(first)])
-    for _ in range(4):                                   # scale to 240 with the cap holding
-        free = [p for p, m in mins.items() if m < MAX_MIN]
-        total = sum(mins.values())
-        if abs(total - 240) < 0.01 or not free:
-            break
-        fixed = sum(m for p, m in mins.items() if p not in free)
-        scale = (240 - fixed) / sum(mins[p] for p in free)
-        for p in free:
-            mins[p] = min(MAX_MIN, mins[p] * scale)
+    first = sorted([(p, min(STARTER_MAX, max(m, STARTER_MIN))) for p, m in avail if p in starters],
+                   key=lambda x: -x[1])[:5]
+    if not first:                                        # no lineup news: the five biggest roles start
+        first = [(p, min(STARTER_MAX, max(m, STARTER_MIN)))
+                 for p, m in sorted(avail, key=lambda x: -x[1])[:5]]
+    picked = {p for p, _ in first}
+    bench = sorted([(p, m) for p, m in avail if p not in picked], key=lambda x: -x[1])[:ROTATION - len(first)]
+    # starters keep a starter's load; the bench splits what is left, by role, capped
+    left = 240 - sum(m for _, m in first)
+    mins = dict(first)
+    bench_total = sum(m for _, m in bench) or 1
+    for p, m in bench:
+        mins[p] = min(BENCH_MAX, m * left / bench_total)
+    short = 240 - sum(mins.values())                     # a bench cap left minutes over: back to the starters
+    if short > 0.01:
+        for p, _ in first:
+            mins[p] = min(MAX_MIN, mins[p] + short / len(first))
     return mins
 
 
