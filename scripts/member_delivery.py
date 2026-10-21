@@ -46,7 +46,14 @@ def enabled():
     return tg_members.db() is not None
 
 
+# the owner's hold: while this file exists no member email goes out (the page still updates)
+HOLD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ops", "HOLD_MEMBER_EMAIL")
+
+
 def email_enabled():
+    if os.path.exists(HOLD):
+        print("  members: email on hold (ops/HOLD_MEMBER_EMAIL)")
+        return False
     return enabled() and bool(os.environ.get("RESEND_API_KEY", "").strip())
 
 
