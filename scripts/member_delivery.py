@@ -114,6 +114,15 @@ def publish(p, when_label, dry=False):
     return True
 
 
+def retract(p, dry=False):
+    """Take a pick voided before tip off the members page. True when gone."""
+    if dry:
+        print(f"  [dry] member page: retract {p.get('matchup')} ({p.get('date')})")
+        return True
+    tg_members.db().collection("member_picks").document(doc_id(p["id"])).delete()
+    return True
+
+
 def active_emails():
     """Addresses of every account with an active pass."""
     return sorted(active_members())
