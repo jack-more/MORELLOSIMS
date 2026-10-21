@@ -523,7 +523,7 @@ class Season:
         out["pos"] = [self.pos(p) for p in pids]
         out["starters"] = [i for i, p in enumerate(pids) if p in set(starters)]
         ld, lg_rows = self.lhist.get(tid, (np.array([]), []))
-        out["H"] = lineups.history(lg_rows[:self._k(ld, D)], pids, gone)
+        out["H"], out["SW"] = lineups.history(lg_rows[:self._k(ld, D)], pids, out["min"], gone, self.pos)
         out["tdef"] = np.array([self.tdef.get(tid, {}).get(t, 1.0) for t in TYPES])
         out["out"] = sorted(out_ids)
         out["gone"] = gone
@@ -847,7 +847,7 @@ def main():
                 teams[tid]["base"] = base
                 teams[tid]["nowowy"] = S.finish(S.base_team(tid, D, lg, tonight, starters, use_wowy=False),
                                                 ctxs["main"], False)
-                teams[tid]["nohist"] = S.finish(dict(base, H={}), ctxs["main"], False)
+                teams[tid]["nohist"] = S.finish(dict(base, H={}, SW={}), ctxs["main"], False)
             pace = (S.pace(h, D, lg) + S.pace(a, D, lg)) / 2
             b2b = {"home_b2b": (h, _day_before(D)) in S.sched, "away_b2b": (a, _day_before(D)) in S.sched}
             gi = len(meta_games)

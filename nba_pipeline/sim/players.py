@@ -268,7 +268,9 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
     out["starters"] = [i for i, p in enumerate(pids) if p in set(starters)]
     tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone() if abbr else None
     # the fives this coach actually plays, and how long, from tonight's rotation
-    out["H"] = lineups.history(context.lineup_history(con).get(tid[0], []) if tid else [], pids, gone)
+    pos = context.positions(con)
+    out["H"], out["SW"] = lineups.history(context.lineup_history(con).get(tid[0], []) if tid else [], pids,
+                                          out["min"], gone, lambda p: pos.get(p, ""))
     out["plan"] = lineups.plan(out)
     # scheme: what this team allows per play type
     tdef = context.team_defense(con, tid[0], lg["team_def"]) if tid else {}

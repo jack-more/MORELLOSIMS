@@ -183,6 +183,14 @@ def lineup_history(con):
     return _CACHE["lineups"]
 
 
+def positions(con):
+    """{player_id: PG/SG/SF/PF/C}, his latest season's label (lineup swaps for players who left)."""
+    if "positions" not in _CACHE:
+        _CACHE["positions"] = {int(p): g for p, g in con.execute(
+            "SELECT player_id, position_group FROM player_archetypes ORDER BY season_id")}
+    return _CACHE["positions"]
+
+
 def role_wowy(con):
     """{(player, teammate): (usage change, pts-per-use change, usage weight, efficiency weight)}
     in the games the teammate missed against the games they played together (ESPN logs,
