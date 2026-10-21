@@ -37,7 +37,7 @@ def team(abbr, lineups, lg, con):
         pid = gf._match_player_name(name, roster)
         if pid is not None and status != "OUT":
             starters.append(int(pid))
-    return players.team_inputs(roster, out_ids, starters, lg, con), roster
+    return players.team_inputs(roster, out_ids, starters, lg, con, abbr=abbr), roster
 
 
 def pace_of(con, abbr):
@@ -55,7 +55,7 @@ def calibrate(lg, con, sims=1500):
         roster = gf._get_full_roster(abbr)
         if roster.empty:
             continue
-        o = players.team_inputs(roster, set(), (), lg, con)
+        o = players.team_inputs(roster, set(), (), lg, con, abbr=abbr)
         res = engine.simulate(o, avg, lg, sims=sims, hca=0.0)
         ratings.append(res["home_pts"].mean() / lg["pace"] * 100)
     return lg["ortg"] / float(np.mean(ratings))
@@ -67,6 +67,7 @@ def main():
     ap.add_argument("--impact", type=float, default=0.5)
     ap.add_argument("--json")
     ap.add_argument("--picks", help='JSON {"AWY@HOM": ["SIDE", line]} to print a cover chance')
+    ap.add_argument("--layers", action="store_true", help="also print what each layer moves the line")
     args = ap.parse_args()
     logged = json.loads(args.picks) if args.picks else LOGGED
     con = players._db()
@@ -78,7 +79,8 @@ def main():
         h, hr = team(home, lineups, lg, con)
         a, ar = team(away, lineups, lg, con)
         pace = np.mean([p for p in (pace_of(con, home), pace_of(con, away)) if p] or [lg["pace"]])
-        res = engine.simulate(h, a, lg, sims=args.sims, pace=pace, impact_w=args.impact, scale=scale)
+        b2b = {"home_b2b": gf.is_back_to_back(home), "away_b2b": gf.is_back_to_back(away)}
+        res = engine.simulate(h, a, lg, sims=args.sims, pace=pace, impact_w=args.impact, scale=scale, **b2b)
         raw = res["margin"]
         mg = raw.mean() + (raw - raw.mean()) * MARGIN_SD / raw.std()
         book = lines.get((home, away), {})
@@ -89,6 +91,16 @@ def main():
                "book_home_spread": book.get("spread"), "book_total": book.get("total"),
                "home_top": sorted(zip(h["names"], res["home_box"].mean(0).round(1), h["min"].round(1)), key=lambda x: -x[1])[:5],
                "away_top": sorted(zip(a["names"], res["away_box"].mean(0).round(1), a["min"].round(1)), key=lambda x: -x[1])[:5]}
+        row["b2b"] = [k[:4] for k, v in b2b.items() if v]
+        row["spacing"] = (round(res["away_spacing"], 2), round(res["home_spacing"], 2))
+        row["synergy"] = (round(res["away_syn"], 2), round(res["home_syn"], 2))
+        if args.layers:
+            # what each layer moves the sim's home spread (same seed, that layer off)
+            row["layers"] = {}
+            for layer in engine.LAYERS:
+                r2 = engine.simulate(h, a, lg, sims=args.sims, pace=pace, impact_w=args.impact, scale=scale,
+                                     off=(layer,), **b2b)
+                row["layers"][layer] = round(float(raw.mean() - r2["margin"].mean()), 2)   # + helps home
         if g in logged:
             side, line = logged[g]
             m = mg if side == home else -mg
@@ -102,6 +114,10 @@ def main():
         if "logged" in r:
             line += f"   logged {r['logged']}: covers {r['cover']:.0%}"
         print(line)
+        extra = f"          spacing away/home {r['spacing']}  synergy {r['synergy']}" + (f"  b2b {r['b2b']}" if r["b2b"] else "")
+        if "layers" in r:
+            extra += "  layer pts to home margin: " + ", ".join(f"{k} {v:+.1f}" for k, v in r["layers"].items())
+        print(extra)
     if args.json:
         json.dump(rows, open(args.json, "w"), indent=1, default=str)
 

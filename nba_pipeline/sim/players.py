@@ -14,8 +14,13 @@ sample size, so twelve possessions of a play type can't make a player elite.
   shooting      3PA share of his shots
   rebounding    his share of his team's OREB / DREB chances on the floor
   impact        steadied offense / defense impact: RAPM and LEBRON splits
+  load          his usage-efficiency curve and his usage share at full strength
+  gravity       what his shooting does to spacing (sim/context.py)
+  pairs         WOWY synergy with each teammate, archetype fit when they never played
+  scheme        the team's PPP allowed per play type (its defensive scheme)
 """
 
+import itertools
 import os
 import sqlite3
 import sys
@@ -24,6 +29,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CURRENT_SEASON, DB_PATH, previous_season  # noqa: E402
+from sim import context  # noqa: E402
 
 # Synergy offensive play types; the order is the column order everywhere
 TYPES = ["PRBallHandler", "Isolation", "Spotup", "Transition", "Cut", "PRRollMan",
@@ -49,6 +55,9 @@ MAX_MIN = 38.0
 # >1: the floor five defers to its high-usage players. 1.5 fits real scoring across usage tiers
 # (sim.validate, 274 players: 1.0 left the 30%+ usage stars 4.3 pts/36 short, 1.6 is flat, 2.2 overshoots)
 USG_POWER = float(os.environ.get("SIM_USG_POWER", "1.5"))
+# usage curves are game-level slopes, noisy: half of each, held inside these bounds
+# (TS points per usage point; the old model's default for a player without one was -0.5)
+CURVE_SHRINK, CURVE_LO, CURVE_HI, CURVE_DEFAULT = 0.5, -1.25, 0.25, -0.5
 
 
 def _db():
@@ -74,8 +83,13 @@ def league(con=None):
     ortg, pace = con.execute(
         "SELECT AVG(off_rating), AVG(pace) FROM team_season_stats WHERE season_id=?",
         (previous_season(CURRENT_SEASON),)).fetchone()
+    g = [(context.gravity(f3, a36), m) for f3, a36, m in con.execute(
+        "SELECT fg3_pct, fg3a_per36, minutes_total FROM player_season_stats "
+        "WHERE season_id=? AND gp >= 20", (previous_season(CURRENT_SEASON),))]
+    spacing = 5 * sum(x * m for x, m in g) / sum(m for _, m in g)      # an average five's gravity
     return {"off_ppp": off, "def_ppp": dfn, "fg3_share": r[0], "tov": r[1], "oreb": r[2],
-            "dreb": r[3], "pts_per_use": r[4], "ortg": ortg, "pace": pace}
+            "dreb": r[3], "pts_per_use": r[4], "ortg": ortg, "pace": pace, "spacing": spacing,
+            "team_def": context.league_team_defense(con, previous_season(CURRENT_SEASON))}
 
 
 def _shrink(x, n, prior, k):
@@ -138,7 +152,7 @@ def rotation(roster, out_ids, starters=()):
     return mins
 
 
-def team_inputs(roster, out_ids, starters=(), lg=None, con=None):
+def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
     """Arrays the engine runs on, one row per rotation player."""
     con = con or _db()
     lg = lg or league(con)
@@ -147,6 +161,19 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None):
     usg = {int(p): float(u) for p, u in zip(roster.player_id, roster.usg_pct) if u and u == u}
     pids = list(mins)
     n, T = len(pids), len(TYPES)
+    # role WOWY: for each regular who is OUT tonight, each teammate's measured usage and
+    # efficiency change in the games that regular missed (shrunk by how many there were)
+    full = rotation(roster, set(), ())
+    wowy = context.role_wowy(con)
+    gone = [x for x in out_ids if full.get(x, 0) >= 20]
+    role = {}
+    for pid in pids:
+        du = de = w = 0.0
+        for x in gone:
+            r = wowy.get((pid, x))
+            if r:
+                du, de, w = du + r[0] * r[2], de + r[1] * r[3], max(w, r[2])
+        role[pid] = (du, de, w)
     out = {"pids": pids, "names": [names.get(p, str(p)) for p in pids],
            "min": np.array([mins[p] for p in pids]), "usg": np.zeros(n), "tov": np.zeros(n),
            "mix": np.zeros((n, T)), "ppp": np.zeros((n, T)), "p3": np.zeros((n, T)),
@@ -156,7 +183,8 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None):
         fga, fta, tov, fg3a, poss, oreb, dreb, ochances, dchances, pts = _box(con, pid)
         used = fga + 0.44 * fta + tov
         # usage: the season line (this season's games over his multi-season prior), else his ESPN rate
-        out["usg"][i] = usg.get(pid) or _shrink(used / poss if poss else 0.2, poss, 0.20, K_BOX)
+        out["usg"][i] = max(0.05, (usg.get(pid) or _shrink(used / poss if poss else 0.2, poss, 0.20, K_BOX))
+                            + role[pid][0])
         out["tov"][i] = _shrink(tov / used if used else lg["tov"], used, lg["tov"], K_BOX / 4)
         share3 = _shrink(fg3a / fga if fga else lg["fg3_share"], fga, lg["fg3_share"], K_BOX / 4)
         out["oreb"][i] = _shrink(oreb / ochances if ochances else lg["oreb"], ochances, lg["oreb"], K_BOX / 4)
@@ -181,7 +209,7 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None):
                 dvals.append(out["dppp"][i, j])
         # level: the play-type mix sets how he scores; his box score sets how well
         # (points per possession he ends, shrunk toward the league)
-        per_use = _shrink(pts / used if used else lg["pts_per_use"], used, lg["pts_per_use"], K_BOX)
+        per_use = _shrink(pts / used if used else lg["pts_per_use"], used, lg["pts_per_use"], K_BOX) + role[pid][1]
         model = (1 - out["tov"][i]) * float(out["mix"][i] @ out["ppp"][i])
         if model > 0:
             out["ppp"][i] *= per_use / model
@@ -190,4 +218,44 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None):
             if t not in DEF_OF:
                 out["dppp"][i, j], out["dwt"][i, j] = avg, 1.0
     out["uw"] = out["usg"] ** USG_POWER
+
+    # load: his share of the floor's possessions at full strength, against which
+    # tonight's share (a star out, a low-usage five) moves his efficiency along his curve
+    full_uw = {p: (usg.get(p) or 0.2) ** USG_POWER for p in full}
+    floor_uw = sum(full_uw[p] * m / 48.0 for p, m in full.items())
+    floor_tonight = float((out["uw"] * out["min"] / 48.0).sum())
+    curves = context.load_curves(con)
+    # where role WOWY measured tonight's role, that role is his normal (no load penalty on it);
+    # elsewhere the full-strength share is, and the curve prices the extra
+    w = np.array([role[p][2] for p in pids])
+    out["s_norm"] = w * out["uw"] / floor_tonight + (1 - w) * out["uw"] / floor_uw
+    out["role"] = {p: role[p] for p in pids if role[p][2] > 0}
+    out["slope"] = np.array([min(CURVE_HI, max(CURVE_LO, CURVE_SHRINK * curves.get(p, CURVE_DEFAULT)))
+                             for p in pids])
+    # gravity
+    shoot = {int(p): (f, a) for p, f, a in con.execute(
+        f"SELECT player_id, fg3_pct, fg3a_per36 FROM player_season_stats WHERE season_id=? "
+        f"AND player_id IN ({','.join('?' * n)})", (CURRENT_SEASON, *pids))}
+    out["g"] = np.array([context.gravity(*shoot.get(p, (0, 0))) for p in pids])
+    # pairs: WOWY synergy, archetype fit for teammates without a shared history
+    syn, prior, arch, _ = context.pairs(con)
+    V = np.zeros((n, n))
+    for a, b in itertools.combinations(range(n), 2):
+        k = (min(pids[a], pids[b]), max(pids[a], pids[b]))
+        v = syn.get(k)
+        if v is None:
+            v = prior.get(tuple(sorted((arch.get(pids[a], ""), arch.get(pids[b], "")))), 0.0)
+        V[a, b] = V[b, a] = v
+    out["V"] = V
+    # five-man units with a track record: value by bitmask of rotation indices
+    idx = {p: i for i, p in enumerate(pids)}
+    U = np.zeros(1 << n)
+    for ps, v in context.units(con)[0].items():
+        if all(p in idx for p in ps):
+            U[sum(1 << idx[p] for p in ps)] = v
+    out["U"] = U
+    # scheme: what this team allows per play type
+    tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone() if abbr else None
+    tdef = context.team_defense(con, tid[0], lg["team_def"]) if tid else {}
+    out["tdef"] = np.array([tdef.get(t, 1.0) for t in TYPES])
     return out

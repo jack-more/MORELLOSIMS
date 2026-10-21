@@ -5868,42 +5868,28 @@ def render_matchup_card(m, idx, team_map, logged=False):
     syn_weighted = w_syn * syn_pts
     proj_spread_val = m.get("proj_spread", 0)
 
-    # ── The board: one row per team, away on top, the book and the sim side by side ──
+    # ── The card: the original matchup card, rebuilt to read faster. Logo against
+    # logo with the sim's line in the middle, the tug of war, the schemes, then one
+    # row per input showing how many points it pulls the line and toward whom ──
     def _line(v):
         return "PK" if abs(v) < 0.05 else f"{v:+.1f}"
+
+    def _ink(hex_color):
+        """Black or white text, whichever reads on this team colour."""
+        c = hex_color.lstrip("#")
+        try:
+            r, g, b = (int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
+        except ValueError:
+            return "#fff"
+        return "#0B0F0D" if 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 else "#fff"
 
     pick_team = pick_text.split(" ")[0] if pick_text else ""
     edge_abs = abs(spread_edge)
     proj_total = m.get("proj_total")
-
-    def _hi(mine, theirs):
-        return ' class="hi"' if mine > theirs else ""
-
-    def _team_row(abbr, name, logo, color, wins, losses, rank, off, dfn, moji, nrtg, l10, syn,
-                  o_moji, o_nrtg, o_l10, o_syn, book, sim):
-        scheme = " · ".join(x for x in (off, dfn) if x)
-        side = ' class="side"' if abbr == pick_team else ""
-        return f"""
-            <tr{side} style="--tc:{color}">
-                <td class="t"><img src="{logo}" class="gc-logo" alt="" onerror="this.style.visibility='hidden'"><div class="gc-id"><b>{abbr}</b><span class="gc-name">{name}</span><small>{wins}-{losses} · <span class="tip" data-tip="{BOARD_TIPS['rank']}">MOJO #{rank}</span>{'<span class="gc-scheme"> · ' + scheme + '</span>' if scheme else ''}</small></div></td>
-                <td{_hi(moji, o_moji)}>{moji:.1f}</td>
-                <td class="x{' hi' if nrtg > o_nrtg else ''}">{nrtg:+.1f}</td>
-                <td class="x{' hi' if l10 > o_l10 else ''}">{l10:+.1f}</td>
-                <td class="x{' hi' if syn > o_syn else ''}">{syn:.1f}</td>
-                <td class="bk">{book}</td>
-                <td class="sim ma-premium">{sim}</td>
-            </tr>"""
-
-    away_book = "—" if spread_proj else _line(-spread)
-    home_book = "—" if spread_proj else _line(spread)
-    board_rows = (
-        _team_row(aa, a_name, a_logo, ac, m['a_wins'], m['a_losses'], m['a_mojo_rank'], a_off, a_def,
-                  away_moji, away_nrtg, away_recent_nrtg, away_syn,
-                  home_moji, home_nrtg, home_recent_nrtg, home_syn, away_book, _line(-proj_spread_val))
-        + _team_row(ha, h_name, h_logo, hc, m['h_wins'], m['h_losses'], m['h_mojo_rank'], h_off, h_def,
-                    home_moji, home_nrtg, home_recent_nrtg, home_syn,
-                    away_moji, away_nrtg, away_recent_nrtg, away_syn, home_book, _line(proj_spread_val))
-    )
+    sim_fav = ha if proj_spread_val <= 0 else aa
+    sim_line = "PK" if abs(proj_spread_val) < 0.05 else f"{sim_fav} {-abs(proj_spread_val):+.1f}"
+    book_line = "no line yet" if spread_proj else (f"{ha} {_line(spread)}" if spread <= 0 else f"{aa} {_line(-spread)}")
+    edge_cls = "hot" if edge_abs > 3 else "mild" if edge_abs > 1 else "flat"
 
     notes = [f'<span class="tip" data-tip="{BOARD_TIPS["hca"]}">Home court +{hca_pts:.1f} {ha}</span>']
     if home_b2b:
@@ -5917,12 +5903,8 @@ def render_matchup_card(m, idx, team_map, logged=False):
 
     floor = _pick_floor()
     if spread_proj:
-        call_html = '<span class="gc-k">No book line yet</span>'
         why_html = "The sim has priced this game. It waits for a book line before it grades it."
     else:
-        call_html = (f'<span class="gc-k tip" data-tip="{BOARD_TIPS["side"]}">Sim side</span><b>{pick_text}</b>'
-                     f'<span class="gc-k tip" data-tip="{BOARD_TIPS["edge"]}">Edge</span><b>{edge_abs:.1f} pts</b>'
-                     f'<span class="gc-k tip" data-tip="{BOARD_TIPS["grade"]}">Grade</span><b>C{conf_10}</b>')
         side_sim = _line(proj_spread_val if pick_team == ha else -proj_spread_val)
         sim_says = "The sim makes it a pick'em." if side_sim == "PK" else f"The sim has {pick_team} {side_sim}."
         lean = max(conf_pct, 100 - conf_pct)
@@ -5940,10 +5922,57 @@ def render_matchup_card(m, idx, team_map, logged=False):
         why_html = (f"The book has {pick_text}. {sim_says} "
                     f"That's {edge_abs:.1f} points of value on {pick_team}. " + verdict)
 
-    sim_fav = ha if proj_spread_val <= 0 else aa
-    how_html = (f'{w_moji:.0%} MOJI ({moji_weighted:+.1f}) + {w_nrtg:.0%} NRtg ({w_nrtg * nrtg_diff:+.1f}) '
-                f'+ {recent_w:.0%} last 10 ({recent_w * recent_nrtg_diff:+.1f}) '
-                f'+ {w_syn:.0%} synergy ({syn_weighted:+.1f}) + home court and rest ({situational_pts:+.1f}) = sim {sim_fav} {(-abs(proj_spread_val)):+.1f}')
+
+    # What built the line: each input's pull in points (+ toward home), as the blend weighs it
+    PULL_FULL = 6.0                                       # points that fill half the bar
+    factors = [
+        ("MOJI", BOARD_TIPS["moji"], f"{w_moji:.0%}", f"{away_moji:.1f}", f"{home_moji:.1f}", moji_weighted),
+        ("NRtg", BOARD_TIPS["nrtg"], f"{w_nrtg:.0%}", f"{away_nrtg:+.1f}", f"{home_nrtg:+.1f}", w_nrtg * nrtg_diff),
+        ("Last 10", BOARD_TIPS["l10"], f"{recent_w:.0%}", f"{away_recent_nrtg:+.1f}", f"{home_recent_nrtg:+.1f}",
+         recent_w * recent_nrtg_diff),
+        ("Synergy", BOARD_TIPS["syn"], f"{w_syn:.0%}", f"{away_syn:.1f}", f"{home_syn:.1f}", syn_weighted),
+        ("Court + rest", BOARD_TIPS["hca"], "", "", "", situational_pts),
+    ]
+
+    def _pull(pts):
+        if abs(pts) < 0.05:
+            return '<span class="vs-fbar"></span>', '<span class="vs-fp even">even</span>'
+        side, team = ("h", ha) if pts > 0 else ("a", aa)
+        width = min(50.0, abs(pts) / PULL_FULL * 50)
+        return (f'<span class="vs-fbar"><i class="{side}" style="width:{width:.1f}%"></i></span>',
+                f'<span class="vs-fp {side}">{team} +{abs(pts):.1f}</span>')
+
+    factor_rows = ""
+    for label, tip, weight, av, hv, pts in factors:
+        bar, val = _pull(pts)
+        w_html = f"<i>{weight}</i>" if weight else ""
+        factor_rows += (f'<div class="vs-f"><span class="vs-fk"><span class="tip" data-tip="{tip}">{label}</span>{w_html}</span>'
+                        f'<span class="vs-fa">{av}</span>{bar}<span class="vs-fh">{hv}</span>{val}</div>')
+    bar, _ = _pull(-proj_spread_val)
+    factor_rows += (f'<div class="vs-f vs-fsum"><span class="vs-fk">Sim line</span><span class="vs-fa"></span>{bar}'
+                    f'<span class="vs-fh"></span><span class="vs-fp sum">{sim_line}</span></div>')
+
+    # tug of war: where the sim's margin puts the game, away left, home right
+    home_share = 50 + max(-42.0, min(42.0, -proj_spread_val * 2.5))
+    sim_short = "Sim: pick'em" if abs(proj_spread_val) < 0.05 else f"Sim: {sim_fav} by {abs(proj_spread_val):.1f}"
+
+    def _chips(off, dfn, color):
+        ink = _ink(color)
+        return "".join(f'<span class="vs-chip" style="background:{color};color:{ink}">{x}</span>' for x in (off, dfn) if x)
+
+    def _team(abbr, name, logo, wins, losses, rank, right=False):
+        return (f'<div class="vs-team{" r" if right else ""}"><img src="{logo}" class="vs-logo" alt="" '
+                f'onerror="this.style.visibility=\'hidden\'"><div class="vs-id"><b class="vs-abbr">{abbr}</b>'
+                f'<span class="vs-nick">{name}</span><span class="vs-meta">{wins}-{losses} · '
+                f'<span class="tip" data-tip="{BOARD_TIPS["rank"]}">MOJO #{rank}</span></span></div></div>')
+
+    if spread_proj:
+        pill = '<span class="vs-pill wait">Waiting on a book line</span>'
+    else:
+        is_pick = logged or (conf_10 >= floor and max(conf_pct, 100 - conf_pct) > _CAPTURE_LEAN)
+        pill = (f'<span class="vs-pill{" pick" if is_pick else ""}"><span class="tip" data-tip="{BOARD_TIPS["side"]}">'
+                f'Sim side</span> <b>{pick_text}</b> · <span class="tip" data-tip="{BOARD_TIPS["edge"]}">{edge_abs:.1f} edge</span>'
+                f' · <span class="tip" data-tip="{BOARD_TIPS["grade"]}">C{conf_10}</span></span>')
 
     tip_txt = _tip_et(m.get("tip_at"))
     ou_txt = f"O/U {total:.1f}" + (f" · sim {proj_total:.1f}" if proj_total else "")
@@ -5981,18 +6010,26 @@ def render_matchup_card(m, idx, team_map, logged=False):
                          for u, n, t in books)
 
     return f"""
-    <div class="matchup-card gc" data-game="{aa}@{ha}" data-conf="{conf_10}" data-edge="{abs(spread_edge):.1f}" data-total="{total}" data-idx="{idx}">
-        <div class="mc-header gc-top">
-            <span class="gc-when">{tip_txt} · {a_name} at {h_name}</span>
-            <span class="gc-ou ma-premium tip" data-tip="{BOARD_TIPS['ou']}">{ou_txt}</span>
+    <div class="matchup-card gc vs-card" data-game="{aa}@{ha}" data-conf="{conf_10}" data-edge="{abs(spread_edge):.1f}" data-total="{total}" data-idx="{idx}" style="--ac:{ac};--hc:{hc}">
+        <div class="vs-top"><span class="gc-when">{tip_txt} · {a_name} at {h_name}</span><span class="vs-ou tip" data-tip="{BOARD_TIPS['ou']}">{ou_txt}</span></div>
+        <div class="vs-head">
+            {_team(aa, a_name, a_logo, m['a_wins'], m['a_losses'], m['a_mojo_rank'])}
+            <div class="vs-mid ma-premium">
+                <span class="vs-k tip" data-tip="{BOARD_TIPS['sim']}">Sim line</span>
+                <b class="vs-line {edge_cls}">{sim_line}</b>
+                <span class="vs-book"><span class="tip" data-tip="{BOARD_TIPS['book']}">Book</span> {book_line}</span>
+                {pill}
+            </div>
+            {_team(ha, h_name, h_logo, m['h_wins'], m['h_losses'], m['h_mojo_rank'], right=True)}
         </div>
-        <table class="gc-board">
-            <thead><tr><th class="t">Team</th><th><span class="tip" data-tip="{BOARD_TIPS['moji']}">MOJI</span></th><th class="x"><span class="tip" data-tip="{BOARD_TIPS['nrtg']}">NRtg</span></th><th class="x"><span class="tip" data-tip="{BOARD_TIPS['l10']}">Last 10</span></th><th class="x"><span class="tip" data-tip="{BOARD_TIPS['syn']}">Synergy</span></th><th><span class="tip" data-tip="{BOARD_TIPS['book']}">Book</span></th><th class="ma-premium"><span class="tip" data-tip="{BOARD_TIPS['sim']}">Sim</span></th></tr></thead>
-            <tbody>{board_rows}
-            </tbody>
-        </table>
-        <div class="gc-call ma-premium">{call_html}<span class="gc-notes">{" · ".join(notes)}</span><p class="gc-why">{why_html}</p></div>
-        <details class="gc-how ma-premium"><summary>How the sim got there</summary><p>{how_html}</p></details>
+        <div class="vs-tow ma-premium"><i class="a" style="width:{100 - home_share:.1f}%"></i><i class="h" style="width:{home_share:.1f}%"></i><b></b></div>
+        <div class="vs-towl ma-premium"><span>{aa} MOJI {away_moji:.1f}</span><span class="vs-towsim">{sim_short}</span><span>{ha} MOJI {home_moji:.1f}</span></div>
+        <div class="vs-schemes"><span class="vs-sg">{_chips(a_off, a_def, ac)}</span><em>vs</em><span class="vs-sg">{_chips(h_off, h_def, hc)}</span></div>
+        <div class="vs-factors ma-premium">
+            <div class="vs-fhead"><span>Inputs</span><span>{aa}</span><span></span><span>{ha}</span><span>Pull</span></div>
+            {factor_rows}
+        </div>
+        <div class="gc-call vs-call ma-premium"><span class="gc-notes">{" · ".join(notes)}</span><p class="gc-why">{why_html}</p></div>
         <div class="gc-books"><span class="gc-k">Bet it</span>{books_html}</div>
 
         <!-- Expand button -->
