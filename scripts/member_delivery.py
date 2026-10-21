@@ -171,15 +171,19 @@ def sync_feeds(dry=False):
     feed = [s.to_dict() for s in d.collection("member_picks").where("date", ">=", since).stream()]
     feed.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("logged_at") or "")))
     key = hashlib.sha256(repr(feed).encode()).hexdigest()[:16]
-    uids = set()
+    uids, listed, found = set(), 0, 0
     for addr, uid in active_members().items():
         if uid is not None:
             uids.add(uid)
             continue
         # whitelisted: find the account by the email onUserCreate stored
         # (no match means the address never signed up)
-        for snap in d.collection("users").where("email", "in", list({addr, addr.lower()})).stream():
-            uids.add(snap.id)
+        listed += 1
+        hits = [s.id for s in d.collection("users").where("email", "in", list({addr, addr.lower()})).stream()]
+        found += bool(hits)
+        uids.update(hits)
+    print(f"  members: page feed has {len(feed)} pick(s) for {len(uids)} account(s); "
+          f"{found} of {listed} whitelisted address(es) have an account")
     if dry:
         print(f"  [dry] member feeds: {len(feed)} pick(s) for {len(uids)} member(s)")
         return (len(uids), 0)
