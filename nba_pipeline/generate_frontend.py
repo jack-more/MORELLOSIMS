@@ -3740,6 +3740,7 @@ def _pick_floor():
 
 
 _PICK_FLOOR = None
+_CAPTURE_LEAN = 65  # capture_picks.skip_reason's threshold: the sim's side has to clear 65%
 
 
 def _tip_et(tip_at):
@@ -3762,7 +3763,7 @@ def render_sealed_matchup_card(m, idx):
     a_name, h_name = TEAM_FULL_NAMES.get(aa, aa), TEAM_FULL_NAMES.get(ha, ha)
     ac, hc = TEAM_COLORS.get(aa, "#333"), TEAM_COLORS.get(ha, "#333")
     return f"""
-    <div class="matchup-card gc sealed-card" data-conf="{conf}" data-edge="0" data-total="0" data-idx="{idx}">
+    <div class="matchup-card gc sealed-card" data-pick="1" data-game="{aa}@{ha}" data-conf="{conf}" data-edge="0" data-total="0" data-idx="{idx}">
         <div class="mc-header gc-top">
             <span class="gc-when">{tip_txt} · {a_name} at {h_name}</span>
             <span class="gc-ou">Sealed until tip</span>
@@ -3780,6 +3781,12 @@ def render_sealed_matchup_card(m, idx):
         </div>
     </div>
 """
+
+
+# Full cards of the sealed games, keyed "AWY@HOM". Written next to nba_sim.html
+# as _member_cards.json (never committed: .gitignore, check_seal_guardrail.py).
+MEMBER_CARDS = {}
+MEMBER_CARDS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_member_cards.json")
 
 
 def _is_sealed_matchup(m):
@@ -4924,6 +4931,8 @@ def generate_html():
         for idx, m in enumerate(matchups):
             if _is_sealed_matchup(m):
                 matchup_cards += render_sealed_matchup_card(m, idx)
+                # the full card, for members only: publish_member_cards.py puts it in Firestore
+                MEMBER_CARDS[f"{m['away_abbr']}@{m['home_abbr']}"] = render_matchup_card(m, idx, team_map, logged=True)
                 continue
             matchup_cards += render_matchup_card(m, idx, team_map)
     else:
@@ -5705,8 +5714,11 @@ def generate_html():
 </html>"""
 
 
-def render_matchup_card(m, idx, team_map):
-    """Render a single matchup card with spread/total and expandable lineup."""
+def render_matchup_card(m, idx, team_map, logged=False):
+    """Render a single matchup card with spread/total and expandable lineup.
+
+    logged: the full card of a sealed (already logged) pick, for members; the
+    pick was logged at an earlier line, which the dashboard tags on the card."""
     ha = m["home_abbr"]
     aa = m["away_abbr"]
     h = m["home"]
@@ -5844,10 +5856,16 @@ def render_matchup_card(m, idx, team_map):
     hca_pts = bd.get("hca_pts", _MOJI_CONSTANTS["HCA_MEASURED"])
     situational_pts = bd.get("situational_pts", hca_pts)
 
-    # Model weighting computations (must match _MOJI_CONSTANTS: 40/10/30/20)
-    moji_weighted = 0.40 * moji_pts
-    nrtg_weighted = 0.10 * nrtg_diff + 0.30 * recent_nrtg_diff
-    syn_weighted = 0.20 * syn_pts
+    # Model weighting, as compute_moji_spread blends it: 40/10/30/20, with the
+    # last-10 share scaled by games played and the other three scaled back up
+    K = _MOJI_CONSTANTS
+    recent_w = bd.get("recent_weight", K["NRTG_RECENT_WEIGHT"])
+    rest_w = K["MOJI_WEIGHT"] + K["NRTG_SEASON_WEIGHT"] + K["SYN_WEIGHT"]
+    rest_scale = (rest_w + K["NRTG_RECENT_WEIGHT"] - recent_w) / rest_w
+    w_moji, w_nrtg, w_syn = (rest_scale * K[k] for k in ("MOJI_WEIGHT", "NRTG_SEASON_WEIGHT", "SYN_WEIGHT"))
+    moji_weighted = w_moji * moji_pts
+    nrtg_weighted = w_nrtg * nrtg_diff + recent_w * recent_nrtg_diff
+    syn_weighted = w_syn * syn_pts
     proj_spread_val = m.get("proj_spread", 0)
 
     # ── The board: one row per team, away on top, the book and the sim side by side ──
@@ -5907,14 +5925,25 @@ def render_matchup_card(m, idx, team_map):
                      f'<span class="gc-k tip" data-tip="{BOARD_TIPS["grade"]}">Grade</span><b>C{conf_10}</b>')
         side_sim = _line(proj_spread_val if pick_team == ha else -proj_spread_val)
         sim_says = "The sim makes it a pick'em." if side_sim == "PK" else f"The sim has {pick_team} {side_sim}."
+        lean = max(conf_pct, 100 - conf_pct)
+        if logged:
+            verdict = ("This is a logged pick: the tag up top has the line, grade and stake it was logged at. "
+                       "The board shows the sim against the current line.")
+        elif conf_10 < floor:
+            verdict = f"C{conf_10} is under the C{floor} bar, so it isn't a pick."
+        elif lean <= _CAPTURE_LEAN:
+            # C6 starts at 64%; capture_picks.skip_reason logs a side only past 65%
+            verdict = (f"It grades C{conf_10}, but a pick needs the sim past {_CAPTURE_LEAN}% on a side "
+                       f"and this one is at {lean:.0f}%, so it isn't a pick.")
+        else:
+            verdict = f"C{conf_10} clears the C{floor} bar: a logged pick."
         why_html = (f"The book has {pick_text}. {sim_says} "
-                    f"That's {edge_abs:.1f} points of value on {pick_team}. "
-                    + (f"C{conf_10} is under the C{floor} bar, so it isn't a pick." if conf_10 < floor
-                       else f"C{conf_10} clears the C{floor} bar."))
+                    f"That's {edge_abs:.1f} points of value on {pick_team}. " + verdict)
 
     sim_fav = ha if proj_spread_val <= 0 else aa
-    how_html = (f'40% MOJI ({moji_weighted:+.1f}) + 10% NRtg ({0.10 * nrtg_diff:+.1f}) + 30% last 10 ({0.30 * recent_nrtg_diff:+.1f}) '
-                f'+ 20% synergy ({syn_weighted:+.1f}) + home court and rest ({situational_pts:+.1f}) = sim {sim_fav} {(-abs(proj_spread_val)):+.1f}')
+    how_html = (f'{w_moji:.0%} MOJI ({moji_weighted:+.1f}) + {w_nrtg:.0%} NRtg ({w_nrtg * nrtg_diff:+.1f}) '
+                f'+ {recent_w:.0%} last 10 ({recent_w * recent_nrtg_diff:+.1f}) '
+                f'+ {w_syn:.0%} synergy ({syn_weighted:+.1f}) + home court and rest ({situational_pts:+.1f}) = sim {sim_fav} {(-abs(proj_spread_val)):+.1f}')
 
     tip_txt = _tip_et(m.get("tip_at"))
     ou_txt = f"O/U {total:.1f}" + (f" · sim {proj_total:.1f}" if proj_total else "")
@@ -5952,7 +5981,7 @@ def render_matchup_card(m, idx, team_map):
                          for u, n, t in books)
 
     return f"""
-    <div class="matchup-card gc" data-conf="{conf_10}" data-edge="{abs(spread_edge):.1f}" data-total="{total}" data-idx="{idx}">
+    <div class="matchup-card gc" data-game="{aa}@{ha}" data-conf="{conf_10}" data-edge="{abs(spread_edge):.1f}" data-total="{total}" data-idx="{idx}">
         <div class="mc-header gc-top">
             <span class="gc-when">{tip_txt} · {a_name} at {h_name}</span>
             <span class="gc-ou ma-premium tip" data-tip="{BOARD_TIPS['ou']}">{ou_txt}</span>
@@ -6460,6 +6489,10 @@ if __name__ == "__main__":
     with open(index_path, "w") as f:
         f.write(html)
 
+    with open(MEMBER_CARDS_PATH, "w") as f:
+        json.dump({"generated_at": datetime.now(timezone.utc).isoformat(), "cards": MEMBER_CARDS}, f)
+
     logger.info("Generated %s", output_path)
+    logger.info("Generated %s (%d member card(s))", MEMBER_CARDS_PATH, len(MEMBER_CARDS))
     logger.info("Generated %s", index_path)
     logger.info("Open in browser: file://%s", output_path)

@@ -57,7 +57,12 @@
                 const sort = btn.dataset.sort;
 
                 if (sort === 'value') {
-                    cards.sort((a, b) => parseFloat(b.dataset.edge) - parseFloat(a.dataset.edge));
+                    // tonight's picks lead (a sealed card shows no edge), highest grade first; then the rest by edge
+                    const pick = c => c.dataset.pick === '1' ? 1 : 0;
+                    cards.sort((a, b) => pick(b) - pick(a)
+                        || (pick(a) && parseInt(b.dataset.conf) - parseInt(a.dataset.conf))
+                        || parseFloat(b.dataset.edge) - parseFloat(a.dataset.edge)
+                        || parseInt(a.dataset.idx) - parseInt(b.dataset.idx));
                 } else {
                     cards.sort((a, b) => parseInt(a.dataset.idx) - parseInt(b.dataset.idx));
                 }

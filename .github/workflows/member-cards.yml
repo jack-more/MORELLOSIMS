@@ -1,0 +1,38 @@
+name: Members-only pick cards
+
+# Re-renders tonight's slate and puts the full cards of the picked games in
+# Firestore member_cards, the same step update-lines runs after the dashboard.
+# On demand only: it commits nothing, captures no pick and sends nothing.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: member-cards
+  cancel-in-progress: true
+
+jobs:
+  cards:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PICKS_SEAL_KEY: ${{ secrets.PICKS_SEAL_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r nba_pipeline/requirements.txt firebase-admin
+
+      - name: Render tonight's slate
+        working-directory: nba_pipeline
+        run: python generate_frontend.py
+
+      - name: Members-only cards of tonight's picks (Firestore member_cards)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: python3 scripts/publish_member_cards.py
