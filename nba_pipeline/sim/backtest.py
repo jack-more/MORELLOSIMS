@@ -111,7 +111,7 @@ from sim.players import (CURVE_DEFAULT, CURVE_HI, CURVE_LO, CURVE_SHRINK, K_BOX,
 SEASON, PRIOR = "2025-26", "2024-25"
 HCA = 1.68                  # engine.simulate default
 BASE_HCA = 1.7              # the baselines' home edge
-MARGIN_SD = 13.0            # sim/run.py's narrowing (not imported: run.py pulls in generate_frontend)
+MARGIN_SD = 15.0            # sim/run.py's narrowing (not imported: run.py pulls in generate_frontend)
 IMPACT_W = 0.5              # sim/run.py's --impact default, for the leaky run
 SKIP_DAYS = 10
 MIN_TEAM_GAMES = 3          # and each team needs this many games before D
