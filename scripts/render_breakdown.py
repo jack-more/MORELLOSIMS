@@ -29,6 +29,21 @@ SD = 13.0                      # NBA results scatter ~13 points around a good li
 MIN_COVER, MAX_GAP = 0.58, 6.0
 UNIT = 25.0                    # $PP per unit
 e = html.escape
+# ESPN's logo codes (the members page and pick notes use the same files)
+ESPN = {"GSW": "gs", "NOP": "no", "NYK": "ny", "SAS": "sa", "UTA": "utah", "WAS": "wsh"}
+
+
+def logo(abbr, cls="lg"):
+    return (f'<img class="{cls}" src="https://a.espncdn.com/i/teamlogos/nba/500/{ESPN.get(abbr, abbr.lower())}.png" '
+            f'alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">')
+
+
+def face(pid, cls="hs"):
+    """NBA.com headshot; hidden when the player has none."""
+    if not pid:
+        return ""
+    return (f'<img class="{cls}" src="https://cdn.nba.com/headshots/nba/latest/260x190/{int(pid)}.png" alt="" '
+            f'loading="lazy" onerror="this.style.visibility=\'hidden\'">')
 
 
 def phi(x):
@@ -160,11 +175,11 @@ def units_table(g, abbr):
     color = g["home_color"] if abbr == g["home"] else g["away_color"]
     per12 = g["pace"] / 100 / 4
     rows = "".join(
-        f'<tr><td class="five">{e(" · ".join(u["five"]))}'
+        f'<tr><td class="five"><span class="faces">{"".join(face(p, "hs xs") for p in u.get("pids", []))}</span>{e(" · ".join(u["five"]))}'
         + ('<span class="tag st">Starts</span>' if u["start"] else "") + ('<span class="tag cl">Closes</span>' if u["close"] else "")
         + f'</td><td>{u["min"]:.0f}</td><td class="{"pos" if u["net"] > 0 else "neg"}">{u["net"]:+.1f}</td>'
         f'<td>{u["net"] * per12:+.1f}</td><td>{u["chem"]:+.1f}</td></tr>' for u in units)
-    return (f'<div class="rot" style="--tc:{color}"><h4>{e(abbr)} <span>tonight’s units</span></h4><table class="units"><thead><tr>'
+    return (f'<div class="rot" style="--tc:{color}"><h4>{logo(abbr, "lg sm")}{e(abbr)} <span>tonight’s units</span></h4><table class="units"><thead><tr>'
             f'<th>Five</th><th title="Minutes the plan gives this five">Min</th><th title="Net per 100 possessions: impact + chemistry">Net/100</th>'
             f'<th title="The same, per 12 minutes together">Per 12</th><th title="Pairs plus the unit’s own record, per 100">Chem</th></tr></thead>'
             f'<tbody>{rows}</tbody></table></div>')
@@ -214,20 +229,20 @@ def rotation_table(g, abbr):
         if r["role"]:
             tags.append(f'<span class="tag role" title="Measured in games a regular teammate missed">'
                         f'role {r["role"]["usg"]:+.1f} usg</span>')
-        rows.append(f'<tr class="{"st" if r["starter"] else ""}"><td class="nm">{e(r["name"])}{"".join(tags)}'
-                    f'<small>{e(" · ".join(r["plays"]))}</small></td><td>{r["min"]:.0f}</td><td>{r["usg"]:.0f}%</td>'
+        rows.append(f'<tr class="{"st" if r["starter"] else ""}"><td class="nm">{face(r.get("pid"))}<div><span class="pn">{e(r["name"])}</span>{"".join(tags)}'
+                    f'<small>{e(" · ".join(r["plays"]))}</small></div></td><td>{r["min"]:.0f}</td><td>{r["usg"]:.0f}%</td>'
                     f'<td>{r["per_use"]:.2f}</td><td>{r["off"] + r["def"]:+.1f}</td></tr>')
     out = "".join(f'<span class="out">{e(n)}</span>' for n in t["out"]) or '<span class="none">Nobody out</span>'
     color = g["home_color"] if abbr == g["home"] else g["away_color"]
-    return (f'<div class="rot" style="--tc:{color}"><h4>{e(abbr)} <span>{e(g["home_name"] if abbr == g["home"] else g["away_name"])}</span></h4>'
+    return (f'<div class="rot" style="--tc:{color}"><h4>{logo(abbr, "lg sm")}{e(abbr)} <span>{e(g["home_name"] if abbr == g["home"] else g["away_name"])}</span></h4>'
             f'<table><thead><tr><th>Player</th><th title="Projected minutes">Min</th><th title="Share of possessions he ends">Usg</th>'
             f'<th title="Points per possession he ends">Pts/poss</th><th title="RAPM/LEBRON impact per 100">Impact</th></tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table><div class="outs"><b>Out</b>{out}</div></div>')
 
 
 def box_table(g, abbr):
-    rows = "".join(f'<tr><td>{e(p["name"])}</td><td>{p["min"]:.0f}</td><td><b>{p["pts"]:.1f}</b></td></tr>' for p in g["box"][abbr])
-    return f'<table class="box"><thead><tr><th>{e(abbr)}</th><th>Min</th><th>Pts</th></tr></thead><tbody>{rows}</tbody></table>'
+    rows = "".join(f'<tr><td class="nm">{face(p.get("pid"))}<div><span class="pn">{e(p["name"])}</span></div></td><td>{p["min"]:.0f}</td><td><b>{p["pts"]:.1f}</b></td></tr>' for p in g["box"][abbr])
+    return f'<table class="box"><thead><tr><th>{logo(abbr, "lg xs")}{e(abbr)}</th><th>Min</th><th>Pts</th></tr></thead><tbody>{rows}</tbody></table>'
 
 
 def reasons(g, d):
@@ -272,10 +287,10 @@ def card(g, d):
     return f"""
 <section class="game" id="{gid}" style="--ac:{g['away_color']};--hc:{g['home_color']}">
   <header class="gh">
-    <div class="tm"><b>{e(g['away'])}</b><span>{e(g['away_name'])}</span></div>
+    <div class="tm">{logo(g['away'])}<div><b>{e(g['away'])}</b><span>{e(g['away_name'])}</span></div></div>
     <div class="mid"><span class="k">{e(tip(g['game']))} · Sim line</span><strong>{e(d['sim_line'])}</strong>
       <span class="bk">Book {e(d['book'] or 'none yet')}</span></div>
-    <div class="tm r"><b>{e(g['home'])}</b><span>{e(g['home_name'])}</span></div>
+    <div class="tm r">{logo(g['home'])}<div><b>{e(g['home'])}</b><span>{e(g['home_name'])}</span></div></div>
   </header>
   <div class="verdict {call}"><span class="vk">{VERDICT[call]}</span><span>{verdict}</span></div>
   <ol class="steps">
@@ -308,13 +323,13 @@ def render(walk, date):
     decided.sort(key=lambda x: (order[x[1]["call"]], TIPS.get(x[0]["game"]) or ""))
     picks = [(g, d) for g, d in decided if d["call"] == "pick"]
     cards = "".join(card(g, d) for g, d in picks)
-    rest = "".join(f'<details><summary>{e(g["away"])} @ {e(g["home"])} · {e(tip(g["game"]))} · sim {e(d["sim_line"])}, book {e(d["book"] or "none")}'
+    rest = "".join(f'<details><summary>{logo(g["away"], "lg xs")}{e(g["away"])} @ {logo(g["home"], "lg xs")}{e(g["home"])} · {e(tip(g["game"]))} · sim {e(d["sim_line"])}, book {e(d["book"] or "none")}'
                    + (f' · best side {e(d["side"])} {fmt(d["line"])} {d["cover"]:.0%}' if d.get("side") else "")
                    + f'</summary>{card(g, d)}</details>' for g, d in decided if d["call"] != "pick")
     rows = []
     for g, d in sorted(decided, key=lambda x: TIPS.get(x[0]["game"]) or ""):
         call_txt = f"{d['side']} {fmt(d['line'])} · {d['units']:g}U" if d["call"] == "pick" else "—"
-        rows.append(f'<tr class="{d["call"]}"><td>{e(tip(g["game"]))}</td><td><a href="#{g["game"].replace("@", "-").lower()}">{e(g["away"])} @ {e(g["home"])}</a></td>'
+        rows.append(f'<tr class="{d["call"]}"><td>{e(tip(g["game"]))}</td><td><a href="#{g["game"].replace("@", "-").lower()}">{logo(g["away"], "lg xs")}{e(g["away"])} @ {logo(g["home"], "lg xs")}{e(g["home"])}</a></td>'
                     f'<td>{e(d["book"] or "—")}</td><td>{e(d["sim_line"])}</td><td>{d.get("gap", 0):.1f}</td>'
                     f'<td>{(str(round(d["cover"] * 100)) + "%") if d.get("cover") is not None else "—"}</td>'
                     f'<td class="c">{e(call_txt)}</td></tr>')
