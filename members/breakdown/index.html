@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breakdown · Morello Sims</title>
+<meta name="description" content="Members: every game on tonight's slate through the possession sim, step by step.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,300..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261021d">
+<link rel="stylesheet" href="/assets/brand/v2/breakdown.css?v=20261021a">
+<link rel="stylesheet" href="/morello-auth.css?v=20261020-members">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;background:#1FA255;color:#0B0F0D;font-family:var(--ms-font);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1}
+#ma-profile-btn,.ma-site-nav{display:none!important}
+.wrap{max-width:1080px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-right,0px)) 80px max(16px,env(safe-area-inset-left,0px))}
+.ptitle{margin:28px 0 14px;color:#fff}
+.ptitle h1{margin:0;font:900 clamp(40px,8vw,64px)/.95 var(--ms-font);font-stretch:78%;letter-spacing:-.01em}
+.ptitle p{margin:8px 0 0;font-size:15px;color:rgba(255,255,255,.9)}
+.card{background:#fff;border-radius:12px;padding:22px;box-shadow:0 14px 34px rgba(0,0,0,.14)}
+.card h2{margin:0;font:900 30px/1.1 var(--ms-font)}
+.card p{margin:10px 0 0;color:#4A544F;line-height:1.55}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.btn{display:inline-block;background:#1FA255;color:#fff;border:0;border-radius:3px;padding:12px 18px;font:600 15px var(--ms-font);text-decoration:none;cursor:pointer}
+.btn.ghost{background:none;color:#0B0F0D;border:1px solid #E1E8E3}
+.foot{margin-top:24px;font-size:12px;color:rgba(255,255,255,.85);line-height:1.6}
+.foot a{color:#fff}
+</style></head>
+<body>
+
+<div class="ms-head">
+<header class="ms-top"><div class="in">
+  <a href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
+  <nav aria-label="Main"><a class="opt" href="/">Home</a><a href="/ledger/nba/">Ledger</a><a class="on" href="/members/" aria-current="page">Members<span class="lg"> zone</span></a><a class="acct" href="#" id="ms-acct">Account</a></nav>
+</div></header>
+<div class="ms-zone"><div class="in"><span class="k">Members zone</span><nav aria-label="Members zone"><a href="/members/">Tonight’s picks</a><a class="on" href="/members/breakdown/" aria-current="page">Breakdown</a><a href="/members/dashboard/">Lineups + info</a></nav></div></div>
+</div>
+
+<div class="wrap">
+  <div class="ptitle"><h1>Breakdown</h1><p id="sub">How the sim got to every pick, step by step.</p></div>
+  <main id="main"><div class="card"><p>Loading…</p></div></main>
+  <p class="foot">Every pick is graded in public on the <a href="/ledger/nba/">ledger</a>. Simulations, not guarantees. 21+ · 1-800-GAMBLER.</p>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="/morello-auth.js?v=20261020-members"></script>
+<script>
+const main = document.getElementById("main");
+const etDate = (d = new Date()) => new Intl.DateTimeFormat("en-CA", {timeZone: "America/New_York"}).format(d);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+document.getElementById("ms-acct").addEventListener("click", e => { e.preventDefault(); if (window.morelloAuth) morelloAuth.openModal(morelloAuth.getCurrentUser() ? "profile" : "signin"); });
+
+function msg(title, body, buttons = "") {
+  main.innerHTML = `<div class="card"><h2>${title}</h2><p>${body}</p>${buttons ? `<div class="btns">${buttons}</div>` : ""}</div>`;
+}
+
+// mirror of hasActiveAccess in functions/index.js (Firestore rules enforce the same)
+function passActive(u) {
+  if (!u) return false;
+  if (u.tier === "admin") return true;
+  const exp = u.accessExpiresAt && u.accessExpiresAt.toMillis ? u.accessExpiresAt.toMillis() : 0;
+  if (exp > Date.now()) return true;
+  return u.checkoutMode === "subscription" && !!u.tier && u.tier !== "free";
+}
+
+// tonight's breakdown (scripts/publish_member_breakdown.py); before the afternoon run, last night's
+async function show() {
+  const db = firebase.firestore();
+  for (const day of [etDate(), etDate(new Date(Date.now() - 864e5))]) {
+    const snap = await db.collection("member_breakdowns").doc(day).get();
+    if (snap.exists) {
+      const b = snap.data();
+      document.getElementById("sub").textContent = day === etDate()
+        ? "Tonight's slate, every game, through the possession sim."
+        : "Last night's slate. Tonight's breakdown posts with the afternoon run.";
+      main.innerHTML = b.html;
+      if (location.hash) { const el = document.getElementById(location.hash.slice(1)); if (el) el.scrollIntoView(); }
+      return;
+    }
+  }
+  msg("No breakdown yet.", "The breakdown posts with the afternoon run, when the night's lines and lineups are in.");
+}
+
+async function onUser(user) {
+  if (!user) {
+    return msg("Sign in to see the breakdown.", "Members see how the sim got to every pick: the lineups, each layer's pull and 5,000 games.",
+      `<button class="btn" onclick="morelloAuth.openModal('signin')">Sign in</button><a class="btn ghost" href="/#plans">Get a pass</a>`);
+  }
+  const u = await firebase.firestore().collection("users").doc(user.uid).get().then(s => s.exists ? s.data() : null, () => null);
+  try {
+    if (passActive(u) || await firebase.firestore().collection("member_picks").limit(1).get().then(() => true, () => false)) return await show();
+  } catch (err) {
+    return msg("The breakdown didn't load.", `Refresh to try again (${esc(err.code || "error")}).`, `<button class="btn" onclick="location.reload()">Refresh</button>`);
+  }
+  msg("No active pass on this account.", `Signed in as ${esc(user.email)}. A pass unlocks every pick and its breakdown.`,
+    `<a class="btn" href="/#plans">Get tonight's picks</a><button class="btn ghost" onclick="morelloAuth.handleSignout()">Sign out</button>`);
+}
+
+(function wait(n) {
+  if (typeof firebase !== "undefined" && firebase.apps && firebase.apps.length) return firebase.auth().onAuthStateChanged(onUser);
+  if (n > 100) return msg("The page didn't load.", "Refresh to try again.");
+  setTimeout(() => wait(n + 1), 100);
+})(0);
+</script>
+</body></html>

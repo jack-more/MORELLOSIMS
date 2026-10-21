@@ -244,6 +244,16 @@ jobs:
           pip install -q firebase-admin || true
           python3 scripts/publish_member_cards.py
 
+      # every game through the possession sim, step by step, for /members/breakdown/; never fails the run
+      - name: Members breakdown (possession sim, Firestore member_breakdowns)
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: |
+          (cd nba_pipeline && python -m sim.explain --slate --out "$RUNNER_TEMP/walk.json")
+          python3 scripts/publish_member_breakdown.py "$RUNNER_TEMP/walk.json"
+
 
       - name: Commit and push
         run: |
@@ -369,6 +379,16 @@ jobs:
         run: |
           pip install -q firebase-admin || true
           python3 scripts/publish_member_cards.py
+
+      # every game through the possession sim, step by step, for /members/breakdown/; never fails the run
+      - name: Members breakdown (possession sim, Firestore member_breakdowns)
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: |
+          (cd nba_pipeline && python -m sim.explain --slate --out "$RUNNER_TEMP/walk.json")
+          python3 scripts/publish_member_breakdown.py "$RUNNER_TEMP/walk.json"
 
 
       - name: Commit and push

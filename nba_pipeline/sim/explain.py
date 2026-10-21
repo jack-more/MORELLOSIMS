@@ -1,6 +1,7 @@
 """Everything the sim did for a game, step by step, as JSON (for the walkthrough page).
 
   cd nba_pipeline && python3 -m sim.explain --games MIN@MIA,UTA@MEM --out walk.json
+  cd nba_pipeline && python3 -m sim.explain --slate --out walk.json
 
 Per game: the rotations it played (minutes, usage, efficiency, play types,
 shooting gravity, impact, role WOWY changes, who is out), the possession
@@ -102,7 +103,8 @@ def explain(home, away, lineups, lines, lg, con, scale, sims):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--games", required=True, help="AWY@HOM,AWY@HOM")
+    ap.add_argument("--games", help="AWY@HOM,AWY@HOM")
+    ap.add_argument("--slate", action="store_true", help="every game on tonight's slate")
     ap.add_argument("--sims", type=int, default=5000)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -110,7 +112,7 @@ def main():
     lg = players.league(con)
     scale = run.calibrate(lg, con)
     lineups, lines, pairs, _d, times = gf.scrape_rotowire()
-    want = [g.split("@") for g in args.games.split(",")]
+    want = [[a, h] for h, a in pairs] if args.slate else [g.split("@") for g in (args.games or "").split(",") if g]
     out = []
     for away, home in want:
         if (home, away) not in set(pairs):
