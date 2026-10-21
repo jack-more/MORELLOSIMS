@@ -14,8 +14,13 @@ sample size, so twelve possessions of a play type can't make a player elite.
   shooting      3PA share of his shots
   rebounding    his share of his team's OREB / DREB chances on the floor
   impact        steadied offense / defense impact: RAPM and LEBRON splits
+  load          his usage-efficiency curve and his usage share at full strength
+  gravity       what his shooting does to spacing (sim/context.py)
+  pairs         WOWY synergy with each teammate, archetype fit when they never played
+  scheme        the team's PPP allowed per play type (its defensive scheme)
 """
 
+import itertools
 import os
 import sqlite3
 import sys
@@ -24,6 +29,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CURRENT_SEASON, DB_PATH, previous_season  # noqa: E402
+from sim import context  # noqa: E402
 
 # Synergy offensive play types; the order is the column order everywhere
 TYPES = ["PRBallHandler", "Isolation", "Spotup", "Transition", "Cut", "PRRollMan",
@@ -49,6 +55,9 @@ MAX_MIN = 38.0
 # >1: the floor five defers to its high-usage players. 1.5 fits real scoring across usage tiers
 # (sim.validate, 274 players: 1.0 left the 30%+ usage stars 4.3 pts/36 short, 1.6 is flat, 2.2 overshoots)
 USG_POWER = float(os.environ.get("SIM_USG_POWER", "1.5"))
+# usage curves are game-level slopes, noisy: half of each, held inside these bounds
+# (TS points per usage point; the old model's default for a player without one was -0.5)
+CURVE_SHRINK, CURVE_LO, CURVE_HI, CURVE_DEFAULT = 0.5, -1.25, 0.25, -0.5
 
 
 def _db():
@@ -74,8 +83,13 @@ def league(con=None):
     ortg, pace = con.execute(
         "SELECT AVG(off_rating), AVG(pace) FROM team_season_stats WHERE season_id=?",
         (previous_season(CURRENT_SEASON),)).fetchone()
+    g = [(context.gravity(f3, a36), m) for f3, a36, m in con.execute(
+        "SELECT fg3_pct, fg3a_per36, minutes_total FROM player_season_stats "
+        "WHERE season_id=? AND gp >= 20", (previous_season(CURRENT_SEASON),))]
+    spacing = 5 * sum(x * m for x, m in g) / sum(m for _, m in g)      # an average five's gravity
     return {"off_ppp": off, "def_ppp": dfn, "fg3_share": r[0], "tov": r[1], "oreb": r[2],
-            "dreb": r[3], "pts_per_use": r[4], "ortg": ortg, "pace": pace}
+            "dreb": r[3], "pts_per_use": r[4], "ortg": ortg, "pace": pace, "spacing": spacing,
+            "team_def": context.league_team_defense(con, previous_season(CURRENT_SEASON))}
 
 
 def _shrink(x, n, prior, k):
@@ -138,7 +152,7 @@ def rotation(roster, out_ids, starters=()):
     return mins
 
 
-def team_inputs(roster, out_ids, starters=(), lg=None, con=None):
+def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
     """Arrays the engine runs on, one row per rotation player."""
     con = con or _db()
     lg = lg or league(con)
@@ -190,4 +204,33 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None):
             if t not in DEF_OF:
                 out["dppp"][i, j], out["dwt"][i, j] = avg, 1.0
     out["uw"] = out["usg"] ** USG_POWER
+
+    # load: his share of the floor's possessions at full strength, against which
+    # tonight's share (a star out, a low-usage five) moves his efficiency along his curve
+    full = rotation(roster, set(), ())
+    full_uw = {p: (usg.get(p) or 0.2) ** USG_POWER for p in full}
+    floor_uw = sum(full_uw[p] * m / 48.0 for p, m in full.items())
+    curves = context.load_curves(con)
+    out["s_norm"] = out["uw"] / floor_uw
+    out["slope"] = np.array([min(CURVE_HI, max(CURVE_LO, CURVE_SHRINK * curves.get(p, CURVE_DEFAULT)))
+                             for p in pids])
+    # gravity
+    shoot = {int(p): (f, a) for p, f, a in con.execute(
+        f"SELECT player_id, fg3_pct, fg3a_per36 FROM player_season_stats WHERE season_id=? "
+        f"AND player_id IN ({','.join('?' * n)})", (CURRENT_SEASON, *pids))}
+    out["g"] = np.array([context.gravity(*shoot.get(p, (0, 0))) for p in pids])
+    # pairs: WOWY synergy, archetype fit for teammates without a shared history
+    syn, prior, arch, _ = context.pairs(con)
+    V = np.zeros((n, n))
+    for a, b in itertools.combinations(range(n), 2):
+        k = (min(pids[a], pids[b]), max(pids[a], pids[b]))
+        v = syn.get(k)
+        if v is None:
+            v = prior.get(tuple(sorted((arch.get(pids[a], ""), arch.get(pids[b], "")))), 0.0)
+        V[a, b] = V[b, a] = v
+    out["V"] = V
+    # scheme: what this team allows per play type
+    tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone() if abbr else None
+    tdef = context.team_defense(con, tid[0], lg["team_def"]) if tid else {}
+    out["tdef"] = np.array([tdef.get(t, 1.0) for t in TYPES])
     return out

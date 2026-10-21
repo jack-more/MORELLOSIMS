@@ -24,7 +24,7 @@ def main(sims=1500):
         roster = gf._get_full_roster(abbr)
         if roster.empty:
             continue
-        o = players.team_inputs(roster, set(), (), lg, con)
+        o = players.team_inputs(roster, set(), (), lg, con, abbr=abbr)
         res = engine.simulate(o, avg, lg, sims=sims, hca=0.0)
         team_ortg.append((abbr, res["home_pts"].mean() / lg["pace"] * 100))
         for i, pid in enumerate(o["pids"]):
