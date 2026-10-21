@@ -166,7 +166,7 @@ def sync_feeds(dry=False):
     d = tg_members.db()
     if d is None:
         return (0, 0)
-    from firebase_admin import firestore
+    from firebase_admin import auth, firestore
     since = (datetime.now(ET) - timedelta(days=FEED_DAYS - 1)).strftime("%Y-%m-%d")
     feed = [s.to_dict() for s in d.collection("member_picks").where("date", ">=", since).stream()]
     feed.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("logged_at") or "")))
@@ -176,10 +176,15 @@ def sync_feeds(dry=False):
         if uid is not None:
             uids.add(uid)
             continue
-        # whitelisted: find the account by the email onUserCreate stored
-        # (no match means the address never signed up)
+        # whitelisted: Firebase Auth knows the account; without an Auth role,
+        # fall back to the email onUserCreate stored on the users doc
         listed += 1
-        hits = [s.id for s in d.collection("users").where("email", "in", list({addr, addr.lower()})).stream()]
+        try:
+            hits = [auth.get_user_by_email(addr).uid]
+        except auth.UserNotFoundError:
+            hits = []                                     # never signed up
+        except auth.InsufficientPermissionError:
+            hits = [s.id for s in d.collection("users").where("email", "in", list({addr, addr.lower()})).stream()]
         found += bool(hits)
         uids.update(hits)
     print(f"  members: page feed has {len(feed)} pick(s) for {len(uids)} account(s); "
