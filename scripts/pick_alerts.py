@@ -200,6 +200,15 @@ def run(dry=False):
                     st["x_sealed"].append(ref)
             except Exception as e:
                 print(f"  WARN sealed X post {pid}: {e}")
+    # members whose rules can't read member_picks get the picks on their own doc
+    if member_delivery.enabled():
+        try:
+            fed, cleared = member_delivery.sync_feeds(dry=dry)
+            if fed or cleared:
+                print(f"  members: page feed updated for {fed}, cleared for {cleared}")
+        except Exception as e:
+            print(f"  WARN member feeds: {type(e).__name__}: "
+                  f"{getattr(e, 'message', '') or str(e).splitlines()[0][:160]}")
     for k in st:
         st[k] = st[k][-600:]
     if not dry:

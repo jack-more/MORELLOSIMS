@@ -12037,7 +12037,9 @@ document.querySelectorAll(".sealed-card .mc-center").forEach(function (c) {
         document.getElementById("ms-acct").textContent = user ? "Account" : "Sign in";
         if (!user) { gate.hidden = false; return; }
         firebase.firestore().collection("users").doc(user.uid).get().then(function (s) {
-          if (active(s.exists ? s.data() : null)) return true;
+          var u = s.exists ? s.data() : null;
+          // member_feed: the pick bot's copy of tonight's picks, written only for members
+          if (active(u) || (u && Array.isArray(u.member_feed))) return true;
           // whitelisted (friends & family): the member_picks rule decides
           return firebase.firestore().collection("member_picks").limit(1).get().then(function () { return true; });
         }).then(function (ok) { gate.hidden = ok; }).catch(function () { gate.hidden = false; });

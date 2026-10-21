@@ -196,28 +196,47 @@ function card(p) {
   </article>`;
 }
 
+// the pick bot also copies the picks onto each member's own users doc, which
+// every Firestore ruleset lets its owner read (scripts/member_delivery.py sync_feeds)
+const hasFeed = u => !!u && Array.isArray(u.member_feed);
+
 function showPicks(user, u) {
-  const today = etDate(), yday = etDate(new Date(Date.now() - 864e5));
+  const yday = etDate(new Date(Date.now() - 864e5));
   $("sub").textContent = passLine(u) + " New picks appear here and in your inbox.";
   if (unsub) unsub();
-  unsub = firebase.firestore().collection("member_picks").where("date", ">=", yday).onSnapshot(snap => {
-    const picks = snap.docs.map(d => d.data()).sort((a, b) => (b.date || "").localeCompare(a.date || "")
-      || ((b.logged_at?.toMillis?.() || 0) - (a.logged_at?.toMillis?.() || 0)));
-    const tonight = picks.filter(p => p.date === today), earlier = picks.filter(p => p.date !== today);
-    let html = `<div class="label day">Tonight · ${new Date().toLocaleDateString("en-US", {timeZone: "America/New_York", weekday: "long", month: "short", day: "numeric"})}</div>`;
-    html += tonight.length ? notes(tonight) : `<div class="card msg"><h2>No pick yet tonight.</h2>
-      <p>The sim logs a pick when it finds an edge against the line, usually by early afternoon ET. It shows up here
-      the second it's logged, and we email you. Some nights the sim passes.</p></div>`;
-    html += `<div class="card msg"><div class="label">Members dashboard</div><h2 style="margin-top:8px">Every game, the court sim, player MOJO and trends.</h2>
-      <div class="btns"><a class="btn" href="/members/dashboard/">Open the dashboard</a></div></div>`;
-    if (earlier.length) html += `<div class="label day">Last night</div>` + notes(earlier);
-    main.innerHTML = html + foot;
-    fitNotes();
+  unsub = firebase.firestore().collection("member_picks").where("date", ">=", yday)
+    .onSnapshot(snap => renderPicks(snap.docs.map(d => d.data())), () => showFeed(user));
+}
+
+// member_picks refused: read the copy on the member's own doc instead
+function showFeed(user) {
+  if (unsub) unsub();
+  unsub = firebase.firestore().collection("users").doc(user.uid).onSnapshot(snap => {
+    const u = snap.exists ? snap.data() : null;
+    if (hasFeed(u)) return renderPicks(u.member_feed);
+    msg("Your picks are on their way.", "Your pass is active. Tonight's picks reach this page within 15 minutes of your purchase, and they're in your inbox too.",
+      `<button class="btn" onclick="location.reload()">Refresh</button>`);
   }, err => {
     msg("Your picks didn't load.", `Your account shows a pass, but the members list wouldn't open (${esc(err.code || "error")}).
       Sign out and back in; if it persists, reply to any pick email and we'll fix it.`,
       `<button class="btn ghost" onclick="morelloAuth.handleSignout()">Sign out</button>`);
   });
+}
+
+function renderPicks(list) {
+  const today = etDate(), yday = etDate(new Date(Date.now() - 864e5));
+  const picks = list.filter(p => (p.date || "") >= yday).sort((a, b) => (b.date || "").localeCompare(a.date || "")
+    || ((b.logged_at?.toMillis?.() || 0) - (a.logged_at?.toMillis?.() || 0)));
+  const tonight = picks.filter(p => p.date === today), earlier = picks.filter(p => p.date !== today);
+  let html = `<div class="label day">Tonight · ${new Date().toLocaleDateString("en-US", {timeZone: "America/New_York", weekday: "long", month: "short", day: "numeric"})}</div>`;
+  html += tonight.length ? notes(tonight) : `<div class="card msg"><h2>No pick yet tonight.</h2>
+    <p>The sim logs a pick when it finds an edge against the line, usually by early afternoon ET. It shows up here
+    the second it's logged, and we email you. Some nights the sim passes.</p></div>`;
+  html += `<div class="card msg"><div class="label">Members dashboard</div><h2 style="margin-top:8px">Every game, the court sim, player MOJO and trends.</h2>
+    <div class="btns"><a class="btn" href="/members/dashboard/">Open the dashboard</a></div></div>`;
+  if (earlier.length) html += `<div class="label day">Last night</div>` + notes(earlier);
+  main.innerHTML = html + foot;
+  fitNotes();
 }
 
 async function readUser(uid) {
@@ -239,7 +258,7 @@ async function onUser(user) {
     u = await readUser(user.uid).catch(() => u);
   }
   if (PAID) { try { history.replaceState(null, "", location.pathname); } catch (_) {} }
-  if (passActive(u) || await rulesAllow()) return showPicks(user, u);
+  if (passActive(u) || hasFeed(u) || await rulesAllow()) return showPicks(user, u);
   if (PAID) {
     return msg("Your payment is still confirming.", "Stripe hasn't confirmed it yet. Refresh in a minute. Please don't buy again.",
       `<button class="btn" onclick="location.reload()">Refresh</button>`);
