@@ -33,6 +33,10 @@ PICKS_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "picks.csv")
 DAILY_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "daily_picks.json")
 PICK_LOG = os.path.join(os.path.dirname(__file__), "..", "data", "pick_log.json")
 MIN_TRACKED_CONF_GRADE = 6   # owner 2026-10-20: C6/C7 are logged at small stakes (risk_amount)
+# While this file exists no new pick is logged (or sealed); logged picks stand.
+# 2026-10-21: lineup MOJI weights each player by last season's minutes on his
+# old team, so rebuilt rosters were mispriced. Delete the file to resume.
+HOLD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "ops", "HOLD_PICK_CAPTURE")
 
 
 def conf_to_1_10(confidence):
@@ -68,6 +72,8 @@ def skip_reason(g, threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, now=None
     mode, generate_frontend.py uses it to seal the same games before capture
     runs. Returns "" for silent skips (no line / neutral zone).
     """
+    if os.path.exists(HOLD):
+        return f"SKIP (capture on hold: ops/HOLD_PICK_CAPTURE): {g['matchup']}"
     if g["book_spread"] is None:
         return ""  # no real sportsbook line
     # Only regular season / postseason / play-in games are ever tracked.
