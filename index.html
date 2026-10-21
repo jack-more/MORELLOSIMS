@@ -169,6 +169,17 @@ section.pad{padding:96px 0}
 .plans>.in{position:relative}
 .plans .sec-head p{color:rgba(255,255,255,.88)}
 .notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:stretch}
+#plan-notes{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(min-width:1181px){                 /* four across: a tighter note */
+  #plan-notes .plan{padding:28px 70px 28px 26px}
+  #plan-notes .plan .pf{right:20px;width:30px}
+  #plan-notes .plan .ps{right:56px}
+  #plan-notes .price{font-size:54px}
+  #plan-notes .price small{display:block;margin:8px 0 0}
+  #plan-notes .email{flex-direction:column}
+  #plan-notes .btn{padding:0 12px;font-size:15px;white-space:nowrap}
+}
+@media(max-width:1180px){#plan-notes{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .plan{position:relative;overflow:hidden;display:flex;flex-direction:column;color:var(--ink);border-radius:16px;padding:30px 84px 30px 30px;box-shadow:0 22px 50px rgba(0,0,0,.2);
   --nt:#1FA255;background:linear-gradient(165deg,#F4FBF6 0%,#D6F2E0 55%,#A9E2C1 100%)}
 .plan.blue{--nt:#1F78D1;background:linear-gradient(165deg,#F3F8FF 0%,#D2E5FA 55%,#A3C9F2 100%)}
@@ -243,7 +254,7 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
   .strip{grid-template-columns:repeat(2,minmax(0,1fr))}
   .strip>div:nth-child(3){border-left:0}
   .strip>div:nth-child(n+3){border-top:1px solid var(--line)}
-  .points,.notes{grid-template-columns:1fr}
+  .points,.notes,#plan-notes{grid-template-columns:1fr}
   .months{grid-template-columns:repeat(3,minmax(0,1fr))}
   .how ol{grid-template-columns:repeat(2,minmax(0,1fr))}
   .faq .in{grid-template-columns:1fr}
@@ -369,7 +380,7 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
 <section class="pad plans" id="plans" aria-labelledby="plans-h">
   <div class="mz" aria-hidden="true"><i class="mz-lines"></i><i class="mz-lat"></i><i class="mz-ros r"></i></div>
   <div class="in">
-    <div class="sec-head"><h2 id="plans-h">Pick how much you want.</h2><p>Every plan gets the same picks. The difference is how many.</p></div>
+    <div class="sec-head"><h2 id="plans-h">Pick how much you want.</h2><p>Every paid plan gets every pick. The difference is how long you’re in.</p></div>
     <div class="member" id="member" hidden>
       <h3 id="member-h">Your pass is active.</h3>
       <p id="member-p">Every pick shows up on your members page the moment it’s logged, and lands in your inbox.</p>
@@ -389,6 +400,12 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
         <h3>Tonight</h3><div class="price">$19.99<small>24 hours</small></div>
         <p class="what">Every pick on tonight’s board the moment it’s logged, on your members page and in your inbox.</p>
         <button class="btn" data-plan="tonight">Get tonight’s picks</button>
+      </div>
+      <div class="plan blue">
+        <i class="pf" aria-hidden="true"></i><span class="ps" aria-hidden="true">MS 6999 0007 W</span>
+        <h3>The week</h3><div class="price">$69.99<small>7 days</small></div>
+        <p class="what">Every pick, every night, for 7 days. About $10 a night.</p>
+        <button class="btn" data-plan="week">Get the week</button>
       </div>
       <div class="plan best">
         <i class="pf" aria-hidden="true"></i><span class="ps" aria-hidden="true">MS 19999 0030 M</span>
@@ -420,7 +437,7 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
       <details><summary>Do you win every night?</summary><p>No. Last season had <span class="q-up">45</span> winning nights and <span class="q-down">37</span> losing ones. Every one of them is on the ledger.</p></details>
       <details><summary>What’s a unit?</summary><p>One fixed bet size you choose. Each pick says how many units it’s worth, based on how big the edge is.</p></details>
       <details><summary>How do I get the picks?</summary><p>Buy a pass and sign in. Every pick shows up on your <a href="/members/">members page</a> the moment it’s logged, and lands in your inbox.</p></details>
-      <details><summary>Does it renew?</summary><p>No. Tonight is one payment for 24 hours of access. All month is one payment for 30 days. Nothing charges you again.</p></details>
+      <details><summary>Does it renew?</summary><p>No. Tonight is one payment for 24 hours of access, the week is one payment for 7 days, and all month is one payment for 30 days. Nothing charges you again.</p></details>
       <details><summary>Is this a guarantee?</summary><p>No. These are simulations, not guarantees. You must be 21+. Bet only what you can afford to lose. Help is free at 1-800-GAMBLER.</p></details>
     </div>
   </div>
@@ -465,6 +482,8 @@ document.querySelectorAll(".pn-fit").forEach(f => {
 const PLANS = {
   tonight: {product: "pickmaker_dual", title: "Tonight · $19.99", buy: "Pay $19.99",
             list: ["Every pick on tonight’s board", "On your members page and in your inbox", "The line and the sim’s number for each", "24 hours of access"]},
+  week:    {product: "weekly_board", title: "The week · $69.99", buy: "Pay $69.99",
+            list: ["Every pick, every night, for 7 days", "On your members page and in your inbox", "The line and the sim’s number for each"]},
   month:   {product: "monthly_board", title: "All month · $199.99", buy: "Pay $199.99",
             list: ["Every pick, every night, for 30 days", "On your members page and in your inbox", "The line and the sim’s number for each"]},
 };
