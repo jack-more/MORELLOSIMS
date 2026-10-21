@@ -36,11 +36,18 @@ jobs:
           fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           trap 'rm -f "$RUNNER_TEMP/sa.json"' EXIT
-          if ! GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
-               npx --yes firebase-tools@13 deploy --only firestore:rules --project morello-sims --non-interactive; then
-            echo "::error::The service account can't publish Firestore rules. Grant it the Firebase Rules Admin role in Google Cloud IAM and re-run, or paste firestore.rules into the Firebase console (Firestore > Rules > Publish)."
-            exit 1
-          fi
+          # the account's address only (an identifier, never the key), so the IAM grant names the right one
+          who=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('client_email', '?'))" "$RUNNER_TEMP/sa.json")
+          echo "deploying as $who"
+          for try in 1 2 3 4; do                  # a new IAM grant can take a few minutes to reach the rules API
+            if GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
+                 npx --yes firebase-tools@13 deploy --only firestore:rules --project morello-sims --non-interactive; then
+              exit 0
+            fi
+            [ "$try" -lt 4 ] && { echo "attempt $try refused; retrying in 60s"; sleep 60; }
+          done
+          echo "::error::$who can't publish Firestore rules. Grant that account the Firebase Rules Admin role in Google Cloud IAM and re-run, or paste firestore.rules into the Firebase console (Firestore > Rules > Publish)."
+          exit 1
 
       # An unauthenticated read of a missing tail_counts doc: 404 under the
       # repo rules (public read), 403 under the old ones
