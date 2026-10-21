@@ -23,7 +23,7 @@ from sim.run import MARGIN_SD, gf  # noqa: E402
 LABEL = {"PRBallHandler": "P&R handler", "Isolation": "Isolation", "Spotup": "Spot-up", "Transition": "Transition",
          "Cut": "Cut", "PRRollMan": "Roll man", "Postup": "Post-up", "Handoff": "Handoff", "OffScreen": "Off screen",
          "OffRebound": "Putback", "Misc": "Other"}
-LAYER_NAME = {"load": "Usage load", "spacing": "Spacing", "pairs": "Chemistry", "scheme": "Scheme vs play type",
+LAYER_NAME = {"lineups": "Lineup plan", "load": "Usage load", "spacing": "Spacing", "pairs": "Chemistry", "scheme": "Scheme vs play type",
               "fatigue": "Fatigue"}
 
 
@@ -44,7 +44,14 @@ def _team_detail(t, roster, info):
                      "off": round(float(t["off"][i]), 1), "def": round(float(t["def"][i]), 1),
                      "role": ({"usg": round(role[0] * 100, 1), "eff": round(role[1], 2)} if role else None)})
     rows.sort(key=lambda r: (not r["starter"], -r["min"]))
-    return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids)}
+    units = []
+    if t.get("plan"):
+        last = lambda i: t["names"][i].split()[-1] if t["names"][i].split()[-1] not in ("Jr.", "II", "III") else t["names"][i].split()[-2]
+        for five, mins, net, imp, chem in t["plan"]["units"][:6]:
+            units.append({"five": [last(i) for i in five], "min": round(mins, 1), "net": round(net, 1),
+                          "impact": round(imp, 1), "chem": round(chem, 1),
+                          "start": five == t["plan"]["start"], "close": five == t["plan"]["close"]})
+    return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids), "units": units}
 
 
 def _narrow(raw):

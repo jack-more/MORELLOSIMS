@@ -26,6 +26,7 @@ import itertools
 
 import numpy as np
 
+from sim import lineups
 from sim.context import SYN_SHARE
 from sim.players import TYPES
 
@@ -46,7 +47,7 @@ LOAD_LO, LOAD_HI = 0.88, 1.05
 FATIGUE_FROM, FATIGUE_PER_MIN, B2B_FATIGUE_FROM = 34.0, 0.01, 32.0
 # back-to-back: points per game, measured (generate_frontend._MOJI_CONSTANTS, nba_sim.db OLS)
 B2B_HOME, B2B_ROAD = 2.0, 2.5
-LAYERS = ("load", "spacing", "pairs", "scheme", "fatigue")   # simulate(off=...) switches any of them off
+LAYERS = ("lineups", "load", "spacing", "pairs", "scheme", "fatigue")   # simulate(off=...) switches any of them off
 
 
 def _lineups(rng, minutes, S, iters=4):
@@ -131,7 +132,12 @@ def simulate(home, away, lg, sims=5000, seed=7, pace=None, hca=1.68, impact_w=0.
     pace = pace or lg["pace"]
     ppg = pace * lg["ortg"] / 100
     poss = np.maximum(80, np.rint(rng.normal(pace, 3.0, S))).astype(int)
-    lh, la = _lineups(rng, home["min"], S), _lineups(rng, away["min"], S)
+    # the lineup plan (sim/lineups.py): the coach's units; off, fives are drawn at random by minutes
+    def fives(team):
+        if team.get("plan") and "lineups" not in off:
+            return lineups.draw(rng, team["plan"], S, SEGMENTS)
+        return _lineups(rng, team["min"], S)
+    lh, la = fives(home), fives(away)
     sp_h, syn_h = _floor(home, lh, lg)
     sp_a, syn_a = _floor(away, la, lg)
     if "spacing" in off:

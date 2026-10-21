@@ -29,7 +29,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CURRENT_SEASON, DB_PATH, previous_season  # noqa: E402
-from sim import context  # noqa: E402
+from sim import context, lineups  # noqa: E402
 
 # Synergy offensive play types; the order is the column order everywhere
 TYPES = ["PRBallHandler", "Isolation", "Spotup", "Transition", "Cut", "PRRollMan",
@@ -261,6 +261,12 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
         if all(p in idx for p in ps):
             U[sum(1 << idx[p] for p in ps)] = v
     out["U"] = U
+    # positions and tonight's starters, for the lineup plan (sim/lineups.py)
+    grp = {int(p): (g if isinstance(g, str) and g else "") for p, g in zip(roster.player_id, roster.position_group)}
+    listed = {int(p): (x if isinstance(x, str) else "") for p, x in zip(roster.player_id, roster.listed_position)}
+    out["pos"] = [grp.get(p) or {"G": "SG", "F": "SF", "C": "C"}.get((listed.get(p) or "F")[:1], "SF") for p in pids]
+    out["starters"] = [i for i, p in enumerate(pids) if p in set(starters)]
+    out["plan"] = lineups.plan(out)
     # scheme: what this team allows per play type
     tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone() if abbr else None
     tdef = context.team_defense(con, tid[0], lg["team_def"]) if tid else {}
