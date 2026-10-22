@@ -98,9 +98,10 @@ CARD_OPENS = (7, 30)   # ET, game day
 
 
 def card_open(g, now=None):
-    """True once it is CARD_OPENS ET on the game's day (games without a tip time: always)."""
+    """True once it is CARD_OPENS ET on the game's day (games without a tip time: always).
+    CAPTURE_NOW=true (nba-pipeline dispatch input capture_now) opens it early."""
     tip = parse_ts(g.get("tip_at"))
-    if tip is None:
+    if tip is None or os.environ.get("CAPTURE_NOW") == "true":
         return True
     from zoneinfo import ZoneInfo
     et = ZoneInfo("America/New_York")

@@ -44,6 +44,12 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      capture_now:
+        description: 'Log picks now, before the 7:30 AM ET game-day card opens (owner call)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
       inject_pick:
         description: 'Manual pick injection — e.g. "BOS @ CLE" "BOS -0.5" --risk 50'
         required: false
@@ -212,6 +218,8 @@ jobs:
 
       - name: Capture picks
         working-directory: nba_pipeline
+        env:
+          CAPTURE_NOW: ${{ inputs.capture_now }}
         run: python scripts/capture_picks.py
 
       - name: Inject manual pick (workflow_dispatch only)
