@@ -43,6 +43,10 @@ LEGACY = os.path.join(REPO, "mlbsim", "posted_cards.json")
 OUT = os.path.join(REPO, "posters", "v2")
 ET = timezone(timedelta(hours=-4))
 MIN_CONF = 6   # same floor as capture_picks.MIN_TRACKED_CONF_GRADE
+# The owner is the guard (2026-10-22): from this date a pick reaches members (page,
+# email, premium channel) only after Jack taps Send on its DM. One he holds, or never
+# sends before tip, is voided at grading (nba_pipeline/scripts/grade_picks.release_check).
+GATE_FROM = "2026-10-23"
 UNLOCK_WORD = {"nba": "tip", "nfl": "kickoff"}
 PREMIUM = os.environ.get("TELEGRAM_PREMIUM_CHANNEL_ID", "").strip()
 
@@ -91,12 +95,66 @@ def card_path(p, sealed=False):
     return path
 
 
+def gap(p):
+    """Points between the sim's number and the book's for the picked side, or None.
+    CLE +3.5 with the sim at CLE -3.5 is 7 apart."""
+    sim, line = (p.get("sim_projection") or "").split(), p.get("line")
+    if len(sim) != 2 or line is None:
+        return None
+    try:
+        mine = 0.0 if sim[1] == "PK" else float(sim[1])
+        return abs(float(line) - mine) if sim[0] == str(p.get("pick_text", "")).split()[0] else abs(float(line) + mine)
+    except ValueError:
+        return None
+
+
+def gated(p):
+    return p.get("sport") == "nba" and (p.get("date") or "") >= GATE_FROM
+
+
+def released(st, p):
+    """Members may have this pick: Jack tapped Send (or it predates the gate)."""
+    return not gated(p) or any(picks_store.ref_matches(e.split("|", 1)[0], p["id"]) for e in st.get("approved", []))
+
+
 def dm_text(p):
     sim = p.get("sim_projection") or ""
-    return (f"🚨 NEW {p['sport'].upper()} PICK · C{p.get('conf')}\n"
+    g = gap(p)
+    head = (f"🚨 NEW {p['sport'].upper()} PICK · C{p.get('conf')}\n"
             f"{p['pick_text']} {odds_str(p)} · {p.get('matchup')} · {p.get('game_time') or ''}\n"
-            f"Risk {p.get('units')} $PP ({float(p.get('units') or 0) / 25:g}u)" + (f" · Sim {sim}" if sim else "") + "\n"
-            f"X gets the sealed card. Tap below to post it unblurred.")
+            f"Risk {p.get('units')} $PP ({float(p.get('units') or 0) / 25:g}u)" + (f" · Sim {sim}" if sim else "")
+            + (f" · {g:.1f} pts off the book" if g is not None else "") + "\n")
+    if gated(p):
+        return head + ("Members don't have it yet. ✅ Send puts it on the members page, email and channel; "
+                       "❌ Hold keeps it off and it won't count. Nothing goes out if you don't tap before tip.")
+    return head + "X gets the sealed card. Tap below to post it unblurred."
+
+
+def decide(ref, send):
+    """Jack tapped ✅ Send / ❌ Hold on a pick DM (tg_channel_bot.handle_owner). Recorded with
+    the time; run() delivers a sent pick in the same bot run. Returns the reply for the DM."""
+    p = next((p for sport, path in pick_sources() for p in picks_store.load_picks(os.path.join(REPO, path))
+              if p.get("status") == "pending" and picks_store.ref_matches(ref, p.get("id"))), None)
+    if p is None:
+        return "That pick isn't pending anymore (graded, voided or not found)."
+    p.setdefault("sport", "nba")
+    name = f"{p.get('pick_text') or 'the pick'} ({p.get('matchup')})"
+    start = picks_store.start_time(p)
+    if start is not None and datetime.now(timezone.utc) >= start:
+        return f"Too late: {name} has tipped. It stays off the members page and won't count."
+    st = load(STATE, {})
+    key = "approved" if send else "held"
+    st.setdefault(key, []).append(f"{picks_store.state_ref(p['id'])}|{datetime.now(timezone.utc).isoformat()}")
+    if send:   # a Hold after a Send takes it back off the list, and the other way round
+        st["held"] = [e for e in st.get("held", []) if not picks_store.ref_matches(e.split("|", 1)[0], p["id"])]
+    else:
+        st["approved"] = [e for e in st.get("approved", []) if not picks_store.ref_matches(e.split("|", 1)[0], p["id"])]
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    with open(STATE, "w") as f:
+        json.dump(st, f, indent=2)
+    if send:
+        return f"✅ Sent: {name} goes to the members page, email and channel now."
+    return f"❌ Held: {name} stays off the members page and email, and won't count on the ledger."
 
 
 def premium_text(p):
@@ -156,6 +214,8 @@ def run(dry=False):
         ref = picks_store.state_ref(pid)  # NBA ids name the side: hashed in committed state under seal mode
         if readable and not picks_store.ref_in(st["dm"], pid):
             button = [[("📣 Post to X unblurred", f"xopen:{pid}")]]
+            if gated(p):
+                button = [[("✅ Send to members", f"send:{ref}"), ("❌ Hold", f"hold:{ref}")]] + button
             ok = False
             try:
                 path = card_path(p)
@@ -166,7 +226,8 @@ def run(dry=False):
                 ok = ops_tg.send(dm_text(p), button)
             if ok:
                 st["dm"].append(ref)
-        if PREMIUM and readable and not picks_store.ref_in(st["premium"], pid):
+        ok_members = released(st, p)   # Jack's Send first (GATE_FROM on)
+        if PREMIUM and readable and ok_members and not picks_store.ref_in(st["premium"], pid):
             ok = False
             try:
                 ok = ops_tg.send_photo(card_path(p), premium_text(p), chat=PREMIUM)
@@ -177,7 +238,7 @@ def run(dry=False):
             if ok:
                 st["premium"].append(ref)
         # the members page first, then the inbox: the email links to the page
-        if readable and member_delivery.enabled() and not picks_store.ref_in(st["site"], pid):
+        if readable and ok_members and member_delivery.enabled() and not picks_store.ref_in(st["site"], pid):
             try:
                 if member_delivery.publish(p, picks_store.start_label(p), dry=dry):
                     st["site"].append(ref)
