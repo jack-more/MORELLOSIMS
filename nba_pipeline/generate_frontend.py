@@ -1873,6 +1873,21 @@ def project_minutes(roster_df, out_player_ids):
     return projected
 
 
+def _rotation_minutes(roster_df, out_player_ids, lineup_info):
+    """{player_id: minutes} tonight, on THIS team: RotoWire's starters at a
+    starter's load and the bench by role, scaled to 240 (sim/players.rotation).
+    A player's minutes line is last season's on whatever team he was on, so it
+    only orders the bench; a new starter doesn't play his old backup minutes."""
+    from sim.players import rotation
+    out = {int(p) for p in out_player_ids}
+    starters = []
+    for name, _pos, status in lineup_info.get("starters", []):
+        pid = _match_player_name(name, roster_df) if status != "OUT" else None
+        if pid is not None:
+            starters.append(int(pid))
+    return {int(p): float(m) for p, m in rotation(roster_df, out, starters).items()}
+
+
 def compute_adjusted_mojo(roster_df, out_player_ids, projected_minutes):
     """Compute MOJI: MOJOs adjusted for who's actually playing.
 
@@ -2640,6 +2655,68 @@ def _compute_full_strength_moji(roster_df):
     return total / total_min if total_min > 0 else 50.0
 
 
+# Last season's team rating describes tonight's team only as far as the same
+# players fill the same minutes. The rest is priced from the players: team NRtg
+# ~ a + b x sum(minutes / 48 x player impact), impact = RAPM and LEBRON
+# averaged (sim/context.impacts). Fit on 2025-26 teams with their real minutes:
+# NRtg = -0.54 + 1.14 x, r 0.97, in-sample (the RAPM snapshot saw those games),
+# so the slope is taken a little flatter.
+ROSTER_NRTG = (-0.5, 1.1)
+ROOKIE_IMPACT = -1.0        # per 100, a player with no RAPM / LEBRON yet
+_ROSTER_CACHE = {}
+
+
+def _roster_inputs():
+    """({player_id: impact}, {(team_id, player_id): minutes last season}, {team_id: games last season})."""
+    if not _ROSTER_CACHE:
+        imp = {}
+        for _, r in read_query("SELECT player_id, rapm_offense, rapm_defense, lebron_offense, lebron_defense "
+                               "FROM player_rapm", DB_PATH).iterrows():
+            off = [x for x in (r["rapm_offense"], r["lebron_offense"]) if pd.notna(x)]
+            dfn = [x for x in (r["rapm_defense"], r["lebron_defense"]) if pd.notna(x)]
+            imp[int(r["player_id"])] = (sum(off) / len(off) if off else 0.0) + (sum(dfn) / len(dfn) if dfn else 0.0)
+        last = previous_season(CURRENT_SEASON)
+        played = {(int(r["team_id"]), int(r["player_id"])): float(r["minutes"] or 0) for _, r in read_query(
+            "SELECT team_id, player_id, SUM(sec) / 60.0 AS minutes FROM espn_player_games "
+            "WHERE season_id = ? AND counts_regular = 1 AND dnp = 0 GROUP BY team_id, player_id",
+            DB_PATH, [last]).iterrows()}
+        games = {int(r["team_id"]): int(r["n"]) for _, r in read_query(
+            "SELECT team_id, COUNT(*) AS n FROM espn_team_games WHERE season_id = ? AND counts_regular = 1 "
+            "GROUP BY team_id", DB_PATH, [last]).iterrows()}
+        _ROSTER_CACHE.update(imp=imp, played=played, games=games)
+    return _ROSTER_CACHE["imp"], _ROSTER_CACHE["played"], _ROSTER_CACHE["games"]
+
+
+def _roster_nrtg(team_row, minutes):
+    """Season NRtg for tonight's rotation: this season's real games against a
+    prior that is last season's team rating only as far as the roster returns.
+
+    returning = sum over tonight's rotation of (minutes share) x (how much of
+    tonight's role he played for this team last season: his minutes there over
+    tonight's minutes x the team's games, capped at 1). A mid-season arrival
+    who played 15 games counts for ~15/82 of himself. The prior is
+    returning x last season's NRtg + (1 - returning) x the roster rating, and
+    this season's games weigh in as gp / (gp + TEAM_PRIOR_GAMES).
+    Returns (net, returning, roster rating, full-strength share), the last being
+    how much of net is a full-roster rating that injury attrition still applies to."""
+    imp, played, games = _roster_inputs()
+    tid = int(team_row["team_id"])
+    total = sum(minutes.values()) or 240.0
+    roster = ROSTER_NRTG[0] + ROSTER_NRTG[1] * sum(m / 48.0 * imp.get(p, ROOKIE_IMPACT) for p, m in minutes.items())
+    g = games.get(tid, 0)
+    ret = sum(m / total * min(1.0, played.get((tid, p), 0.0) / (m * g))
+              for p, m in minutes.items() if m > 0) if g else 0.0
+    prev = team_row.get("net_rating_prev")
+    prior = roster if prev is None or pd.isna(prev) else ret * prev + (1 - ret) * roster
+    gp = float(team_row.get("gp") or 0)
+    cur = team_row.get("net_rating_cur")
+    if gp and cur is not None and pd.notna(cur):
+        net = (gp * cur + TEAM_PRIOR_GAMES * prior) / (gp + TEAM_PRIOR_GAMES)
+    else:
+        gp, net = 0.0, prior
+    return net, ret, roster, (gp + TEAM_PRIOR_GAMES * ret) / (gp + TEAM_PRIOR_GAMES)
+
+
 def get_trailing_nrtg(team_id, n_games=10):
     """Recency-weighted, blowout-capped trailing net rating proxy.
 
@@ -2704,9 +2781,6 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     home_tid = int(home_data["team_id"])
     away_tid = int(away_data["team_id"])
 
-    h_net = (home_data.get("net_rating", 0) or 0)
-    a_net = (away_data.get("net_rating", 0) or 0)
-
     # ── Get rosters ──
     home_roster = _get_full_roster(home_abbr)
     away_roster = _get_full_roster(away_abbr)
@@ -2721,6 +2795,15 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     # ── Project minutes ──
     home_proj_min = project_minutes(home_roster, home_out_ids)
     away_proj_min = project_minutes(away_roster, away_out_ids)
+
+    # ── Season NRtg for tonight's rotation (last season's only as far as it returns) ──
+    # Priced on tonight's rotation minutes. MOJI keeps project_minutes' weights:
+    # its blend was fit on them, and re-weighting MOJI by the rotation moved the
+    # Oct 21 lines away from the market (MAE vs the pregame book 3.08 -> 3.80, 11 games).
+    h_net, home_ret, home_roster_nrtg, home_full_share = _roster_nrtg(
+        home_data, _rotation_minutes(home_roster, home_out_ids, home_lineup))
+    a_net, away_ret, away_roster_nrtg, away_full_share = _roster_nrtg(
+        away_data, _rotation_minutes(away_roster, away_out_ids, away_lineup))
 
     # ── Compute MOJI ──
     home_moji, home_player_mojo, _ = compute_adjusted_mojo(home_roster, home_out_ids, home_proj_min)
@@ -2754,8 +2837,10 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     # They used to sit inside the season and L10 NRtg terms, which carry 0.40
     # of the blend, so a 1.8 HCA acted as 0.72 and the picks leaned road
     # (2026-09-29 audit N5; backtest in the commit message).
-    home_adj_nrtg = h_net - home_nrtg_attrition
-    away_adj_nrtg = a_net - away_nrtg_attrition
+    # The roster-priced part of the season NRtg already leaves the injured out;
+    # attrition applies to the full-roster part only.
+    home_adj_nrtg = h_net - home_nrtg_attrition * home_full_share
+    away_adj_nrtg = a_net - away_nrtg_attrition * away_full_share
     season_nrtg_diff = home_adj_nrtg - away_adj_nrtg
 
     # ── Trailing 10-game NRtg (captures momentum / hot teams) ──
@@ -2843,6 +2928,10 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     away_syn = compute_team_synergy_vs_opponent(
         away_avail_ids, away_tid, home_def_scheme, away_proj_min, away_player_mojo
     )
+    # The pairs and lineups are last season's: their chemistry carries only as
+    # far as tonight's rotation returns (a rebuilt roster reads ~neutral 50).
+    home_syn = 50.0 + home_ret * (home_syn - 50.0)
+    away_syn = 50.0 + away_ret * (away_syn - 50.0)
 
     syn_diff = home_syn - away_syn
     synergy_as_points = syn_diff * K["SYN_SCALE"]
@@ -2892,6 +2981,12 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
         "away_nrtg": round(away_adj_nrtg, 1),
         "home_nrtg_attrition": round(home_nrtg_attrition, 1),
         "away_nrtg_attrition": round(away_nrtg_attrition, 1),
+        "home_season_nrtg": round(h_net, 1),
+        "away_season_nrtg": round(a_net, 1),
+        "home_returning": round(home_ret, 2),
+        "away_returning": round(away_ret, 2),
+        "home_roster_nrtg": round(home_roster_nrtg, 1),
+        "away_roster_nrtg": round(away_roster_nrtg, 1),
         "nrtg_diff": round(season_nrtg_diff, 1),
         "recent_nrtg_diff": round(recent_nrtg_diff, 1),
         "recent_weight": round(recent_w, 3),
@@ -3247,20 +3342,52 @@ TEAM_PRIOR_GAMES = 10
 _TEAM_RATINGS = ("pace", "off_rating", "def_rating", "net_rating", "fg3a_rate")
 
 
+def _season_so_far(season):
+    """{team_id: (games, {rating: value})} from this season's real games (ESPN
+    play-by-play possessions). team_season_stats' current-season row starts as a
+    copy of last season (seed_season.py, gp 82) and stays one until the team
+    plays, so its gp can't say how many games are real."""
+    out = {}
+    for _, r in read_query("""
+        SELECT g.team_id, COUNT(*) AS gp, SUM(g.pts) AS pts, SUM(o.pts) AS opp_pts,
+               SUM(g.poss) AS poss, SUM(o.poss) AS opp_poss, SUM(g.minutes) AS minutes,
+               SUM(g.fga) AS fga, SUM(g.fg3a) AS fg3a
+        FROM espn_team_games g
+        JOIN espn_team_games o ON o.game_id = g.game_id AND o.team_id = g.opp_team_id
+        WHERE g.season_id = ? AND g.counts_regular = 1 AND g.poss > 0 AND o.poss > 0
+        GROUP BY g.team_id
+    """, DB_PATH, [season]).iterrows():
+        off, dfn = 100 * r["pts"] / r["poss"], 100 * r["opp_pts"] / r["opp_poss"]
+        out[int(r["team_id"])] = (int(r["gp"]), {
+            "off_rating": off, "def_rating": dfn, "net_rating": off - dfn,
+            "pace": 48 * (r["poss"] + r["opp_poss"]) / 2 / (r["minutes"] / 5),
+            "fg3a_rate": r["fg3a"] / r["fga"] if r["fga"] else None})
+    return out
+
+
 def _blend_team_priors(teams):
     prev = {}
     for _, r in read_query("SELECT * FROM team_season_stats WHERE season_id = ? ORDER BY rowid", DB_PATH,
                            [previous_season(CURRENT_SEASON)]).iterrows():
         prev[int(r["team_id"])] = r   # newest row per team (2024-25 has duplicates)
+    real = _season_so_far(CURRENT_SEASON)
+    teams["net_rating_cur"] = teams["net_rating_prev"] = float("nan")
     for i in teams.index:
         p = prev.get(int(teams.at[i, "team_id"]))
-        gp = float(teams.at[i, "gp"] or 0)
-        if p is None:
-            continue
+        gp, cur = real.get(int(teams.at[i, "team_id"]), (0, {}))
+        teams.at[i, "gp"] = gp
+        # kept apart for compute_moji_spread, which prices last season's rating
+        # only as far as tonight's rotation returns (_roster_nrtg)
+        teams.at[i, "net_rating_cur"] = cur.get("net_rating")
+        teams.at[i, "net_rating_prev"] = p.get("net_rating") if p is not None else None
         for c in _TEAM_RATINGS:
-            cur, pv = teams.at[i, c], p.get(c)
-            if pd.notna(cur) and pd.notna(pv):
-                teams.at[i, c] = (gp * cur + TEAM_PRIOR_GAMES * pv) / (gp + TEAM_PRIOR_GAMES)
+            cv, pv = cur.get(c), (p.get(c) if p is not None else None)
+            if cv is not None and pd.notna(pv):
+                teams.at[i, c] = (gp * cv + TEAM_PRIOR_GAMES * pv) / (gp + TEAM_PRIOR_GAMES)
+            elif cv is not None:
+                teams.at[i, c] = cv
+            elif pd.notna(pv):
+                teams.at[i, c] = pv
     return teams
 
 
@@ -3418,7 +3545,7 @@ def get_matchups():
                 h, a, rw_lineups, team_map
             )
 
-            net_diff = (h["net_rating"] or 0) - (a["net_rating"] or 0)
+            net_diff = spread_breakdown["home_season_nrtg"] - spread_breakdown["away_season_nrtg"]
             raw_edge = -(proj_spread)  # positive = home favored (from MOJI model)
 
             # Check for real sportsbook lines
