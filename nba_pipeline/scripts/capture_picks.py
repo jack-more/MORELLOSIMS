@@ -94,6 +94,20 @@ def skip_reason(g, threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, now=None
     return None
 
 
+CARD_OPENS = (7, 30)   # ET, game day
+
+
+def card_open(g, now=None):
+    """True once it is CARD_OPENS ET on the game's day (games without a tip time: always)."""
+    tip = parse_ts(g.get("tip_at"))
+    if tip is None:
+        return True
+    from zoneinfo import ZoneInfo
+    et = ZoneInfo("America/New_York")
+    opens = tip.astimezone(et).replace(hour=CARD_OPENS[0], minute=CARD_OPENS[1], second=0, microsecond=0)
+    return (now or datetime.now(timezone.utc)) >= opens
+
+
 def existing_picks(slate_date):
     """Return set of (matchup, type) already in picks.csv for this date.
 
@@ -185,6 +199,12 @@ def capture(threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, dry_run=False):
         if reason is not None:
             if reason:
                 print(f"  {reason}")
+            continue
+        # One morning card: nothing is logged before CARD_OPENS (ET) on game day, once
+        # the overnight lines and the morning injury news are in. Kept out of
+        # skip_reason so generate_frontend still seals the games that qualify.
+        if not card_open(g):
+            print(f"  WAIT (the card opens {CARD_OPENS[0]}:{CARD_OPENS[1]:02d} AM ET on game day): {g['matchup']}")
             continue
 
         pick_text = g["pick_text"]
