@@ -266,9 +266,13 @@ def team_inputs(roster, out_ids, starters=(), lg=None, con=None, abbr=None):
     listed = {int(p): (x if isinstance(x, str) else "") for p, x in zip(roster.player_id, roster.listed_position)}
     out["pos"] = [grp.get(p) or {"G": "SG", "F": "SF", "C": "C"}.get((listed.get(p) or "F")[:1], "SF") for p in pids]
     out["starters"] = [i for i, p in enumerate(pids) if p in set(starters)]
+    tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone() if abbr else None
+    # the fives this coach actually plays, and how long, from tonight's rotation
+    pos = context.positions(con)
+    out["H"], out["SW"] = lineups.history(context.lineup_history(con).get(tid[0], []) if tid else [], pids,
+                                          out["min"], gone, lambda p: pos.get(p, ""))
     out["plan"] = lineups.plan(out)
     # scheme: what this team allows per play type
-    tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone() if abbr else None
     tdef = context.team_defense(con, tid[0], lg["team_def"]) if tid else {}
     out["tdef"] = np.array([tdef.get(t, 1.0) for t in TYPES])
     return out

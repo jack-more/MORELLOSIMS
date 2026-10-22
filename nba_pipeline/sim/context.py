@@ -12,6 +12,7 @@
   team defense   each team's PPP allowed per play type over league (its scheme)
   units          a five-man unit's own track record beyond its players and pairs
   role WOWY      a player's usage and efficiency with and without each regular teammate
+  lineup history the fives each coach played, game by game, and for how long
 """
 
 import collections
@@ -152,6 +153,42 @@ def units(con):
     out = {ps: ex * tau2 / (tau2 + z) for ps, (ex, z) in raw.items()}
     _CACHE["units"] = (out, {"units": len(out), "unit_sd": round(float(np.sqrt(tau2)), 2)})
     return _CACHE["units"]
+
+
+def lineup_history(con):
+    """{team_id: [(game_date, players who played, {sorted five: minutes out of 48})]}, oldest
+    first: the fives each coach actually put on the floor, game by game (ESPN stints)."""
+    if "lineups" in _CACHE:
+        return _CACHE["lineups"]
+    seasons = (CURRENT_SEASON, previous_season(CURRENT_SEASON))
+    emap = {str(e): p for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
+    games = collections.defaultdict(lambda: collections.defaultdict(float))
+    dates = {}
+    for gid, tid, date, *es, sec in con.execute(
+            "SELECT l.game_id, l.team_id, g.game_date, l.e1, l.e2, l.e3, l.e4, l.e5, l.sec "
+            "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
+            "WHERE g.season_id IN (?,?) AND g.counts_regular=1", seasons):
+        ps = tuple(sorted(p for p in (emap.get(str(e)) for e in es) if p))
+        if len(ps) == 5 and sec:
+            games[(tid, gid)][ps] += sec / 60
+            dates[(tid, gid)] = date
+    out = collections.defaultdict(list)
+    for (tid, gid), fives in games.items():
+        total = sum(fives.values())
+        out[tid].append((dates[(tid, gid)], frozenset(p for f in fives for p in f),
+                         {f: m * 48.0 / total for f, m in fives.items()}))
+    for g in out.values():
+        g.sort(key=lambda x: x[0])
+    _CACHE["lineups"] = dict(out)
+    return _CACHE["lineups"]
+
+
+def positions(con):
+    """{player_id: PG/SG/SF/PF/C}, his latest season's label (lineup swaps for players who left)."""
+    if "positions" not in _CACHE:
+        _CACHE["positions"] = {int(p): g for p, g in con.execute(
+            "SELECT player_id, position_group FROM player_archetypes ORDER BY season_id")}
+    return _CACHE["positions"]
 
 
 def role_wowy(con):

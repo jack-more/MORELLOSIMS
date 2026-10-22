@@ -45,15 +45,30 @@ def _team_detail(t, roster, info):
                      "off": round(float(t["off"][i]), 1), "def": round(float(t["def"][i]), 1),
                      "role": ({"usg": round(role[0] * 100, 1), "eff": round(role[1], 2)} if role else None)})
     rows.sort(key=lambda r: (not r["starter"], -r["min"]))
-    units = []
+    units, lineup = [], None
     if t.get("plan"):
-        last = lambda i: t["names"][i].split()[-1] if t["names"][i].split()[-1] not in ("Jr.", "II", "III") else t["names"][i].split()[-2]
-        for five, mins, net, imp, chem in t["plan"]["units"][:6]:
+        p = t["plan"]
+        short = lambda n: n.split()[-1] if n.split()[-1] not in ("Jr.", "II", "III") else n.split()[-2]
+        last = lambda i: short(t["names"][i])
+        everyone = dict(zip(roster.player_id.astype(int), roster.full_name))
+        who = lambda pid: short(everyone.get(pid) or _name(pid))
+        lineup = {"mix": p.get("mix", {}), "thin": p.get("thin", False)}
+        for five, mins, net, imp, chem in p["units"][:6]:
+            sw = p.get("swap", {}).get(five)
             units.append({"five": [last(i) for i in five], "pids": [int(t["pids"][i]) for i in five],
-                          "min": round(mins, 1), "net": round(net, 1),
+                          "min": round(mins, 1), "played": round(p.get("played", {}).get(five, 0.0), 1),
+                          "kind": p.get("kind", {}).get(five, "new"),
+                          "swap": f"{who(sw[1])} for {who(sw[0])}" if sw else None,
+                          "net": round(net, 1),
                           "impact": round(imp, 1), "chem": round(chem, 1),
                           "start": five == t["plan"]["start"], "close": five == t["plan"]["close"]})
-    return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids), "units": units}
+    return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids), "units": units, "lineup": lineup}
+
+
+def _name(pid):
+    """A player's name from nba_sim.db (one who has left the team)."""
+    r = players._db().execute("SELECT full_name FROM players WHERE player_id=?", (int(pid),)).fetchone()
+    return r[0] if r else str(pid)
 
 
 def _narrow(raw):

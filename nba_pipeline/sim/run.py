@@ -21,10 +21,11 @@ import generate_frontend as gf  # noqa: E402
 from config import CURRENT_SEASON  # noqa: E402
 from sim import engine, players  # noqa: E402
 
-# NBA results scatter about 13 points around a good pregame line; the engine's
-# independent possessions run wider (~16.5), so its margins are narrowed to this
-# around their mean before any chance is read. To be refit on the backtest.
-MARGIN_SD = 13.0
+# Actual margins scatter about 15 points around this sim's mean (point-in-time
+# backtest of 2025-26: residual SD 14.96, 14.37 with end-of-season impacts); the
+# engine's independent possessions run wider (~16.5), so its margins are narrowed
+# to this around their mean before any chance is read.
+MARGIN_SD = 15.0
 LOGGED = {}                       # "AWY@HOM" -> (side, line) for a printed cover chance; filled by --picks
 
 

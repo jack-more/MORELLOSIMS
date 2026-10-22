@@ -45,8 +45,10 @@ SCHEME_W = 0.30               # team scheme's share of the defense read; the fiv
 LOAD_TS = 57.0                # league TS%, to turn TS points into an efficiency ratio
 LOAD_LO, LOAD_HI = 0.88, 1.05
 FATIGUE_FROM, FATIGUE_PER_MIN, B2B_FATIGUE_FROM = 34.0, 0.01, 32.0
-# back-to-back: points per game, measured (generate_frontend._MOJI_CONSTANTS, nba_sim.db OLS)
-B2B_HOME, B2B_ROAD = 2.0, 2.5
+# back-to-back: points per game on top of the fatigue layer's B2B legs. Home from the old
+# model's OLS (generate_frontend._MOJI_CONSTANTS); road refit on the 2025-26 point-in-time
+# backtest, where 2.5 left road B2B teams 1.76 better than the sim had them (214 games)
+B2B_HOME, B2B_ROAD = 2.0, 0.75
 LAYERS = ("lineups", "load", "spacing", "pairs", "scheme", "fatigue")   # simulate(off=...) switches any of them off
 
 
@@ -132,7 +134,8 @@ def simulate(home, away, lg, sims=5000, seed=7, pace=None, hca=1.68, impact_w=0.
     pace = pace or lg["pace"]
     ppg = pace * lg["ortg"] / 100
     poss = np.maximum(80, np.rint(rng.normal(pace, 3.0, S))).astype(int)
-    # the lineup plan (sim/lineups.py): the coach's units; off, fives are drawn at random by minutes
+    # the lineup plan (sim/lineups.py): the coach's own fives; only with the layer switched
+    # off (to measure it) are fives drawn by minutes alone
     def fives(team):
         if team.get("plan") and "lineups" not in off:
             return lineups.draw(rng, team["plan"], S, SEGMENTS)
