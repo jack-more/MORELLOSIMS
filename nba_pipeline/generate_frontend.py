@@ -2129,7 +2129,7 @@ def compute_lineup_rating(team_abbr, available_player_ids, team_net_rating):
         SELECT player_ids, net_rating, minutes, gp
         FROM lineup_stats
         WHERE season_id = '{CURRENT_SEASON}' AND group_quantity = 5
-              AND gp > 5 AND minutes > 8
+              AND gp > 5 AND minutes > 8 AND net_rating IS NOT NULL
               AND team_id = (SELECT team_id FROM teams WHERE abbreviation = ?)
     """, DB_PATH, [team_abbr])
 
@@ -2137,7 +2137,7 @@ def compute_lineup_rating(team_abbr, available_player_ids, team_net_rating):
         SELECT player_ids, net_rating, minutes, gp, group_quantity
         FROM lineup_stats
         WHERE season_id = '{CURRENT_SEASON}' AND group_quantity IN (2, 3)
-              AND gp > 5 AND minutes > 15
+              AND gp > 5 AND minutes > 15 AND net_rating IS NOT NULL
               AND team_id = (SELECT team_id FROM teams WHERE abbreviation = ?)
         ORDER BY net_rating DESC
         LIMIT 5
