@@ -36,7 +36,7 @@ from config import STARTING_BANKROLL
 from collectors.games_espn import fetch_scores_for_grading, score_key
 from utils.ledger import (
     CSV_FIELDS, VOID, SETTLED, read_rows, write_rows, capture_check,
-    compute_profit, row_odds,
+    compute_profit, parse_ts, row_odds,
 )
 
 STALE_PENDING_DAYS = 3
@@ -188,6 +188,27 @@ def attach_closing_line(pick, closing):
 
 # ── Main ─────────────────────────────────────────────────────────────
 
+def release_check(pick):
+    """Why a pick never reached members, or None. From scripts/pick_alerts.GATE_FROM
+    a pick goes out only after the owner taps Send on its Telegram DM before tip;
+    one he held, or never sent, does not count."""
+    sys.path.insert(0, os.path.join(os.path.dirname(PROJECT_ROOT), "scripts"))
+    import pick_alerts
+    import picks_store
+    if pick["date"] < pick_alerts.GATE_FROM:
+        return None
+    away, home = [t.strip() for t in pick["matchup"].split("@")]
+    pid = f"{pick['date']}-nba-{away}-{home}-{pick.get('type') or 'spread'}-{pick['side'].split()[0]}".lower()
+    tip = parse_ts(pick.get("tip_at"))
+    st = pick_alerts.load(pick_alerts.STATE, {})
+    for e in st.get("approved", []):
+        ref, _, at = e.partition("|")
+        sent = parse_ts(at)
+        if picks_store.ref_matches(ref, pid) and (tip is None or (sent is not None and sent < tip)):
+            return None
+    return "NOT RELEASED: the owner didn't send it to members before tip"
+
+
 def grade_all():
     """Grade all pending picks from CSV."""
     picks = read_picks()
@@ -246,7 +267,7 @@ def grade_all():
         if game.get("tip_utc") and not pick.get("tip_at"):
             pick["tip_at"] = game["tip_utc"]
 
-        void_reason = capture_check(pick, game.get("tip_utc"))
+        void_reason = capture_check(pick, game.get("tip_utc")) or release_check(pick)
         if void_reason:
             would = compute_profit(result, risk, odds=row_odds(pick))
             pick["result"] = VOID

@@ -84,11 +84,6 @@ def skip_reason(g, threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, now=None
     tip = parse_ts(g.get("tip_at"))
     if tip is not None and (now or datetime.now(timezone.utc)) >= tip:
         return f"SKIP (tipped {g.get('tip_at')}): {g['matchup']}"
-    # Market guard (owner's rule, 2026-10-22): a model this far from the book has
-    # usually missed what the market saw (rebuilt rosters, news), so no pick.
-    if abs(g.get("spread_edge") or 0) > MAX_MARKET_GAP:
-        return (f"SKIP (model {abs(g['spread_edge']):.1f} pts off the book, past the "
-                f"{MAX_MARKET_GAP:g}-point guard): {g['matchup']}")
     # Skip if confidence is in the neutral zone (35-65 = no meaningful edge)
     conf = g["confidence"]
     if (100 - threshold) <= conf <= threshold:
@@ -100,7 +95,6 @@ def skip_reason(g, threshold=65, min_conf_grade=MIN_TRACKED_CONF_GRADE, now=None
 
 
 CARD_OPENS = (7, 30)   # ET, game day
-MAX_MARKET_GAP = 6.0   # points between the model's spread and the book's (render_breakdown.MAX_GAP)
 
 
 def card_open(g, now=None):

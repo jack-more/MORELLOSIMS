@@ -255,6 +255,10 @@ def handle_owner(msg, cb):
             import slips
             note = slips.handle(data)
             api("sendMessage", chat_id=OWNER_ID, text=f"Slip: {note}")
+        elif data.startswith(("send:", "hold:")):
+            kind, ref = data.split(":", 1)
+            note = pick_alerts.decide(ref, kind == "send")
+            api("sendMessage", chat_id=OWNER_ID, text=note)
         elif data.startswith("xopen:"):
             note = pick_alerts.open_on_x(data.split(":", 1)[1])
             api("sendMessage", chat_id=OWNER_ID, text=f"X: {note} ({data.split(':', 1)[1]})")
