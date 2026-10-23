@@ -281,6 +281,12 @@ def main():
             continue
         if cp["date"] < cutoff:
             continue  # already in baseline — skip to prevent double-counting
+        if cp["id"] in seen and cp.get("line") is not None:
+            # a second pick on the same side at another number (MEM +3 logged by the
+            # model, MEM +4.5 added by the owner): its own id, keyed by the line; the
+            # first keeps the plain id so its sends already on record stay matched
+            line = f'{float(cp["line"]):+g}'
+            cp["id"] = f'{cp["id"]}-{"p" if line[0] == "+" else "m"}{line[1:]}'
         if cp["id"] in seen:
             continue
         contract.append(cp)
