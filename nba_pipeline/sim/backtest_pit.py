@@ -74,6 +74,7 @@ def main():
     ap.add_argument("--cal-sims", type=int, default=600)
     ap.add_argument("--max-dates", type=int, default=0, help="debug: stop after this many game dates")
     ap.add_argument("--runs", default="", help="comma list of runs (default: all)")
+    ap.add_argument("--from-date", default="", help="simulate only games from this date (earlier ones still feed the history)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     logf = open(os.path.join(args.out, "progress.log"), "a")
@@ -103,7 +104,7 @@ def main():
         return [p for p, s in S.box[prev[-1]][tid] if s] if prev else []
 
     dates = sorted(S.games.game_date.unique())
-    start = (dt.date.fromisoformat(dates[0]) + dt.timedelta(days=SKIP_DAYS)).isoformat()
+    start = max((dt.date.fromisoformat(dates[0]) + dt.timedelta(days=SKIP_DAYS)).isoformat(), args.from_date)
     chem = Chemistry(S.arch)
     game_tasks, cal_tasks, meta, skipped, unmatched = [], [], [], collections.Counter(), collections.Counter()
     cal_dates, cal_lg, next_cal = [], {}, start

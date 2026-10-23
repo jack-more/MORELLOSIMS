@@ -55,6 +55,11 @@ def load(results, lines_path):
         if r.get("old_sim_spread_home"):
             g["old_margin"] = -float(r["old_sim_spread_home"])
         g["late"] = r.get("late") == "1"
+        # blends: the fully point-in-time sim averaged with net rating / with the old model
+        if g.get("pit_nopt_margin") is not None:
+            g["blend_nrtg_margin"] = (g["pit_nopt_margin"] + g["base_nrtg"]) / 2
+            if g.get("old_margin") is not None:
+                g["blend_old_margin"] = (g["pit_nopt_margin"] + g["old_margin"]) / 2
         rows.append(g)
     return rows
 

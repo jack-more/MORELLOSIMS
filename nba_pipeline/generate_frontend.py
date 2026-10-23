@@ -3851,7 +3851,7 @@ BOARD_TIPS = {
     "side": "The team the sim likes at the book's number.",
     "edge": "Points between the sim's line and the book's. Bigger edge, higher grade.",
     "grade": "C1 to C10, from the size of the edge. Picks are logged from C6: C6 is 0.25u, C7 0.5u, "
-             "C8 and C9 2u, C10 4u.",
+             "C8 and C9 1u, C10 2u. 4u is kept for a MAX BET.",
     "rank": "Where this team's lineup MOJO ranks in the league tonight.",
     "hca": "Points the sim adds for home court, measured from last season.",
     "ou": "The book's total next to the sim's projected total.",

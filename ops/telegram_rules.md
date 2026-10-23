@@ -3,7 +3,7 @@ MORELLO SIMS · MEMBERS
 HOW IT WORKS
 · Every NBA pick posts here the moment the sim logs it, before tip.
 · Each post has the pick, the price, the stake in units and the sim's number.
-· 1 unit is your own fixed bet size. Stakes run from 0.8u to 4u.
+· 1 unit is your own fixed bet size. Stakes run from 0.25u to 2u; 4u is kept for a MAX BET.
 · Every pick is graded in public after the final, wins and losses: morellosims.com/ledger/nba/
 
 YOUR PASS

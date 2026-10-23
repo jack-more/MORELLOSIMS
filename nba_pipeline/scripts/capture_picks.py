@@ -51,11 +51,12 @@ def conf_to_1_10(confidence):
 
 
 def risk_amount(conf_1_10):
-    """Determine risk amount from 1-10 confidence scale."""
+    """Determine risk amount from 1-10 confidence scale. Owner's ladder (2026-10-23):
+    0.25u-2u; 4u only for a MAX BET, which this scale never reaches on its own."""
     if conf_1_10 >= 10:
-        return 100
+        return 50     # 2u
     if conf_1_10 >= 8:
-        return 50
+        return 25     # 1u
     if conf_1_10 == 7:
         return 12.5   # 0.5u (25 $PP = 1u)
     if conf_1_10 == 6:
