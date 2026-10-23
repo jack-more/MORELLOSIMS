@@ -158,6 +158,7 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     # If pick_log has no entry (manual injection, direct CSV append, or
     # legacy rows with no metadata), derive a sensible conf floor from the
     # risk amount. Mirrors capture_picks.py's risk_amount() ladder:
+    #   2026-10-23 ladder: C10 2u (50), C8-C9 1u (25), C7 0.5u, C6 0.25u; 4u (100) only for a MAX BET
     #   risk 100 -> C:10  (max-confidence plays)
     #   risk 50 -> C:8+   (premium plays)
     #   risk 30 -> C:5    (legacy mid-tier, not tracked)
@@ -167,6 +168,7 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
         if risk >= 100: conf = 10
         elif risk >= 50: conf = 8
         elif risk >= 30: conf = 5
+        elif risk == 25: conf = 8         # 1u: C8-C9 on the 2026-10-23 ladder (C10 2u, MAX BET 4u)
         elif risk == 12.5: conf = 7
         elif risk == 6.25: conf = 6
         elif risk > 0:   conf = 1
