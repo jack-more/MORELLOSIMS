@@ -264,9 +264,23 @@ def brand(html):
     return SEALED_CTA.sub('<a class="sealed-cta" href="/members/">Open the pick &rarr;</a>', html)
 
 
+OG = """    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://morellosims.com/members/dashboard/">
+    <meta property="og:title" content="Lineups + info · Morello Sims Members">
+    <meta property="og:description" content="Tonight&#39;s lineups, injuries and matchup notes. Members only.">
+    <meta property="og:image" content="https://morellosims.com/assets/brand/og-members.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://morellosims.com/assets/brand/og-members.jpg">
+"""
+
+
 def build(src=SRC, out=OUT):
     html = brand(open(src, encoding="utf-8").read())
     html = re.sub(r"<title>[^<]*</title>", "<title>Lineups + info · Morello Sims</title>", html, count=1)
+    html = re.sub(r'\s*<meta property="og:image"[^>]*>', "", html)
+    html = html.replace("</title>", "</title>\n" + OG.rstrip("\n"), 1)
     if "</head>" not in html or "<body" not in html or "</body>" not in html:
         raise SystemExit(f"{src}: not a full page")
     html = html.replace("</head>", HEAD + "</head>", 1)
