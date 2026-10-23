@@ -8,15 +8,16 @@
 <script>
 // timed to the track: 115.99 BPM, a landing every two beats; ?bpm= overrides (the synth bed was 120)
 const BPM = +(new URLSearchParams(location.search).get('bpm') || 115.99);
-const W = 1080, H = 1920, BEAT = 60 / BPM, HOP = 2 * BEAT, T0 = HOP, DUR = T0 + 11 * HOP + 7 * BEAT;
+// T0: four beats of breakdown with the vial hovering, then it slams down on the drop (the first landing)
+const W = 1080, H = 1920, BEAT = 60 / BPM, HOP = 2 * BEAT, T0 = 4 * BEAT, DUR = T0 + 11 * HOP + 7 * BEAT;
 const c = document.getElementById('c'), x = c.getContext('2d');
 const AREA = { metabolic: ['#1F4FD8', '#A3CEFF', '#0B1F5C'], tissue: ['#0E9A5B', '#ABE9C3', '#0A3B26'], dermal: ['#FF5A1F', '#FFB7C5', '#9E1717'],
   endocrine: ['#D08000', '#FFE97A', '#5E3C00'], neuro: ['#6E3FD8', '#D9C8FF', '#2A1263'], supplies: ['#4E6077', '#D9E1EA', '#1B2533'] };
 const AREA_NAME = { metabolic: 'METABOLIC RESEARCH', tissue: 'TISSUE RESEARCH', dermal: 'DERMAL RESEARCH', endocrine: 'ENDOCRINE RESEARCH', neuro: 'NEURO RESEARCH', supplies: 'LAB SUPPLIES' };
-// the twelve, ordered so the colour changes on every landing
-const SEQ_ALL = [['01', 'RT-3', 'metabolic'], ['09', 'BPC+TB', 'tissue'], ['05', 'GHK-Cu', 'dermal'], ['04', 'TESAMORELIN', 'endocrine'], ['11', 'SELANK', 'neuro'],
-  ['02', 'TZ-2', 'metabolic'], ['10', 'GHK+BT', 'dermal'], ['07', 'CJC+IPA', 'endocrine'], ['12', 'SEMAX', 'neuro'], ['06', 'MOTS-c', 'metabolic'],
-  ['08', 'NAD+', 'metabolic']];
+// the eleven compounds, ordered so the colour changes on every landing
+const SEQ_ALL = [['01', 'RT-3', 'metabolic'], ['09', 'BPC+TB', 'tissue'], ['02', 'TZ-2', 'metabolic'], ['05', 'GHK-Cu', 'dermal'], ['04', 'TESAMORELIN', 'endocrine'],
+  ['06', 'MOTS-c', 'metabolic'], ['11', 'SELANK', 'neuro'], ['10', 'GHK+BT', 'dermal'], ['08', 'NAD+', 'metabolic'], ['07', 'CJC+IPA', 'endocrine'],
+  ['12', 'SEMAX', 'neuro']];
 // ?preview: only the five vials whose spin frames exist so far
 const SEQ = location.search.includes('preview') ? SEQ_ALL.filter((v) => ['01', '09', '05', '04', '11'].includes(v[0])) : SEQ_ALL;
 const N = SEQ.length, T_END = T0 + N * HOP;          // the last landing turns into the end card
@@ -63,6 +64,14 @@ window.prep = async (t) => {
   if (FR.size > 60) FR.delete(FR.keys().next().value);
 };
 
+// how high the vial is: over the breakdown it floats down into view and hangs, bobbing, then drops on the last beat
+function liftAt(t, s) {
+  if (s.tau !== null) return 4 * LIFT * s.tau * (1 - s.tau);
+  const hang = T0 - BEAT;
+  if (t < hang) return lerp(1500, 620, ease(t / hang)) + Math.sin(t * Math.PI * 2 / (2 * BEAT)) * 26;
+  const f = (t - hang) / BEAT; return lerp(620 + Math.sin(hang * Math.PI / BEAT) * 26, 0, f * f);
+}
+
 // ---------- the pieces
 function shadow(h, col) {   // contact shadow shrinks as the vial rises
   const k = 1 - clamp(h / LIFT) * .6;
@@ -71,8 +80,7 @@ function shadow(h, col) {   // contact shadow shrinks as the vial rises
 function vialAt(t, s) {
   const im = FR.get(frameOf(s.i, t)); if (!im) return;
   let lift, sq = 1;
-  if (s.tau === null) lift = lerp(1500, 0, s.fall * s.fall);                         // falls in from above the frame
-  else lift = 4 * LIFT * s.tau * (1 - s.tau);
+  lift = liftAt(t, s);
   const land = s.tau === null ? 0 : Math.max(0, 1 - s.since / .16);                 // squash right after each landing
   sq = 1 - .2 * land * Math.sin(Math.PI * clamp(s.since / .16));
   const stretch = s.tau !== null && s.tau > .08 && s.tau < .92 ? 1 + .05 * Math.abs(1 - 2 * s.tau) : 1;
@@ -96,7 +104,9 @@ function burst(t, s, colNew) {   // shockwave, flash and petals from the landing
     x.save(); x.globalAlpha = 1 - r; flower(FLOWER, cx, mid, 300 + r * 1700, a * 1.6, colNew, 'nonzero', 26 * (1 - r) + 4); x.restore();
     x.save(); x.globalAlpha = (1 - r) * .7; flower(FLOWER, cx, mid, 200 + r * 1100, -a * 2.2, '#fff', 'nonzero', 14 * (1 - r) + 2); x.restore();
   }
-  if (a < .1) { x.save(); x.globalCompositeOperation = 'lighter'; x.globalAlpha = (1 - a / .1) * .55; const g = x.createRadialGradient(cx, mid, 0, cx, mid, 900); g.addColorStop(0, '#fff'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H); x.restore(); }
+  const drop = s.k === 0, fl = drop ? .18 : .1;
+  if (drop && a < .12) { x.save(); x.globalAlpha = (1 - a / .12) * .85; fill('#fff'); x.restore(); }
+  if (a < fl) { x.save(); x.globalCompositeOperation = 'lighter'; x.globalAlpha = (1 - a / fl) * .55; const g = x.createRadialGradient(cx, mid, 0, cx, mid, 900); g.addColorStop(0, '#fff'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H); x.restore(); }
   if (a < .7) {                                                                       // petal confetti in the new area's tones
     const r = rng(s.k * 97 + 3), [b1, l1, d1] = AREA[SEQ[s.i][2]];
     for (let p = 0; p < 34; p++) {
@@ -153,7 +163,7 @@ window.render = (t) => {
   if (s.tau === null || s.k === 0) fill(light);
   else { const r = ease(s.since / .35) * 2300; x.save(); x.fillStyle = light; x.beginPath(); x.arc(W / 2, FLOOR, r, 0, Math.PI * 2); x.fill(); x.restore(); }
   title(t, s);
-  const lift = s.tau === null ? lerp(1500, 0, s.fall * s.fall) : 4 * LIFT * s.tau * (1 - s.tau);
+  const lift = liftAt(t, s);
   shadow(lift, dark);
   burst(t, s, AREA[area][0]);
   vialAt(t, s);
