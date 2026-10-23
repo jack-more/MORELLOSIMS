@@ -532,13 +532,15 @@ class Season:
         out["games_before"] = [rate[p]["games"] for p in pids]
         return out
 
-    def finish(self, base, ctx, leaky):
-        """Add the impact-dependent keys: off/def, pair matrix V, unit values U, the lineup plan."""
+    def finish(self, base, ctx, leaky, impacts=None):
+        """Add the impact-dependent keys: off/def, pair matrix V, unit values U, the lineup plan.
+        impacts: {player: (off, def)} to use instead (the point-in-time RAPM run)."""
         t = dict(base)
         pids = t["pids"]
         n = len(pids)
         syn, prior, units = ctx
-        imp = [self.impact.get(p, (0.0, 0.0)) if leaky else (0.0, 0.0) for p in pids]
+        src = impacts if impacts is not None else (self.impact if leaky else {})
+        imp = [src.get(p, (0.0, 0.0)) for p in pids]
         t["off"] = np.array([x[0] for x in imp])
         t["def"] = np.array([x[1] for x in imp])
         V = np.zeros((n, n))
@@ -573,6 +575,10 @@ class Chemistry:
         self.team = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
         self.pair = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
         self.unit = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
+        # possessions each player shared with each team / pair: residuals against any
+        # set of impacts (the point-in-time RAPM run) without keeping every stint
+        self.tco = collections.defaultdict(collections.Counter)
+        self.pco = collections.defaultdict(collections.Counter)
 
     def add(self, stints):
         for tid, ps, raw, imp, n in stints:
@@ -580,20 +586,34 @@ class Chemistry:
                 acc[0] += raw
                 acc[1] += imp
                 acc[2] += n
+            for p in ps:
+                self.tco[tid][p] += n
+            for a, b in itertools.combinations(ps, 2):
+                co = self.pco[(a, b, tid)]
+                for p in ps:
+                    co[p] += n
 
     @staticmethod
     def _tau2(est, nz, floor):
         return context._tau2(est, nz, floor) if len(est) else floor
 
-    def state(self, leaky):
-        res = (lambda v: v[0] - v[1]) if leaky else (lambda v: v[0])
-        tavg = {t: res(v) / v[2] for t, v in self.team.items() if v[2] > 0}
+    def state(self, leaky, beta=None):
+        """beta: {player: net impact per 100} to score stints against (point-in-time RAPM)."""
+        if beta is None:
+            res = (lambda v: v[0] - v[1]) if leaky else (lambda v: v[0])
+            tavg = {t: res(v) / v[2] for t, v in self.team.items() if v[2] > 0}
+            pres = lambda key, v: res(v)
+        else:
+            res = None
+            tavg = {t: (v[0] - sum(beta.get(p, 0.0) * n for p, n in self.tco[t].items())) / v[2]
+                    for t, v in self.team.items() if v[2] > 0}
+            pres = lambda key, v: v[0] - sum(beta.get(p, 0.0) * n for p, n in self.pco[key].items())
         raw = {}
         for (a, b, tid), v in self.pair.items():
             n = v[2]
             if n < 200:
                 continue
-            ex, z = res(v) / n - tavg[tid], NOISE / n
+            ex, z = pres((a, b, tid), v) / n - tavg[tid], NOISE / n
             if (a, b) in raw:
                 e0, z0 = raw[(a, b)]
                 w0, w1 = 1 / z0, 1 / z
@@ -621,7 +641,8 @@ class Chemistry:
             if n < 100:
                 continue
             chem = SYN_SHARE * sum(syn.get(ab, 0.0) for ab in itertools.combinations(ps, 2))
-            uraw[(tid, ps)] = (res(v) / n - tavg[tid] - chem, NOISE / n)
+            r = res(v) if beta is None else v[0] - v[2] * sum(beta.get(p, 0.0) for p in ps)
+            uraw[(tid, ps)] = (r / n - tavg[tid] - chem, NOISE / n)
         utau2 = self._tau2(np.array([e for e, _ in uraw.values()]), np.array([z for _, z in uraw.values()]), 0.25)
         units = collections.defaultdict(dict)
         for (tid, ps), (ex, z) in uraw.items():
