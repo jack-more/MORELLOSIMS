@@ -15,6 +15,7 @@ public and the picks are sealed until tip.
 import html
 import json
 import math
+import re
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -331,18 +332,34 @@ def card(g, d):
 </section>"""
 
 
+def dashboard_order():
+    """['AWY@HOM', ...] in the order Lineups + info shows tonight's games (the dashboard
+    generate_frontend.py wrote this run); [] when it isn't there."""
+    try:
+        html = open(os.path.join(REPO, "nba_pipeline", "nba_sim.html"), encoding="utf-8").read()
+    except OSError:
+        return []
+    out = []
+    for m in re.finditer(r'class="matchup-card[^"]*"[^>]*?data-game="([^"]+)"', html):
+        if m.group(1) not in out:
+            out.append(m.group(1))
+    return out
+
+
 def render(walk, date):
     book = ledger(date)
     decided = [(g, decide(g, book.get(g["game"], []))) for g in walk["games"]]
-    order = {"pick": 0, "hold": 1, "thin": 2, "pass": 3, "no_line": 4}
-    decided.sort(key=lambda x: (order[x[1]["call"]], TIPS.get(x[0]["game"]) or ""))
+    # the same game order as Lineups + info (owner, 2026-10-23): picks open, the rest folded in place
+    pos = {k: i for i, k in enumerate(dashboard_order())}
+    decided.sort(key=lambda x: (pos.get(x[0]["game"], len(pos)), TIPS.get(x[0]["game"]) or ""))
     picks = [(g, d) for g, d in decided if d["call"] == "pick"]
-    cards = "".join(card(g, d) for g, d in picks)
-    rest = "".join(f'<details><summary>{logo(g["away"], "lg xs")}{e(g["away"])} @ {logo(g["home"], "lg xs")}{e(g["home"])} · {e(tip(g["game"]))} · sim {e(d["sim_line"])}, book {e(d["book"] or "none")}'
-                   + (f' · best side {e(d["side"])} {fmt(d["line"])} {d["cover"]:.0%}' if d.get("side") else "")
-                   + f'</summary>{card(g, d)}</details>' for g, d in decided if d["call"] != "pick")
+    games = "".join(
+        card(g, d) if d["call"] == "pick" else
+        f'<details><summary>{logo(g["away"], "lg xs")}{e(g["away"])} @ {logo(g["home"], "lg xs")}{e(g["home"])} · {e(tip(g["game"]))} · sim {e(d["sim_line"])}, book {e(d["book"] or "none")}'
+        + (f' · best side {e(d["side"])} {fmt(d["line"])} {d["cover"]:.0%}' if d.get("side") else "")
+        + f'</summary>{card(g, d)}</details>' for g, d in decided)
     rows = []
-    for g, d in sorted(decided, key=lambda x: TIPS.get(x[0]["game"]) or ""):
+    for g, d in decided:
         call_txt = f"{d['side']} {fmt(d['line'])} · {d['units']:g}U" if d["call"] == "pick" else "—"
         rows.append(f'<tr class="{d["call"]}"><td>{e(tip(g["game"]))}</td><td><a href="#{g["game"].replace("@", "-").lower()}">{logo(g["away"], "lg xs")}{e(g["away"])} @ {logo(g["home"], "lg xs")}{e(g["home"])}</a></td>'
                     f'<td>{e(d["book"] or "—")}</td><td>{e(d["sim_line"])}</td><td>{d.get("gap", 0):.1f}</td>'
@@ -354,13 +371,12 @@ def render(walk, date):
     return f"""<div class="bd">
   <div class="intro"><p>{len(picks)} pick{"" if len(picks) == 1 else "s"} tonight, {units:g}U in all, from {len(decided)} games. Every game was played 5,000 times, possession by possession, with tonight's rotations (sim run {run_at}).</p>
     <div class="chips">{chips}</div></div>
-  {cards}
-  <section class="rest"><h2>The other games</h2><p>The same walkthrough for every game without a pick.</p>{rest}</section>
-  <section class="sum"><h2>Summary</h2><p>The whole slate in tip order.</p>
+  <section class="rest">{games}</section>
+  <section class="sum"><h2>Summary</h2><p>The whole slate, in the same order.</p>
     <div class="tw"><table><thead><tr><th>Tip</th><th>Game</th><th>Book</th><th>Sim</th><th>Gap</th><th>Covers</th><th>Pick</th></tr></thead>
     <tbody>{"".join(rows)}</tbody></table>
     <div class="totals"><span>Picks: {len(picks)}</span><span>Stake: {units:g}U total</span></div></div>
-    <p class="notes"><b>How to read it.</b> Chances use a 13-point spread around the sim's margin, the scatter NBA results show around a good line. The sim isn't a pick past {MAX_GAP:.0f} points off the market, or under a {MIN_COVER:.0%} chance to cover. Simulations, not guarantees.</p>
+    <p class="notes"><b>How to read it.</b> Chances use a 15-point spread around the sim's margin, the scatter NBA results show around a good line. The sim isn't a pick past {MAX_GAP:.0f} points off the market, or under a {MIN_COVER:.0%} chance to cover. Simulations, not guarantees.</p>
   </section>
 </div>"""
 
