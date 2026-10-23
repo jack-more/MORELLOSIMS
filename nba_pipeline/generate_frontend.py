@@ -3848,7 +3848,10 @@ BOARD_TIPS = {
            "20% of the line.",
     "book": "The sportsbook spread for each team. Minus is the favorite: -1.5 means win by 2 or more.",
     "sim": "Who the sim has winning, and by how much, from the four columns plus home court and rest.",
-    "side": "The bet: the team the sim takes at the book's number. LAC +9.5 means the Clippers, getting 9.5 points.",
+    # no team in the example: "LAC +9.5" here matched that night's sealed pick and
+    # check_seal_guardrail.py blocked every commit until tip
+    "side": "The bet: the team the sim takes at the book's number. +9.5 means that team gets 9.5 points; "
+            "-9.5 means it has to win by 10 or more.",
     "edge": "Points between the sim's line and the book's. Bigger edge, higher grade.",
     "grade": "C1 to C10, from the size of the edge. Picks are logged from C6: C6 is 0.25u, C7 0.5u, "
              "C8 and C9 1u, C10 2u. 4u is kept for a MAX BET.",
