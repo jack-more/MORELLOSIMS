@@ -9,9 +9,10 @@ Sources:
   data/reference/nba_teams_espn_2026.json  names, colors, logos (ESPN), arenas
       (Wikipedia/NBA.com — ESPN's own venue field is stale for 5 teams)
   data/reference/nba_court_dimensions.json court geometry
-  picks/nba.json sim_projection = projected MARGIN for the picked side
-      ("NYK +1.0" = Knicks win by 1), so edge = margin + line; verified on
-      every logged pick (e.g. NYK +5.0, sim +1.0 → edge 6.0).
+  picks/nba.json sim_projection = the sim's LINE for the picked side, in book
+      terms (sync_to_picks_json since 2026-10-20: "HOU -7.0" = the Rockets win
+      by 7), so margin = -line and edge = margin + the pick's line (HOU +5.5,
+      sim HOU -7.0 → win by 7, edge 12.5).
 
   python3 scripts/render_nba_card.py --pick-id <id> [--settled|--sealed] [--out DIR]
 """
@@ -304,7 +305,8 @@ def render(pick, settled=False):
     wy = s(728)
     margin = None
     try:
-        margin = float((pick.get("sim_projection") or "").split()[-1])
+        sim = (pick.get("sim_projection") or "").split()[-1]
+        margin = 0.0 if sim == "PK" else -float(sim)      # a line: minus is the favourite
     except (ValueError, IndexError):
         pass
     if settled and pick.get("status") in ("win", "loss", "push"):
