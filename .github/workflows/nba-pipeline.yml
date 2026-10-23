@@ -264,6 +264,11 @@ jobs:
 
 
       - name: Commit and push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_PIPELINE: ${{ inputs.full_pipeline || 'false' }}
+          CAPTURE_NOW: ${{ inputs.capture_now || 'false' }}
+          INJECT_PICK: ${{ inputs.inject_pick }}
         run: |
           git config user.name "NBA Pipeline Bot"
           git config user.email "noreply@github.com"
@@ -293,8 +298,10 @@ jobs:
           fi
 
           git commit -m "NBA SIM — ${DATE}"
-          git pull --rebase origin main || true
-          git push
+          # main moved (another workflow or a merge): rebase and retry; on a data
+          # conflict, queue a fresh run with the same inputs to rebuild on it
+          bash scripts/ci_push.sh nba-pipeline.yml -f full_pipeline="$FULL_PIPELINE" \
+            -f capture_now="$CAPTURE_NOW" -f inject_pick="$INJECT_PICK"
       - name: Kick pick alerts (owner DM + sealed X card)
         if: success()
         env:
@@ -400,6 +407,8 @@ jobs:
 
 
       - name: Commit and push
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "NBA Pipeline Bot"
           git config user.email "noreply@github.com"
@@ -429,8 +438,7 @@ jobs:
           fi
 
           git commit -m "NBA trends refresh — ${DATE}"
-          git pull --rebase origin main || true
-          git push
+          bash scripts/ci_push.sh nba-pipeline.yml -f trends_only=true
       - name: Kick pick alerts (owner DM + sealed X card)
         if: success()
         env:
@@ -548,6 +556,8 @@ jobs:
           python3 scripts/test_score_order.py
 
       - name: Commit settlement
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "NBA Pipeline Bot"
           git config user.email "noreply@github.com"
@@ -572,8 +582,7 @@ jobs:
           fi
 
           git commit -m "NBA settle — ${DATE}"
-          git pull --rebase origin main || true
-          git push
+          bash scripts/ci_push.sh nba-pipeline.yml -f settle_only=true
 
       # After the commit so partial settlements still land; then fail loudly.
       - name: Guardrail — no pick pending more than 3 days after its date
