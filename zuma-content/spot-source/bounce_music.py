@@ -1,10 +1,10 @@
-# Original 16-second bed for the ZUMA bounce video, synthesized from scratch: 120 BPM, E minor.
+# Original 15-second bed for the ZUMA bounce video, synthesized from scratch: 120 BPM, E minor.
 # 0-1 TV static and power-on thunk; 1-17.5 groove (kick, clap, hats, saw bass, offbeat stabs, hits on the slams,
 # riser into the star wipe); 17.2 tape-stop; 17.55 flower bloom and chord, 18.7 logo with a sparkle on the chrome sweep; fade to 23.5 s.
 import numpy as np, wave
 from scipy.signal import butter, lfilter
 
-SR, DUR, BPM = 44100, 16.0, 120
+SR, DUR, BPM = 44100, 15.0, 120
 BEAT = 60 / BPM
 N = int(SR * DUR)
 mix = np.zeros((N, 2))
@@ -56,10 +56,10 @@ def chime(m, at, gain=.25):
     add(s, at, gain, pan=.3); add(s, at + .12, gain * .6, pan=-.3)
 
 
-# groove from the first landing (0.5 s) to the end card (12.5 s)
+# groove from the first landing (0.5 s) to the end card (11.5 s)
 bass_line = [40, 40, 43, 45, 48, 47, 45, 43]
 chords = [[64, 67, 71], [64, 67, 71], [60, 64, 67], [62, 66, 69]]
-nb = int((12.5 - 0.5) / BEAT)
+nb = int((11.5 - 0.5) / BEAT)
 for b in range(nb):
     at = 0.5 + b * BEAT
     add(kick(), at, .9)
@@ -73,7 +73,7 @@ n = int(.5 * SR); tt = np.arange(n) / SR
 add(np.sin(2 * np.pi * np.cumsum(1800 * (1 - tt / .5) ** 1.5 + 300) / SR) * .25 * np.linspace(.3, 1, n), 0.0)
 
 # every landing: a pop, a short boing, and a plucked note that climbs the scale vial by vial
-scale = [64, 66, 67, 69, 71, 72, 74, 76, 78, 79, 81, 83]
+scale = [64, 66, 67, 69, 71, 72, 74, 76, 78, 79, 81]
 def pop():
     n = int(.09 * SR); tt = np.arange(n) / SR
     return hp(rng.standard_normal(n), 1500) * np.exp(-tt * 70) * .6 + np.sin(2 * np.pi * np.cumsum(900 * np.exp(-tt * 30) + 120) / SR) * np.exp(-tt * 40) * .7
@@ -83,16 +83,16 @@ def boing():
 def pluck(m):
     n = int(.6 * SR); tt = np.arange(n) / SR
     return sum(np.sin(2 * np.pi * note(m) * k * tt) * g for k, g in ((1, 1), (2, .35), (3, .15))) * np.exp(-tt * 7) * .3
-for k in range(12):
+for k in range(11):
     at = 0.5 + k
     add(pop(), at, .8); add(boing(), at + .01, .6, pan=(k % 3 - 1) * .3); add(pluck(scale[k]), at, .7, pan=(k % 2 - .5) * .4)
     add(whoosh(.3, True), at + .62, .25)                # the hop's way down, into the next landing
 
-# the twelfth landing becomes the logo: big hit, chord, sparkle, two chimes
-add(impact(), 12.5, .9)
-add(pad([52, 59, 64, 67, 71, 74], 3.5), 12.5, 1.0)
-for i, m in enumerate((88, 91, 95, 98, 100)): chime(m, 13.45 + i * .07, .12)
-chime(76, 14.0, .2); chime(83, 14.5, .22)
+# the last landing becomes the logo: big hit, chord, sparkle, two chimes
+add(impact(), 11.5, .9)
+add(pad([52, 59, 64, 67, 71, 74], 3.5), 11.5, 1.0)
+for i, m in enumerate((88, 91, 95, 98, 100)): chime(m, 12.45 + i * .07, .12)
+chime(76, 13.0, .2); chime(83, 13.5, .22)
 
 L = mix.copy()
 pk = np.max(np.abs(L)) or 1; L /= pk

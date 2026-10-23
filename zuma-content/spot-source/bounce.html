@@ -1,12 +1,12 @@
 <!doctype html><meta charset="utf-8">
-<!-- ZUMA bounce: one vial spins and hops on the beat; every landing turns it into the next of the twelve with a squash, a
+<!-- ZUMA bounce: one vial spins and hops on the beat; every landing turns it into the next of the eleven compounds with a squash, a
      flash, a flower-shaped shockwave in the new area colour, a colour flood from the impact point and petal confetti.
-     After the twelfth it bursts into the end card. render(t) is deterministic once prep(t) has loaded that moment's spin
-     frame; shoot.cjs awaits prep(t) then render(t). 120 BPM, 16 s, 1080x1920 (9:16). -->
+     After the last it bursts into the end card. render(t) is deterministic once prep(t) has loaded that moment's spin
+     frame; shoot.cjs awaits prep(t) then render(t). 120 BPM, 15 s, 1080x1920 (9:16). -->
 <style>html,body{margin:0;background:#000}canvas{display:block}</style>
 <canvas id="c" width="1080" height="1920"></canvas>
 <script>
-const W = 1080, H = 1920, BEAT = 0.5, HOP = 1.0, T0 = 0.5, DUR = 16;
+const W = 1080, H = 1920, BEAT = 0.5, HOP = 1.0, T0 = 0.5, DUR = 15;
 const c = document.getElementById('c'), x = c.getContext('2d');
 const AREA = { metabolic: ['#1F4FD8', '#A3CEFF', '#0B1F5C'], tissue: ['#0E9A5B', '#ABE9C3', '#0A3B26'], dermal: ['#FF5A1F', '#FFB7C5', '#9E1717'],
   endocrine: ['#D08000', '#FFE97A', '#5E3C00'], neuro: ['#6E3FD8', '#D9C8FF', '#2A1263'], supplies: ['#4E6077', '#D9E1EA', '#1B2533'] };
@@ -14,10 +14,10 @@ const AREA_NAME = { metabolic: 'METABOLIC RESEARCH', tissue: 'TISSUE RESEARCH', 
 // the twelve, ordered so the colour changes on every landing
 const SEQ_ALL = [['01', 'RT-3', 'metabolic'], ['09', 'BPC+TB', 'tissue'], ['05', 'GHK-Cu', 'dermal'], ['04', 'TESAMORELIN', 'endocrine'], ['11', 'SELANK', 'neuro'],
   ['02', 'TZ-2', 'metabolic'], ['10', 'GHK+BT', 'dermal'], ['07', 'CJC+IPA', 'endocrine'], ['12', 'SEMAX', 'neuro'], ['06', 'MOTS-c', 'metabolic'],
-  ['03', 'BAC WATER', 'supplies'], ['08', 'NAD+', 'metabolic']];
+  ['08', 'NAD+', 'metabolic']];
 // ?preview: only the five vials whose spin frames exist so far
 const SEQ = location.search.includes('preview') ? SEQ_ALL.filter((v) => ['01', '09', '05', '04', '11'].includes(v[0])) : SEQ_ALL;
-const N = SEQ.length, T_END = T0 + N * HOP;          // the twelfth landing turns into the end card
+const N = SEQ.length, T_END = T0 + N * HOP;          // the last landing turns into the end card
 const FLOOR = 1560, VH = 720, LIFT = 360, SPIN_FPS = 22;
 const glow = document.createElement('canvas'), gx = glow.getContext('2d');   // the vial alone, for the white-hot glint
 let LOCK, FLOWER, MARK, LW;
