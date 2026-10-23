@@ -31,7 +31,7 @@ OUT = os.path.join(REPO, "members", "dashboard", "index.html")
 HEAD = """
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/brand/v2/brand.css?v=20261021d">
-<link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261021e">
+<link rel="stylesheet" href="/assets/brand/v2/dashboard.css?v=20261023a">
 <link rel="icon" href="/assets/brand/v2/mark.svg" type="image/svg+xml">
 <meta name="robots" content="noindex">
 <style>

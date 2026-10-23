@@ -3847,8 +3847,8 @@ BOARD_TIPS = {
     "syn": "Synergy, 0 to 99: how tonight's lineup has played together, from 2- to 5-man on/off data. "
            "20% of the line.",
     "book": "The sportsbook spread for each team. Minus is the favorite: -1.5 means win by 2 or more.",
-    "sim": "The sim's own spread for each team, built from the four columns plus home court and rest.",
-    "side": "The team the sim likes at the book's number.",
+    "sim": "Who the sim has winning, and by how much, from the four columns plus home court and rest.",
+    "side": "The bet: the team the sim takes at the book's number. LAC +9.5 means the Clippers, getting 9.5 points.",
     "edge": "Points between the sim's line and the book's. Bigger edge, higher grade.",
     "grade": "C1 to C10, from the size of the edge. Picks are logged from C6: C6 is 0.25u, C7 0.5u, "
              "C8 and C9 1u, C10 2u. 4u is kept for a MAX BET.",
@@ -6093,13 +6093,21 @@ def render_matchup_card(m, idx, team_map, logged=False):
                 f'<span class="vs-nick">{name}</span><span class="vs-meta">{wins}-{losses} · '
                 f'<span class="tip" data-tip="{BOARD_TIPS["rank"]}">MOJO #{rank}</span></span></div></div>')
 
+    # The bet is the headline: the team and number the sim takes, big; what the sim
+    # and the book each say sits under it (owner, 2026-10-23: "which team is being picked")
     if spread_proj:
-        pill = '<span class="vs-pill wait">Waiting on a book line</span>'
+        mid = (f'<span class="vs-k tip" data-tip="{BOARD_TIPS["sim"]}">Sim line</span>'
+               f'<b class="vs-line {edge_cls}">{sim_line}</b>'
+               f'<span class="vs-book"><span class="tip" data-tip="{BOARD_TIPS["book"]}">Book</span> {book_line}</span>'
+               '<span class="vs-pill wait">Waiting on a book line</span>')
     else:
         is_pick = logged or (conf_10 >= floor and max(conf_pct, 100 - conf_pct) > _CAPTURE_LEAN)
-        pill = (f'<span class="vs-pill{" pick" if is_pick else ""}"><span class="tip" data-tip="{BOARD_TIPS["side"]}">'
-                f'Sim side</span> <b>{pick_text}</b> · <span class="tip" data-tip="{BOARD_TIPS["edge"]}">{edge_abs:.1f} edge</span>'
-                f' · <span class="tip" data-tip="{BOARD_TIPS["grade"]}">C{conf_10}</span></span>')
+        mid = (f'<span class="vs-k tip" data-tip="{BOARD_TIPS["side"]}">{"Our pick" if is_pick else "Sim lean"}</span>'
+               f'<b class="vs-line vs-bet{" pick" if is_pick else ""} {edge_cls}">{pick_text}</b>'
+               f'<span class="vs-book"><span class="tip" data-tip="{BOARD_TIPS["sim"]}">{sim_short}</span> · '
+               f'<span class="tip" data-tip="{BOARD_TIPS["book"]}">Book</span> {book_line}</span>'
+               f'<span class="vs-pill{" pick" if is_pick else ""}"><span class="tip" data-tip="{BOARD_TIPS["edge"]}">'
+               f'{edge_abs:.1f} pts of edge</span> · <span class="tip" data-tip="{BOARD_TIPS["grade"]}">C{conf_10}</span></span>')
 
     tip_txt = _tip_et(m.get("tip_at"))
     ou_txt = f"O/U {total:.1f}" + (f" · sim {proj_total:.1f}" if proj_total else "")
@@ -6142,10 +6150,7 @@ def render_matchup_card(m, idx, team_map, logged=False):
         <div class="vs-head">
             {_team(aa, a_name, a_logo, m['a_wins'], m['a_losses'], m['a_mojo_rank'])}
             <div class="vs-mid ma-premium">
-                <span class="vs-k tip" data-tip="{BOARD_TIPS['sim']}">Sim line</span>
-                <b class="vs-line {edge_cls}">{sim_line}</b>
-                <span class="vs-book"><span class="tip" data-tip="{BOARD_TIPS['book']}">Book</span> {book_line}</span>
-                {pill}
+                {mid}
             </div>
             {_team(ha, h_name, h_logo, m['h_wins'], m['h_losses'], m['h_mojo_rank'], right=True)}
         </div>
