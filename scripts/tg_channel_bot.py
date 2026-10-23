@@ -28,12 +28,14 @@ Usage:
   python3 scripts/tg_channel_bot.py revoke --user <telegram id>
   python3 scripts/tg_channel_bot.py list
   python3 scripts/tg_channel_bot.py post-rules
+  python3 scripts/tg_channel_bot.py set-photo [--photo <jpg>]   (the bot's profile photo)
 """
 
 import argparse
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -323,9 +325,33 @@ def cmd_post_rules():
     print("rules posted and pinned")
 
 
+def cmd_set_photo(path):
+    """The bot's own profile photo (Bot API setMyProfilePhoto): the brand mark the X account uses."""
+    path = path or os.path.join(REPO, "assets", "brand", "tg-avatar.jpg")
+    boundary = "----tgb"
+    with open(path, "rb") as f:
+        img = f.read()
+    body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"photo\"\r\n\r\n"
+            f"{json.dumps({'type': 'static', 'photo': 'attach://avatar'})}\r\n").encode()
+    body += (f"--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; "
+             f"filename=\"avatar.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n").encode() + img + b"\r\n"
+    body += f"--{boundary}--\r\n".encode()
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{TOKEN}/setMyProfilePhoto", data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            res = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        res = json.loads(e.read() or b"{}")
+    if not res.get("ok"):
+        raise SystemExit(f"setMyProfilePhoto refused: {res.get('description')}")
+    print(f"bot photo set from {os.path.relpath(path, REPO)}")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run", "post", "grant", "revoke", "list", "post-rules"])
+    ap.add_argument("cmd", choices=["run", "post", "grant", "revoke", "list", "post-rules", "set-photo"])
     ap.add_argument("--photo")
     ap.add_argument("--caption", default="")
     ap.add_argument("--user")
@@ -342,6 +368,8 @@ def main():
         cmd_revoke(a.user)
     elif a.cmd == "post-rules":
         cmd_post_rules()
+    elif a.cmd == "set-photo":
+        cmd_set_photo(a.photo)
     else:
         cmd_list()
 
