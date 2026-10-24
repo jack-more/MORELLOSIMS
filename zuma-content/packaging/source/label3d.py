@@ -20,7 +20,7 @@ def vial3(no):
     # real 3 mL proportions: straight body to 23.5 mm, shoulder, short neck, rolled lip; crimp skirt and a tall flip-off cap make 35 mm
     outer = [(0.0, 0.02), (0.62, 0.0), (0.76, 0.03), (0.8, 0.14), (R, 2.35), (0.785, 2.45), (0.72, 2.54), (0.6, 2.6), (0.54, 2.66),
              (0.54, 2.74), (0.6, 2.77), (0.65, 2.82), (0.65, 2.95), (0.5, 2.97)]
-    inner = [(0.43, 2.97), (0.45, 2.93), (0.45, 2.66), (0.56, 2.56), (0.7, 2.45), (0.73, 2.3), (0.73, 0.2), (0.6, 0.12), (0.0, 0.14)]
+    inner = [(0.43, 2.97), (0.47, 2.93), (0.47, 2.64), (0.53, 2.585), (0.645, 2.515), (0.715, 2.43), (0.73, 2.34), (0.73, 0.2), (0.6, 0.12), (0.0, 0.14)]   # an even 0.7 mm wall through the shoulder, no thick lens of glass
     glass = lathe('glass', outer + inner, seg=160)
     tint = {'metabolic': '#9DB9F2', 'dermal': '#F4AE97', 'tissue': '#8ED3AE', 'endocrine': '#EBC27C', 'neuro': '#BCA6EE', 'supplies': '#C9D2DC'}
     gcol = lin(tint[area]) if os.environ.get('ZTINT') else (1, 1, 1, 1)   # ZTINT=1: glass tinted in the area colour
@@ -31,7 +31,7 @@ def vial3(no):
     if os.environ.get('ZTINT') == 'vol':
         # coloured glass: white surface, the colour absorbed inside the wall, so thin faces read light and the edges run deep
         gb.inputs['Base Color'].default_value = (1, 1, 1, 1)
-        ab = gnt.nodes.new('ShaderNodeVolumeAbsorption'); ab.inputs['Color'].default_value = {'dermal': (1.0, 0.3, 0.14, 1), 'metabolic': (0.06, 0.28, 1.0, 1), 'tissue': (0.06, 0.72, 0.3, 1), 'endocrine': (1.0, 0.58, 0.06, 1), 'neuro': (0.42, 0.18, 1.0, 1), 'supplies': (0.6, 0.7, 0.85, 1)}[area]; ab.inputs['Density'].default_value = float(os.environ.get('ZDENS', '6'))
+        ab = gnt.nodes.new('ShaderNodeVolumeAbsorption'); ac = lin(TONES[area][1]); am = max(ac[:3]); ab.inputs['Color'].default_value = tuple((ac[i] / am) ** 0.5 for i in range(3)) + (1,); ab.inputs['Density'].default_value = float(os.environ.get('ZDENS', '6'))
         gnt.links.new(ab.outputs['Volume'], out.inputs['Volume'])
     glass.data.materials.append(gm); parts.append(glass)
     # grey rubber stopper: the plug sits down in the neck and shows through the glass under the crimp
@@ -42,7 +42,7 @@ def vial3(no):
     cm, cb = mat('alu', **{'Base Color': lin('#CDD1D5'), 'Metallic': 1.0, 'Roughness': 0.3, 'Anisotropic': 0.5}); crimp.data.materials.append(cm); parts.append(crimp)
     # flip-off cap: moulded plastic sitting proud on the crimp, slightly wider, soft rounded top edge
     cap = lathe('cap', [(0.0, 3.06), (0.69, 3.06), (0.705, 3.09), (0.71, 3.3), (0.705, 3.44), (0.68, 3.49), (0.62, 3.5), (0.0, 3.5)], seg=128)
-    pm, pb = mat('cap', **{'Base Color': lin(TONES[area][2 if os.environ.get('ZCAP') == 'deep' else 1]), 'Roughness': 0.38, 'Coat Weight': 0.3, 'Coat Roughness': 0.2}); cap.data.materials.append(pm); parts.append(cap)
+    pm, pb = mat('cap', **{'Base Color': lin({'ox': '#6E1C2A', 'snow': '#EEEAE3'}.get(os.environ.get('ZCAP'), TONES[area][2 if os.environ.get('ZCAP') == 'deep' else 1])), 'Roughness': 0.38, 'Coat Weight': 0.3, 'Coat Roughness': 0.2}); cap.data.materials.append(pm); parts.append(cap)
     cake = lathe('cake', [(0.0, 0.15), (0.71, 0.15), (0.72, 0.2), (0.72, 0.62), (0.69, 0.66), (0.4, 0.64), (0.0, 0.62)], seg=96)
     km, kb = mat('cake', **{'Base Color': lin('#F2EFE8'), 'Roughness': 0.95}); cake.data.materials.append(km); parts.append(cake)
     # the label: 20 mm tall on the straight body, 3 mm above the base, full wrap
@@ -65,7 +65,7 @@ def vial3(no):
     nt.links.new(img.outputs['Color'], ink.inputs['Base Color'])
     nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 900; bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.04
     nt.links.new(nz.outputs['Fac'], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], ink.inputs['Normal'])
-    if OPT in ('T', 'S', 'P'):
+    if OPT in ('T', 'S') or OPT.startswith('P'):
         # printed straight on the glass: ink where the art has ink, clear everywhere else
         clear = nt.nodes.new('ShaderNodeBsdfTransparent'); m2 = nt.nodes.new('ShaderNodeMixShader'); nt.links.new(img.outputs['Alpha'], m2.inputs['Fac'])
         nt.links.new(clear.outputs['BSDF'], m2.inputs[1]); nt.links.new(ink.outputs['BSDF'], m2.inputs[2]); nt.links.new(m2.outputs['Shader'], o.inputs['Surface'])
