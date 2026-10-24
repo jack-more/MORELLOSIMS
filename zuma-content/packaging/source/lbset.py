@@ -19,10 +19,13 @@ AREA = AREA_OF[NO]
 
 # the Lightbox: a wall of lit tiles well behind the vial, so the lens softens it
 bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 11, 3.2), rotation=(math.radians(90), 0, 0)); bk = bpy.context.active_object
-bk.scale = (17, 17, 1) if not os.environ.get('ZNOS') else (70, 40, 1); bpy.ops.object.transform_apply(scale=True)
+bk.scale = (17, 17, 1) if not os.environ.get('ZNOS') else (36, 21, 1) if os.environ.get('ZWALL') else (70, 40, 1); bpy.ops.object.transform_apply(scale=True)
+if os.environ.get('ZWS'):                          # wall size and height for a lineup: sx, sz, z (so a dense grid fits the frame)
+    sx_, sz_, z_ = map(float, os.environ['ZWS'].split(','))
+    for v_ in bk.data.vertices: v_.co.x *= sx_ / 36; v_.co.z = z_ + (v_.co.z - 3.2) * sz_ / 21   # the mesh is already baked in place
 em = bpy.data.materials.new('lightbox'); em.use_nodes = True; nt = em.node_tree; nt.nodes.clear()
 o = nt.nodes.new('ShaderNodeOutputMaterial'); es = nt.nodes.new('ShaderNodeEmission'); es.inputs['Strength'].default_value = float(os.environ.get('ZLB', '1.0'))
-ti = nt.nodes.new('ShaderNodeTexImage'); tp = os.path.join(SET, 'lb-%s.png' % NO); ti.image = bpy.data.images.load(tp if os.path.exists(tp) else os.path.join(SET, 'lb-%s.png' % AREA))
+ti = nt.nodes.new('ShaderNodeTexImage'); tp = os.environ.get('ZWALL') or os.path.join(SET, 'lb-%s.png' % NO); ti.image = bpy.data.images.load(tp if os.path.exists(tp) else os.path.join(SET, 'lb-%s.png' % AREA))
 nt.links.new(ti.outputs['Color'], es.inputs['Color']); nt.links.new(es.outputs['Emission'], o.inputs['Surface']); bk.data.materials.append(em)
 WHITE = os.environ.get('ZBG') == 'white'          # plain white studio, for the factory: the true tint with nothing behind it
 if WHITE: nt.links.remove(es.inputs['Color'].links[0]); es.inputs['Color'].default_value = (1, 1, 1, 1)
@@ -86,9 +89,14 @@ pl.data.materials.append(lm_)
 
 LINE = os.environ.get('ZNOS')                     # a lineup: several vials in a row, the camera pulled back to hold them
 if LINE:
-    nos = LINE.split(','); gap = 2.5
+    nos = LINE.split(','); gap = 2.5; rows = int(os.environ.get('ZROWS', '1'))
+    per = (len(nos) + rows - 1) // rows
     for i, n_ in enumerate(nos):
-        v = vial3(n_); v.location = ((i - (len(nos) - 1) / 2) * gap, 0, 0)
+        v = vial3(n_)
+        if rows == 1: v.location = ((i - (len(nos) - 1) / 2) * gap, 0, 0)
+        else:                                      # two staggered rows: the back row sits half a step over and further back
+            r_, k_ = divmod(i, per); v.location = ((k_ - (per - 1) / 2) * 3.4 + (0.0 if r_ else 1.7) - 0.85, 2.6 if r_ == 0 else -1.4, 0)
+            v.rotation_euler = (0, 0, math.radians((k_ * 37 % 11) - 5))
         if n_ == '03':                             # BAC water is a liquid: no cake
             for o_ in [o_ for o_ in v.children if o_.name.startswith('cake')]: bpy.data.objects.remove(o_, do_unlink=True)
 else:
@@ -107,7 +115,7 @@ area('top', 6, (0, -2, 14), 120)
 for ob in [o_ for o_ in sc.objects if o_.type == 'LIGHT']: ob.visible_glossy = True
 
 cam = bpy.data.cameras.new('cam'); co = bpy.data.objects.new('cam', cam); sc.collection.objects.link(co); sc.camera = co
-cam.sensor_width = 36; cam.lens = 85; co.location = tuple(map(float, os.environ['ZCAM'].split(','))) if os.environ.get('ZCAM') else (0, -21, 2.9) if not LINE else (0, -40, 4.4); look = Vector((0, 0, 1.55))
+cam.sensor_width = 36; cam.lens = 85; co.location = tuple(map(float, os.environ['ZCAM'].split(','))) if os.environ.get('ZCAM') else (0, -21, 2.9) if not LINE else (0, -40, 4.4); look = Vector(tuple(map(float, os.environ['ZLOOK'].split(','))) if os.environ.get('ZLOOK') else (0, 0, 1.55))
 d = look - co.location; co.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
 cam.dof.use_dof = True; cam.dof.focus_distance = (Vector((0, -0.6, 1.6)) - co.location).length; cam.dof.aperture_fstop = 2.8
 
