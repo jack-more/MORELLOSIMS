@@ -40,6 +40,8 @@ import picks_store  # noqa: E402
 REPO = os.path.dirname(HERE)
 STATE = os.path.join(REPO, "ops", "state", "pick_alerts.json")  # telegram/ is gitignored
 LEGACY = os.path.join(REPO, "mlbsim", "posted_cards.json")
+# owner stake changes after a pick went out: [{"ref": state_ref, "was": "2u to win", "why": ..., "done": ...}]
+RESTAKE = os.path.join(REPO, "ops", "state", "restake.json")
 OUT = os.path.join(REPO, "posters", "v2")
 ET = timezone(timedelta(hours=-4))
 MIN_CONF = 6   # same floor as capture_picks.MIN_TRACKED_CONF_GRADE
@@ -272,6 +274,32 @@ def run(dry=False):
                     st["x_sealed"].append(ref)
             except Exception as e:
                 print(f"  WARN sealed X post {pid}: {e}")
+    # the owner changed a sent pick's stake before tip (ops/state/restake.json): the members
+    # page takes the new stake and every member gets one stake-change email
+    restakes = load(RESTAKE, [])
+    for r in restakes:
+        if r.get("done"):
+            continue
+        p = next((p for p in published_today(today) if picks_store.ref_matches(r["ref"], p["id"])), None)
+        if p is None or picks_store.is_raw_sealed(p) or not released(st, p):
+            continue
+        start = picks_store.start_time(p)
+        if start is not None and datetime.now(timezone.utc) >= start:
+            r["done"] = "tipped before the change went out"
+            continue
+        note = f"Stake change: now {member_delivery._stake_txt(p)} (was {r['was']}). {r.get('why') or ''}".strip()
+        try:
+            if member_delivery.enabled():
+                member_delivery.publish(p, picks_store.start_label(p), dry=dry)
+            if member_delivery.email_enabled():
+                member_delivery.email(p, picks_store.start_label(p), dry=dry, update=note)
+            r["done"] = datetime.now(timezone.utc).isoformat()
+            print(f"  members: stake change sent · {p.get('matchup')}")
+        except Exception as e:
+            print(f"  WARN stake change {p.get('matchup')}: {type(e).__name__}")
+    if restakes and not dry:
+        with open(RESTAKE, "w") as f:
+            json.dump(restakes, f, indent=2)
     # a pick voided before tip comes off the members page
     for p in voided_today(today):
         if member_delivery.enabled() and picks_store.ref_in(st["site"], p["id"]):
