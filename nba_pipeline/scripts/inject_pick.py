@@ -19,6 +19,9 @@ Usage:
   # Force add even if game exists:
   python scripts/inject_pick.py "BOS @ CLE" "BOS -0.5" --force
 
+  # Owner stakes are to-win (2026-10-23): 10u to win at -110 risks 275 $PP (11u)
+  python scripts/inject_pick.py "MEM @ GSW" "MEM +4.5" --to-win 10 --force
+
   # Via workflow dispatch:
   Called automatically when the workflow receives inject_pick input
 """
@@ -206,11 +209,18 @@ def main():
     )
     parser.add_argument("matchup", help='Game matchup, e.g. "BOS @ CLE"')
     parser.add_argument("side", help='Pick side, e.g. "BOS -0.5" or "BOS ML"')
-    parser.add_argument("--risk", type=int, default=50, help="Risk amount in $PP (default: 50)")
+    parser.add_argument("--risk", type=float, default=50, help="Risk amount in $PP (default: 50)")
+    parser.add_argument("--to-win", type=float, default=None,
+                        help="Units to win (25 $PP = 1u) at the pick's odds, -110 for spreads; sets --risk")
     parser.add_argument("--date", type=str, default=None, help="Date YYYY-MM-DD (default: today)")
     parser.add_argument("--odds", type=int, default=None, help="ML odds (e.g. +130 or -150)")
     parser.add_argument("--force", action="store_true", help="Add even if pick already exists")
     args = parser.parse_args()
+    if args.to_win is not None:
+        price = args.odds if args.odds is not None else -110
+        args.risk = round(args.to_win * 25 * (abs(price) / 100 if price < 0 else 1), 4)
+    if args.risk == int(args.risk):
+        args.risk = int(args.risk)
 
     success = inject(
         matchup=args.matchup,

@@ -4,7 +4,9 @@
      Serve the repo root and screenshot .mn, e.g. with Playwright:
        /scripts/templates/pick_note.html#{"tier":6,"tc":"#006BB6","tc2":"#F58426","logo":"...","city":"New York",
          "nick":"Knicks","abbr":"NYK","line":"−4.5","terms":"−110 · 0.25 units · vs 76ers","ser":"0001","stake":"¼U",
-         "book":"NYK −4.5","sim":"Knicks by 8","edge":"3.5 pts","tip":"7:00 PM","game":"76ers at Knicks","logged":"Logged 1:14 PM ET"} -->
+         "book":"NYK −4.5","sim":"Knicks by 8","edge":"3.5 pts","tip":"7:00 PM","game":"76ers at Knicks","logged":"Logged 1:14 PM ET"}
+     A settled note adds the stamp: "res":"WIN","amt":"+1U","stampline":"OCT 23 2026 · No. 0037" -->
+
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>:root{--font:"Archivo",system-ui,sans-serif;--mono:"IBM Plex Mono",monospace;--ink:#0B0F0D;--ink-2:#4E5752;--ink-3:#88918C;--green-deep:#14743C}
 body{margin:0;background:#fff}</style>
@@ -27,13 +29,14 @@ document.getElementById("c").innerHTML = `
     <div class="mn-row"><div><span class="mn-k">Book</span><b>${d.book}</b></div><div><span class="mn-k">Sim</span><b>${d.sim}</b></div><div class="e"><span class="mn-k">Edge</span><b>${d.edge}</b></div><div><span class="mn-k">Tip</span><b>${d.tip}</b></div></div>
     <div class="mn-fin"><span>${d.game}</span><span class="mn-log">${d.logged}</span></div>
   </div>
+  ${d.res ? `<div class="mn-stamp"><svg width="300" height="300" viewBox="0 0 300 300"><circle cx="150" cy="150" r="142" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="150" cy="150" r="129" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="150" cy="150" r="92" fill="none" stroke="currentColor" stroke-width="2.5"/><path id="mn-t1" d="M 39,150 A 111,111 0 0 1 261,150" fill="none"/><path id="mn-t2" d="M 32,150 A 118,118 0 0 0 268,150" fill="none"/><text font-family="IBM Plex Mono" font-size="17" font-weight="500" letter-spacing="4" fill="currentColor"><textPath href="#mn-t1" startOffset="50%" text-anchor="middle">GRADED IN PUBLIC</textPath></text><text font-family="IBM Plex Mono" font-size="15" font-weight="500" letter-spacing="3" fill="currentColor"><textPath href="#mn-t2" startOffset="50%" text-anchor="middle">${d.stampline}</textPath></text></svg><div><b>${d.res}</b><span>${d.amt}</span></div></div>` : ""}
 </div>`;
 
 // measured in the note's own fonts (a fallback face runs wider and would shrink every line)
 Promise.all([document.fonts.load('condensed 900 100px "Archivo"'), document.fonts.load('600 25px "IBM Plex Mono"')]).catch(() => {}).then(() => {
   // long nicknames shrink to the room before the foil strip
   const nick = document.querySelector(".mn-nick");
-  let fs = 158; while (nick.scrollWidth > 540 && fs > 90) { fs -= 4; nick.style.fontSize = fs + "px"; }
+  let fs = 158; while (nick.scrollWidth > 540 && fs > 60) { fs -= 4; nick.style.fontSize = fs + "px"; }
   // and a double-digit line shrinks clear of the stake rosette
   const line = document.querySelector(".mn-line"); line.style.width = "max-content";
   let ls = 330; while (line.offsetWidth > 600 && ls > 200) { ls -= 10; line.style.fontSize = ls + "px"; }
