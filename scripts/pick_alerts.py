@@ -88,9 +88,22 @@ def published_today(today):
 
 
 def card_path(p, sealed=False):
-    """v3 pick card (MLB render_pick_card / NBA render_nba_card), saved to OUT."""
+    """The pick's card, saved to OUT: an NBA spread is its banknote note with the home arena
+    (render_pick_note, headless Chrome); anything else, or a note that fails to render, is the
+    v3 card (MLB render_pick_card / NBA render_nba_card)."""
     os.makedirs(OUT, exist_ok=True)
     sport = p.get("sport") or "mlb"
+    if sport == "nba" and not sealed and (p.get("bet_type") or "spread") == "spread":
+        try:
+            import render_pick_note
+            ps = sorted(picks_store.load_picks(os.path.join(REPO, "picks", "nba.json")), key=lambda x: (x["date"], x["id"]))
+            n = next((i for i, x in enumerate(ps, 1) if x["id"] == p["id"]), 1)
+            note = render_pick_note.render(p, os.path.join(OUT, f"note-{p['id']}.png"), n=n,
+                                           when_label=p.get("game_time") or picks_store.start_label(p))
+            if note:
+                return note
+        except Exception as e:
+            print(f"  WARN note render {p.get('matchup')}: {type(e).__name__}")
     mod = __import__({"nba": "render_nba_card", "nfl": "render_nfl_card"}.get(sport, "render_pick_card"))
     path = os.path.join(OUT, f"{'sealed' if sealed else 'pick'}-{p['id']}.png")
     (mod.sealed(p) if sealed else mod.render(p, False)).save(path)

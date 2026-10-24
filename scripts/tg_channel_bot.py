@@ -23,6 +23,7 @@ Channel setup (one-time, by hand — Telegram does not let bots create channels)
 
 Usage:
   python3 scripts/tg_channel_bot.py run
+  python3 scripts/tg_channel_bot.py listen --minutes 13   (answers within seconds; the cron chains them)
   python3 scripts/tg_channel_bot.py post --photo <path> --caption "..."
   python3 scripts/tg_channel_bot.py grant --user <telegram id> --days 30 --note "comp"
   python3 scripts/tg_channel_bot.py revoke --user <telegram id>
@@ -166,11 +167,12 @@ def save_json(path, obj):
         json.dump(obj, f, indent=2)
 
 
-def cmd_run():
-    if not TOKEN:
-        raise SystemExit("TELEGRAM_BOT_TOKEN missing")
-    state = load_json(STATE_FILE, {"offset": 0})
-    upd = api("getUpdates", offset=state["offset"], timeout=10, allowed_updates=ALLOWED_UPDATES)
+def process_updates(state, timeout=10):
+    """Drain getUpdates once (long-poll `timeout` seconds) and handle each update.
+    Returns True when the owner did something (a tap or a command) that needs the
+    duties run right away (a Send to deliver, a pick to post)."""
+    acted = False
+    upd = api("getUpdates", offset=state["offset"], timeout=timeout, allowed_updates=ALLOWED_UPDATES)
     for u in upd.get("result", []):
         state["offset"] = u["update_id"] + 1
         msg = u.get("message") or {}
@@ -194,6 +196,7 @@ def cmd_run():
         if cb or (msg and OWNER_ID and str(msg.get("chat", {}).get("id")) == str(OWNER_ID)):
             try:
                 handle_owner(msg, cb)
+                acted = True
             except Exception as e:  # one bad update must not stop the run or lose the offset
                 print(f"  WARN owner update {u['update_id']}: {e}")
             continue
@@ -213,6 +216,12 @@ def cmd_run():
     if upd.get("result"):
         api("getUpdates", offset=state["offset"], timeout=0)
         save_json(STATE_FILE, state)
+    return acted
+
+
+def duties():
+    """Everything a run does besides updates: slips, pick alerts and delivery, line-move
+    alerts, member expiries."""
     # slips held for first pitch, and result follow-ups for posted slips
     try:
         import slips
@@ -225,11 +234,60 @@ def cmd_run():
         pick_alerts.run()
     except Exception as e:
         print(f"  WARN pick alerts: {e}")
+    # a sent pick whose edge dropped 2+ points since it was logged → owner DM
+    try:
+        import tg_console
+        tg_console.move_alerts(lambda text: api("sendMessage", chat_id=OWNER_ID, text=text))
+    except Exception as e:
+        print(f"  WARN move alerts: {e}")
     # expiries: remove members whose pass or comp has ended
     if CHANNEL_ID:
         import tg_members
         tg_members.sweep(remove_member)
+
+
+def cmd_run():
+    if not TOKEN:
+        raise SystemExit("TELEGRAM_BOT_TOKEN missing")
+    state = load_json(STATE_FILE, {"offset": 0})
+    process_updates(state, timeout=10)
+    duties()
     save_json(STATE_FILE, state)
+
+
+def cmd_listen(minutes):
+    """Stay up for `minutes`, answering taps and commands within seconds (Telegram
+    long-poll) instead of once per cron run. The duties run at the start, right after
+    anything the owner does, and every DUTY_EVERY seconds after a pull from main, and
+    the state is committed as it changes. The workflow's cron starts the next listener
+    as this one ends."""
+    import tg_console
+    if not TOKEN:
+        raise SystemExit("TELEGRAM_BOT_TOKEN missing")
+    end = time.time() + minutes * 60
+    state = load_json(STATE_FILE, {"offset": 0})
+    process_updates(state, timeout=0)
+    duties()
+    save_json(STATE_FILE, state)
+    tg_console.commit_push(["ops/state"], f"TG bot — {datetime.now(tg_console.ET):%b %d %I:%M %p} ET — state sync")
+    last = time.time()
+    while time.time() < end - 40:
+        acted = process_updates(state, timeout=max(1, min(25, int(end - time.time() - 35))))
+        due = time.time() - last >= DUTY_EVERY
+        if not (acted or due):
+            continue
+        save_json(STATE_FILE, state)
+        if due:
+            tg_console.commit_push(["ops/state"], f"TG bot — {datetime.now(tg_console.ET):%b %d %I:%M %p} ET — state sync")
+            tg_console.git_sync()
+            state = load_json(STATE_FILE, state)
+            last = time.time()
+        duties()
+        save_json(STATE_FILE, state)
+        tg_console.commit_push(["ops/state"], f"TG bot — {datetime.now(tg_console.ET):%b %d %I:%M %p} ET — state sync")
+
+
+DUTY_EVERY = 180   # seconds between pulls from main + duties while listening
 
 
 def ack(cb, text):
@@ -275,6 +333,11 @@ def handle_owner(msg, cb):
         import slips
         slips.receive(msg)
         return
+    import tg_console
+    reply = tg_console.handle(msg.get("text") or "")
+    if reply:
+        api("sendMessage", chat_id=OWNER_ID, text=reply)
+        return
     text = (msg.get("text") or "").strip().lower()
     if text.startswith("/status"):
         ops_digest.digest("Check-in")
@@ -282,7 +345,7 @@ def handle_owner(msg, cb):
         lines = ops_digest.picks_block(datetime.now(ops_digest.ET).strftime("%Y-%m-%d"))
         api("sendMessage", chat_id=OWNER_ID, text="\n".join(lines) or "No C8+ picks yet today.")
     else:
-        api("sendMessage", chat_id=OWNER_ID, text=OWNER_HELP)
+        api("sendMessage", chat_id=OWNER_ID, text=tg_console.HELP)
 
 
 def cmd_post(photo, caption):
@@ -351,7 +414,8 @@ def cmd_set_photo(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run", "post", "grant", "revoke", "list", "post-rules", "set-photo"])
+    ap.add_argument("cmd", choices=["run", "listen", "post", "grant", "revoke", "list", "post-rules", "set-photo"])
+    ap.add_argument("--minutes", type=float, default=13)
     ap.add_argument("--photo")
     ap.add_argument("--caption", default="")
     ap.add_argument("--user")
@@ -360,6 +424,8 @@ def main():
     a = ap.parse_args()
     if a.cmd == "run":
         cmd_run()
+    elif a.cmd == "listen":
+        cmd_listen(a.minutes)
     elif a.cmd == "post":
         cmd_post(a.photo, a.caption)
     elif a.cmd == "grant":

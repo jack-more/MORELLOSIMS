@@ -71,12 +71,12 @@ concurrency:
 
 permissions:
   contents: write
-  actions: read
+  actions: write   # /resim starts the NBA pipeline
 
 jobs:
   bot:
     runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to 26 on 2026-10-19, eve of NBA opener
-    timeout-minutes: 10
+    timeout-minutes: 20   # `run` listens for 13 minutes; the cron chains the next one
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,6 +122,7 @@ jobs:
           case "${CMD}" in
             grant)  python3 scripts/tg_channel_bot.py grant --user "${{ inputs.user }}" --days "${{ inputs.days }}" --note "${{ inputs.note }}" ;;
             revoke) python3 scripts/tg_channel_bot.py revoke --user "${{ inputs.user }}" ;;
+            run)    python3 scripts/tg_channel_bot.py listen --minutes 13 ;;   # taps and commands answered in seconds
             *)      python3 scripts/tg_channel_bot.py "${CMD}" ;;
           esac
 
