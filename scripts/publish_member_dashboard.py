@@ -24,6 +24,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import brand_head  # noqa: E402
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(REPO, "nba_pipeline", "nba_sim.html")
 OUT = os.path.join(REPO, "members", "dashboard", "index.html")
@@ -268,12 +271,7 @@ OG = """    <meta property="og:type" content="website">
     <meta property="og:url" content="https://morellosims.com/members/dashboard/">
     <meta property="og:title" content="Lineups + info · Morello Sims Members">
     <meta property="og:description" content="Tonight&#39;s lineups, injuries and matchup notes. Members only.">
-    <meta property="og:image" content="https://morellosims.com/assets/brand/og-members.jpg">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://morellosims.com/assets/brand/og-members.jpg">
-"""
+"""  # icons and preview image: brand_head.apply in build()
 
 
 def build(src=SRC, out=OUT):
@@ -293,6 +291,7 @@ def build(src=SRC, out=OUT):
         html = html[:k] + TITLE.format(date=date) + html[k:]
     j = html.rindex("</body>")
     html = html[:j] + LINEUPS_JS + TIPS_JS + GATE_JS + html[j:]
+    html = brand_head.apply(html, "https://morellosims.com/members/dashboard/")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
