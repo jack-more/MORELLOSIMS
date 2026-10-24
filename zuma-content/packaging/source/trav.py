@@ -25,15 +25,15 @@ def travertine(name, base='#E4D6BF'):
     ramp = nt.nodes.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].color = lin('#DCCDB4'); ramp.color_ramp.elements[1].color = lin('#F4ECDF')
     nt.links.new(band.outputs['Fac'], ramp.inputs['Fac'])
     # open pores: small dark voids, stretched along the strata
-    pm_ = nt.nodes.new('ShaderNodeMapping'); pm_.inputs['Scale'].default_value = (0.45, 0.45, 1.6); nt.links.new(co.outputs['Object'], pm_.inputs['Vector'])
+    pm_ = nt.nodes.new('ShaderNodeMapping'); pm_.inputs['Scale'].default_value = (0.14, 0.14, 2.4); nt.links.new(co.outputs['Object'], pm_.inputs['Vector'])
     vor = nt.nodes.new('ShaderNodeTexVoronoi'); vor.inputs['Scale'].default_value = 2.4; nt.links.new(pm_.outputs['Vector'], vor.inputs['Vector'])
-    mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.0; mr.inputs['From Max'].default_value = 0.11; mr.clamp = True
+    mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.0; mr.inputs['From Max'].default_value = 0.075; mr.clamp = True
     nt.links.new(vor.outputs['Distance'], mr.inputs['Value'])
-    pore = nt.nodes.new('ShaderNodeMixRGB'); pore.blend_type = 'MULTIPLY'; pore.inputs['Color2'].default_value = lin('#5E4A36')
+    pore = nt.nodes.new('ShaderNodeMixRGB'); pore.blend_type = 'MULTIPLY'; pore.inputs['Color2'].default_value = lin('#A08B6E')
     inv = nt.nodes.new('ShaderNodeMath'); inv.operation = 'SUBTRACT'; inv.inputs[0].default_value = 1.0; nt.links.new(mr.outputs['Result'], inv.inputs[1])
     # a second, finer layer of pits so the pores vary in size
     vor2 = nt.nodes.new('ShaderNodeTexVoronoi'); vor2.inputs['Scale'].default_value = 7.5; nt.links.new(pm_.outputs['Vector'], vor2.inputs['Vector'])
-    mr2 = nt.nodes.new('ShaderNodeMapRange'); mr2.inputs['From Min'].default_value = 0.0; mr2.inputs['From Max'].default_value = 0.06; mr2.clamp = True
+    mr2 = nt.nodes.new('ShaderNodeMapRange'); mr2.inputs['From Min'].default_value = 0.0; mr2.inputs['From Max'].default_value = 0.04; mr2.clamp = True
     nt.links.new(vor2.outputs['Distance'], mr2.inputs['Value'])
     both = nt.nodes.new('ShaderNodeMath'); both.operation = 'MINIMUM'; nt.links.new(mr.outputs['Result'], both.inputs[0]); nt.links.new(mr2.outputs['Result'], both.inputs[1])
     nt.links.new(both.outputs['Value'], inv.inputs[1])

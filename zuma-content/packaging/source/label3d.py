@@ -22,10 +22,17 @@ def vial3(no):
              (0.54, 2.74), (0.6, 2.77), (0.65, 2.82), (0.65, 2.95), (0.5, 2.97)]
     inner = [(0.43, 2.97), (0.45, 2.93), (0.45, 2.66), (0.56, 2.56), (0.7, 2.45), (0.73, 2.3), (0.73, 0.2), (0.6, 0.12), (0.0, 0.14)]
     glass = lathe('glass', outer + inner, seg=160)
-    gm, gb = mat('glass', **{'Base Color': (1, 1, 1, 1), 'Roughness': 0.0, 'IOR': 1.51, 'Transmission Weight': 1.0}); gb.inputs['Specular IOR Level'].default_value = 0.5
+    tint = {'metabolic': '#9DB9F2', 'dermal': '#F4AE97', 'tissue': '#8ED3AE', 'endocrine': '#EBC27C', 'neuro': '#BCA6EE', 'supplies': '#C9D2DC'}
+    gcol = lin(tint[area]) if os.environ.get('ZTINT') else (1, 1, 1, 1)   # ZTINT=1: glass tinted in the area colour
+    gm, gb = mat('glass', **{'Base Color': gcol, 'Roughness': 0.0, 'IOR': 1.51, 'Transmission Weight': 1.0}); gb.inputs['Specular IOR Level'].default_value = 0.5
     gnt = gm.node_tree; out = gnt.nodes['Material Output']; lp = gnt.nodes.new('ShaderNodeLightPath'); mx = gnt.nodes.new('ShaderNodeMixShader'); tr = gnt.nodes.new('ShaderNodeBsdfTransparent')
     orr = gnt.nodes.new('ShaderNodeMath'); orr.operation = 'MAXIMUM'; gnt.links.new(lp.outputs['Is Shadow Ray'], orr.inputs[0]); gnt.links.new(lp.outputs['Is Diffuse Ray'], orr.inputs[1])
     gnt.links.new(orr.outputs['Value'], mx.inputs['Fac']); gnt.links.new(gb.outputs['BSDF'], mx.inputs[1]); gnt.links.new(tr.outputs['BSDF'], mx.inputs[2]); gnt.links.new(mx.outputs['Shader'], out.inputs['Surface'])
+    if os.environ.get('ZTINT') == 'vol':
+        # coloured glass: white surface, the colour absorbed inside the wall, so thin faces read light and the edges run deep
+        gb.inputs['Base Color'].default_value = (1, 1, 1, 1)
+        ab = gnt.nodes.new('ShaderNodeVolumeAbsorption'); ab.inputs['Color'].default_value = {'dermal': (1.0, 0.3, 0.14, 1), 'metabolic': (0.06, 0.28, 1.0, 1), 'tissue': (0.06, 0.72, 0.3, 1), 'endocrine': (1.0, 0.58, 0.06, 1), 'neuro': (0.42, 0.18, 1.0, 1), 'supplies': (0.6, 0.7, 0.85, 1)}[area]; ab.inputs['Density'].default_value = float(os.environ.get('ZDENS', '6'))
+        gnt.links.new(ab.outputs['Volume'], out.inputs['Volume'])
     glass.data.materials.append(gm); parts.append(glass)
     # grey rubber stopper: the plug sits down in the neck and shows through the glass under the crimp
     stp = lathe('stopper', [(0.0, 2.55), (0.4, 2.55), (0.44, 2.58), (0.445, 2.97), (0.6, 2.98), (0.6, 3.03), (0.0, 3.03)], seg=96)   # the plug shows as a thin grey ring through the neck, under the crimp
@@ -58,7 +65,11 @@ def vial3(no):
     nt.links.new(img.outputs['Color'], ink.inputs['Base Color'])
     nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 900; bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.04
     nt.links.new(nz.outputs['Fac'], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], ink.inputs['Normal'])
-    if OPT == 'A':
+    if OPT in ('T', 'S', 'P'):
+        # printed straight on the glass: ink where the art has ink, clear everywhere else
+        clear = nt.nodes.new('ShaderNodeBsdfTransparent'); m2 = nt.nodes.new('ShaderNodeMixShader'); nt.links.new(img.outputs['Alpha'], m2.inputs['Fac'])
+        nt.links.new(clear.outputs['BSDF'], m2.inputs[1]); nt.links.new(ink.outputs['BSDF'], m2.inputs[2]); nt.links.new(m2.outputs['Shader'], o.inputs['Surface'])
+    elif OPT == 'A':
         # frosted film: a rough translucent sheet, with the print laid on it where the art has ink
         frost = nt.nodes.new('ShaderNodeBsdfPrincipled'); frost.inputs['Base Color'].default_value = (0.95, 0.95, 0.95, 1)
         frost.inputs['Transmission Weight'].default_value = 1.0; frost.inputs['Roughness'].default_value = 0.42; frost.inputs['IOR'].default_value = 1.45
