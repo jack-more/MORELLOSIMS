@@ -164,13 +164,15 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
     #   risk 30 -> C:5    (legacy mid-tier, not tracked)
     #   risk 12.5 -> C:7, risk 6.25 -> C:6  (0.5u / 0.25u, tracked since 2026-10-20)
     #   risk 20 -> C:1-4  (light, not tracked)
+    # Owner stakes are to-win at -110 from 2026-10-23 (1u to win = 27.5 $PP risked), so
+    # each ladder step also matches its 1.1x risk: TOR -8 at 27.5 had dropped out as C1.
     if conf == 0 and risk:
         if risk >= 100: conf = 10
         elif risk >= 50: conf = 8
         elif risk >= 30: conf = 5
-        elif risk == 25: conf = 8         # 1u: C8-C9 on the 2026-10-23 ladder (C10 2u, MAX BET 4u)
-        elif risk == 12.5: conf = 7
-        elif risk == 6.25: conf = 6
+        elif risk in (25, 27.5): conf = 8         # 1u: C8-C9 on the 2026-10-23 ladder (C10 2u, MAX BET 4u)
+        elif risk in (12.5, 13.75): conf = 7
+        elif risk in (6.25, 6.875): conf = 6
         elif risk > 0:   conf = 1
 
     if conf < MIN_TRACKED_CONF:
