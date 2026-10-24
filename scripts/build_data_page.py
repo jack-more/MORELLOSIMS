@@ -30,6 +30,7 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "nba_pipeline"))
 sys.path.insert(0, HERE)
 from utils.constants import ESPN_ABBR_MAP  # noqa: E402
+import brand_head  # noqa: E402
 
 ET = timezone(timedelta(hours=-4))
 SEASON_START = date(2026, 10, 20)          # 2026-27 opening night (ESPN schedule)
@@ -135,6 +136,7 @@ REDIRECT = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>M
             '<meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=/">'
             '<link rel="canonical" href="https://morellosims.com/"></head>'
             '<body><a href="/">Morello Sims</a></body></html>\n')
+REDIRECT = brand_head.apply(REDIRECT, "https://morellosims.com/")   # a shared /nbasim/ link previews as the site
 
 
 def main():
