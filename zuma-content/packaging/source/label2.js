@@ -43,10 +43,10 @@
   // It redraws whatever <symbol id="zuma-logo"> on the page holds (text, rect, path, circle, polygon), so swapping the
   // page's logo slot also swaps the logo printed on every vial. Without a symbol it falls back to the Tricolor mark.
   // h is the height of the symbol's viewBox in canvas px; returns the drawn width.
-  let SPEC;
-  function readSymbol() {
-    if (SPEC !== undefined) return SPEC; SPEC = null;
-    const sym = typeof document !== 'undefined' && document.getElementById('zuma-logo'); if (!sym) return SPEC;
+  const SPECS = {};
+  function readSymbol(id = 'zuma-logo') {
+    if (SPECS[id] !== undefined) return SPECS[id]; let SPEC = SPECS[id] = null;
+    const sym = typeof document !== 'undefined' && document.getElementById(id); if (!sym) return SPEC;
     const vb = (sym.getAttribute('viewBox') || '0 0 448 100').trim().split(/[\s,]+/).map(Number);
     const num = (el, a, d = 0) => { const v = parseFloat(el.getAttribute(a)); return isNaN(v) ? d : v; };
     const paint = el => { const role = el.getAttribute('data-role'); if (role === 'dot') return 'dot';
@@ -61,10 +61,10 @@
       if (k === 'path') { o.p = new Path2D(el.getAttribute('d')); o.rule = el.getAttribute('fill-rule') === 'evenodd' ? 'evenodd' : 'nonzero'; }
       if (k === 'polygon') o.p = new Path2D('M' + el.getAttribute('points').trim() + 'Z');
       return o; });
-    SPEC = { vb, els }; return SPEC;
+    SPEC = SPECS[id] = { vb, els }; return SPEC;
   }
-  function logo(x, X, Y, h, ink, dot) {
-    const sp = readSymbol();
+  function logo(x, X, Y, h, ink, dot, id) {
+    const sp = readSymbol(id);
     if (!sp) { const r = T(x, 'ZUMA', X, Y + h * 0.9, { size: h * 1.15, weight: 800, fill: ink, ls: h * 0.02 }); x.fillStyle = dot; x.fillRect(X + r.w + h * 0.22, Y + h * 0.3, h * 0.6, h * 0.6); return r.w + h * 0.9; }
     const [vx, vy, vw, vh] = sp.vb, s = h / vh; x.save(); x.translate(X, Y); x.scale(s, s); x.translate(-vx, -vy);
     for (const e of sp.els) { if (!e.paint) continue; x.fillStyle = e.paint === 'ink' ? ink : e.paint === 'dot' ? dot : e.paint;
@@ -85,20 +85,25 @@
     { const m = document.createElement('canvas').getContext('2d'), w0 = logo(m, 0, 0, 250, OX, OX), h = Math.min(250, 250 * 940 / w0);
       logo(x, FC - w0 * h / 250 / 2, 40 + (250 - h) / 2, h, OX, OX); }
     T(x, areaName, FC, 438, { size: 44, weight: 800, fill: OX, align: 'center', ls: 7, maxW: 960 });
-    T(x, p.name, FC, 800, { size: 400, weight: 900, fill: OX, align: 'center', maxW: 1060, ls: -10 });
-    T(x, String(p.mg).toUpperCase(), FC, 948, { size: 112, weight: 900, fill: OX, align: 'center', ls: 2, maxW: 900 });
+    // a long name shrinks to fit; the name and fill move up together so the band never shows a gap above them
+    const fs = T(document.createElement('canvas').getContext('2d'), p.name, 0, 0, { size: 400, weight: 900, maxW: 1060, ls: -10 }).fs, lift = (400 - fs) * 0.42;
+    T(x, p.name, FC, 800 - lift, { size: 400, weight: 900, fill: OX, align: 'center', maxW: 1060, ls: -10 });
+    T(x, String(p.mg).toUpperCase(), FC, 948 - lift - (400 - fs) * 0.15, { size: 112, weight: 900, fill: OX, align: 'center', ls: 2, maxW: 900 });
     T(x, (p.full + ' · ' + (p.form || 'lyophilized powder')).toUpperCase(), FC, 1050, { size: 38, weight: 800, fill: OX, align: 'center', ls: 3, maxW: 1000 });
-    // the slim Oxblood band: the research-use line and the lot line, small
-    T(x, 'FOR LABORATORY RESEARCH USE ONLY  ·  NOT FOR HUMAN OR VETERINARY USE', FC, 1222, { size: 36, weight: 800, fill: SNOW, align: 'center', ls: 3, maxW: 1060 });
-    T(x, 'LOT ' + p.lot + '  ·  FILLED ' + p.filled + '  ·  STORE ' + (p.store || '−20 °C'), FC, 1290, { size: 32, weight: 700, fill: lt, align: 'center', ls: 2, maxW: 1000 });
+    // the Oxblood band: one mono line running all the way round, the same ring the printed glass carries, with ZUMA centred on the front
+    { const MONO = "'IBM Plex Mono', ui-monospace, monospace", seg = 'ZUMA  \u2726  FOR LABORATORY RESEARCH USE ONLY  \u2726  NOT FOR HUMAN OR VETERINARY USE  \u2726  RESEARCH, REFINED  \u2726  ';
+      x.save(); x.beginPath(); x.rect(X0, YS[2][0], X1 - X0, YS[2][1] - YS[2][0]); x.clip();
+      x.font = `600 40px ${MONO}`; x.letterSpacing = '6px'; x.textBaseline = 'alphabetic'; x.textAlign = 'left'; x.fillStyle = SNOW;
+      const ws = x.measureText(seg).width, wz = x.measureText('ZUMA').width;
+      for (let sx = FC - wz / 2 - ws * 2; sx < X1; sx += ws) x.fillText(seg, sx, 1248);
+      x.restore(); x.letterSpacing = '0px'; }
     // left side panel: the code to this lot's report and the lot record
     qr(x, p.url, 640, 10, 310, OX);
     rows(x, 640, 930, [['Lot ' + p.lot, 800, 40, OX], ['Filled ' + p.filled, 700, 34, OX], ['Store ' + (p.store || '−20 °C') + ', dark', 700, 34, OX]]);
-    // right side panel
-    para(x, RUOF, 2240, 100, { size: 34, weight: 700, fill: OX, maxW: 580 });
-    { const m = document.createElement('canvas').getContext('2d'), w0 = logo(m, 0, 0, 170, OX, OX), h = Math.min(170, 170 * 600 / w0);
-      logo(x, 2240, 700 - 170 * 0.9 + (170 - h) / 2, h, OX, OX); }
-    T(x, 'EST. 2026', 2246, 790, { size: 36, weight: 700, fill: OX, ls: 6 });
+    // right side panel: the crest, big, and the founding year
+    { const m = document.createElement('canvas').getContext('2d'), h = 560, w = logo(m, 0, 0, h, OX, OX, 'zuma-mark');
+      logo(x, 2560 - w / 2, 410, h, OX, OX, 'zuma-mark'); }
+    T(x, 'EST. 2026', 2560, 1060, { size: 46, weight: 800, fill: OX, align: 'center', ls: 10 });
   }
   // a canvas with the label drawn at scale k (1 = 3200 x 1340)
   function canvas(p, k = 1) { const c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); const x = c.getContext('2d'); x.scale(k, k); draw(x, p); return c; }
