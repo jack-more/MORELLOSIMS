@@ -8,7 +8,7 @@ from mathutils import Vector
 HERE = os.path.dirname(os.path.abspath(__file__)); TEX = os.path.join(HERE, 'tex'); LB = os.path.join(HERE, 'lab3')
 args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else sys.argv[1:]
 LARGS = list(args); OPT, OUT = LARGS[0], LARGS[1]
-NOS = ['05', '01', '09']
+NOS = os.environ.get('ZNOS', '05,01,09').split(',')
 src = open(os.path.join(HERE, 'vial.py')).read()
 sys.argv = ['vial.py', 'front', NOS[0], OUT]
 exec(compile(src[:src.index("if SHOT == 'lineup':")], 'vial.py', 'exec'))
@@ -35,7 +35,7 @@ def vial3(no):
     cm, cb = mat('alu', **{'Base Color': lin('#CDD1D5'), 'Metallic': 1.0, 'Roughness': 0.3, 'Anisotropic': 0.5}); crimp.data.materials.append(cm); parts.append(crimp)
     # flip-off cap: moulded plastic sitting proud on the crimp, slightly wider, soft rounded top edge
     cap = lathe('cap', [(0.0, 3.06), (0.69, 3.06), (0.705, 3.09), (0.71, 3.3), (0.705, 3.44), (0.68, 3.49), (0.62, 3.5), (0.0, 3.5)], seg=128)
-    pm, pb = mat('cap', **{'Base Color': lin(TONES[area][1]), 'Roughness': 0.38, 'Coat Weight': 0.3, 'Coat Roughness': 0.2}); cap.data.materials.append(pm); parts.append(cap)
+    pm, pb = mat('cap', **{'Base Color': lin(TONES[area][2 if os.environ.get('ZCAP') == 'deep' else 1]), 'Roughness': 0.38, 'Coat Weight': 0.3, 'Coat Roughness': 0.2}); cap.data.materials.append(pm); parts.append(cap)
     cake = lathe('cake', [(0.0, 0.15), (0.71, 0.15), (0.72, 0.2), (0.72, 0.62), (0.69, 0.66), (0.4, 0.64), (0.0, 0.62)], seg=96)
     km, kb = mat('cake', **{'Base Color': lin('#F2EFE8'), 'Roughness': 0.95}); cake.data.materials.append(km); parts.append(cake)
     # the label: 20 mm tall on the straight body, 3 mm above the base, full wrap
@@ -89,7 +89,7 @@ def slab(name, size, loc, m):
     o.scale = size; bpy.ops.object.transform_apply(scale=True); o.data.materials.append(m); return o
 slab('floor', (120, 80, 1), (0, 20, -0.5), stucco('floor', '#E7DAC6'))
 slab('wall', (120, 1, 80), (0, 5, 30), stucco('wall', '#EFE4D2'))
-for no, x, y, rot in zip(NOS, (-2.0, 0.0, 2.0), (0.4, -0.3, 0.5), (-3, 0, 3)):
+for no, x, y, rot in zip(NOS, (-2.0, 0.0, 2.0), (0.4, -0.3, 0.5), [float(x) for x in os.environ.get('ZROT', '-3,0,3').split(',')]):
     v = vial3(no); v.location = (x, y, 0); v.rotation_euler = (0, 0, math.radians(rot))
 
 world = bpy.data.worlds.new('w'); sc.world = world; world.use_nodes = True; wn = world.node_tree
