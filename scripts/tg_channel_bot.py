@@ -259,32 +259,51 @@ def cmd_listen(minutes):
     """Stay up for `minutes`, answering taps and commands within seconds (Telegram
     long-poll) instead of once per cron run. The duties run at the start, right after
     anything the owner does, and every DUTY_EVERY seconds after a pull from main, and
-    the state is committed as it changes. The workflow's cron starts the next listener
-    as this one ends."""
+    the state is committed as it changes. The workflow starts the next listener as this
+    one ends. A Telegram or git error is logged and retried, so it never ends the run
+    (and with it the chain)."""
     import tg_console
     if not TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN missing")
+
+    def sync():
+        try:
+            tg_console.commit_push(["ops/state"], f"TG bot — {datetime.now(tg_console.ET):%b %d %I:%M %p} ET — state sync")
+        except Exception as e:
+            print(f"  WARN state commit: {type(e).__name__}: {e}")
+
     end = time.time() + minutes * 60
     state = load_json(STATE_FILE, {"offset": 0})
-    process_updates(state, timeout=0)
+    try:
+        process_updates(state, timeout=0)
+    except Exception as e:
+        print(f"  WARN getUpdates: {type(e).__name__}")
     duties()
     save_json(STATE_FILE, state)
-    tg_console.commit_push(["ops/state"], f"TG bot — {datetime.now(tg_console.ET):%b %d %I:%M %p} ET — state sync")
+    sync()
     last = time.time()
     while time.time() < end - 40:
-        acted = process_updates(state, timeout=max(1, min(25, int(end - time.time() - 35))))
+        try:
+            acted = process_updates(state, timeout=max(1, min(25, int(end - time.time() - 35))))
+        except Exception as e:   # the token is in the URL: log the type only
+            print(f"  WARN getUpdates: {type(e).__name__}")
+            time.sleep(5)
+            acted = False
         due = time.time() - last >= DUTY_EVERY
         if not (acted or due):
             continue
         save_json(STATE_FILE, state)
         if due:
-            tg_console.commit_push(["ops/state"], f"TG bot — {datetime.now(tg_console.ET):%b %d %I:%M %p} ET — state sync")
-            tg_console.git_sync()
+            sync()
+            try:
+                tg_console.git_sync()
+            except Exception as e:
+                print(f"  WARN git pull: {type(e).__name__}: {e}")
             state = load_json(STATE_FILE, state)
             last = time.time()
         duties()
         save_json(STATE_FILE, state)
-        tg_console.commit_push(["ops/state"], f"TG bot — {datetime.now(tg_console.ET):%b %d %I:%M %p} ET — state sync")
+        sync()
 
 
 DUTY_EVERY = 180   # seconds between pulls from main + duties while listening

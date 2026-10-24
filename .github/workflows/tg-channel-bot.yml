@@ -76,7 +76,7 @@ permissions:
 jobs:
   bot:
     runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to 26 on 2026-10-19, eve of NBA opener
-    timeout-minutes: 20   # `run` listens for 13 minutes; the cron chains the next one
+    timeout-minutes: 20   # `run` listens for 13 minutes, then starts the next run
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,6 +90,7 @@ jobs:
         run: pip install requests requests-oauthlib pillow numpy cryptography firebase-admin
 
       - name: Run bot (owner console + pick alerts; channel gatekeeper once configured)
+        id: bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -122,7 +123,8 @@ jobs:
           case "${CMD}" in
             grant)  python3 scripts/tg_channel_bot.py grant --user "${{ inputs.user }}" --days "${{ inputs.days }}" --note "${{ inputs.note }}" ;;
             revoke) python3 scripts/tg_channel_bot.py revoke --user "${{ inputs.user }}" ;;
-            run)    python3 scripts/tg_channel_bot.py listen --minutes 13 ;;   # taps and commands answered in seconds
+            run)    python3 scripts/tg_channel_bot.py listen --minutes 13   # taps and commands answered in seconds
+                    echo "chain=1" >> "$GITHUB_OUTPUT" ;;
             *)      python3 scripts/tg_channel_bot.py "${CMD}" ;;
           esac
 
@@ -142,3 +144,13 @@ jobs:
             git commit -m "TG bot — $(TZ=America/New_York date +'%b %d %I:%M %p ET') — state sync"
             git push || { git fetch origin && git rebase -X theirs origin/main && git push; }
           fi
+
+      # GitHub runs the */15 cron hours late when it is busy, so a listener that ran its
+      # full window starts the next one; the concurrency group holds it until this run
+      # ends. A listener that crashed does not, so a bad deploy can't spin; the cron and
+      # the pipelines' dispatches restart the chain.
+      - name: Start the next listener
+        if: ${{ !cancelled() && steps.bot.outputs.chain == '1' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tg-channel-bot.yml --ref main -f command=run || echo "dispatch failed; the 15-min bot cron will catch it"
