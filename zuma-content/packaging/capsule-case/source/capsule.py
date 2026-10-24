@@ -75,7 +75,7 @@ area('key', 16, (-16, -18, 16), 3200, col=(1, 0.97, 0.93))
 area('rim', 4, (12, 4, 10), 900, sx=14)
 area('fill', 30, (10, -40, 6), 1400)
 cam = bpy.data.cameras.new('cam'); co = bpy.data.objects.new('cam', cam); sc.collection.objects.link(co); sc.camera = co
-cam.sensor_width = 36; cam.lens = 85; co.location = (2.0, -27, 4.4) if not MULTI else (0, -40, 9); look = Vector((0.3, 0, 3.4)) if not MULTI else Vector((0, 0.4, 3.0))
+cam.sensor_width = 36; cam.lens = 85; co.location = (2.0, -27, 4.4) if not MULTI else (0, -52, 10.5); look = Vector((0.3, 0, 3.4)) if not MULTI else Vector((0, 0.4, 3.0))
 d = look - co.location; co.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
 cam.dof.use_dof = True; cam.dof.focus_distance = (Vector((1.1, 0, 3.2)) - co.location).length if not MULTI else (look - co.location).length; cam.dof.aperture_fstop = 4
 r = sc.render; r.engine = 'CYCLES'; r.resolution_x, r.resolution_y = W, H; r.resolution_percentage = 100
