@@ -28,8 +28,8 @@ def vial3(no):
     gnt.links.new(orr.outputs['Value'], mx.inputs['Fac']); gnt.links.new(gb.outputs['BSDF'], mx.inputs[1]); gnt.links.new(tr.outputs['BSDF'], mx.inputs[2]); gnt.links.new(mx.outputs['Shader'], out.inputs['Surface'])
     glass.data.materials.append(gm); parts.append(glass)
     # grey rubber stopper: the plug sits down in the neck and shows through the glass under the crimp
-    stp = lathe('stopper', [(0.0, 2.71), (0.38, 2.71), (0.43, 2.74), (0.44, 2.97), (0.6, 2.98), (0.6, 3.03), (0.0, 3.03)], seg=96)   # only 2-3 mm of plug in the neck
-    sm, sb = mat('rubber', **{'Base Color': lin('#A7AAAE'), 'Roughness': 0.6}); stp.data.materials.append(sm); parts.append(stp)
+    stp = lathe('stopper', [(0.0, 2.55), (0.4, 2.55), (0.44, 2.58), (0.445, 2.97), (0.6, 2.98), (0.6, 3.03), (0.0, 3.03)], seg=96)   # the plug shows as a thin grey ring through the neck, under the crimp
+    sm, sb = mat('rubber', **{'Base Color': lin('#8E9196'), 'Roughness': 0.6}); stp.data.materials.append(sm); parts.append(stp)
     # aluminium crimp: a tall satin skirt rolled under the lip
     crimp = lathe('crimp', [(0.0, 3.06), (0.45, 3.06), (0.66, 3.05), (0.675, 3.02), (0.675, 2.74), (0.665, 2.71), (0.6, 2.7), (0.57, 2.73)], seg=128)
     cm, cb = mat('alu', **{'Base Color': lin('#CDD1D5'), 'Metallic': 1.0, 'Roughness': 0.3, 'Anisotropic': 0.5}); crimp.data.materials.append(cm); parts.append(crimp)
@@ -69,7 +69,7 @@ def vial3(no):
         m2 = nt.nodes.new('ShaderNodeMixShader'); nt.links.new(img.outputs['Alpha'], m2.inputs['Fac'])
         nt.links.new(hm.outputs['Shader'], m2.inputs[1]); nt.links.new(ink.outputs['BSDF'], m2.inputs[2]); nt.links.new(m2.outputs['Shader'], o.inputs['Surface'])
     else:
-        ink.inputs['Coat Weight'].default_value = 0.3 if OPT in ('B', 'OG') else 0.0
+        ink.inputs['Coat Weight'].default_value = 0.3 if OPT in ('B', 'OG', 'D') else 0.0
         nt.links.new(ink.outputs['BSDF'], o.inputs['Surface'])
     lab.data.materials.append(lm); parts.append(lab)
     root = bpy.data.objects.new('vial-' + no, None); sc.collection.objects.link(root)
