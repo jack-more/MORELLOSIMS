@@ -109,6 +109,8 @@ def note_data(p, n=1, when_label=None, settled=False):
         "game": f"{names[away]} at {names[home]}" + (f" · {venue}" if venue else ""),
         "logged": f"Logged {_et(p.get('captured_at'))} ET" if _et(p.get("captured_at")) else "Logged before tip",
         **(_stamp(p, n) if settled else {}),
+        **({"art": f"/assets/brand/arenas/{home.lower()}.png"} if os.path.exists(
+            os.path.join(REPO, "assets", "brand", "arenas", f"{home.lower()}.png")) else {}),
     }
 
 
