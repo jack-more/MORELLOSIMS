@@ -188,6 +188,9 @@ def attach_closing_line(pick, closing):
 
 # ── Main ─────────────────────────────────────────────────────────────
 
+_IDS = None  # release_check: ledger key -> picks/nba.json id, built once per run
+
+
 def release_check(pick):
     """Why a pick never reached members, or None. From scripts/pick_alerts.GATE_FROM
     a pick goes out only after the owner taps Send on its Telegram DM before tip;
@@ -197,8 +200,16 @@ def release_check(pick):
     import picks_store
     if pick["date"] < pick_alerts.GATE_FROM:
         return None
+    # the id the Send was recorded under: picks/nba.json's, which carries the line when a
+    # second pick sits on the same side (Oct 23: MEM +4.5 / TOR -8 / MIN -1.5 were sent under
+    # ...-mem-p4.5 etc. and voided here as unsent, because this built the plain id)
+    global _IDS
+    if _IDS is None:
+        import sync_to_picks_json
+        _IDS = sync_to_picks_json.contract_ids()
     away, home = [t.strip() for t in pick["matchup"].split("@")]
-    pid = f"{pick['date']}-nba-{away}-{home}-{pick.get('type') or 'spread'}-{pick['side'].split()[0]}".lower()
+    pid = _IDS.get((pick["date"], pick["matchup"], pick["side"], pick.get("type") or "spread")) or \
+        f"{pick['date']}-nba-{away}-{home}-{pick.get('type') or 'spread'}-{pick['side'].split()[0]}".lower()
     tip = parse_ts(pick.get("tip_at"))
     st = pick_alerts.load(pick_alerts.STATE, {})
     for e in st.get("approved", []):

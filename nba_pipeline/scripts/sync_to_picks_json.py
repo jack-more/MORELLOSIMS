@@ -258,14 +258,10 @@ def load_json(path: Path):
         return json.load(f)
 
 
-def main():
-    csv_rows = load_csv(PICKS_CSV)
-    pick_log = open_entries(load_json(PICK_LOG) or [])
-    meta_idx = build_pick_log_index(pick_log)
-
-    # Respect picks/baselines.json's tracking_started cutoff. Anything before
-    # that date is already counted in the baseline; including it here would
-    # double-count when render_dispatch adds picks/nba.json on top of baseline.
+def tracking_cutoff() -> str:
+    """picks/baselines.json's tracking_started: anything before it is already counted
+    in the baseline; including it here would double-count when render_dispatch adds
+    picks/nba.json on top of the baseline."""
     cutoff = "2026-05-01"
     baselines_path = MORELLOSIMS / "picks" / "baselines.json"
     if baselines_path.exists():
@@ -273,10 +269,14 @@ def main():
             cutoff = json.loads(baselines_path.read_text()).get("tracking_started", cutoff)
         except (json.JSONDecodeError, OSError):
             pass
+    return cutoff
 
-    contract: list[dict] = []
-    seen: set[str] = set()
 
+def assign_ids(csv_rows: list, meta_idx: dict, cutoff: str) -> list:
+    """[(row, contract pick)] in ledger order, carrying the ids picks/nba.json and the
+    owner's Send / Hold records use. grade_picks.release_check matches Sends by these
+    ids, so both go through here."""
+    out, seen = [], set()
     for row in csv_rows:
         cp = csv_row_to_pick(row, meta_idx)
         if not cp:
@@ -291,8 +291,23 @@ def main():
             cp["id"] = f'{cp["id"]}-{"p" if line[0] == "+" else "m"}{line[1:]}'
         if cp["id"] in seen:
             continue
-        contract.append(cp)
+        out.append((row, cp))
         seen.add(cp["id"])
+    return out
+
+
+def contract_ids() -> dict:
+    """(date, matchup, side, type) -> the pick's id in picks/nba.json, from the ledger as it is."""
+    meta_idx = build_pick_log_index(open_entries(load_json(PICK_LOG) or []))
+    return {(r["date"], r["matchup"], r["side"], r.get("type") or "spread"): cp["id"]
+            for r, cp in assign_ids(load_csv(PICKS_CSV), meta_idx, tracking_cutoff())}
+
+
+def main():
+    csv_rows = load_csv(PICKS_CSV)
+    pick_log = open_entries(load_json(PICK_LOG) or [])
+    meta_idx = build_pick_log_index(pick_log)
+    contract = [cp for _, cp in assign_ids(csv_rows, meta_idx, tracking_cutoff())]
 
     # Sort newest first (matches picks/SCHEMA.md contract)
     contract.sort(key=lambda p: p["date"], reverse=True)
