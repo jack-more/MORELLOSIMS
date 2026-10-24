@@ -22,13 +22,15 @@ End every caption with: **For laboratory research use only. Not for human or vet
 
 ## X
 
-- **Profile picture:** `x-pfp-ring.png` (recommended: the flower on ink inside a ring of the six area colours). Plain version: `x-pfp-ink.png`.
-- **Banner:** `x-banner-bloom.png` (recommended: the wordmark, "Every lot tested." and the flower blooming in the six colours). Alternative: `x-banner-v2.png` (six area columns with oversized vials).
-- **Name:** zuma · **Location:** On Solana · **Website:** zumatides.com/enter
-- **Bio (143 characters):** Every lot tested — at the prices everyone deserves. Twelve research compounds, six areas. For laboratory research use only. zumatides.com/enter
-- **Website field:** zumatides.com
-- **Profile picture:** `x-pfp-lacquer-400.png`. **Header:** `x-banner-sun-1500.png`.
-- **Spot:** `zuma-spot-9x16.mp4` (vertical) and `zuma-spot-dancers.mp4` (16:9); older cut `zuma-spot-2000s.mp4` (23.5 s, 1920×1080, with sound). Source in `../spot-source/`.
+The line, in full: **Research, refined. At prices researchers can afford.** Short form on end cards: **Research, refined.**
+
+- **Header:** `x/x-header-refined-1500.png` (upload this; 1500 × 500). Hi-res: `x/x-header-refined-3000.png`. The logo and line sit clear of the profile photo (bottom-left) and of the strip X crops on phones.
+- **Profile picture:** `x/x-pfp-lacquer-400.png`.
+- **Name:** zuma · **Location:** On Solana · **Website:** zumatides.com
+- **Bio (119 characters):** Research, refined. At prices researchers can afford. Research peptides in small lots. For laboratory research use only.
+- **End cards:** `x/end-card-9x16.png` (stories, Reels, TikTok) and `x/end-card-16x9.png` (X and YouTube video).
+- **Spot:** `zuma-spot-9x16.mp4` (vertical) and `zuma-spot-dancers.mp4` (16:9). Source in `../spot-source/`.
+- Retired: `x-banner-bloom.png`, `x-banner-sun-*`, `x-banner-v2.png` show the old coloured caps and the old line. Don't post them.
 
 Launch thread:
 
