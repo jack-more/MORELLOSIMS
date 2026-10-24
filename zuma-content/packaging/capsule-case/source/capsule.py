@@ -30,11 +30,16 @@ def make_capsule(COL, name='capsule'):
             for li in poly.loop_indices:
                 if uv.data[li].uv[0] < 0.5: uv.data[li].uv = (uv.data[li].uv[0] + 1, uv.data[li].uv[1])
     m, b = mat(name + '-sil', **{'Base Color': lin(COL), 'Roughness': 0.58, 'Specular IOR Level': 0.35, 'Subsurface Weight': 0.08, 'Subsurface Radius': (0.1, 0.05, 0.04)})
-    nt = m.node_tree; img = nt.nodes.new('ShaderNodeTexImage'); img.image = bpy.data.images.load(os.path.join(CAP, 'pattern.png')); img.image.colorspace_settings.name = 'Non-Color'
+    nt = m.node_tree; img = nt.nodes.new('ShaderNodeTexImage'); img.image = bpy.data.images.load(os.path.join(CAP, os.environ.get('ZPATTERN', 'pattern.png'))); img.image.colorspace_settings.name = 'Non-Color'
     img.interpolation = 'Cubic'; bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 1.0; bp.inputs['Distance'].default_value = 0.06
     nt.links.new(img.outputs['Color'], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], b.inputs['Normal'])
     # the pressed shapes sit a touch darker, the way silicone reads where it is thinner
     dk = nt.nodes.new('ShaderNodeMixRGB'); dk.blend_type = 'MULTIPLY'; dk.inputs['Color1'].default_value = lin(COL)
+    if os.environ.get('ZCOL2'):                      # a two-tone pill: the area colour on the top half, the second colour below the seam
+        tc = nt.nodes.new('ShaderNodeTexCoord'); sx = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tc.outputs['Object'], sx.inputs['Vector'])
+        gt = nt.nodes.new('ShaderNodeMath'); gt.operation = 'GREATER_THAN'; gt.inputs[1].default_value = L / 2 - D0 / 2; nt.links.new(sx.outputs['Z'], gt.inputs[0])
+        tt = nt.nodes.new('ShaderNodeMixRGB'); tt.inputs['Color1'].default_value = lin(os.environ['ZCOL2']); tt.inputs['Color2'].default_value = lin(COL)
+        nt.links.new(gt.outputs['Value'], tt.inputs['Fac']); nt.links.new(tt.outputs['Color'], dk.inputs['Color1'])
     inv = nt.nodes.new('ShaderNodeInvert'); nt.links.new(img.outputs['Color'], inv.inputs['Color'])
     mr = nt.nodes.new('ShaderNodeMath'); mr.operation = 'MULTIPLY'; mr.inputs[1].default_value = 0.32; nt.links.new(inv.outputs['Color'], mr.inputs[0])
     dk.inputs['Color2'].default_value = (0.55, 0.55, 0.55, 1); nt.links.new(mr.outputs['Value'], dk.inputs['Fac']); nt.links.new(dk.outputs['Color'], b.inputs['Base Color'])
@@ -46,11 +51,13 @@ if not MULTI:
     cap = make_capsule(COL)
     piv = bpy.data.objects.new('piv', None); sc.collection.objects.link(piv); cap.parent = piv
     piv.location = (0.9, -0.6, 0); piv.rotation_euler = (0, 0, math.radians(-25))
+    if os.environ.get('ZFACE'): piv.rotation_euler = (0, 0, math.atan2(-27 + 0.6, 2.0 - 0.9) + math.pi / 2 + math.radians(float(os.environ['ZFACE'])))
 else:
     cols = MULTI.split(',')
     for i, c_ in enumerate(cols):
         cp = make_capsule(c_, 'cap%d' % i); pv = bpy.data.objects.new('pv%d' % i, None); sc.collection.objects.link(pv); cp.parent = pv
         pv.location = ((i - (len(cols) - 1) / 2) * 3.0, (i % 2) * 1.4 - 0.7, 0); pv.rotation_euler = (0, 0, math.radians(-20 + (i * 37) % 40))
+        if os.environ.get('ZFACE'): pv.rotation_euler = (0, 0, math.atan2(-52 - pv.location.y, -pv.location.x) + math.pi / 2 + math.radians(float(os.environ['ZFACE'])))
 
 def box(name, size, loc, col, rough=0.8):
     bpy.ops.mesh.primitive_cube_add(size=1, location=loc); o = bpy.context.active_object; o.name = name; o.scale = size
