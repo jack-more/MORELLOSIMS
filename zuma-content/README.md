@@ -27,7 +27,7 @@ The line, in full: **Research, refined. At prices researchers can afford.** Shor
 - **Header:** `x/x-header-refined-1500.png` (upload this; 1500 × 500). Hi-res: `x/x-header-refined-3000.png`. The logo and line sit clear of the profile photo (bottom-left) and of the strip X crops on phones.
 - **Profile picture:** `x/x-pfp-oxblood.png` (recommended: reads best at feed size). Options: `x/x-pfp-lightbox.png`, `x/x-pfp-stucco.png`. All 800 × 800, crest inside the circle crop.
 - **Name:** zuma · **Location:** On Solana · **Website:** zumatides.com
-- **Bio (119 characters):** Research, refined. At prices researchers can afford. Research peptides in small lots. For laboratory research use only.
+- **Bio (149 characters):** Research, refined. At prices researchers can afford. Research peptides in small lots, each lot with its own report. For laboratory research use only.
 - **End cards:** `x/end-card-9x16.png` (stories, Reels, TikTok) and `x/end-card-16x9.png` (X and YouTube video).
 - **Spot:** `zuma-spot-9x16.mp4` (vertical) and `zuma-spot-dancers.mp4` (16:9). Source in `../spot-source/`.
 - Retired: `x-banner-bloom.png`, `x-banner-sun-*`, `x-banner-v2.png` show the old coloured caps and the old line. Don't post them.
