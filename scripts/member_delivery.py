@@ -86,8 +86,20 @@ def doc_id(pick_id):
     return hashlib.sha256(str(pick_id).encode()).hexdigest()[:24]
 
 
+def _stake(p):
+    """(units, to_win): the stake as posted. Owner stakes are units to win at -110
+    (2026-10-23): 55 $PP risked is 2u to win, shown as such (render_pick_note.stake_units)."""
+    import render_pick_note
+    return render_pick_note.stake_units(p)
+
+
 def _u(p):
-    return round(float(p.get("units") or 0) / 25, 2)   # $PP stake -> units (25 $PP = 1u)
+    return _stake(p)[0]
+
+
+def _stake_txt(p):
+    u, to_win = _stake(p)
+    return f"{u:g}u to win" if to_win else f"{u:g}u"
 
 
 def _odds(p):
@@ -100,7 +112,7 @@ def publish(p, when_label, dry=False):
     rec = {
         "sport": p.get("sport"), "date": p.get("date"), "matchup": p.get("matchup"),
         "away": p.get("away"), "home": p.get("home"), "bet_type": p.get("bet_type"),
-        "pick_text": p.get("pick_text"), "odds": _odds(p), "units": _u(p),
+        "pick_text": p.get("pick_text"), "odds": _odds(p), "units": _u(p), "to_win": _stake(p)[1],
         "conf": p.get("conf"), "sim_projection": p.get("sim_projection"),
         "game_time": when_label, "start": p.get("start") or p.get("tip_at"),
         "captured_at": p.get("captured_at"),
@@ -241,27 +253,30 @@ def note_png(p, when_label):
         return None
 
 
-def message(p, when_label, with_note=False):
+def message(p, when_label, with_note=False, update=None):
+    """update: a stake change after the pick went out (pick_alerts restakes); it heads the
+    subject and the message."""
     sport = (p.get("sport") or "nba").upper()
     sim = p.get("sim_projection")
-    subject = f"{sport} pick · {p.get('matchup')}" + (f" · {when_label}" if when_label else "")
+    subject = ("Stake change · " if update else "") + f"{sport} pick · {p.get('matchup')}" + (f" · {when_label}" if when_label else "")
     logged = datetime.now(ET).strftime("%-I:%M %p ET")
-    lines = [f"{p.get('pick_text')} {_odds(p)}", f"{p.get('matchup')}" + (f" · {when_label}" if when_label else ""),
-             f"{_u(p):g}u · confidence {p.get('conf')}/10"]
-    if sim:
+    lines = ([update, ""] if update else []) + [f"{p.get('pick_text')} {_odds(p)}", f"{p.get('matchup')}" + (f" · {when_label}" if when_label else ""),
+             _stake_txt(p) if update else f"{_stake_txt(p)} · confidence {p.get('conf')}/10"]
+    if sim and not update:          # a stake change carries its own reason; the morning's sim is stale
         lines.append(f"The sim: {sim}")
-    lines.append(f"Logged {logged}. The public card stays sealed until {UNLOCK_WORD.get(p.get('sport'), 'tip')}.")
+    lines.append(f"{'Updated' if update else 'Logged'} {logged}. The public card stays sealed until {UNLOCK_WORD.get(p.get('sport'), 'tip')}.")
     text = "\n".join(lines) + f"\n\nTonight's picks: {MEMBERS_URL}\nEvery pick, graded: https://morellosims.com/ledger/nba/\n"
     note = (f'<img src="cid:{NOTE_CID}" width="520" alt="{p.get("pick_text")} {_odds(p)}, confidence {p.get("conf")}" '
             'style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:18px;margin:0 0 20px">') if with_note else ""
     html = (
         '<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:24px;color:#10202E">'
         + note +
+        (f'<div style="font:600 15px/1.5 Arial,sans-serif;background:#FFF4D6;border-left:4px solid #B9861B;padding:10px 14px;margin:0 0 16px">{update}</div>' if update else '') +
         f'<div style="font:600 12px/1.4 Arial,sans-serif;letter-spacing:.12em;color:#5E6B66">MORELLO SIMS · {sport} · MEMBERS</div>'
         f'<div style="font-size:30px;font-weight:700;margin:14px 0 4px">{p.get("pick_text")} {_odds(p)}</div>'
         f'<div style="font-size:16px">{p.get("matchup")}' + (f' · {when_label}' if when_label else '') + '</div>'
-        f'<div style="font:15px/1.6 Arial,sans-serif;margin-top:12px">{_u(p):g}u · confidence {p.get("conf")}/10'
-        + (f'<br>The sim: {sim}' if sim else '') + f'<br>Logged {logged}.</div>'
+        f'<div style="font:15px/1.6 Arial,sans-serif;margin-top:12px">{_stake_txt(p)}' + ('' if update else f' · confidence {p.get("conf")}/10')
+        + (f'<br>The sim: {sim}' if sim and not update else '') + f'<br>{"Updated" if update else "Logged"} {logged}.</div>'
         f'<a href="{MEMBERS_URL}" style="display:inline-block;margin-top:20px;background:#14743C;color:#fff;'
         'padding:12px 20px;text-decoration:none;font:600 15px Arial,sans-serif">Open tonight\'s picks</a>'
         '<div style="font:12px/1.5 Arial,sans-serif;color:#5E6B66;margin-top:24px">Every pick is graded in public at '
@@ -270,13 +285,14 @@ def message(p, when_label, with_note=False):
     return subject, text, html
 
 
-def send_with_note(p, when_label, to, png, key):
+def send_with_note(p, when_label, to, png, key, update=None):
     """One email per member with the note inline (cid). Returns the addresses Resend
     refused (all of them if it refuses the first), for the text batch to cover."""
     import base64
     import time
     import requests
-    subject, text, html = message(p, when_label, with_note=True)
+    subject, text, html = message(p, when_label, with_note=True, update=update)
+    tag = f"-upd{hashlib.sha256(update.encode()).hexdigest()[:8]}" if update else ""
     att = [{"filename": f"{doc_id(p['id'])}.png", "content": base64.b64encode(png).decode(),
             "content_type": "image/png", "content_id": NOTE_CID}]
     failed = []
@@ -284,7 +300,7 @@ def send_with_note(p, when_label, to, png, key):
         r = requests.post(RESEND_ONE, json={"from": FROM, "to": [addr], "subject": subject, "text": text,
                                             "html": html, "attachments": att}, timeout=30,
                           headers={"Authorization": f"Bearer {key}",
-                                   "Idempotency-Key": f"{doc_id(p['id'])}-note-{hashlib.sha256(recipient_key(addr).encode()).hexdigest()[:16]}"})
+                                   "Idempotency-Key": f"{doc_id(p['id'])}{tag}-note-{hashlib.sha256(recipient_key(addr).encode()).hexdigest()[:16]}"})
         if r.status_code >= 300:
             print(f"  WARN member email with note: HTTP {r.status_code} {r.text[:200]}")
             if n == 0:
@@ -294,7 +310,7 @@ def send_with_note(p, when_label, to, png, key):
     return failed
 
 
-def email(p, when_label, dry=False, skip=()):
+def email(p, when_label, dry=False, skip=(), update=None):
     """Send the pick to every active member not in `skip` (recipient_key
     values). Returns the keys of the members it went to, or None when a batch
     was refused."""
@@ -307,21 +323,22 @@ def email(p, when_label, dry=False, skip=()):
         return []
     import requests
     key = os.environ["RESEND_API_KEY"].strip()
-    png = note_png(p, when_label)
+    png = None if update else note_png(p, when_label)   # the note carries the morning's grade and sim
     everyone = list(to)
     if png:
-        to = send_with_note(p, when_label, to, png, key)
+        to = send_with_note(p, when_label, to, png, key, update=update)
         print(f"  members: emailed {len(everyone) - len(to)} member(s) with the note · {p.get('matchup')}")
         if not to:
             return [recipient_key(a) for a in everyone]
-    subject, text, html = message(p, when_label)
+    subject, text, html = message(p, when_label, update=update)
+    tag = f"-upd{hashlib.sha256(update.encode()).hexdigest()[:8]}" if update else ""
     ok = True
     for i in range(0, len(to), 100):
         batch = [{"from": FROM, "to": [addr], "subject": subject, "text": text, "html": html} for addr in to[i:i + 100]]
         chunk = "".join(sorted(recipient_key(a) for a in to[i:i + 100]))
         r = requests.post(RESEND_URL, json=batch, timeout=30,
                           headers={"Authorization": f"Bearer {key}",
-                                   "Idempotency-Key": f"{doc_id(p['id'])}-{hashlib.sha256(chunk.encode()).hexdigest()[:16]}"})
+                                   "Idempotency-Key": f"{doc_id(p['id'])}{tag}-{hashlib.sha256(chunk.encode()).hexdigest()[:16]}"})
         if r.status_code >= 300:
             print(f"  WARN member email batch {i // 100}: HTTP {r.status_code} {r.text[:200]}")
             ok = False
