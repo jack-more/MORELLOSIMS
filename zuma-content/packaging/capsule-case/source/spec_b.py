@@ -72,6 +72,8 @@ h1{{font:900 24pt/1 Outfit;color:#6E1C2A;margin:0 0 2mm}} h2{{font:700 11pt Outf
 <li><b>Ends:</b> full hemispheres, R {R:g}. The bottom is cut flat to a seat Ø {SEAT:.1f} mm so the case stands upright.</li>
 <li><b>Halves:</b> two halves join at a fine parting seam {SEAM:.1f} mm above the seat; 0.3 mm wide, 0.3 mm deep groove.</li>
 <li><b>Cavity:</b> fits one 3 mL vial with its crimp cap, snug, no rattle. Confirm against a physical vial.</li>
+<li><b>Wall:</b> 3.0 mm minimum all round, ends included. The case ships in a padded mailer with no box, so it is the vial's only crush and drop protection: it must survive a 1.2 m drop onto concrete and a 20 kg load across the body with the vial unbroken.</li>
+<li><b>Closure:</b> the two halves press-fit on an internal lip and stay shut through the drop test; supplier to design and prove it on the sample.</li>
 <li><b>Material:</b> silicone, Shore 40–50A, opaque, colour through the body.</li></ul>
 <h2 style="margin-top:7mm">Colours, one per research area</h2><div class="sws">{sw}</div>
 <p style="font-size:8.5pt;color:#7A5A60;margin-top:4mm">Match to the hex values. Send a moulded swatch of each colour for approval before the run.</p></div>
