@@ -570,8 +570,15 @@ class Chemistry:
     Sums per key: [raw residual x n, snapshot impact x n, n]; the main run's residual is
     the raw one, the leaky run's subtracts the snapshot impacts (as context.py does)."""
 
-    def __init__(self, arch):
+    def __init__(self, arch, pair_min=200, unit_min=100, tau_x=1.0, chem_w=1.0, tau_pair_min=0, tau_unit_min=0):
+        """pair_min / unit_min: possessions (both ends) before a pair / five gets its own value;
+        tau_pair_min / tau_unit_min: only combos with this many possessions measure the signal
+        variance (tau2) that every combo is shrunk with (0: all of them, as live);
+        tau_x: multiplies the measured signal variances (more trust in small samples);
+        chem_w: scales every chemistry value (0 = no chemistry). Defaults are the live sim's."""
         self.arch = arch
+        self.pair_min, self.unit_min, self.tau_x, self.chem_w = pair_min, unit_min, tau_x, chem_w
+        self.tau_pair_min, self.tau_unit_min = tau_pair_min, tau_unit_min
         self.team = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
         self.pair = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
         self.unit = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
@@ -611,7 +618,7 @@ class Chemistry:
         raw = {}
         for (a, b, tid), v in self.pair.items():
             n = v[2]
-            if n < 200:
+            if n < max(self.pair_min, 1):
                 continue
             ex, z = pres((a, b, tid), v) / n - tavg[tid], NOISE / n
             if (a, b) in raw:
@@ -621,7 +628,8 @@ class Chemistry:
             else:
                 raw[(a, b)] = (ex, z)
         arch = self.arch
-        tau2 = self._tau2(np.array([e for e, _ in raw.values()]), np.array([z for _, z in raw.values()]), 0.25)
+        big = [(e, z) for e, z in raw.values() if NOISE / z >= self.tau_pair_min]
+        tau2 = self.tau_x * self._tau2(np.array([e for e, _ in big]), np.array([z for _, z in big]), 0.25)
         pool = collections.defaultdict(lambda: [0.0, 0.0])
         for (a, b), (ex, z) in raw.items():
             if a in arch and b in arch:
@@ -638,15 +646,19 @@ class Chemistry:
         uraw = {}
         for (tid, ps), v in self.unit.items():
             n = v[2]
-            if n < 100:
+            if n < max(self.unit_min, 1):
                 continue
             chem = SYN_SHARE * sum(syn.get(ab, 0.0) for ab in itertools.combinations(ps, 2))
             r = res(v) if beta is None else v[0] - v[2] * sum(beta.get(p, 0.0) for p in ps)
             uraw[(tid, ps)] = (r / n - tavg[tid] - chem, NOISE / n)
-        utau2 = self._tau2(np.array([e for e, _ in uraw.values()]), np.array([z for _, z in uraw.values()]), 0.25)
+        ubig = [(e, z) for e, z in uraw.values() if NOISE / z >= self.tau_unit_min]
+        utau2 = self.tau_x * self._tau2(np.array([e for e, _ in ubig]), np.array([z for _, z in ubig]), 0.25)
         units = collections.defaultdict(dict)
         for (tid, ps), (ex, z) in uraw.items():
-            units[tid][ps] = ex * utau2 / (utau2 + z)
+            units[tid][ps] = self.chem_w * ex * utau2 / (utau2 + z)
+        if self.chem_w != 1.0:
+            syn = {k: self.chem_w * v for k, v in syn.items()}
+            prior = {k: self.chem_w * v for k, v in prior.items()}
         notes = {"pairs": len(raw), "pair_sd": round(math.sqrt(tau2), 2), "fit_sd": round(math.sqrt(ctau2), 2),
                  "units": len(uraw), "unit_sd": round(math.sqrt(utau2), 2)}
         return (syn, prior, dict(units)), notes
