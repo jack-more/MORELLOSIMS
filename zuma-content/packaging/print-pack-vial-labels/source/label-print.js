@@ -94,13 +94,9 @@
     T(x, p.name, FC, 812 - lift, { size: 400, weight: 900, fill: OX, align: 'center', maxW: 1060, ls: -10 });
     T(x, String(p.mg).toUpperCase(), FC, 948 - lift - (400 - fs) * 0.15, { size: 112, weight: 900, fill: OX, align: 'center', ls: 2, maxW: 900 });
     T(x, p.full.toUpperCase(), FC, 1078, { size: 66, weight: 800, fill: OX, align: 'center', ls: 3, maxW: 1100 });
-    // the Oxblood band: one mono line running all the way round, the same ring the printed glass carries, with ZUMA centred on the front
-    { const MONO = "'IBM Plex Mono', ui-monospace, monospace", seg = 'ZUMA  \u2726  FOR LABORATORY RESEARCH USE ONLY  \u2726  NOT FOR HUMAN OR VETERINARY USE  \u2726  RESEARCH, REFINED  \u2726  ';
-      x.save(); x.beginPath(); x.rect(X0, YS[2][0], X1 - X0, YS[2][1] - YS[2][0]); x.clip();
-      x.font = `600 70px ${MONO}`; x.letterSpacing = '8px'; x.textBaseline = 'alphabetic'; x.textAlign = 'left'; x.fillStyle = SNOW;
-      const ws = x.measureText(seg).width, wz = x.measureText('ZUMA').width;
-      for (let sx = FC - wz / 2 - ws * 3; sx < X1; sx += ws) x.fillText(seg, sx, 1259);
-      x.restore(); x.letterSpacing = '0px'; }
+    // the Oxblood band: the research-use sentence once, whole, centred on the front and clear of the cut at both ends
+    T(x, 'FOR LABORATORY RESEARCH USE ONLY  \u00b7  NOT FOR HUMAN OR VETERINARY USE', FC, 1257,
+      { size: 62, weight: 600, family: "'IBM Plex Mono', ui-monospace, monospace", fill: SNOW, align: 'center', ls: 5, maxW: 2640 });
     // left side panel: a box left clear for the filler's inkjet (lot and fill date), and the code to the product's lot reports
     x.fillStyle = SNOW; x.fillRect(290, 78, 760, 228); x.strokeStyle = OX; x.lineWidth = 5; x.strokeRect(290, 78, 760, 228);
     T(x, 'LOT', 318, 168, { size: 64, weight: 800, fill: OX, ls: 4 }); T(x, 'FILLED', 318, 278, { size: 64, weight: 800, fill: OX, ls: 4 });
