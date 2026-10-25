@@ -1,0 +1,64 @@
+name: Deploy payment functions
+
+# Publishes the Cloud Functions that take money: checkout, the Stripe webhook and the
+# referral books (functions/index.js). deploy.yml ships Hosting only, and these were
+# last deployed by hand, so the site's code field and /members/earn/ need this run
+# before the Hosting change goes live. Run by hand only: a bad deploy stops sales.
+# Only the three named functions are replaced; every other function stays as it is,
+# and the Stripe keys stay in the functions' own config (never in this repo or log).
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-functions
+  cancel-in-progress: false
+
+jobs:
+  functions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install
+        working-directory: functions
+        run: npm ci
+
+      - name: Deploy checkout, webhook and referral books
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::error::Missing GitHub secret FIREBASE_SERVICE_ACCOUNT_MORELLO_SIMS."
+            exit 1
+          fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          trap 'rm -f "$RUNNER_TEMP/sa.json"' EXIT
+          who=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('client_email', '?'))" "$RUNNER_TEMP/sa.json")
+          echo "deploying as $who"
+          if ! GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
+               npx --yes firebase-tools@13 deploy --project morello-sims --non-interactive --force \
+               --only functions:createCheckoutSession,functions:stripeWebhook,functions:affiliate; then
+            echo "::error::$who couldn't deploy functions (nothing live changed). It needs Cloud Functions Admin and Service Account User in Google Cloud IAM, or run the same 'firebase deploy --only functions:createCheckoutSession,functions:stripeWebhook,functions:affiliate' from a signed-in machine."
+            exit 1
+          fi
+
+      # No side effects: each probe is refused before any Stripe or Firestore write
+      - name: Check they answer
+        run: |
+          base=https://us-central1-morello-sims.cloudfunctions.net
+          for i in 1 2 3 4 5 6; do
+            a=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/affiliate" -H 'Content-Type: application/json' -d '{}')
+            c=$(curl -s -X POST "$base/createCheckoutSession" -H 'Content-Type: application/json' \
+                  -d '{"priceId":"price_probe","uid":"probe","email":"probe@example.com"}')
+            echo "affiliate (no sign-in): HTTP $a · checkout (unknown price): $c"
+            if [ "$a" = 401 ] && echo "$c" | grep -q 'Unknown priceId'; then exit 0; fi
+            sleep 20
+          done
+          echo "::error::The functions deployed but didn't answer as expected."
+          exit 1
