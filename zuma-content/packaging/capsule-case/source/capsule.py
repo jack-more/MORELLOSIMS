@@ -33,6 +33,16 @@ def make_capsule(COL, name='capsule'):
     nt = m.node_tree; img = nt.nodes.new('ShaderNodeTexImage'); img.image = bpy.data.images.load(os.path.join(CAP, os.environ.get('ZPATTERN', 'pattern.png'))); img.image.colorspace_settings.name = 'Non-Color'
     img.interpolation = 'Cubic'; bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 1.0; bp.inputs['Distance'].default_value = 0.06
     nt.links.new(img.outputs['Color'], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], b.inputs['Normal'])
+    if os.environ.get('ZGRAIN'):                     # soft-touch silicone: a fine matte grain over the stamps, a little roughness drift, a velvet sheen
+        nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 900.0; nz.inputs['Detail'].default_value = 3.0
+        tc_ = nt.nodes.new('ShaderNodeTexCoord'); nt.links.new(tc_.outputs['Object'], nz.inputs['Vector'])
+        bg_ = nt.nodes.new('ShaderNodeBump'); bg_.inputs['Strength'].default_value = 0.22; bg_.inputs['Distance'].default_value = 0.003
+        nt.links.new(nz.outputs['Fac'], bg_.inputs['Height']); nt.links.new(bp.outputs['Normal'], bg_.inputs['Normal']); nt.links.new(bg_.outputs['Normal'], b.inputs['Normal'])
+        nz2 = nt.nodes.new('ShaderNodeTexNoise'); nz2.inputs['Scale'].default_value = 6.0; nt.links.new(tc_.outputs['Object'], nz2.inputs['Vector'])
+        mr_ = nt.nodes.new('ShaderNodeMapRange'); mr_.inputs['To Min'].default_value = 0.52; mr_.inputs['To Max'].default_value = 0.68
+        nt.links.new(nz2.outputs['Fac'], mr_.inputs['Value']); nt.links.new(mr_.outputs['Result'], b.inputs['Roughness'])
+        b.inputs['Sheen Weight'].default_value = 0.12; b.inputs['Sheen Roughness'].default_value = 0.45
+        b.inputs['Sheen Tint'].default_value = lin(COL)
     # the pressed shapes sit a touch darker, the way silicone reads where it is thinner
     dk = nt.nodes.new('ShaderNodeMixRGB'); dk.blend_type = 'MULTIPLY'; dk.inputs['Color1'].default_value = lin(COL)
     if os.environ.get('ZCOL2'):                      # a two-tone pill: the area colour on the top half, the second colour below the seam
@@ -58,6 +68,7 @@ else:
         cp = make_capsule(c_, 'cap%d' % i); pv = bpy.data.objects.new('pv%d' % i, None); sc.collection.objects.link(pv); cp.parent = pv
         pv.location = ((i - (len(cols) - 1) / 2) * 3.0, (i % 2) * 1.4 - 0.7, 0); pv.rotation_euler = (0, 0, math.radians(-20 + (i * 37) % 40))
         if os.environ.get('ZFACE'): pv.rotation_euler = (0, 0, math.atan2(-52 - pv.location.y, -pv.location.x) + math.pi / 2 + math.radians(float(os.environ['ZFACE'])))
+        if os.environ.get('ZFACE') and os.environ.get('ZALT') and i % 2: pv.rotation_euler.z += math.pi   # every other one turned to show its back
 
 def box(name, size, loc, col, rough=0.8):
     bpy.ops.mesh.primitive_cube_add(size=1, location=loc); o = bpy.context.active_object; o.name = name; o.scale = size
