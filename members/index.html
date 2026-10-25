@@ -98,6 +98,9 @@ html,body{background:#1FA255!important}
 .tier{display:inline-block;padding:4px 8px;border-radius:5px;font:700 11px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;color:#fff;font-style:normal}
 .tier.t6{background:#B06A35}.tier.t7{background:linear-gradient(180deg,#a9b4be,#7D8A96)}.tier.t8{background:#14743C}.tier.t9{background:#1F5FB0}.tier.t10{background:#15120A;color:#f3d27a;box-shadow:inset 0 0 0 1px #d9b25a}
 .label.cards{margin:22px 0 10px;color:rgba(255,255,255,.88)!important}
+.earn-s{font-size:14.5px;line-height:1.5;color:var(--ink-2)}
+.earn-s b{color:var(--ink)}
+.earn-s a{color:var(--deep,#14743C);font-weight:700}
 .notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}
 .notes .note-fit{border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.18)}
 .notes .note-fit>.mn{border-radius:44px}
@@ -110,7 +113,7 @@ html,body{background:#1FA255!important}
   <a href="/" aria-label="Morello Sims"><span class="foil-logo"><i></i></span></a>
   <nav aria-label="Main"><a class="opt" href="/">Home</a><a href="/ledger/nba/">Ledger</a><a class="on" href="/members/" aria-current="page">Members<span class="lg"> zone</span></a><a class="acct" href="#" id="ms-acct">Account</a></nav>
 </div></header>
-<div class="ms-zone"><div class="in"><span class="k">Members zone</span><nav aria-label="Members zone"><a href="/members/dashboard/">Lineups + info</a><a class="on" href="/members/" aria-current="page">Tonight’s picks</a><a href="/members/breakdown/">Breakdown</a></nav></div></div>
+<div class="ms-zone"><div class="in"><span class="k">Members zone</span><nav aria-label="Members zone"><a href="/members/dashboard/">Lineups + info</a><a class="on" href="/members/" aria-current="page">Tonight’s picks</a><a href="/members/breakdown/">Breakdown</a><a href="/members/earn/">Earn 30%</a></nav></div></div>
 </div>
 
 <div class="wrap">
@@ -121,7 +124,7 @@ html,body{background:#1FA255!important}
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="/morello-auth.js?v=20261020-members"></script>
+<script src="/morello-auth.js?v=20261025-refs"></script>
 <script>
 const $ = id => document.getElementById(id);
 const main = $("main");
@@ -131,6 +134,11 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const foot = `<p class="foot">Every pick is graded in public on the <a href="/ledger/nba/">ledger</a>.
   Simulations, not guarantees. 21+ · 1-800-GAMBLER.</p>`;
 let unsub = null;
+let ME = null;   // the signed-in member's users doc (the earn card reads referred_code)
+// friends who came in on a code hear they can do the same; everyone else gets the short version
+const earnCard = () => ME && ME.referred_code
+  ? `<div class="card msg earn"><h2>You saved 25% with a friend’s code.</h2><p>You can do the same: get your own code, and earn 30% of everything the friends you send buy, for good.</p><div class="btns"><a class="btn" href="/members/earn/">Get my code</a></div></div>`
+  : `<div class="card earn-s"><b>Earn 30%.</b> Friends get 25% off their first pass with your code; you get 30% of what they buy. <a href="/members/earn/">Get your code</a></div>`;
 document.getElementById("ms-acct").addEventListener("click", e => { e.preventDefault(); if (window.morelloAuth) morelloAuth.openModal(morelloAuth.getCurrentUser() ? "profile" : "signin"); });
 
 function msg(title, body, buttons = "") {
@@ -297,7 +305,7 @@ function renderPicks(list) {
     <p>The sim logs a pick when it finds an edge against the line, usually by early afternoon ET. It shows up here
     the second it's logged, and we email you. Some nights the sim passes.</p></div>`;
   if (earlier.length) html += `<div class="label day">Last night</div>` + slip(earlier, `Results go on the <a href="/ledger/nba/">ledger</a> once the games are final.`);
-  main.innerHTML = html + foot;
+  main.innerHTML = html + earnCard() + foot;
   fitNotes();
 }
 
@@ -313,6 +321,7 @@ async function onUser(user) {
       `<button class="btn" onclick="morelloAuth.openModal('signin')">Sign in</button><a class="btn ghost" href="/#plans">Get a pass</a>`);
   }
   let u = await readUser(user.uid).catch(() => null);
+  ME = u;
   // back from Stripe: the webhook can take a few seconds to record the pass
   for (let i = 0; PAID && !passActive(u) && i < 40; i++) {
     msg("Confirming your payment…", "This takes a few seconds. Don't buy again; your pass is on its way.");
@@ -320,6 +329,7 @@ async function onUser(user) {
     u = await readUser(user.uid).catch(() => u);
   }
   if (PAID) { try { history.replaceState(null, "", location.pathname); } catch (_) {} }
+  ME = u;
   if (passActive(u) || hasFeed(u) || await rulesAllow()) return showPicks(user, u);
   if (PAID) {
     return msg("Your payment is still confirming.", "Stripe hasn't confirmed it yet. Refresh in a minute. Please don't buy again.",
