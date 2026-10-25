@@ -41,6 +41,16 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/sa.json"' EXIT
           who=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('client_email', '?'))" "$RUNNER_TEMP/sa.json")
           echo "deploying as $who"
+          # the functions read the Stripe keys from runtime config; a deploy without them
+          # would stop checkout, so look first (key names only, never the values)
+          names=$(GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
+                  npx --yes firebase-tools@13 functions:config:get --project morello-sims 2>/dev/null \
+                  | python3 -c "import json,sys; print(' '.join(sorted((json.load(sys.stdin).get('stripe') or {}).keys())))" 2>/dev/null || true)
+          echo "stripe config keys: ${names:-none}"
+          case " $names " in *" secret "*) ;; *)
+            echo "::error::No stripe.secret in the functions' runtime config (or $who can't read it). Not deploying: checkout would stop. Nothing live changed."
+            exit 1 ;;
+          esac
           if ! GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
                npx --yes firebase-tools@13 deploy --project morello-sims --non-interactive --force \
                --only functions:createCheckoutSession,functions:stripeWebhook,functions:affiliate; then
@@ -56,8 +66,9 @@ jobs:
             a=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/affiliate" -H 'Content-Type: application/json' -d '{}')
             c=$(curl -s -X POST "$base/createCheckoutSession" -H 'Content-Type: application/json' \
                   -d '{"priceId":"price_probe","uid":"probe","email":"probe@example.com"}')
-            echo "affiliate (no sign-in): HTTP $a · checkout (unknown price): $c"
-            if [ "$a" = 401 ] && echo "$c" | grep -q 'Unknown priceId'; then exit 0; fi
+            s=$(curl -s "$base/affiliate?health=1")
+            echo "affiliate (no sign-in): HTTP $a · checkout (unknown price): $c · stripe: $s"
+            if [ "$a" = 401 ] && echo "$c" | grep -q 'Unknown priceId' && echo "$s" | grep -q '"stripe":true'; then exit 0; fi
             sleep 20
           done
           echo "::error::The functions deployed but didn't answer as expected."
