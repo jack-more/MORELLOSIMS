@@ -53,6 +53,8 @@ HELP = (
     "/stake ATL 0.5u: change a pick's stake before tip\n"
     "/pull ATL: take a pick off before tip\n"
     "/resim: re-run the model now (about 6 minutes)\n"
+    "/refs: who's owed what from referral codes\n"
+    "/paid JAIDAN 45.00 venmo: record a payout\n"
     "/status · /picks: the check-in and today's list"
 )
 
@@ -455,6 +457,65 @@ def resim():
 
 # ── the command router ────────────────────────────────────────────────────
 
+# ── referral payouts (functions/index.js keeps the books; the owner pays by hand) ──
+
+def _ref_books():
+    """[(code, owner email, payout handle, customers, earned, paid, owed)] in cents, most owed first."""
+    import tg_members
+    fs = tg_members.db()
+    if fs is None:
+        raise RuntimeError("Firestore isn't configured on this run")
+    earned, buyers, paid = {}, {}, {}
+    for d in fs.collection("affiliate_earnings").stream():
+        e = d.to_dict()
+        if e.get("status") == "reversed":
+            continue
+        a = e.get("affiliate_uid")
+        earned[a] = earned.get(a, 0) + int(e.get("commission_cents") or 0)
+        buyers.setdefault(a, set()).add(e.get("buyer_uid"))
+    for d in fs.collection("affiliate_payouts").stream():
+        p = d.to_dict()
+        paid[p.get("affiliate_uid")] = paid.get(p.get("affiliate_uid"), 0) + int(p.get("amount_cents") or 0)
+    rows = []
+    for uid in set(earned) | set(paid):
+        u = fs.collection("users").document(uid).get().to_dict() or {}
+        rows.append((u.get("affiliateCode") or "?", u.get("email") or "?", u.get("affiliatePayout") or "",
+                     len(buyers.get(uid, ())), earned.get(uid, 0), paid.get(uid, 0), uid))
+    return sorted(rows, key=lambda r: -(r[4] - r[5]))
+
+
+def refs():
+    rows = _ref_books()
+    if not rows:
+        return "Referrals: no sales on any code yet."
+    usd = lambda c: f"${c / 100:,.2f}"
+    lines = ["Referrals (30% of what each customer pays)"]
+    for code, email, handle, n, e, p, _uid in rows:
+        lines.append(f"{code} · {email} · {n} customer{'s' if n != 1 else ''} · earned {usd(e)} · paid {usd(p)} · "
+                     f"owed {usd(max(0, e - p))}" + (f" · pay to {handle}" if handle else " · no payout handle yet"))
+    lines.append("Record a payout: /paid CODE 45.00 venmo")
+    return "\n".join(lines)
+
+
+def paid(code, amount, note=""):
+    """Record a payout to the account behind `code`."""
+    import tg_members
+    from firebase_admin import firestore as gfs
+    cents = int(round(float(amount.lstrip("$")) * 100))
+    if cents <= 0:
+        return "The amount has to be more than $0."
+    fs = tg_members.db()
+    doc = fs.collection("affiliate_codes").document(code.upper()).get()
+    if not doc.exists:
+        return f"No account has the code {code.upper()}."
+    uid = doc.to_dict()["uid"]
+    fs.collection("affiliate_payouts").add({"affiliate_uid": uid, "amount_cents": cents, "note": note[:120],
+                                            "createdAt": gfs.SERVER_TIMESTAMP})
+    row = next((r for r in _ref_books() if r[6] == uid), None)
+    left = max(0, row[4] - row[5]) if row else 0
+    return f"Recorded ${cents / 100:,.2f} paid to {code.upper()}. Still owed: ${left / 100:,.2f}."
+
+
 def handle(text):
     """Reply for an owner command, or None when `text` isn't one of these."""
     words = (text or "").strip().split()
@@ -474,6 +535,10 @@ def handle(text):
             return pull(args[0]) if args else "Format: /pull ATL"
         if cmd == "/resim":
             return resim()
+        if cmd == "/refs":
+            return refs()
+        if cmd == "/paid":
+            return paid(args[0], args[1], " ".join(args[2:])) if len(args) >= 2 else "Format: /paid JAIDAN 45.00 venmo"
         if cmd in ("/help", "/start", "/commands"):
             return HELP
     except Exception as e:
