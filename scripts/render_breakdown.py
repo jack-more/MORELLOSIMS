@@ -27,7 +27,7 @@ import picks_store  # noqa: E402
 
 ET = timezone(timedelta(hours=-4))
 SD = 15.0                      # results scatter ~15 points around the sim's margin (sim/run.py MARGIN_SD)
-MIN_COVER, MAX_GAP = 0.58, 6.0
+MIN_COVER = 0.58
 THIN_MIN = 24.0                # sim/lineups.THIN_MIN: real-lineup minutes to price a team
 UNIT = 25.0                    # $PP per unit
 e = html.escape
@@ -110,7 +110,7 @@ def decide(g, logged):
     side, line = (h, bs) if home_side else (a, -bs)
     out.update(side=side, line=line, cover=cover(mg, home_side, line))
     out["thin"] = [t for t in (a, h) if (g["teams"][t].get("lineup") or {}).get("thin")]
-    out["call"] = "thin" if out["thin"] else "hold" if out["gap"] > MAX_GAP else "pass"
+    out["call"] = "thin" if out["thin"] else "pass" if out["cover"] < MIN_COVER else "unlogged"
     return out
 
 
@@ -270,13 +270,10 @@ def reasons(g, d):
     if d.get("side"):
         out.append(f"Sim line {d['sim_line']} against the book's {d['book']}: {d['gap']:.1f} points apart. "
                    f"{d['side']} {fmt(d['line'])} covers in {d['cover']:.0%} of the 5,000 games.")
-    if d.get("gap", 0) > MAX_GAP:
-        out.append(f"The sim is {d['gap']:.1f} points off the market here. Past {MAX_GAP:.0f} points the market has "
-                   f"usually seen something the model hasn't.")
     return "".join(f"<li>{e(x)}</li>" for x in out)
 
 
-VERDICT = {"pick": "Pick", "hold": "No pick: off the market", "thin": "No pick: thin lineup data", "pass": "No pick",
+VERDICT = {"pick": "Pick", "unlogged": "No pick", "thin": "No pick: thin lineup data", "pass": "No pick",
            "no_line": "No line"}
 
 
@@ -286,9 +283,9 @@ def card(g, d):
     if call == "pick":
         verdict = f'<b>{e(d["side"])} {fmt(d["line"])}</b> · {d["cover"]:.0%} to cover · {d["units"]:g}U'
         why = "Logged before tip. The stake is frozen on the ledger."
-    elif call == "hold":
+    elif call == "unlogged":
         verdict = f'Best side {e(d["side"])} {fmt(d["line"])} · {d["cover"]:.0%} to cover'
-        why = f"Not a pick: the sim is {d['gap']:.1f} points off the market, past the {MAX_GAP:.0f}-point limit."
+        why = "Not a pick: the model didn't log it before tip."
     elif call == "thin":
         verdict = f'Best side {e(d["side"])} {fmt(d["line"])} · {d["cover"]:.0%} to cover'
         why = (f"Not a pick: {' and '.join(d['thin'])} {'has' if len(d['thin']) == 1 else 'have'} under "
@@ -376,7 +373,7 @@ def render(walk, date):
     <div class="tw"><table><thead><tr><th>Tip</th><th>Game</th><th>Book</th><th>Sim</th><th>Gap</th><th>Covers</th><th>Pick</th></tr></thead>
     <tbody>{"".join(rows)}</tbody></table>
     <div class="totals"><span>Picks: {len(picks)}</span><span>Stake: {units:g}U total</span></div></div>
-    <p class="notes"><b>How to read it.</b> Chances use a 15-point spread around the sim's margin, the scatter NBA results show around a good line. The sim isn't a pick past {MAX_GAP:.0f} points off the market, or under a {MIN_COVER:.0%} chance to cover. Simulations, not guarantees.</p>
+    <p class="notes"><b>How to read it.</b> Chances use a 15-point spread around the sim's margin, the scatter NBA results show around a good line. The sim isn't a pick under a {MIN_COVER:.0%} chance to cover. Simulations, not guarantees.</p>
   </section>
 </div>"""
 
