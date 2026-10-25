@@ -11,6 +11,8 @@ projected box score.
 """
 
 import argparse
+import collections
+import itertools
 import json
 import os
 import sys
@@ -20,6 +22,10 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sim import engine, players, run  # noqa: E402  (run sets up generate_frontend and logging)
 from sim.run import MARGIN_SD, gf  # noqa: E402
+from config import CURRENT_SEASON, previous_season  # noqa: E402
+
+PAIR_MIN, TRIO_MIN = 20.0, 15.0   # minutes together this season before a pair / trio is listed
+_STINTS = {}
 
 LABEL = {"PRBallHandler": "P&R handler", "Isolation": "Isolation", "Spotup": "Spot-up", "Transition": "Transition",
          "Cut": "Cut", "PRRollMan": "Roll man", "Postup": "Post-up", "Handoff": "Handoff", "OffScreen": "Off screen",
@@ -28,7 +34,64 @@ LAYER_NAME = {"lineups": "Lineup plan", "load": "Usage load", "spacing": "Spacin
               "fatigue": "Fatigue"}
 
 
-def _team_detail(t, roster, info):
+def _stints(con):
+    """({team_id: [(sorted five, seconds, points margin, possessions)]} this regular season,
+    {2|3|5: combos that shared the floor last season}) from ESPN five-man stints."""
+    if not _STINTS:
+        emap = {str(e): int(p) for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
+        q = ("SELECT l.team_id, l.e1, l.e2, l.e3, l.e4, l.e5, l.sec, l.pts, l.opp_pts, l.poss, l.opp_poss "
+             "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
+             "WHERE g.season_id=? AND g.season_type=2")
+        now, last = collections.defaultdict(list), {k: set() for k in (2, 3, 5)}
+        for season, sink in ((CURRENT_SEASON, now), (previous_season(CURRENT_SEASON), None)):
+            for tid, *es, sec, pts, opp, poss, oposs in con.execute(q, (season,)):
+                five = [emap.get(str(e)) for e in es]
+                if None in five:
+                    continue
+                five = tuple(sorted(five))
+                if sink is not None:
+                    sink[tid].append((five, sec or 0, (pts or 0) - (opp or 0), ((poss or 0) + (oposs or 0)) / 2))
+                else:
+                    for k in (2, 3, 5):
+                        last[k].update(itertools.combinations(five, k) if k < 5 else [five])
+        _STINTS.update(now=now, last=last)
+    return _STINTS["now"], _STINTS["last"]
+
+
+def _season(con, abbr, t):
+    """This season's real record of every combo in tonight's rotation: ({sorted five:
+    {min, net}}, {"pairs": [...], "trios": [...]}), the lists the best three and worst two
+    with enough minutes together, each with the sim's own pair value where it has one."""
+    tid = con.execute("SELECT team_id FROM teams WHERE abbreviation=?", (abbr,)).fetchone()
+    now, last = _stints(con)
+    pids = [int(p) for p in t["pids"]]
+    idx, nm = {p: i for i, p in enumerate(pids)}, dict(zip(pids, t["names"]))
+    short = lambda p: nm[p].split()[-1] if nm[p].split()[-1] not in ("Jr.", "II", "III") else nm[p].split()[-2]
+    agg = {k: collections.defaultdict(lambda: np.zeros(3)) for k in (2, 3, 5)}
+    for five, sec, diff, poss in now.get(tid[0] if tid else None, []):
+        for k in (2, 3, 5):
+            for cb in (itertools.combinations(five, k) if k < 5 else [five]):
+                if all(p in idx for p in cb):            # every player of the combo plays tonight
+                    agg[k][cb] += (sec, diff, poss)
+    rec = lambda v: {"min": round(float(v[0]) / 60, 1), "net": round(float(100 * v[1] / v[2]), 1) if v[2] > 0 else 0.0}
+    fives = {cb: rec(v) for cb, v in agg[5].items()}
+    lists = {}
+    for k, key, floor in ((2, "pairs", PAIR_MIN), (3, "trios", TRIO_MIN)):
+        rows = []
+        for cb, v in agg[k].items():
+            r = rec(v)
+            if r["min"] < floor:
+                continue
+            sim = round(float(t["V"][idx[cb[0]], idx[cb[1]]]), 1) if k == 2 else None
+            rows.append(dict(r, who=[short(p) for p in cb], pids=list(cb), new=cb not in last[k], sim=sim))
+        rows.sort(key=lambda r: -r["net"])
+        best = [r for r in rows if r["net"] > 0][:3]
+        worst = [r for r in rows[::-1] if r["net"] < 0 and r not in best][:2]
+        lists[key] = best + worst[::-1]
+    return fives, lists
+
+
+def _team_detail(t, roster, info, abbr=None):
     names = dict(zip(roster.player_id.astype(int), roster.full_name))
     out_ids, _ = gf._resolve_out_ids(info, roster, "", "walkthrough")
     starters = {int(p) for p in (gf._match_player_name(n, roster) for n, _pos, st in info.get("starters", [])
@@ -46,6 +109,7 @@ def _team_detail(t, roster, info):
                      "role": ({"usg": round(role[0] * 100, 1), "eff": round(role[1], 2)} if role else None)})
     rows.sort(key=lambda r: (not r["starter"], -r["min"]))
     units, lineup = [], None
+    fives, combos = _season(players._db(), abbr, t) if abbr else ({}, {})
     if t.get("plan"):
         p = t["plan"]
         short = lambda n: n.split()[-1] if n.split()[-1] not in ("Jr.", "II", "III") else n.split()[-2]
@@ -61,8 +125,10 @@ def _team_detail(t, roster, info):
                           "swap": f"{who(sw[1])} for {who(sw[0])}" if sw else None,
                           "net": round(net, 1),
                           "impact": round(imp, 1), "chem": round(chem, 1),
+                          "season": fives.get(tuple(sorted(int(t["pids"][i]) for i in five))),
                           "start": five == t["plan"]["start"], "close": five == t["plan"]["close"]})
-    return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids), "units": units, "lineup": lineup}
+    return {"rotation": rows, "out": sorted(names.get(p, str(p)) for p in out_ids), "units": units, "lineup": lineup,
+            "combos": combos}
 
 
 def _name(pid):
@@ -112,7 +178,8 @@ def explain(home, away, lineups, lines, lg, con, scale, sims):
         "margin": round(total, 2), "home_win": round(float(np.mean(mg > 0)), 3),
         "hist": {"edges": edges.tolist(), "counts": hist.tolist()},
         "steps": steps,
-        "teams": {home: _team_detail(h, hr, lineups.get(home, {})), away: _team_detail(a, ar, lineups.get(away, {}))},
+        "teams": {home: _team_detail(h, hr, lineups.get(home, {}), home),
+                  away: _team_detail(a, ar, lineups.get(away, {}), away)},
         "box": {home: box(h, full["home_box"]), away: box(a, full["away_box"])},
     }
 
