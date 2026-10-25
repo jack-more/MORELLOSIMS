@@ -29,6 +29,8 @@ ET = timezone(timedelta(hours=-4))
 SD = 15.0                      # results scatter ~15 points around the sim's margin (sim/run.py MARGIN_SD)
 MIN_COVER = 0.58
 THIN_MIN = 24.0                # sim/lineups.THIN_MIN: real-lineup minutes to price a team
+PAIR_MIN, TRIO_MIN = 20.0, 15.0   # sim/explain: minutes together before a pair / trio is listed
+NOISE_SD_40 = 17.7             # sim/context.NOISE: luck in a 40-minute net per 100, one standard deviation
 UNIT = 25.0                    # $PP per unit
 e = html.escape
 # ESPN's logo codes (the members page and pick notes use the same files)
@@ -185,15 +187,37 @@ def units_table(g, abbr):
         + (f'<span class="tag sw">{e(u["swap"])}</span>' if u.get("swap") else "")
         + f'</td><td>{u["min"]:.0f}</td><td>{coach(u)}</td>'
         f'<td class="{"pos" if u["net"] > 0 else "neg"}">{u["net"]:+.1f}</td>'
-        f'<td>{u["net"] * per12:+.1f}</td><td>{u["chem"]:+.1f}</td></tr>' for u in units)
+        f'<td>{u["net"] * per12:+.1f}</td><td>{u["chem"]:+.1f}</td>{season_cell(u.get("season"))}</tr>' for u in units)
     src = (f'<p class="src">{mix.get("real", 0):.0f} of 48 min from lineups that have played together or start tonight'
            f' · {mix.get("swap", 0):.0f} with one player swapped · {mix.get("new", 0):.0f} new</p>') if mix else ""
     return (f'<div class="rot" style="--tc:{color}"><h4>{logo(abbr, "lg sm")}{e(abbr)} <span>tonight’s units</span></h4>{src}<table class="units"><thead><tr>'
             f'<th>Five</th><th title="Minutes the plan gives this five">Min</th>'
             f'<th title="Minutes per game the coach has played this five when all five were available; new or first = never together">Coach</th>'
             f'<th title="Net per 100 possessions: impact + chemistry">Net/100</th>'
-            f'<th title="The same, per 12 minutes together">Per 12</th><th title="Pairs plus the unit’s own record, per 100">Chem</th></tr></thead>'
-            f'<tbody>{rows}</tbody></table></div>')
+            f'<th title="The same, per 12 minutes together">Per 12</th><th title="Pairs plus the unit’s own record, per 100">Chem</th>'
+            f'<th title="What this five has actually done together this season: net per 100, and minutes">Season</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table>{combos_list(g["teams"][abbr].get("combos") or {})}</div>')
+
+
+def season_cell(s):
+    """This season's real net per 100 and minutes together, or a dash for a five that hasn't played."""
+    if not s or s["min"] < 1:
+        return '<td class="sea">—</td>'
+    if s["min"] < 3:                                   # a minute or two: the net is a coin flip, show the time only
+        return f'<td class="sea"><small>{s["min"]:.0f}m</small></td>'
+    return f'<td class="sea"><b class="{"pos" if s["net"] > 0 else "neg"}">{s["net"]:+.0f}</b><small>{s["min"]:.0f}m</small></td>'
+
+
+def combos_list(c):
+    """The team's best and worst pairs and trios this season, among tonight's players."""
+    def item(r):
+        sim = f' · sim {r["sim"]:+.1f}' if r.get("sim") is not None else ""
+        return (f'<li><span class="who">{e(" · ".join(r["who"]))}{"<i>new</i>" if r.get("new") else ""}</span>'
+                f'<b class="{"pos" if r["net"] > 0 else "neg"}">{r["net"]:+.0f}</b><small>{r["min"]:.0f}m{e(sim)}</small></li>')
+    cols = [(f"Pairs, {PAIR_MIN:.0f}+ min together · sim = the chemistry it credits", c.get("pairs") or []),
+            (f"Trios, {TRIO_MIN:.0f}+ min together · not in the sim", c.get("trios") or [])]
+    body = "".join(f'<div><h5>{e(h)}</h5><ul>{"".join(item(r) for r in rs)}</ul></div>' for h, rs in cols if rs)
+    return f'<div class="combos">{body}</div>' if body else ""
 
 
 def histogram(g, d):
@@ -309,7 +333,7 @@ def card(g, d):
   <ol class="steps">
     <li><h3>Who's playing</h3><p class="lede">Tonight's rotations: RotoWire's starters and injury list, minutes for a 240-minute game, each player's numbers from his own games.</p>
       <div class="rots">{rotation_table(g, g['away'])}{rotation_table(g, g['home'])}</div></li>
-    <li><h3>Tonight's units</h3><p class="lede">The fives each coach actually plays, from every game's lineup data, at the minutes per game he gives them (the Coach column; recent games and games without tonight's missing players count most). When a player from one of those fives isn't playing, the same five plays with the teammate who took his minutes in the games he missed. Tonight's starters open both halves; the strongest of the real fives closes. New fives get only the minutes those can't cover inside each player's minutes. Under {THIN_MIN:.0f} real minutes, a team is too new to price and gets no pick.</p>
+    <li><h3>Tonight's units</h3><p class="lede">The fives each coach actually plays, from every game's lineup data, at the minutes per game he gives them (the Coach column; recent games and games without tonight's missing players count most). When a player from one of those fives isn't playing, the same five plays with the teammate who took his minutes in the games he missed. Tonight's starters open both halves; the strongest of the real fives closes. New fives get only the minutes those can't cover inside each player's minutes. Under {THIN_MIN:.0f} real minutes, a team is too new to price and gets no pick. The Season column and the pairs and trios below each table are what those players have actually done together this season, next to what the sim credits them; over 40 minutes, luck alone moves a net rating about {NOISE_SD_40:.0f} points per 100 either way.</p>
       <div class="rots">{units_table(g, g['away'])}{units_table(g, g['home'])}</div></li>
     <li><h3>Every possession</h3><p class="lede">About {g['pace']:.0f} possessions each. Each one: who ends it (usage), how (his play types), what it's worth against these five defenders and this scheme, then a shot, a turnover or a putback.</p>
       <div class="env">
