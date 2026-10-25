@@ -75,7 +75,10 @@ def main():
     ap.add_argument("--max-dates", type=int, default=0, help="debug: stop after this many game dates")
     ap.add_argument("--runs", default="", help="comma list of runs (default: all)")
     ap.add_argument("--from-date", default="", help="simulate only games from this date (earlier ones still feed the history)")
+    ap.add_argument("--chem", default="", help="chemistry settings, e.g. pair_min=0,unit_min=0,tau_x=2,chem_w=1 "
+                                               "(backtest.Chemistry; default: the live sim's)")
     args = ap.parse_args()
+    chem_kw = {k: float(v) for k, v in (kv.split("=") for kv in args.chem.split(",") if kv)}
     os.makedirs(args.out, exist_ok=True)
     logf = open(os.path.join(args.out, "progress.log"), "a")
     t_start = time.time()
@@ -105,7 +108,7 @@ def main():
 
     dates = sorted(S.games.game_date.unique())
     start = max((dt.date.fromisoformat(dates[0]) + dt.timedelta(days=SKIP_DAYS)).isoformat(), args.from_date)
-    chem = Chemistry(S.arch)
+    chem = Chemistry(S.arch, **chem_kw)
     game_tasks, cal_tasks, meta, skipped, unmatched = [], [], [], collections.Counter(), collections.Counter()
     cal_dates, cal_lg, next_cal = [], {}, start
     for di, D in enumerate(dates):
@@ -208,7 +211,7 @@ def main():
             if done % 500 == 0:
                 el = time.time() - t0
                 log(f"simulated {done}/{len(game_tasks)} (eta {el / done * (len(game_tasks) - done):.0f}s)")
-    json.dump({"generated": dt.datetime.now(dt.timezone.utc).isoformat(), "runs": list(runs), "games": meta},
+    json.dump({"generated": dt.datetime.now(dt.timezone.utc).isoformat(), "runs": list(runs), "chem": chem_kw, "games": meta},
               open(os.path.join(args.out, "results.json"), "w"), indent=1, default=str)
     log(f"wrote {args.out}/results.json in {(time.time() - t_start) / 60:.1f} min")
 
