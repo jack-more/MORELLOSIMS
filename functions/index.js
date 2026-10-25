@@ -26,6 +26,42 @@ const PRICE_TO_PACKAGE = {
   'price_1T3s0qA9KGX7mrlmA8KljtHG': { tier: 'all_access', mode: 'payment' }
 };
 
+// REFERRALS (owner, 2026-10-25): anyone with an account gets a code. A customer who
+// uses one gets 25% off a first pass and is tied to that code's owner; the owner earns
+// 30% of everything that customer pays, every purchase, for good. Payouts are manual
+// (the owner's Telegram /refs and /paid); this only keeps the books.
+//   affiliate_codes/{CODE}     {uid}                  one code per account, unique
+//   users/{uid}                affiliateCode, referred_by_affiliate, referred_code
+//   affiliate_earnings/{sess}  {affiliate_uid, buyer_uid, amount_cents, commission_cents, status}
+//   affiliate_payouts/{id}     {affiliate_uid, amount_cents, note}
+const REF_COUPON = 'MS_FRIEND25';
+const REF_DISCOUNT_PCT = 25;
+const REF_COMMISSION = 0.30;
+const CODE_RE = /^[A-Z0-9]{4,12}$/;
+
+async function refCoupon() {
+  try {
+    return (await stripe.coupons.retrieve(REF_COUPON)).id;
+  } catch (err) {
+    if (err.statusCode !== 404) throw err;
+    return (await stripe.coupons.create({
+      id: REF_COUPON, percent_off: REF_DISCOUNT_PCT, duration: 'once', name: 'Friend code: 25% off your first pass'
+    })).id;
+  }
+}
+
+// The account behind a code: its affiliate_codes doc, else a member's older refCode
+async function codeOwner(code) {
+  if (!CODE_RE.test(code)) return null;
+  const doc = await db.collection('affiliate_codes').doc(code).get();
+  if (doc.exists) return doc.data().uid;
+  const q = await db.collection('users').where('refCode', '==', code).limit(1).get();
+  return q.empty ? null : q.docs[0].id;
+}
+
+// A first purchase: nothing bought before on this account (pass, subscription or a coded buy)
+const hasBought = (u) => !!(u && (u.packagePurchasedAt || u.checkoutMode || u.referred_by_affiliate));
+
 // CREATE CHECKOUT SESSION
 // Called from morello-auth.js when user clicks a checkout CTA
 exports.createCheckoutSession = functions.https.onRequest((req, res) => {
@@ -37,9 +73,15 @@ exports.createCheckoutSession = functions.https.onRequest((req, res) => {
 
     try {
       const { priceId, uid, email, successUrl, cancelUrl } = req.body;
+      const code = String(req.body.code || '').trim().toUpperCase();
 
       if (!priceId || !uid || !email) {
         res.status(400).json({ error: 'Missing required fields: priceId, uid, email' });
+        return;
+      }
+      // before any Stripe call, so a bad request leaves nothing behind
+      if (!PRICE_TO_PACKAGE[priceId]) {
+        res.status(400).json({ error: 'Unknown priceId' });
         return;
       }
 
@@ -92,8 +134,26 @@ exports.createCheckoutSession = functions.https.onRequest((req, res) => {
         };
       }
 
+      // referral: a customer already tied to a code owner pays that owner on every buy;
+      // a new customer with a valid code (not their own) gets 25% off this first pass
+      const u = userDoc.exists ? userDoc.data() : {};
+      let codeNote = '';
+      if (u.referred_by_affiliate) {
+        sessionParams.metadata.affiliate_uid = u.referred_by_affiliate;
+      } else if (code && mode === 'payment') {
+        const owner = await codeOwner(code);
+        if (!owner) codeNote = 'That code isn’t one of ours.';
+        else if (owner === uid) codeNote = 'You can’t use your own code.';
+        else if (hasBought(u)) codeNote = 'Codes work on a first pass only.';
+        else {
+          sessionParams.discounts = [{ coupon: await refCoupon() }];
+          Object.assign(sessionParams.metadata, { affiliate_uid: owner, ref_code: code });
+          codeNote = 'applied';
+        }
+      }
+
       const session = await stripe.checkout.sessions.create(sessionParams);
-      res.json({ url: session.url });
+      res.json({ url: session.url, code: codeNote });
     } catch (err) {
       console.error('Checkout session error:', err);
       res.status(500).json({ error: err.message });
@@ -142,6 +202,19 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
           { merge: true }
         );
         console.log(`Updated user ${uid} to tier: ${tier}`);
+        await recordReferral(session, uid);
+      }
+      break;
+    }
+
+    case 'charge.refunded': {
+      // a refunded purchase earns no commission
+      const charge = event.data.object;
+      if (charge.payment_intent) {
+        const q = await db.collection('affiliate_earnings').where('payment_intent', '==', charge.payment_intent).get();
+        for (const d of q.docs) {
+          await d.ref.set({ status: 'reversed', reversedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        }
       }
       break;
     }
@@ -186,6 +259,120 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   }
 
   res.json({ received: true });
+});
+
+// A paid checkout with a code owner on it: tie a new customer to the code they used (once,
+// for good) and book 30% of what they paid. Keyed by session id, so a retried webhook
+// books nothing twice.
+async function recordReferral(session, buyerUid) {
+  const affiliateUid = session.metadata?.affiliate_uid;
+  if (!affiliateUid || affiliateUid === buyerUid || session.payment_status !== 'paid') return;
+  const buyerRef = db.collection('users').doc(buyerUid);
+  const earnRef = db.collection('affiliate_earnings').doc(session.id);
+  const amount = Number(session.amount_total || 0);
+  await db.runTransaction(async (tx) => {
+    const [buyer, earned] = await Promise.all([tx.get(buyerRef), tx.get(earnRef)]);
+    if (earned.exists) return;
+    const b = buyer.exists ? buyer.data() : {};
+    if (b.referred_by_affiliate && b.referred_by_affiliate !== affiliateUid) return;   // tied to someone else
+    if (!b.referred_by_affiliate) {
+      if (!session.metadata?.ref_code) return;                                         // never used a code
+      tx.set(buyerRef, { referred_by_affiliate: affiliateUid, referred_code: session.metadata.ref_code,
+                         referredAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    tx.set(earnRef, {
+      affiliate_uid: affiliateUid, buyer_uid: buyerUid, ref_code: session.metadata?.ref_code || b.referred_code || '',
+      amount_cents: amount, commission_cents: Math.round(amount * REF_COMMISSION), currency: session.currency || 'usd',
+      tier: session.metadata?.tier || '', access_hours: Number(session.metadata?.accessHours || 0),
+      payment_intent: session.payment_intent || '', status: 'owed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  });
+}
+
+// A readable starting code from the email's name part, made unique: JAIDAN, JAIDAN2...
+async function claimDefaultCode(uid, email) {
+  const base = (String(email || '').split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g, '') || 'FRIEND').slice(0, 9).padEnd(4, 'X');
+  for (let i = 0; i < 50; i++) {
+    const code = i === 0 ? base : `${base}${i + 1}`;
+    const ok = await db.runTransaction(async (tx) => {
+      const ref = db.collection('affiliate_codes').doc(code);
+      if ((await tx.get(ref)).exists) return false;
+      tx.set(ref, { uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.set(db.collection('users').doc(uid), { affiliateCode: code }, { merge: true });
+      return true;
+    });
+    if (ok) return code;
+  }
+  throw new Error('no free code');
+}
+
+// AFFILIATE: a signed-in account's code and books.
+// POST {action: 'me'} -> {code, link, customers, purchases, earned_cents, paid_cents, owed_cents, recent}
+// POST {action: 'set_code', code} -> the same, under the new code (one change, while unused)
+// POST {action: 'set_payout', payout} -> the same; payout is where the owner sends the money (Venmo / Zelle / Cash App)
+exports.affiliate = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const decoded = await verifyAuthHeader(req);
+    if (!decoded) {
+      res.status(401).json({ error: 'Sign in required' });
+      return;
+    }
+    try {
+      const uid = decoded.uid;
+      const userRef = db.collection('users').doc(uid);
+      let u = (await userRef.get()).data() || {};
+      let code = u.affiliateCode || await claimDefaultCode(uid, decoded.email);
+      const action = String((req.body && req.body.action) || 'me');
+      const earnQ = await db.collection('affiliate_earnings').where('affiliate_uid', '==', uid).get();
+      const earnings = earnQ.docs.map(d => d.data());
+
+      if (action === 'set_code') {
+        const want = String(req.body.code || '').trim().toUpperCase();
+        if (!CODE_RE.test(want)) return res.status(400).json({ error: 'Codes are 4 to 12 letters or numbers.' });
+        if (u.affiliateCodeChanged) return res.status(400).json({ error: 'You’ve already changed your code once.' });
+        if (earnings.length) return res.status(400).json({ error: 'Your code is already in use by a customer.' });
+        const taken = await db.runTransaction(async (tx) => {
+          const ref = db.collection('affiliate_codes').doc(want);
+          const cur = await tx.get(ref);
+          if (cur.exists && cur.data().uid !== uid) return true;
+          tx.set(ref, { uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+          if (code !== want) tx.delete(db.collection('affiliate_codes').doc(code));
+          tx.set(userRef, { affiliateCode: want, affiliateCodeChanged: true }, { merge: true });
+          return false;
+        });
+        if (taken) return res.status(409).json({ error: 'That code is taken.' });
+        code = want;
+      }
+      if (action === 'set_payout') {
+        const handle = String(req.body.payout || '').trim().slice(0, 80);
+        await userRef.set({ affiliatePayout: handle }, { merge: true });
+        u = Object.assign({}, u, { affiliatePayout: handle });
+      }
+
+      const live = earnings.filter(e => e.status !== 'reversed');
+      const payQ = await db.collection('affiliate_payouts').where('affiliate_uid', '==', uid).get();
+      const earned = live.reduce((a, e) => a + Number(e.commission_cents || 0), 0);
+      const paid = payQ.docs.reduce((a, d) => a + Number(d.data().amount_cents || 0), 0);
+      const recent = live.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)).slice(0, 12)
+        .map(e => ({ at: e.createdAt?.toMillis?.() || 0, hours: e.access_hours, amount_cents: e.amount_cents, commission_cents: e.commission_cents }));
+      res.set('Cache-Control', 'no-store');
+      res.json({
+        code, link: `https://morellosims.com/?ref=${code}`, changed: !!u.affiliateCodeChanged || action === 'set_code',
+        payout: u.affiliatePayout || '',
+        customers: new Set(live.map(e => e.buyer_uid)).size, purchases: live.length,
+        earned_cents: earned, paid_cents: paid, owed_cents: Math.max(0, earned - paid), recent,
+        discount_pct: REF_DISCOUNT_PCT, commission_pct: Math.round(REF_COMMISSION * 100)
+      });
+    } catch (err) {
+      console.error('Affiliate error:', err);
+      res.status(500).json({ error: 'Could not load your code' });
+    }
+  });
 });
 
 // TELEGRAM INVITE
