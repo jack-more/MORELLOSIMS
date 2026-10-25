@@ -313,6 +313,16 @@ async function claimDefaultCode(uid, email) {
 // POST {action: 'set_payout', payout} -> the same; payout is where the owner sends the money (Venmo / Zelle / Cash App)
 exports.affiliate = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
+    if (req.method === 'GET' && req.query.health !== undefined) {
+      // deploy check: can this deploy reach Stripe with its key? (says nothing else)
+      try {
+        await stripe.coupons.list({ limit: 1 });
+        res.json({ stripe: true });
+      } catch (err) {
+        res.status(503).json({ stripe: false });
+      }
+      return;
+    }
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
