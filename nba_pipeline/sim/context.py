@@ -30,6 +30,50 @@ NOISE = 100 ** 2 * 5.2
 
 _CACHE = {}
 
+# Pairs and fives read this season and the two before it, so a player back from a
+# lost season (Haliburton, 2025-26) still has his last healthy year's combos. A
+# combo's most recent season counts in full; each season before that counts SEASON_W
+# of a possession per possession. Backtest of 2025-26 with 2024-25 in (sim/backtest_pit
+# --prior-chem): margin RMSE -0.048 (90% -0.087..-0.011) at 0.5, against -0.049 at
+# 0.25 and -0.043 at 1.0; from February on (the leak-free run) -0.015 at 0.5, against
+# +0.035 and -0.004.
+SEASONS = (CURRENT_SEASON, previous_season(CURRENT_SEASON), previous_season(previous_season(CURRENT_SEASON)))
+SEASON_W = 0.5
+
+
+def _pool(entries):
+    """(estimate, noise) of one combo from its (estimate, noise, seasons back) rows, one per
+    team-season: inverse-noise weighted, older than its latest season at SEASON_W per season."""
+    last = min(s for _, _, s in entries)
+    sw = sz = 0.0
+    for ex, z, s in entries:
+        k = SEASON_W ** (s - last)
+        sw += ex * k / z
+        sz += k / z
+    return sw / sz, 1 / sz
+
+
+def _stints(con):
+    """[(team-season, sorted players, net per 100 minus their impacts, possessions both ends)]:
+    every stored ESPN five-man stint of SEASONS, playoffs included."""
+    if "stints" not in _CACHE:
+        emap = {str(e): p for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
+        imp = impacts(con)
+        back = {s: i for i, s in enumerate(SEASONS)}
+        out = []
+        for r in con.execute(
+                "SELECT g.season_id, l.team_id, l.e1, l.e2, l.e3, l.e4, l.e5, l.pts, l.opp_pts, l.poss, l.opp_poss "
+                "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
+                f"WHERE g.season_id IN ({','.join('?' * len(SEASONS))})", SEASONS):
+            ps = tuple(sorted(p for p in (emap.get(str(e)) for e in r[2:7]) if p))
+            n = (r[9] or 0) + (r[10] or 0)
+            if len(ps) < 5 or n <= 0:
+                continue
+            resid = 100 * ((r[7] or 0) - (r[8] or 0)) / (n / 2) - sum(imp.get(p, 0.0) for p in ps)
+            out.append(((r[1], back[r[0]]), ps, resid, n))
+        _CACHE["stints"] = out
+    return _CACHE["stints"]
+
 
 def _net(v):
     return 100 * (v[0] / v[2] - v[1] / v[3]) if v[2] > 0 and v[3] > 0 else 0.0
@@ -60,41 +104,24 @@ def pairs(con):
 
     Every ESPN five-man stint is scored against what its five players' own
     impacts predict (net per 100 minus their summed RAPM/LEBRON) and against its
-    team's average surplus, so team strength and teammate quality are out of it.
-    A pair's synergy is the surplus of the stints it shares; an archetype
-    pairing's is the same pooled over every such pair. Both are shrunk by how
-    much of their spread the data says is noise (method of moments)."""
+    team-season's average surplus, so team strength and teammate quality are out
+    of it. A pair's synergy is the surplus of the stints it shares (pooled over
+    its team-seasons, _pool); an archetype pairing's is the same pooled over
+    every such pair. Both are shrunk by how much of their spread the data says
+    is noise (method of moments)."""
     if "pairs" in _CACHE:
         return _CACHE["pairs"]
-    seasons = (CURRENT_SEASON, previous_season(CURRENT_SEASON))
-    emap = {str(e): p for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
-    imp = impacts(con)
     team = collections.defaultdict(lambda: np.zeros(2))
     pair = collections.defaultdict(lambda: np.zeros(2))
-    for r in con.execute(
-            "SELECT l.team_id, l.e1, l.e2, l.e3, l.e4, l.e5, l.pts, l.opp_pts, l.poss, l.opp_poss "
-            "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
-            "WHERE g.season_id IN (?,?)", seasons):
-        ps = sorted(p for p in (emap.get(str(e)) for e in r[1:6]) if p)
-        n = (r[8] or 0) + (r[9] or 0)
-        if len(ps) < 5 or n <= 0:
-            continue
-        resid = 100 * ((r[6] or 0) - (r[7] or 0)) / (n / 2) - sum(imp.get(p, 0.0) for p in ps)
-        team[r[0]] += (resid * n, n)
+    for tk, ps, resid, n in _stints(con):
+        team[tk] += (resid * n, n)
         for a, b in itertools.combinations(ps, 2):
-            pair[(a, b, r[0])] += (resid * n, n)
-    raw = {}
-    for (a, b, tid), (s, n) in pair.items():
-        if n < 200:
-            continue
-        ex = s / n - team[tid][0] / team[tid][1]
-        z = NOISE / n
-        if (a, b) in raw:                                # teammates on more than one team: pool
-            e0, z0 = raw[(a, b)]
-            w0, w1 = 1 / z0, 1 / z
-            raw[(a, b)] = ((e0 * w0 + ex * w1) / (w0 + w1), 1 / (w0 + w1))
-        else:
-            raw[(a, b)] = (ex, z)
+            pair[(a, b, tk)] += (resid * n, n)
+    seen = collections.defaultdict(list)
+    for (a, b, tk), (s, n) in pair.items():
+        if n >= 200:
+            seen[(a, b)].append((s / n - team[tk][0] / team[tk][1], NOISE / n, tk[1]))
+    raw = {k: _pool(v) for k, v in seen.items()}
     arch = {int(p): a for p, a in con.execute(
         "SELECT player_id, archetype_label FROM player_archetypes WHERE season_id=?", (CURRENT_SEASON,))}
     est = np.array([e for e, _ in raw.values()])
@@ -124,32 +151,22 @@ SYN_SHARE = 0.25          # a five's chemistry: its ten pair values / 4 (each pl
 
 def units(con):
     """{sorted 5 player ids: per 100}: a five-man unit's own track record beyond its
-    players' impacts, its team's average and its ten pairs, shrunk the same way."""
+    players' impacts, its team-season's average and its ten pairs, shrunk the same way."""
     if "units" in _CACHE:
         return _CACHE["units"]
     syn, _, _, _ = pairs(con)
-    seasons = (CURRENT_SEASON, previous_season(CURRENT_SEASON))
-    emap = {str(e): p for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
-    imp = impacts(con)
     team = collections.defaultdict(lambda: np.zeros(2))
     unit = collections.defaultdict(lambda: np.zeros(2))
-    for r in con.execute(
-            "SELECT l.team_id, l.e1, l.e2, l.e3, l.e4, l.e5, l.pts, l.opp_pts, l.poss, l.opp_poss "
-            "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
-            "WHERE g.season_id IN (?,?)", seasons):
-        ps = tuple(sorted(p for p in (emap.get(str(e)) for e in r[1:6]) if p))
-        n = (r[8] or 0) + (r[9] or 0)
-        if len(ps) < 5 or n <= 0:
-            continue
-        resid = 100 * ((r[6] or 0) - (r[7] or 0)) / (n / 2) - sum(imp.get(p, 0.0) for p in ps)
-        team[r[0]] += (resid * n, n)
-        unit[(r[0], ps)] += (resid * n, n)
-    raw = {}
-    for (tid, ps), (s_, n) in unit.items():
+    for tk, ps, resid, n in _stints(con):
+        team[tk] += (resid * n, n)
+        unit[(tk, ps)] += (resid * n, n)
+    seen = collections.defaultdict(list)
+    for (tk, ps), (s_, n) in unit.items():
         if n < 100:
             continue
         chem = SYN_SHARE * sum(syn.get(ab, 0.0) for ab in itertools.combinations(ps, 2))
-        raw[ps] = (s_ / n - team[tid][0] / team[tid][1] - chem, NOISE / n)
+        seen[ps].append((s_ / n - team[tk][0] / team[tk][1] - chem, NOISE / n, tk[1]))
+    raw = {ps: _pool(v) for ps, v in seen.items()}
     est = np.array([e for e, _ in raw.values()])
     nz = np.array([z for _, z in raw.values()])
     tau2 = _tau2(est, nz, 0.25)
@@ -163,7 +180,9 @@ def lineup_history(con):
     first: the fives each coach actually put on the floor, game by game (ESPN stints)."""
     if "lineups" in _CACHE:
         return _CACHE["lineups"]
-    seasons = (CURRENT_SEASON, previous_season(CURRENT_SEASON))
+    # two seasons, not SEASONS: the season before that cost the lineup plan more than it
+    # gave (sim/backtest_pit --prior-lh, 2025-26)
+    seasons = SEASONS[:2]
     emap = {str(e): p for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
     games = collections.defaultdict(lambda: collections.defaultdict(float))
     dates = {}

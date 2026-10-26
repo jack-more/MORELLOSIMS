@@ -27,7 +27,10 @@ Point-in-time (built from games before D)
   pairs / units  context.pairs / context.units recomputed from espn_lineup_games
                  stints before D (cumulative sums by date); the method-of-moments
                  signal variances (tau2) are re-estimated at every date from the
-                 stints before D, so nothing is fixed from later data
+                 stints before D, so nothing is fixed from later data. With
+                 backtest_pit --prior-chem, 2024-25's stints (playoffs included)
+                 are in from opening night, as the live sim reads the seasons
+                 before this one, a combo's older season at Chemistry.older_w
   role WOWY      context.role_wowy's rule on espn_player_games before D, for the
                  regulars OUT tonight
   pace           each team's possessions per 48 before D, shrunk to the league
@@ -155,8 +158,11 @@ def _day_before(d):
 class Season:
     """2025-26 logs, 2024-25 priors and the static tables, loaded once."""
 
-    def __init__(self, con, log):
+    def __init__(self, con, log, prior_lineups=False):
+        """prior_lineups: the lineup plan also reads 2024-25's fives (regular season), as the
+        live sim reads the seasons before this one."""
         self.con, self.log = con, log
+        self.prior_lineups = prior_lineups
         q = lambda sql, *a: pd.read_sql_query(sql, con, params=a)  # noqa: E731
         pg = q("SELECT game_id, team_id, player_id, game_date, started, dnp, sec, fga, fta, tov, fg3a, fg3m, "
                "pts, off_poss, oreb, dreb, on_oreb, on_opp_dreb, on_dreb, on_opp_oreb FROM espn_player_games "
@@ -324,13 +330,27 @@ class Season:
             imp = n * sum(self.imp_sum.get(p, 0.0) for p in ps)       # the leaky run subtracts this
             self.stints[r.game_date].append((int(r.team_id), ps, raw, imp, float(n)))
         self.stint_rows, self.stint_skipped = len(st), skipped
+        # 2024-25's stints, playoffs included (live chemistry reads every stored game of its
+        # seasons): Chemistry.add(..., season=1) seeds the chemistry with them before opening night
+        pr = pd.read_sql_query(
+            "SELECT l.team_id, l.e1, l.e2, l.e3, l.e4, l.e5, l.pts, l.opp_pts, l.poss, l.opp_poss "
+            "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
+            "WHERE g.season_id=?", con, params=(PRIOR,))
+        self.prior_stints = []
+        for r in pr.itertuples(index=False):
+            ps = tuple(sorted(p for p in (emap.get(str(e)) for e in r[1:6]) if p))
+            n = (r.poss or 0) + (r.opp_poss or 0)
+            if len(ps) == 5 and n > 0:
+                self.prior_stints.append((int(r.team_id), ps, 200.0 * ((r.pts or 0) - (r.opp_pts or 0)),
+                                          n * sum(self.imp_sum.get(p, 0.0) for p in ps), float(n)))
         # the fives each coach played, game by game (context.lineup_history's rows), for the lineup plan
         lh = collections.defaultdict(lambda: collections.defaultdict(float))
         ldate = {}
+        lh_seasons = (PRIOR, SEASON) if self.prior_lineups else (SEASON, SEASON)
         for gid, tid, date, *es, sec in con.execute(
                 "SELECT l.game_id, l.team_id, g.game_date, l.e1, l.e2, l.e3, l.e4, l.e5, l.sec "
                 "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
-                "WHERE g.season_id=? AND g.counts_regular=1", (SEASON,)):
+                "WHERE g.season_id IN (?,?) AND g.counts_regular=1", lh_seasons):
             ps = tuple(sorted(p for p in (emap.get(str(e)) for e in es) if p))
             if len(ps) == 5 and sec:
                 lh[(int(tid), gid)][ps] += sec / 60
@@ -565,20 +585,29 @@ class Season:
         return t
 
 
+def _season(team_key):
+    """Seasons back of a Chemistry team key: tid (this season) or (tid, seasons back)."""
+    return team_key[1] if isinstance(team_key, tuple) else 0
+
+
 class Chemistry:
     """context.pairs / context.units on stints before D, kept as cumulative sums by date.
     Sums per key: [raw residual x n, snapshot impact x n, n]; the main run's residual is
     the raw one, the leaky run's subtracts the snapshot impacts (as context.py does)."""
 
-    def __init__(self, arch, pair_min=200, unit_min=100, tau_x=1.0, chem_w=1.0, tau_pair_min=0, tau_unit_min=0):
+    def __init__(self, arch, pair_min=200, unit_min=100, tau_x=1.0, chem_w=1.0, tau_pair_min=0, tau_unit_min=0,
+                 older_w=1.0):
         """pair_min / unit_min: possessions (both ends) before a pair / five gets its own value;
         tau_pair_min / tau_unit_min: only combos with this many possessions measure the signal
         variance (tau2) that every combo is shrunk with (0: all of them, as live);
         tau_x: multiplies the measured signal variances (more trust in small samples);
-        chem_w: scales every chemistry value (0 = no chemistry). Defaults are the live sim's."""
+        chem_w: scales every chemistry value (0 = no chemistry);
+        older_w: a combo's seasons before the last one it played count as this many
+        possessions per possession (context.SEASON_W). Defaults are the live sim's."""
         self.arch = arch
         self.pair_min, self.unit_min, self.tau_x, self.chem_w = pair_min, unit_min, tau_x, chem_w
         self.tau_pair_min, self.tau_unit_min = tau_pair_min, tau_unit_min
+        self.older_w = older_w
         self.team = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
         self.pair = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
         self.unit = collections.defaultdict(lambda: [0.0, 0.0, 0.0])
@@ -587,8 +616,10 @@ class Chemistry:
         self.tco = collections.defaultdict(collections.Counter)
         self.pco = collections.defaultdict(collections.Counter)
 
-    def add(self, stints):
+    def add(self, stints, season=0):
+        """season: 0 for this season's stints, 1 for the season before (its own team averages)."""
         for tid, ps, raw, imp, n in stints:
+            tid = (tid, season) if season else tid
             for acc in [self.team[tid], self.unit[(tid, ps)]] + [self.pair[(a, b, tid)] for a, b in itertools.combinations(ps, 2)]:
                 acc[0] += raw
                 acc[1] += imp
@@ -604,6 +635,18 @@ class Chemistry:
     def _tau2(est, nz, floor):
         return context._tau2(est, nz, floor) if len(est) else floor
 
+    def _pool(self, entries):
+        """(estimate, noise) from one combo's (estimate, noise, season) rows, one per team-season:
+        inverse-noise weighted, a season older than the combo's latest counting older_w per step."""
+        last = min(s for _, _, s in entries)
+        sw = sz = 0.0
+        for ex, z, s in entries:
+            k = self.older_w ** (s - last)
+            if k > 0:
+                sw += ex * k / z
+                sz += k / z
+        return sw / sz, 1 / sz
+
     def state(self, leaky, beta=None):
         """beta: {player: net impact per 100} to score stints against (point-in-time RAPM)."""
         if beta is None:
@@ -615,18 +658,13 @@ class Chemistry:
             tavg = {t: (v[0] - sum(beta.get(p, 0.0) * n for p, n in self.tco[t].items())) / v[2]
                     for t, v in self.team.items() if v[2] > 0}
             pres = lambda key, v: v[0] - sum(beta.get(p, 0.0) * n for p, n in self.pco[key].items())
-        raw = {}
+        seen = collections.defaultdict(list)
         for (a, b, tid), v in self.pair.items():
             n = v[2]
             if n < max(self.pair_min, 1):
                 continue
-            ex, z = pres((a, b, tid), v) / n - tavg[tid], NOISE / n
-            if (a, b) in raw:
-                e0, z0 = raw[(a, b)]
-                w0, w1 = 1 / z0, 1 / z
-                raw[(a, b)] = ((e0 * w0 + ex * w1) / (w0 + w1), 1 / (w0 + w1))
-            else:
-                raw[(a, b)] = (ex, z)
+            seen[(a, b)].append((pres((a, b, tid), v) / n - tavg[tid], NOISE / n, _season(tid)))
+        raw = {k: self._pool(v) for k, v in seen.items()}
         arch = self.arch
         big = [(e, z) for e, z in raw.values() if NOISE / z >= self.tau_pair_min]
         tau2 = self.tau_x * self._tau2(np.array([e for e, _ in big]), np.array([z for _, z in big]), 0.25)
@@ -643,14 +681,15 @@ class Chemistry:
         for (a, b), (ex, z) in raw.items():
             p0 = prior.get(tuple(sorted((arch.get(a, ""), arch.get(b, "")))), 0.0)
             syn[(a, b)] = p0 + (ex - p0) * tau2 / (tau2 + z)
-        uraw = {}
+        useen = collections.defaultdict(list)
         for (tid, ps), v in self.unit.items():
             n = v[2]
             if n < max(self.unit_min, 1):
                 continue
             chem = SYN_SHARE * sum(syn.get(ab, 0.0) for ab in itertools.combinations(ps, 2))
             r = res(v) if beta is None else v[0] - v[2] * sum(beta.get(p, 0.0) for p in ps)
-            uraw[(tid, ps)] = (r / n - tavg[tid] - chem, NOISE / n)
+            useen[(tid[0] if isinstance(tid, tuple) else tid, ps)].append((r / n - tavg[tid] - chem, NOISE / n, _season(tid)))
+        uraw = {k: self._pool(v) for k, v in useen.items()}
         ubig = [(e, z) for e, z in uraw.values() if NOISE / z >= self.tau_unit_min]
         utau2 = self.tau_x * self._tau2(np.array([e for e, _ in ubig]), np.array([z for _, z in ubig]), 0.25)
         units = collections.defaultdict(dict)

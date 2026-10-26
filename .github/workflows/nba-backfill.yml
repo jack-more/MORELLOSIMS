@@ -1,0 +1,94 @@
+name: NBA Backfill
+
+# One-off: store a finished season's ESPN box scores and five-man stints
+# (regular season, play-in and playoffs) in nba_pipeline/db/nba_sim.db. The
+# possession sim reads three seasons of combos and coach's lineups
+# (sim/context.SEASONS); a season that was never pulled leaves players back
+# from a lost year (Haliburton, 2025-26) without their last healthy combos.
+#
+# Writes only the espn_* tables, the ESPN-to-NBA player id map (and a players
+# row for an athlete with no NBA id) and the playoff/play-in rows of `games`
+# (--no-pgs --no-season-stats): nothing the daily pipeline reads as this
+# season's or last season's stats changes.
+#
+# Bot identity and lane: NBA Pipeline Bot, nba_pipeline/db/ only. Shares the
+# pipeline's concurrency group, so it never runs while a pipeline run does.
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to store (e.g. 2024-25)'
+        required: true
+        default: '2024-25'
+        type: string
+      start:
+        description: 'First date (YYYY-MM-DD)'
+        required: true
+        default: '2024-10-22'
+        type: string
+      end:
+        description: 'Last date (YYYY-MM-DD), through the Finals'
+        required: true
+        default: '2025-06-23'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nba-pipeline
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r nba_pipeline/requirements.txt
+
+      - name: Store the season from ESPN
+        working-directory: nba_pipeline
+        env:
+          SEASON: ${{ inputs.season }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+        run: |
+          python scripts/espn_stats_sync.py --season "$SEASON" --start "$START" --end "$END" --no-pgs --no-season-stats
+          python - <<'EOF'
+          import os, sqlite3
+          con = sqlite3.connect("db/nba_sim.db")
+          rows = con.execute(
+              "SELECT g.season_type, COUNT(DISTINCT l.game_id), ROUND(SUM(l.sec) / 3600.0) FROM espn_lineup_games l "
+              "JOIN espn_team_games g ON g.game_id = l.game_id AND g.team_id = l.team_id "
+              "WHERE g.season_id = ? GROUP BY 1", (os.environ["SEASON"],)).fetchall()
+          print("stored (season type, games, team-hours):", rows)
+          if not rows:
+              raise SystemExit("nothing stored")
+          EOF
+
+      - name: Commit and push
+        env:
+          SEASON: ${{ inputs.season }}
+        run: |
+          git config user.name "NBA Pipeline Bot"
+          git config user.email "noreply@github.com"
+          git add nba_pipeline/db/nba_sim.db
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "NBA backfill: ESPN ${SEASON} box scores and stints"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            sleep $((i * 10))
+          done
+          exit 1
