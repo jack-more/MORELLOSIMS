@@ -20,9 +20,9 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from sim import engine, players, run  # noqa: E402  (run sets up generate_frontend and logging)
+from sim import context, engine, players, run  # noqa: E402  (run sets up generate_frontend and logging)
 from sim.run import MARGIN_SD, gf  # noqa: E402
-from config import CURRENT_SEASON, previous_season  # noqa: E402
+from config import CURRENT_SEASON  # noqa: E402
 
 PAIR_MIN, TRIO_MIN = 20.0, 15.0   # minutes together this season before a pair / trio is listed
 _STINTS = {}
@@ -36,14 +36,15 @@ LAYER_NAME = {"lineups": "Lineup plan", "load": "Usage load", "spacing": "Spacin
 
 def _stints(con):
     """({team_id: [(sorted five, seconds, points margin, possessions)]} this regular season,
-    {2|3|5: combos that shared the floor last season}) from ESPN five-man stints."""
+    {2|3|5: combos that shared the floor in the seasons before (context.SEASONS)}) from ESPN
+    five-man stints."""
     if not _STINTS:
         emap = {str(e): int(p) for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
         q = ("SELECT l.team_id, l.e1, l.e2, l.e3, l.e4, l.e5, l.sec, l.pts, l.opp_pts, l.poss, l.opp_poss "
              "FROM espn_lineup_games l JOIN espn_team_games g ON g.game_id=l.game_id AND g.team_id=l.team_id "
              "WHERE g.season_id=? AND g.season_type=2")
         now, last = collections.defaultdict(list), {k: set() for k in (2, 3, 5)}
-        for season, sink in ((CURRENT_SEASON, now), (previous_season(CURRENT_SEASON), None)):
+        for season, sink in [(CURRENT_SEASON, now)] + [(s, None) for s in context.SEASONS[1:]]:
             for tid, *es, sec, pts, opp, poss, oposs in con.execute(q, (season,)):
                 five = [emap.get(str(e)) for e in es]
                 if None in five:

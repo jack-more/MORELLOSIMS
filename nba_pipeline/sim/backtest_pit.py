@@ -31,7 +31,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sim import engine  # noqa: E402
-from sim.backtest import (BASE_HCA, HCA, IMPACT_W, MIN_TEAM_GAMES, Chemistry, Season,  # noqa: E402
+from sim.backtest import (BASE_HCA, HCA, IMPACT_W, MIN_TEAM_GAMES, PRIOR, Chemistry, Season,  # noqa: E402
                           _connect, _day_before, _lean, _sim_task)
 from sim.pit_rapm import PitRapm  # noqa: E402
 
@@ -77,6 +77,11 @@ def main():
     ap.add_argument("--from-date", default="", help="simulate only games from this date (earlier ones still feed the history)")
     ap.add_argument("--chem", default="", help="chemistry settings, e.g. pair_min=0,unit_min=0,tau_x=2,chem_w=1 "
                                                "(backtest.Chemistry; default: the live sim's)")
+    ap.add_argument("--prior-chem", action="store_true", help="seed the chemistry with 2024-25's stints "
+                    "(their weight against newer seasons: --chem older_w=...)")
+    ap.add_argument("--prior-rapm", type=float, default=0.0, help="seed the point-in-time RAPM with 2024-25's "
+                    "stints, each possession counting this much")
+    ap.add_argument("--prior-lh", action="store_true", help="the lineup plan also reads 2024-25's fives")
     args = ap.parse_args()
     chem_kw = {k: float(v) for k, v in (kv.split("=") for kv in args.chem.split(",") if kv)}
     os.makedirs(args.out, exist_ok=True)
@@ -90,8 +95,8 @@ def main():
         logf.flush()
 
     con = _connect()
-    S = Season(con, log)
-    R = PitRapm(con)
+    S = Season(con, log, prior_lineups=args.prior_lh)
+    R = PitRapm(con, prior=PRIOR, prior_w=args.prior_rapm)
     outs = json.load(open(args.pregame)) if args.pregame else {}
     runs = {k: v for k, v in RUNS.items() if (outs or not v[2]) and (not args.runs or k in args.runs.split(","))}
     if "pit" not in runs:                       # the thin flag reads the pit run's plan
@@ -109,6 +114,10 @@ def main():
     dates = sorted(S.games.game_date.unique())
     start = max((dt.date.fromisoformat(dates[0]) + dt.timedelta(days=SKIP_DAYS)).isoformat(), args.from_date)
     chem = Chemistry(S.arch, **chem_kw)
+    if args.prior_chem:
+        chem.add(S.prior_stints, season=1)
+    log(f"priors: chemistry {len(S.prior_stints) if args.prior_chem else 0} stints, RAPM {len(R.prior_rows)} "
+        f"rows x {args.prior_rapm}, lineup plan {'with' if args.prior_lh else 'without'} {PRIOR}")
     game_tasks, cal_tasks, meta, skipped, unmatched = [], [], [], collections.Counter(), collections.Counter()
     cal_dates, cal_lg, next_cal = [], {}, start
     for di, D in enumerate(dates):
@@ -211,7 +220,8 @@ def main():
             if done % 500 == 0:
                 el = time.time() - t0
                 log(f"simulated {done}/{len(game_tasks)} (eta {el / done * (len(game_tasks) - done):.0f}s)")
-    json.dump({"generated": dt.datetime.now(dt.timezone.utc).isoformat(), "runs": list(runs), "chem": chem_kw, "games": meta},
+    json.dump({"generated": dt.datetime.now(dt.timezone.utc).isoformat(), "runs": list(runs), "chem": chem_kw,
+               "prior": {"chem": args.prior_chem, "rapm": args.prior_rapm, "lh": args.prior_lh}, "games": meta},
               open(os.path.join(args.out, "results.json"), "w"), indent=1, default=str)
     log(f"wrote {args.out}/results.json in {(time.time() - t_start) / 60:.1f} min")
 
