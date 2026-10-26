@@ -58,13 +58,63 @@ Cellular Cosmetics (Australia), Zerun Cosmetic (China), Indigo Private Label (US
 - BASF biomimetic peptides (industry context): https://personalcaremagazine.com/story/37577/basf-launches-biomimetic-peptides
 - Global Sources peptide listings: https://www.globalsources.com/Biochemical/peptide-1236875687p.htm
 
+Cosmetic-grade GHK-Cu suppliers (checked 2026-10-26):
+- **Shaanxi Huatai Bio-Fine Chemicals**, Xi'an: https://glabridin.net/product/copper-tripeptide-1/ · CAS 89030-95-5, HPLC ≥98%, Cu 8–10%, heavy metals <10 ppm, COA and TDS offered, MOQ "10 g to 100 g". Its "40% in 48 h" claim has no data behind it.
+- **GenScript (GS-PepRejuv)**, NJ / Nanjing: https://www.genscript.com/peptide/RP30159-GS_PepRejuv_Copper_Tripeptide_1_Hydrochlorate.html · >95%, $15,600/kg, links to COA, HPLC and MS files; grade not labeled
+- **Grand Ingredients**, US: https://grandingredients.com/active/copper-tripeptide-1/ · INCI Copper Tripeptide-1, samples available, no purity or COA stated
+- **Active Peptide Company**, Boston area: https://www.activepeptide.com/ · has a GHK-Cu product, no grade, COA or MOQ stated
+- Skip "research use only" vial sellers.
+- Check the CAS number: **89030-95-5** is the copper complex. 49557-75-7 is the peptide without copper.
+
 Facts we rely on: GHK-Cu is C14H22CuN6O4, a blue powder that tints creams pale blue. Keep the fluid path metal-free: copper peptide reacts with bare aluminum and steel.
 
 ---
 
 ## 3. Packaging and bottle manufacturing
 
-Research in progress: airless refill systems, lock actuators, silicone (LSR) skins, metallized caps, inner shells, weights, aluminum carton tin. This section will be filled in with verified suppliers.
+Checked 2026-10-26 by page fetch unless marked. MOQ and price only where the page states them.
+
+### Airless pumps: refillable, locking, metal-free
+- **Toly SNAP refillable airless**: https://ecat.toly.com/en/portals/toly/assets/14161924/the-refillable-airless-pump-snap-by-toly/ · only the inner bottle is replaced and the pump is reused, 15/30/50/100 ml. Closest match to our design. Large group, expect higher MOQ.
+- **A Packaging Group (APG)**, Azusa CA / Defiance OH: https://apackaginggroup.com/collections/airless/products/abs-pp-refillable-airless-pump-bottle-twist-lock · refillable twist-lock airless (APG-200437), 25 and 45 ml (no 30 ml), MOQ 10,000, $5.00/unit
+- **Jarsking Packaging**, Guangzhou: https://www.jarsking.com/?p=106050 · 30/50 ml refillable airless, AS outer with replaceable PP inner, MOQ 10,000 per SKU. Doesn't say whether the pump stays.
+- **APC Packaging**, Fort Lauderdale FL: https://apcpackaging.com/product-category/custom/airless-custom/ · stock and custom airless. Metal-free EAPP all-plastic airless (PP/PE, no spring, 15/30/50 ml) confirmed only in trade press: https://www.packaging-gateway.com/news/apc-packaging-eapp-solution
+- **Lumson FREE**, Italy: https://cosmeticsbusiness.com/lumson-strides-into-the-future-with-free-its · metal-free pump with an airless version, 24/410 neck. Likely not small MOQ.
+- No supplier page showed our exact twist-down nail-head lock. Plan on a custom actuator.
+
+### Silicone (LSR) skins
+- **SIMTEC Silicone Parts**, Miramar FL: https://www.simtec-silicone.com/about-us/ · custom LSR molding and overmolding, Class 8 cleanroom, no MOQ stated
+- **Rilong Mold**, Dongguan/Shenzhen: https://rilong-mold.com/capabilities/lsr-and-rubber-product/ · LSR molding and overmolding onto plastic, metal and glass; mentions cosmetic surface standards
+- **Protolabs**, Maple Plain MN: https://www.protolabs.com/services/injection-molding/ · LSR and plastic molding, no minimum, aluminum prototype tools for under 2,000 parts. Good for pilots, high unit cost.
+- DongGuan Hopewell Silicon Plastic Tech: https://b2brazil.com/hotsite/dongguanhopewell/silicone-valve-flip-top-cap-sports-water · marketplace listing only, unverified
+- No one found who specifically advertises silicone sleeves for cosmetic bottles.
+
+### Metallized silver caps (knurled)
+- **Mueller Coatings**, East Bridgewater MA · vacuum metallizing and UV coating of caps; names L'Oréal and Estée Lauder as clients. Finisher only: you supply the molded caps. Seen in trade press and directories, own site not opened.
+- **Baralan USA**: https://www.gcimagazine.com/packaging/article/21850409/baralan-new-stock-or-custom-jar-covers-from-baralan-usa · metallized silver overcaps, custom color MOQ 10,000 (2017–2021 coverage, may be dated)
+- **Jarsking**: https://www.jarsking.com/?p=92294 · lists electroplating as a decoration option, MOQ 10,000 (search snippet only)
+- I.V. Miller & Sons, Ocean NJ · directory listings only, unverified
+- Plan: mold the knurled cap (see inner shells), then send it to a metallizer.
+
+### Inner shells and custom molds (PP/ABS)
+- **Topfeel Pack**, Shenzhen: https://www.topfeelpack.com/ · airless bottles, "nearly 100 sets of private molds", MOQ from 10,000
+- **Protolabs** (above) · no minimum, good for prototypes and bridge runs
+- **Rilong Mold** (above) · plastic plus LSR in one shop, which simplifies shell plus skin
+- Boyu Packaging (Hangzhou), Ningbo Moldor · blog and directory mentions only, unverified
+
+### Weights (steel or zinc)
+- **ForceBeyond**, New Castle DE (sources from China): https://www.forcebeyond.com/zinc-die-casting · zinc die casting ZAMAK 2/3/5 and ZA-8, machining, plating, ISO 9001
+- Dongguan Mingyi Hardware: https://b2brazil.com/hotsite/dongguanmingyi/zinc-alloy-die-casting-counterweight-blo · zinc die-cast counterweight, marketplace listing, unverified
+- Guan Cheng Xin, Guangdong: https://www.globalsources.com/knowledge/gold-electroplated-perfume-bottle-cap/ · zinc-alloy perfume caps, MOQ 1,000 sets (search snippet)
+- Steel slugs: any CNC service (Protolabs, Xometry) can quote
+
+### Carton tin
+- **Desjardin**, France: https://www.desjardin.fr/en/categories/cosmetic-packaging · aluminum cosmetic tins, custom design, one carton to millions
+- **Advance Packaging Manufacturing**, Hong Kong: https://www.hktdc.com/event/hkgiftspremiumfair/en/product/1Z03MQR23 · egg-shaped tin PG886, 83×131 mm, 40-day lead time. Tinplate, not aluminum.
+- Dongguan Tinshine: https://sourcing.hktdc.com/en/Product-Detail/tin-box-1Z03PBEFD · custom egg tin $0.80–1.80, tinplate (search snippet)
+- Hefei Wisdom Technology (made-in-china.com) · cosmetic tins MOQ 1,000 at $0.17–0.35, metal not confirmed (search snippet)
+- Nice-Can, Guangzhou/Huizhou · press release only, unverified
+- No egg-carton aluminum tin exists off the shelf. Aluminum is deep-drawn round or rectangular, so the six-cup carton means tinplate or custom tooling.
 
 Packaging design references (style only, do not copy):
 - Your Pinterest packaging board: https://www.pinterest.com/jaidanmorello/packaging-design-inspiration/
@@ -75,8 +125,15 @@ Packaging design references (style only, do not copy):
 
 ## 4. Testing
 
-- HPLC potency test of finished cream at a US lab (supplier list pending, see section 3 research)
+- HPLC potency test of the finished cream at a US lab
 - 12-week stability and packaging compatibility test at 40 °C with every wet part
+
+US labs (checked 2026-10-26):
+- **Certified Laboratories**, Melville NY: https://certified-laboratories.com/blog/in-package-cosmetic-stability-testing-faqs/ · in-package stability and packaging compatibility, active-ingredient assays, ISO 17025. A GHK-Cu method isn't confirmed.
+- **ALS (formerly BioScreen)**, Torrance CA: https://www.alsglobal.com/en/bioscreen · analytical chemistry, stability, micro, tox
+- **Krause Analytical**, Austin TX: https://contractlaboratory.com/vendor/krause-analytical-llc/ · HPLC and LC-MS/MS; has published GHK-Cu content-vs-label results on research vials, not creams
+- Qualimax, Ridgefield NJ · directory snippet says HPLC assays of cosmetic actives in finished products; page blocked, unverified
+- No lab confirmed a ready method for GHK-Cu in a finished cream. Budget for method development.
 
 ---
 
