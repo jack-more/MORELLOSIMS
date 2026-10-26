@@ -149,6 +149,45 @@ Checked 2026-10-26 by page fetch unless marked. MOQ and price only where the pag
 - Nice-Can, Guangzhou/Huizhou · press release only, unverified
 - No egg-carton aluminum tin exists off the shelf. Aluminum is deep-drawn round or rectangular, so the six-cup carton means tinplate or custom tooling.
 
+### Custom development partners (for the twist-down lock)
+Checked 2026-10-26. "Snippet" = seen only in search results or third-party pages.
+
+Top 5 for this project:
+1. **OPD Design / Beauty Lab**, Shenzhen: https://www.opd-design.com · industrial and mechanical design, prototyping, mold development, hands off to factories; serves overseas hardware startups; beauty work (SLEK bottle) · hello@opd-design.com
+2. **Topfeel**, Shenzhen: https://www.topfeelpack.com · "nearly 100 sets of private molds", drawings in 1 day, 3D prototype in 3 days, airless line · MOQ 10k "happy to discuss" · info@topfeelpack.com · +86-755-25686685
+3. **CP2 Packaging North America**, Columbia MD (factories in China): https://www.cp2pkg.com · case study of a patented rotary-cap mechanism with in-house mold development; airless category · 410-844-3104, RFQ form
+4. **UKPACK**, Yuyao/Ningbo: https://www.ukpackchina.com · custom molds, free 3D/DFM, prototypes in 7 business days, airless jars with swappable inner cup, serves indie startups · custom-mold MOQ 5k–10k · info@ukpack.cn
+5. **APC Packaging**, Fort Lauderdale FL: https://apcpackaging.com · private-mold service, in-house engineers, 3D-printed prototypes, 8–12 weeks, refillable airless · info@apcpackaging.com · 954-978-4567
+
+Other manufacturers:
+- Jarsking, Guangzhou: https://www.jarsking.com · in-house mold shop (30–45 days), full custom about 84–110 days · MOQ 10k · info@jarsking.com
+- HCP Packaging: https://www.hcpackaging.com · end-to-end custom, proof-of-principle prototypes; large-brand focus
+- Aptar Beauty: https://www.aptar.com · Astrea airless with metal-free pathway, Micro Mono all PP/PE; no small-brand program
+- Silgan Dispensing: https://www.silgandispensing.com · customization, ERA airless · Corporate@SilganDispensing.com
+- Lumson, Italy: https://www.lumson.com · XTAG refillable airless · +39 0373 2331
+- Baralan, Italy: https://www.baralan.com
+- Toly, Malta: https://www.toly.com · SNAP refillable airless, metal-free, 15–100 ml. A good stock pump to build around.
+- **Pum-Tech Korea**, Incheon: https://www.pumtech.com/eng (site unreachable) · snippet: shows a "Twist Up & Down Refill" with a twist collar that raises the inner bottle. **Close to our idea: check it before patent filing.**
+- Quadpack, Spain + Dallas TX: https://www.quadpack.com (site blocked) · snippet: bespoke development, European distributor for Yonwoo airless, InStockPack in Dallas for indie brands
+- Yonwoo / Samhwa, Korea · could not find working official sites; reach Yonwoo through Quadpack
+
+Design and engineering firms:
+- BLOND, London: https://www.blond.cc · Daisyface refillable skincare with hidden airless pump · hello@blond.cc
+- Sample Studio, Los Angeles: https://www.samplestudio.la · industrial and structural design, DFM, prototyping; Estrid refillable deodorant · Hello@SampleStudio.la
+- Kaleidoscope Innovation, Cincinnati: https://www.kascope.com · design, mechanical engineering, prototype shop; no beauty work shown
+- Delve (absorbed Bresslergroup): https://www.delve.com · startups to Fortune 500; no beauty cases
+
+Sourcing and development agents:
+- The Packaging Company, Long Beach CA: https://www.thepkgco.com · in-house engineering, on-site factory QC, refillable airless · MOQ 5k · info@thepkgco.com
+- PKGroom (PLUS2LINK), Yongin, Korea: https://www.pkgroom.com · vetted Korean container suppliers, custom projects, 3D studio, indie focus · pkgroom@pkgroom.com
+- Crescent Seoul: https://www.crescentseoul.com · matching agency for indie brands, packaging sourcing · MOQ 5k · sales@crescentseoul.com
+- Seoul Coslab: https://www.seoulcoslab.com · stock vs custom components, compatibility testing
+- Cosmopak, NY/TX: https://www.cosmopak.com (site blocked) · snippet: turnkey custom packaging for emerging brands
+- Zenpack, CA/Taipei: https://www.zenpack.us · mostly secondary packaging · hello@zenpack.us
+- JingSourcing: https://www.jingsourcing.com · custom-mold MOQ 50k per style, too high for us
+
+No one above shows LSR skins, zinc weights or PVD in their own work. Expect the lead partner to subcontract those, and ask how they would.
+
 Packaging design references (style only, do not copy):
 - Your Pinterest packaging board: https://www.pinterest.com/jaidanmorello/packaging-design-inspiration/
 - Your health book art board: https://www.pinterest.com/jaidanmorello/health-book-art/
