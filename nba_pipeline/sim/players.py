@@ -30,6 +30,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CURRENT_SEASON, DB_PATH, previous_season  # noqa: E402
 from sim import context, lineups  # noqa: E402
+from utils.impact import second_read  # noqa: E402
 
 # Synergy offensive play types; the order is the column order everywhere
 TYPES = ["PRBallHandler", "Isolation", "Spotup", "Transition", "Cut", "PRRollMan",
@@ -123,13 +124,14 @@ def _playtypes(con, pid, grouping):
 
 def _impact(con, pid):
     """(offense, defense) points per 100 possessions: RAPM and LEBRON splits averaged,
-    so one noisy RAPM season is half the read."""
-    r = con.execute("SELECT rapm_offense, rapm_defense, lebron_offense, lebron_defense "
+    so one noisy RAPM season is half the read (no LEBRON: 3-year RAPM, utils/impact.py)."""
+    r = con.execute("SELECT rapm_offense, rapm_defense, lebron_offense, lebron_defense, rapm_total, rapm_3yr "
                     "FROM player_rapm WHERE player_id=?", (pid,)).fetchone()
     if not r:
         return 0.0, 0.0
-    off = [x for x in (r[0], r[2]) if x is not None]
-    dfn = [x for x in (r[1], r[3]) if x is not None]
+    so, sd = second_read(r[0], r[1], r[4], r[2], r[3], r[5])
+    off = [x for x in (r[0], so) if x is not None]
+    dfn = [x for x in (r[1], sd) if x is not None]
     return (float(np.mean(off)) if off else 0.0, float(np.mean(dfn)) if dfn else 0.0)
 
 

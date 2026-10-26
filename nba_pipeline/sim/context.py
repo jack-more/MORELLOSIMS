@@ -22,6 +22,7 @@ import re
 import numpy as np
 
 from config import CURRENT_SEASON, previous_season
+from utils.impact import second_read
 
 # per-possession scoring variance of a margin: a net rating over n possessions
 # (both ends) carries ~ NOISE / n of variance in points per 100
@@ -43,8 +44,10 @@ def impacts(con):
     """{player_id: offense + defense impact per 100}: RAPM and LEBRON averaged (players.py's read)."""
     if "impacts" not in _CACHE:
         out = {}
-        for pid, ro, rd, lo, ld in con.execute(
-                "SELECT player_id, rapm_offense, rapm_defense, lebron_offense, lebron_defense FROM player_rapm"):
+        for pid, ro, rd, lo, ld, rt, r3 in con.execute(
+                "SELECT player_id, rapm_offense, rapm_defense, lebron_offense, lebron_defense, rapm_total, rapm_3yr "
+                "FROM player_rapm"):
+            lo, ld = second_read(ro, rd, rt, lo, ld, r3)     # no LEBRON: 3-year RAPM (utils/impact.py)
             off = [x for x in (ro, lo) if x is not None]
             dfn = [x for x in (rd, ld) if x is not None]
             out[int(pid)] = (np.mean(off) if off else 0.0) + (np.mean(dfn) if dfn else 0.0)
