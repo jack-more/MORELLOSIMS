@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from db.connection import read_query
 from config import DB_PATH, CURRENT_SEASON, previous_season
 from utils import priors as _priors
+from utils.impact import second_read
 
 # Odds API removed — was returning 401 (expired key) and all lines come from
 # RotoWire scrape anyway. Keeping stub functions so callers don't break.
@@ -73,7 +74,7 @@ def _load_rapm_data():
     try:
         df = read_query("""
             SELECT player_id, player_name, team, rapm_total,
-                   rapm_offense, rapm_defense, rapm_rank
+                   rapm_offense, rapm_defense, rapm_rank, lebron_offense, lebron_defense, rapm_3yr
             FROM player_rapm WHERE rapm_total IS NOT NULL
         """, DB_PATH)
     except (sqlite3.OperationalError, pd.errors.DatabaseError):
@@ -81,11 +82,19 @@ def _load_rapm_data():
 
     if df.empty:
         return
+    num = lambda v: None if pd.isna(v) else float(v)
     for _, row in df.iterrows():
+        off, dfn, tot = float(row["rapm_offense"] or 0), float(row["rapm_defense"] or 0), float(row["rapm_total"])
+        # MOJO reads time-decay RAPM alone; a player with no LEBRON (he missed last season) has a
+        # stale window, so his split is averaged with the 3-year read instead (utils/impact.py)
+        if num(row["lebron_offense"]) is None and num(row["lebron_defense"]) is None:
+            so, sd = second_read(off, dfn, tot, None, None, num(row["rapm_3yr"]))
+            if so is not None:
+                off, dfn, tot = (off + so) / 2, (dfn + sd) / 2, (tot + float(row["rapm_3yr"])) / 2
         _RAPM_DATA[int(row["player_id"])] = {
-            "rapm": float(row["rapm_total"]),
-            "rapm_off": float(row["rapm_offense"] or 0),
-            "rapm_def": float(row["rapm_defense"] or 0),
+            "rapm": tot,
+            "rapm_off": off,
+            "rapm_def": dfn,
             "rapm_rank": float(row["rapm_rank"] or 999),
         }
 
@@ -2670,10 +2679,14 @@ def _roster_inputs():
     """({player_id: impact}, {(team_id, player_id): minutes last season}, {team_id: games last season})."""
     if not _ROSTER_CACHE:
         imp = {}
-        for _, r in read_query("SELECT player_id, rapm_offense, rapm_defense, lebron_offense, lebron_defense "
-                               "FROM player_rapm", DB_PATH).iterrows():
-            off = [x for x in (r["rapm_offense"], r["lebron_offense"]) if pd.notna(x)]
-            dfn = [x for x in (r["rapm_defense"], r["lebron_defense"]) if pd.notna(x)]
+        num = lambda v: None if pd.isna(v) else float(v)
+        for _, r in read_query("SELECT player_id, rapm_offense, rapm_defense, lebron_offense, lebron_defense, "
+                               "rapm_total, rapm_3yr FROM player_rapm", DB_PATH).iterrows():
+            ro, rd = num(r["rapm_offense"]), num(r["rapm_defense"])
+            lo, ld = second_read(ro, rd, num(r["rapm_total"]), num(r["lebron_offense"]),
+                                 num(r["lebron_defense"]), num(r["rapm_3yr"]))
+            off = [x for x in (ro, lo) if x is not None]
+            dfn = [x for x in (rd, ld) if x is not None]
             imp[int(r["player_id"])] = (sum(off) / len(off) if off else 0.0) + (sum(dfn) / len(dfn) if dfn else 0.0)
         last = previous_season(CURRENT_SEASON)
         played = {(int(r["team_id"]), int(r["player_id"])): float(r["minutes"] or 0) for _, r in read_query(
