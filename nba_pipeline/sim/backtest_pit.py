@@ -82,6 +82,8 @@ def main():
     ap.add_argument("--prior-rapm", type=float, default=0.0, help="seed the point-in-time RAPM with 2024-25's "
                     "stints, each possession counting this much")
     ap.add_argument("--prior-lh", action="store_true", help="the lineup plan also reads 2024-25's fives")
+    ap.add_argument("--prior-po-w", type=float, default=1.0, help="in the --prior-rapm seed, a 2024-25 playoff or "
+                    "play-in possession counts this many regular-season ones")
     args = ap.parse_args()
     chem_kw = {k: float(v) for k, v in (kv.split("=") for kv in args.chem.split(",") if kv)}
     os.makedirs(args.out, exist_ok=True)
@@ -96,7 +98,7 @@ def main():
 
     con = _connect()
     S = Season(con, log, prior_lineups=args.prior_lh)
-    R = PitRapm(con, prior=PRIOR, prior_w=args.prior_rapm)
+    R = PitRapm(con, prior=PRIOR, prior_w=args.prior_rapm, prior_po_w=args.prior_po_w)
     outs = json.load(open(args.pregame)) if args.pregame else {}
     runs = {k: v for k, v in RUNS.items() if (outs or not v[2]) and (not args.runs or k in args.runs.split(","))}
     if "pit" not in runs:                       # the thin flag reads the pit run's plan
@@ -117,7 +119,7 @@ def main():
     if args.prior_chem:
         chem.add(S.prior_stints, season=1)
     log(f"priors: chemistry {len(S.prior_stints) if args.prior_chem else 0} stints, RAPM {len(R.prior_rows)} "
-        f"rows x {args.prior_rapm}, lineup plan {'with' if args.prior_lh else 'without'} {PRIOR}")
+        f"rows x {args.prior_rapm} + {len(R.prior_po_rows)} playoff rows x {args.prior_po_w}, lineup plan {'with' if args.prior_lh else 'without'} {PRIOR}")
     game_tasks, cal_tasks, meta, skipped, unmatched = [], [], [], collections.Counter(), collections.Counter()
     cal_dates, cal_lg, next_cal = [], {}, start
     for di, D in enumerate(dates):
@@ -221,7 +223,7 @@ def main():
                 el = time.time() - t0
                 log(f"simulated {done}/{len(game_tasks)} (eta {el / done * (len(game_tasks) - done):.0f}s)")
     json.dump({"generated": dt.datetime.now(dt.timezone.utc).isoformat(), "runs": list(runs), "chem": chem_kw,
-               "prior": {"chem": args.prior_chem, "rapm": args.prior_rapm, "lh": args.prior_lh}, "games": meta},
+               "prior": {"chem": args.prior_chem, "rapm": args.prior_rapm, "po_w": args.prior_po_w, "lh": args.prior_lh}, "games": meta},
               open(os.path.join(args.out, "results.json"), "w"), indent=1, default=str)
     log(f"wrote {args.out}/results.json in {(time.time() - t_start) / 60:.1f} min")
 
