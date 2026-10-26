@@ -28,29 +28,32 @@ SEASON = "2025-26"
 
 
 class PitRapm:
-    def __init__(self, con, season=SEASON, prior=None, prior_w=0.0):
+    def __init__(self, con, season=SEASON, prior=None, prior_w=0.0, prior_po_w=1.0):
         """prior, prior_w: the season before's stints (playoffs included, opponents as that
-        season's teams) go in before opening night, each possession counting prior_w."""
+        season's teams) go in before opening night, each possession counting prior_w;
+        a playoff or play-in possession counts prior_w x prior_po_w."""
         emap = {str(e): int(p) for e, p in con.execute("SELECT espn_id, player_id FROM espn_player_map")}
         sql = ("SELECT g.game_date, l.team_id, g.opp_team_id, g.is_home, l.e1, l.e2, l.e3, l.e4, l.e5, "
                "l.pts, l.opp_pts, l.poss, l.opp_poss FROM espn_lineup_games l JOIN espn_team_games g "
                "ON g.game_id=l.game_id AND g.team_id=l.team_id WHERE g.season_id=? {} ORDER BY g.game_date")
         rows = con.execute(sql.format("AND g.counts_regular=1"), (season,)).fetchall()
-        old = con.execute(sql.format(""), (prior,)).fetchall() if prior and prior_w > 0 else []
+        old = con.execute(sql.format("AND g.counts_regular=1"), (prior,)).fetchall() if prior and prior_w > 0 else []
+        po = con.execute(sql.format("AND g.counts_regular=0"), (prior,)).fetchall() \
+            if prior and prior_w > 0 and prior_po_w > 0 else []
         self.players, self.teams = {}, {}
         self.by_date = collections.defaultdict(list)
-        self.prior_rows = []
-        for src, tag in ((old, "prior"), (rows, None)):
+        self.prior_rows, self.prior_po_rows = [], []
+        for src, tag in ((old, "prior"), (po, "prior_po"), (rows, None)):
             for d, tid, opp, home, *es, pts, opts, poss, oposs in src:
                 ps = [emap.get(str(e)) for e in es]
                 if None in ps or not poss or not oposs:
                     continue
                 for p in ps:
                     self.players.setdefault(p, len(self.players))
-                opp = (opp, tag) if tag else opp
+                opp = (opp, "prior") if tag else opp            # one effect per prior-season team
                 self.teams.setdefault(opp, len(self.teams))
                 row = (ps, opp, 1.0 if home else -1.0, pts or 0, opts or 0, poss, oposs)
-                (self.prior_rows if tag else self.by_date[d]).append(row)
+                {"prior": self.prior_rows, "prior_po": self.prior_po_rows}.get(tag, self.by_date[d]).append(row)
         self.np_, self.nt = len(self.players), len(self.teams)
         self.k = self.np_ + self.nt + 2                     # players, opponent teams, home, intercept
         self.dates = sorted(self.by_date)
@@ -59,6 +62,7 @@ class PitRapm:
         self.n_poss = collections.Counter()
         self._upto = 0                                      # dates [0, _upto) are in the sums
         self._add_rows(self.prior_rows, prior_w)
+        self._add_rows(self.prior_po_rows, prior_w * prior_po_w)
 
     def _add(self, d):
         self._add_rows(self.by_date[d], 1.0)
