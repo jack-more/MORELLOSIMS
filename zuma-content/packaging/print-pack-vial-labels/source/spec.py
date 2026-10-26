@@ -29,8 +29,8 @@ th{{text-align:left;font:700 8pt Outfit;color:#6E1C2A;border-bottom:.3mm solid #
 <tr><td>Material</td><td>White polypropylene film (BOPP), permanent acrylic adhesive rated for −20 °C storage, matte laminate. Must hold through freezer storage, condensation and an alcohol wipe.</td></tr>
 <tr><td>Print</td><td>Digital CMYK, full bleed, one design per SKU. No white ink, no spot colours.</td></tr>
 <tr><td>Colour</td><td>Match the hex values below. Oxblood #6E1C2A is the brand colour on every label: hard proof it before the run.</td></tr>
-<tr><td>Lot box</td><td>The white box top-left (LOT / FILLED, 11.3 × 3.4 mm) stays blank for the lot number and fill date: inkjet or thermal transfer at filling. If thermal transfer, order the laminate as TT-receptive.</td></tr>
-<tr><td>QR code</td><td>9.6 mm, links to that product's lot reports (zumatides.com/lots#CODE-). Scan the proof before approving.</td></tr>
+<tr><td>Lot box</td><td>The white box top-left (LOT, 11.3 × 3.4 mm) stays blank for the lot number: inkjet or thermal transfer at filling. If thermal transfer, order the laminate as TT-receptive.</td></tr>
+<tr><td>QR code</td><td>9.6 mm, one fixed code per product (the same on every vial of it), linking to that product's lot reports (zumatides.com/lots#CODE-). Scan the proof before approving.</td></tr>
 <tr><td>Supply</td><td>Rolls for an applicator (76 mm core, one across, 3 mm gap; confirm unwind direction with the applicator) or sheets for hand labelling. Order vials + 10% per SKU for set-up and spoilage.</td></tr>
 </table></div>
 <div><h2>On the vial</h2>
@@ -53,7 +53,7 @@ th{{text-align:left;font:700 8pt Outfit;color:#6E1C2A;border-bottom:.3mm solid #
 <section class="pg"><div class="g" style="grid-template-columns:1.75fr 1fr"><div><h2>Files and SKUs</h2><table><tr><th>No.</th><th>Label</th><th>Compound</th><th>Fill</th><th>Area</th><th>Print file</th><th>QR</th></tr>{rows}</table>
 <p class="note" style="margin-top:3mm">Also in the pack: zuma-label-NN-art.png (the same art, 3080 × 1540 px, 1702 dpi) and zuma-label-NN-proof.jpg.</p></div>
 <div><h2>To confirm before ordering</h2><ul>
-<li><b>Lot coding:</b> who prints the lot and fill date in the box, and how (inkjet or thermal transfer).</li>
+<li><b>Lot coding:</b> who prints the lot number in the box, and how (inkjet or thermal transfer).</li>
 <li><b>NAD+ 500 mg:</b> confirm the fill fits the 3 mL vial; if it moves to a larger vial it needs its own label size.</li>
 <li><b>Bacteriostatic water:</b> sold in a 10 mL vial, so not in this pack. Send its vial size and it gets its own label.</li>
 <li><b>Quantities</b> per SKU, and rolls or sheets.</li></ul>

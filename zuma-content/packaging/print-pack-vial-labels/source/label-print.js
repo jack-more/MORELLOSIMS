@@ -1,5 +1,5 @@
 /* ZUMA Tricolor label, PRINT version: the same label re-set for a 43 x 20 mm wrap label (67 px/mm, 1702 dpi).
-   Every line is at least 2.7 pt, the QR code is 9.6 mm so a phone reads it, the lot is left to an inkjet box, and the bands run 1.5 mm (100 px) into bleed.
+   Every line is at least 2.7 pt, the QR code is 9.6 mm so a phone reads it, the lot number is left to an inkjet box, and the bands run 1.5 mm (100 px) into bleed.
    Draw it on a 3080 x 1540 canvas translated by (-60, 100): trim is x 160..3040, y 0..1340.
    Made from label2.js; keep the two in step when the design changes.
 
@@ -97,9 +97,9 @@
     // the Oxblood band: the research-use sentence once, whole, centred on the front and clear of the cut at both ends
     T(x, 'FOR LABORATORY RESEARCH USE ONLY  \u00b7  NOT FOR HUMAN OR VETERINARY USE', FC, 1257,
       { size: 62, weight: 600, family: "'IBM Plex Mono', ui-monospace, monospace", fill: SNOW, align: 'center', ls: 5, maxW: 2640 });
-    // left side panel: a box left clear for the filler's inkjet (lot and fill date), and the code to the product's lot reports
+    // left side panel: a box left clear for the filler's inkjet (the lot number), and the code to the product's lot reports
     x.fillStyle = SNOW; x.fillRect(290, 78, 760, 228); x.strokeStyle = OX; x.lineWidth = 5; x.strokeRect(290, 78, 760, 228);
-    T(x, 'LOT', 318, 168, { size: 64, weight: 800, fill: OX, ls: 4 }); T(x, 'FILLED', 318, 278, { size: 64, weight: 800, fill: OX, ls: 4 });
+    T(x, 'LOT', 318, 214, { size: 64, weight: 800, fill: OX, ls: 4 });
     qr(x, p.url, 300, 404, 640, OX);
     // right side panel: the crest, the founding year, the form and how to keep it
     { const m = document.createElement('canvas').getContext('2d'), h = 430, w = logo(m, 0, 0, h, OX, OX, 'zuma-mark');

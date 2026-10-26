@@ -9,4 +9,4 @@ Plain clear 3 mL vial, Oxblood flip-off cap, tricolour wrap label. Eleven SKUs.
 - `proofs/`: each label with the trim (blue) and safe-area (pink) lines, and `all-labels-proof.jpg`.
 - `source/`: the print version of the label (`label-print.js`) and the scripts that make the pack.
 
-To confirm before ordering: who codes the lot and fill date in the LOT box (inkjet or thermal transfer), NAD+ 500 mg in the 3 mL vial, quantities, and rolls or sheets. Bacteriostatic water (10 mL vial) needs its own label size.
+To confirm before ordering: who codes the lot number in the LOT box (inkjet or thermal transfer), NAD+ 500 mg in the 3 mL vial, quantities, and rolls or sheets. Bacteriostatic water (10 mL vial) needs its own label size.
