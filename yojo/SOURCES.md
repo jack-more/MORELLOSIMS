@@ -25,12 +25,45 @@ Last updated: 2026-10-26
 - Confirmed: real Nansha OEM/ODM with GHK-Cu capability
 - Conflicting claims: press release says founded 2000, 15,000 m² plant, GMPC + ISO 22716 to May 2028; Made-in-China says founded 2016, 9,000 m², Class 100,000 cleanroom. Verify certificates with the issuer.
 
-### Beyond Basix
-- Only hit: US trademark BEYOND BASIX, serial 98678059, owned by Guangzhou Fanyuepan Trading Co., Ltd: https://trademarks.justia.com/owners/guangzhou-fanyuepan-trading-co-ltd-5979137
-- Likely a trading company's brand, not a factory. Ask for the factory address and business license.
+### Beyond Basix Cosmetics (Baiyun, Guangzhou)
+- Site: https://beyondbasixcosmetics.com (per Metro's list)
+- US trademark BEYOND BASIX, serial 98678059, owned by Guangzhou Fanyuepan Trading Co., Ltd: https://trademarks.justia.com/owners/guangzhou-fanyuepan-trading-co-ltd-5979137
+- Metro's list says: MOQ 500+, dropper and airless pump options, references ISO 9001, GMP, HALAL, BSCI, GMPC workshop. GHK-Cu % not disclosed.
+- The trademark owner is a trading company. Ask for the factory address and business license.
 
-### Letscharm
-- No trace found online. Unverified.
+### Letscharm Cosmetics Limited Guangzhou (Panyu)
+- Made-in-China store: https://letscharm.en.made-in-china.com
+- Listed as a **trading company** (Made-in-China and its SGS profile), 9 staff
+- Listings: GHK-Cu private label serum $1.98 at MOQ 1,000 · OEM face serum $3 at MOQ 100 · LS138 Blue Copper Peptide Essence MOQ 300 · LS164 cream MOQ 3,000
+- No GHK-Cu % stated. Low price suggests very low concentration; test before trusting.
+
+### TY Cosmetic (Guangzhou)
+- Site: https://tyoemcosmetic.com (per Metro's list)
+- MOQ 500 (50 ml serum, stock dropper bottle, label), 3,000+ with silk-screen print, about 2,000+ for a 30 g face product; GMP and ISO 22716 shown for three factory entities; vacuum pump bottles shown
+
+### Zerun Cosmetic (Shenzhen)
+- Site: https://zeruncosmetic.com (per Metro's list)
+- MOQ about 1,000 per SKU (other pages say 200 or 500–1,000); says GHK-Cu pH window about 5.5–7.0; in-house pump molds; GMP and ISO 22716 practices stated
+
+### Metro Private Label (Guangzhou)
+- Site: https://www.metroprivatelabel.com/contact-us/
+- Its own article ranks itself first (disclosed): https://www.metroprivatelabel.com/top-private-label-ghk-cu-peptide-serum-manufacturers-china/
+- Says: GHK-Cu MOQ about 1,000 per SKU, 500–800 with stock packaging, 5,000+ with custom packaging; concentration customizable; airless pumps supported; GMPC and ISO 22716
+- Others on its list (details not yet pulled): Guangzhou Tinsun Biotechnology, Guangzhou Meisheng Cosmetics, Amarrie, Zicail (all Guangzhou), BlackBird Skincare (Foshan)
+
+### Made-in-China "blue copper peptide serum" search
+- https://www.made-in-china.com/manufacturers/blue-copper-peptide-serum.html (72 suppliers, 30 shown; pulled 2026-10-26)
+- No supplier is listed as a pure manufacturer: 8 trading companies, 10 "manufacturer & trading", 12 unstated. Several are unrelated businesses (metal, shoes, water treatment) reselling.
+- Worth a look (manufacturer & trading, audited, 2,000+ m² plants):
+  - Guangzhou Tinsun Biotechnology, 141 staff: https://tinsunoem.en.made-in-china.com · serums $3.46–3.47, MOQ 100
+  - Guangdong Kangying Biotechnology, 165 staff: https://gzkysw.en.made-in-china.com · GHK-Cu firming serum $2.80, MOQ 100
+  - Guangdong Renhe Guozhuang Biotechnology, 125 staff: https://renheguozhuang.en.made-in-china.com · GHK-Cu serum $1.30, MOQ 2,000
+  - Guangzhou Chenmei Cosmetics, 68 staff: https://chenmei-cosmetic.en.made-in-china.com
+  - Guangzhou Guocui Biological Technology, 50 staff: https://guocui.en.made-in-china.com
+  - Guangzhou Diwo Biotechnology, 208 staff: https://diwobio.en.made-in-china.com
+  - Guangzhou Dephin Cosmetics (type not stated): https://dephincosmetics.en.made-in-china.com · GHK-Cu serums $2.25, MOQ 1,000
+- Raw GHK-Cu powder sellers on the same page: Wellgreen Natural (cosmetic grade $7/kg listed, which is implausibly low; confirm), Wellnature Biotech ($5–6.50). Shanghai Vitspring lists CAS 49557-75-7, the version without copper.
+- Prices of $1–3 per bottle almost certainly mean a tiny GHK-Cu dose. Lab-test any sample.
 
 ### Others named on Xiran's list (not yet checked by us)
 Cellular Cosmetics (Australia), Zerun Cosmetic (China), Indigo Private Label (USA, sells a 1% GHK-Cu serum), Nardo's Natural Private Label (USA), Bulk Serums (USA), Active Peptide (USA, raw material), Biocrown Biotechnology (Taiwan), Mobel Biochem (China).
