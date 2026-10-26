@@ -24,6 +24,38 @@ A weighted egg-shaped bottle, about Ø68 × 110 mm, that wobbles and rights itse
 
 These are concept renders, not engineering drawings. A cross-section and part list are in `build-spec/index.html`.
 
+## It has to look exactly like this
+
+Exterior drawing: `brief-img/appearance-drawing.svg` (locked, open and top views, mm).
+
+| Feature | Target |
+|---|---|
+| Shape | Egg, narrow top, widest in the lower third, rounded bottom (curve radius ≥ 40). Ø68 × 97.5 locked, 103.5 open. |
+| Head | Flat disc Ø36 × 5.5, overhangs the top of the egg like a nail head. Deep, crisp diamond knurl all the way round the rim. Small side slot for cream. |
+| Locked look | Disc sits flush on the egg. No collar or thread visible. |
+| Open look | Disc raised 6 mm on a satin-silver threaded sleeve. |
+| Silver | Satin (brushed-look) silver PVD with UV hardcoat. Not mirror chrome. Same finish on disc and sleeve. |
+| Skin finish | Soft-touch matte, no shine. Suggest mold texture around VDI 3400 ref 24–27; confirm on samples. |
+| Logo | YOJO over GHK-CU, debossed (pressed in) about 0.3–0.5 mm, same color as the skin. We supply vector artwork. |
+
+**Launch colors** (sampled from our renders; screen colors only, to be matched to physical Pantone swatches before tooling):
+
+| Color | Screen target |
+|---|---|
+| Sky blue | #69C0ED |
+| Pink | #F5A9D9 |
+| Leaf green | #73B26E |
+| Cobalt | #0567DE |
+
+## How we'll make sure it matches
+
+1. **Appearance model first.** Before any steel molds, you make 1–3 painted 3D-printed models at full size. We approve shape, proportions and the head overhang in hand.
+2. **Color and finish swatches.** You send molded silicone color chips and a PVD silver chip on the real materials. We approve each against Pantone swatches.
+3. **Working prototype.** The lock and pump work and feel right: smooth twist, clicks at both ends, no dose when locking.
+4. **T1 samples from the production molds.** We compare them side by side with the approved model and chips, and list every change needed.
+5. **Golden sample.** The final approved unit is signed and kept by both sides. Every production unit must match it.
+6. **Inspection before shipping.** A third-party inspector checks a sample of the order against the golden sample (AQL 2.5 for visual defects).
+
 ## Parts
 
 | Part | Requirement |
@@ -67,5 +99,6 @@ These are concept renders, not engineering drawings. A cross-section and part li
 
 ## Before sending
 
-- Get an NDA signed.
+- Get an **NNN agreement** signed (non-disclosure, non-use, non-circumvention). It's the China-standard version of an NDA. It also stops them selling your design or molds to another brand.
+- Put in the contract that YOJO owns the design and the molds, and that the molds can't be used for anyone else.
 - Talk to a patent attorney about a US design patent, and possibly a utility patent for the lock, **before** showing this widely. Public disclosure can start a filing clock.
