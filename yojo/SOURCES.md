@@ -233,8 +233,10 @@ Rules: you are the "responsible person" (product listing, safety records, advers
 
 ## 7. Domains (checked 2026-10-25 against registry records)
 
+- **Owned: yojo.skin**, registered 2026-10-27 at Porkbun, expires 2027-10-27. Turn on auto-renew.
+
 - Taken: yojo.com, getyojo.com, tryyojo.com, shopyojo.com, yojoskin.com, yojoworld.com, yojo.shop, yojo.club, yojo.life
-- Available: yojo.care, yojo.skin, yojo.beauty, yojo.store, yojo.cool, hiyojo.com, yojocare.com, yojolab.com, yojobeauty.com, meetyojo.com, theyojo.com, yojohq.com, yojoegg.com, yojoco.com, yojo-skin.com
+- Available (as of 2026-10-25): yojo.care, yojo.beauty, yojo.store, yojo.cool, hiyojo.com, yojocare.com, yojolab.com, yojobeauty.com, meetyojo.com, theyojo.com, yojohq.com, yojoegg.com, yojoco.com, yojo-skin.com
 - Could not check: yojo.co, yojo.us
 - Registrars: https://www.cloudflare.com/products/registrar/ · https://porkbun.com/
 - Trademark search before buying: https://tmsearch.uspto.gov/
