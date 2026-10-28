@@ -34,9 +34,9 @@ The Y in renders 17 and 18 is a generic sans-serif Y. Production uses the Y from
 
 | Name | Skin, lit side | Backdrop | Role |
 |---|---|---|---|
-| Chalk Sky | #A1D6F6 | #BFE3FA | YOJO Cream core |
-| Chalk Rose | #E4AAB9 | #D6A4AF | YOJO JELLY |
-| Chalk Sage | #AAC694 | #A5B691 | YOJO POP |
+| Chalk Sky | #A1D6F6 | #BFE3FA | GHK-Cu cream (hero) |
+| Chalk Rose | #E4AAB9 | #D6A4AF | Hyaluronic serum |
+| Chalk Sage | #AAC694 | #A5B691 | SPF |
 | Cobalt | #1E77F3 | #1E6DDF | Accent and drops |
 | Black | #000000 | | Hero shots only |
 | Satin chrome | | | The head. Always the only shiny thing in the frame. |

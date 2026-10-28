@@ -1,108 +1,137 @@
-# YOJO brand guide
+# YOJO brand system
 
-Version 1 · 2026-10-27 · yojo.skin
+Version 2 · 2026-10-28 · yojo.skin
+
+Version 1 is retired. It used Archivo, an older palette, and a product lineup that the copper research replaced.
 
 ---
 
-## What YOJO is
+## 1. The system in one line
 
-Copper peptide skincare in a weighted egg that wobbles.
+The YOJO system is one GHK-Cu hero, and every other product exists to make the copper work better. Every piece shares one fixed core, and the shape of each piece changes with its job.
 
-The name comes from the Japanese word *yōjō*, "taking care of your life." The look is late-90s Japanese advertising meeting American commerce: sky blue, clouds, film grain, clean wide type. The product inside is serious (GHK-Cu, airless, refillable). The object outside is a toy you want on your shelf.
+## 2. The routine
 
-**One line:** Serious skin care, fun to own.
+| Step | Product | Mold word | Shape | Color | Status |
+|---|---|---|---|---|---|
+| 1 Cleanse | Syndet cleansing bar on a rope, with a Y inside | (Y only) | Frosted pebble | Frost | Launch |
+| 2 Hydrate | Hyaluronic serum (HA plus panthenol, optional centella) | HYALURONIC | Dropper with a knurled chrome collar | Chalk Rose | Launch |
+| 3 Treat | **GHK-Cu cream, the hero** | GHK-CU | The egg | Chalk Sky | Launch |
+| 4 Protect | Daily SPF | SPF | Tube with a knurled chrome cap | Chalk Sage | After launch (OTC drug) |
 
-## Product lines
+- The **set of 3** is the bar, the serum and the cream.
+- The **set of 4** adds SPF.
+- Both ship in the YOJO crate, with the Y debossed on the lid.
 
-| Line | Product | Color |
+**Parked for drops:** the lip product, and JELLY as a lighter moisturizer. Neither sits in the core routine.
+
+Details and sources: `brand/lineup/README.md`.
+
+## 3. Product rules (from the GHK-Cu research)
+
+- **Copper lives in one product only, the egg.** No second GHK-Cu product until the hero has proved itself.
+- **No product in the line may contain:**
+  - L-ascorbic acid (vitamin C)
+  - AHA/BHA acids
+  - retinoids
+  - benzoyl peroxide
+- **All formulas:** finished pH 5–7.
+- **The bar** must be a syndet at pH 5.5–7, never true soap.
+- **The GHK-Cu cream:**
+  - Add the peptide last, below 40 °C.
+  - No EDTA or other chelators.
+  - No fruit acids or ionic plant extracts.
+- **Usage guidance for customers:** if they use vitamin C, it goes in the morning with copper at night. Retinoids and acids go on alternate nights.
+
+## 4. The fixed core
+
+What every YOJO piece has, so you recognize it without reading:
+
+1. **Satin chrome with fine diamond knurling.** It's the head on the egg, the collar on the dropper, the cap on the tube, and the bead on the bar's cord. It's always the only shiny thing.
+2. **A soft-touch chalk-color body.**
+3. **Molded type with no ink.** It's YOJO over one mold word, debossed tone on tone.
+4. **The Y mark** on the head top, the crate lid, and inside the bar.
+
+## 5. Logo
+
+- **Wordmark:** your YOJO wordmark (`brand/logo/yojo-wordmark-*.svg`).
+- **Y mark:** the Y cut from the wordmark (`brand/logo/y-mark/`).
+  - Never put a circle or ring around the Y. A Y inside a circle reads as a peace sign.
+  - The round chrome head frames it.
+- **Head of the egg:**
+  - The Y is on top, mirror chrome on brushed satin.
+  - YOJO runs around the side band, mirror on satin.
+  - The head always sits level.
+- **Before any mold or print work:** a type designer cleans up both vectors.
+- **No Asian characters**, anywhere.
+
+## 6. Color
+
+| Name | Hex (screen) | Product |
 |---|---|---|
-| **YOJO Cream** | GHK-Cu copper peptide cream, 30 ml | Sky blue |
-| **YOJO JELLY** | Water-gel moisturizer | Pink |
-| **YOJO POP** | To be decided: peptide lip treatment or cica calming gel | Leaf green |
+| Chalk Sky | #A1D6F6 (backdrop #BFE3FA) | GHK-Cu cream |
+| Chalk Rose | #E4AAB9 (backdrop #D6A4AF) | Hyaluronic serum |
+| Chalk Sage | #AAC694 (backdrop #A5B691) | SPF |
+| Frost | translucent icy blue | Cleansing bar, rare tier skins |
+| Cobalt | #1E77F3 | The Y inside the bar, two-tone drops, accents |
+| Black | #000000 | Hero shots only |
+| Satin chrome | | Every metal part |
 
-Each line launches in its own color so people learn the system. Other skin colors come later as accessories and drops.
+- **Pastels are chalky:** a little gray, powdery, matte. Cobalt is the one saturated color.
+- **Hex values are screen targets.** Match physical parts to Pantone chips before tooling.
+- **Each product launches in its own color,** so customers learn the system.
 
-## Logo
+## 7. Finish and photography
 
-- **Primary:** the clean wide YOJO wordmark (the version in the bubble). Use it everywhere by default.
-- **Secondary:** the italic swoosh YOJO, with the O–J–O spacing tightened. Use it for campaigns and merch, never next to the primary.
-- **Icon:** the locked egg seen from above, a sky-blue circle with the silver knurled disc in the middle. Use it for the favicon, app icon and social avatar.
+- **Tone on tone:** shoot each product on a backdrop and plinth in its own color.
+- **Hero shots on black:** one strip light, with the chrome catching the light.
+- **Molded type only.** The spec plate on the back reads GHK-CU / COPPER TRIPEPTIDE-1 / 30 ML.
+- **Macros:** the knurl, the twist, and the cream leaving the side slot.
 
-Rules:
-- White on sky blue or on photos of sky. Ink on white or pale sky.
-- Never white on silver.
-- No Asian characters, anywhere, ever.
-- No outlines, shadows, gradients or stretching on the wordmark.
-- Minimum width 64 px on screen, 18 mm in print.
+## 8. Skins and seasons (the collectible layer)
 
-We need the primary and secondary as vector files (SVG or AI) before any printing or mold work.
+The formula is the same at every tier. Only the outside changes.
 
-## Color
+| Tier | Skin |
+|---|---|
+| Core | The launch colors |
+| Season | New chalk colors for each season (S01, S02, and so on) |
+| Drop | Two-tone color blocking, e.g., sky over cobalt |
+| Rare | Frosted translucent skin with a chrome token encased |
+| Grail | All-metal: satin body, mirror head, numbered |
 
-| Name | Hex | Use |
-|---|---|---|
-| Sky | #69C0ED | Core brand color, YOJO Cream skin |
-| Pale sky | #CFEAFB | Backgrounds |
-| Deep sky | #2F8FD8 | Links, buttons on white |
-| Ink | #0E2A44 | Text |
-| White | #FFFFFF | Logo on sky, backgrounds |
-| Silver | #C9D0D6 | The press head. Always satin, never mirror chrome. |
-| Pink | #F5A9D9 | YOJO JELLY |
-| Leaf | #73B26E | YOJO POP |
-| Cobalt | #0567DE | Accent, limited drops |
+- **Swappable silicone skins** fit the egg. Refill cups keep the vessel in use.
+- **The Vault:** retired colors that come back as limited runs.
+- **No blind boxes for cream.**
 
-Hex values are screen targets taken from the renders. Match physical products to Pantone chips before production.
+## 9. Type
 
-Dropped colors: peach, clear or frosted skins.
+**Not decided yet.** Choose one to sit next to the wordmark:
+- A: Big Shoulders
+- B: Sofia Sans Extra Condensed Italic
+- C: Bricolage Grotesque
 
-## Type
+Archivo is retired.
 
-- **Headlines:** Archivo Expanded (Archivo at width 125), bold. It echoes the wide wordmark.
-- **Body:** Archivo, regular width.
-- **Spec labels:** IBM Plex Mono, uppercase, for lab details like GHK-CU, C14H22CuN6O4, 30 ML, AIRLESS.
+## 10. Words
 
-All three are free on Google Fonts.
+- Use only real product and ingredient words on product: YOJO, GHK-CU, HYALURONIC, SPF, COPPER TRIPEPTIDE-1, 30 ML.
+- No invented taglines or product names until the brand owner writes or approves them.
+- Skip hype words: "miracle", "clinical-grade", "revolutionary".
 
-## Imagery
+## 11. Claims (US)
 
-- Bright sky gradients, soft clouds, bubbles, a little film grain.
-- Product on a pale sky seamless background, slight wobble lean, soft shadow.
-- Macros of the knurled silver head, the twist, the cream ribbon leaving the side slot.
-- Hands: clean, natural nails, real skin texture.
-- Avoid: sterile lab-white sets, mirror chrome, dark moody lighting, anything that looks like medicine.
+**Cosmetic claims only:** how skin looks and feels.
+- **OK:** "visibly smoother", "firmer-looking", "softens the look of fine lines", "hydrates".
+- **Not OK:** "boosts collagen", "repairs", "heals", "treats acne", "anti-inflammatory".
+- **SPF** is an OTC drug (FDA Monograph M020). Any acne claim makes a product a drug too (M006).
+- **Never use "Dr."** in names or copy.
 
-## Packaging system
-
-- **The constant:** egg silhouette plus satin-silver knurled head. This is what people should recognize without reading.
-- **The variable:** the silicone skin color.
-- Locked, the head screws down flush like a nail head. Open, it rises on a silver thread.
-- Debossed text on the skin: YOJO over GHK-CU.
-- Colored metal heads are only for rare, numbered drops, never the core line.
-- Six-pack gift set: the aluminum egg carton.
-
-## Voice
-
-Short, cheerful, specific. Talk like a friend who reads ingredient lists.
-
-- "Twist up. Press. Twist down."
-- "30 ml of copper peptide in an egg that won't stay down."
-- "Refill the cup, keep the egg."
-
-Use real numbers and real ingredient names. Skip hype words like "miracle", "clinical-grade" and "revolutionary".
-
-## Claims (US law)
-
-YOJO is a cosmetic, so claims must be about how skin looks and feels.
-
-- OK: "visibly smoother", "firmer-looking skin", "softens the look of fine lines", "hydrates".
-- Not OK: "boosts collagen", "repairs skin", "heals", "treats acne", "anti-inflammatory". Those make it a drug.
-- Never call anyone "Dr." in brand names or copy.
-
-## Don'ts
+## 12. Don'ts
 
 - No Asian characters.
-- No white on silver.
-- No mirror chrome.
-- No peach, clear or frosted skins.
-- No gumball tops.
-- Don't copy the references: Laneige body shape, Joonbyrd sleeve pattern, RE text layout, Sun Base asterisks.
+- No ink printing on product bodies.
+- No ring around the Y.
+- No gumball tops, no peach.
+- No second copper product in the core set.
+- Don't copy reference brands' shapes, marks or layouts (Laneige, Outside-In, Pure Honey, the YO square monogram, and others).
