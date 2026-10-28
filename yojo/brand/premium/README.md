@@ -17,6 +17,10 @@ Renders from 2026-10-28, based on what you picked from the four direction boards
 | `08-two-tone.jpg` | Two-tone drop: sky over cobalt |
 | `09-frost-rare.jpg` | Rare tier: frosted translucent skin with a chrome token inside |
 | `10-lineup.jpg` | Season lineup, each unit on its own color block |
+| `11-head-side-stamped.jpg` | YOJO stamped into a smooth band on the side of the head, so it reads from the front |
+| `12-head-side-metal-on-metal.jpg` | Side band, metal on metal: mirror YOJO on brushed satin, no fill |
+| `13-head-top-metal-on-metal.jpg` | Head top, metal on metal: large mirror YOJO on brushed satin |
+| `14-all-metal-grail.jpg` | All-metal top tier: satin metal body, mirror head, YOJO/GHK-CU pressed in |
 
 ## Palette (screen targets sampled from the renders)
 
@@ -64,3 +68,7 @@ The pastels are chalky: slightly gray, powdery, velvety matte. Cobalt is the one
 | 08-two-tone | fb103072-a8f4-4723-b085-5c1bca611112 |
 | 09-frost-rare | d19afb0f-8197-4279-9216-fb98a6d6430a |
 | 10-lineup | fb10c98a-70fc-4cb1-acc9-4698cad39957 |
+| 11-head-side-stamped | 385acefb-2a7d-4ae4-ae39-6d798e68c131 |
+| 12-head-side-metal-on-metal | 786a7a92-d4d7-41c5-a8de-7e9b3465a76c |
+| 13-head-top-metal-on-metal | f3647ddc-66fc-480e-916f-7463062eae03 |
+| 14-all-metal-grail | dd3ba176-763d-408b-b402-e7517e035d74 |
