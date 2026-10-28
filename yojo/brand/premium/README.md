@@ -21,6 +21,14 @@ Renders from 2026-10-28, based on what you picked from the four direction boards
 | `12-head-side-metal-on-metal.jpg` | Side band, metal on metal: mirror YOJO on brushed satin, no fill |
 | `13-head-top-metal-on-metal.jpg` | Head top, metal on metal: large mirror YOJO on brushed satin |
 | `14-all-metal-grail.jpg` | All-metal top tier: satin metal body, mirror head, YOJO/GHK-CU pressed in |
+| `15-head-level-front.jpg` | Fix for 12: head sits level with an even reveal; side band YOJO, metal on metal |
+| `16-head-level-above.jpg` | Same, from slightly above |
+| `17-head-top-y.jpg` | Y on the head top, mirror on satin, no ring around it |
+| `18-head-y-plus-side-band.jpg` | Full head: Y on top plus YOJO on the side band |
+
+The head always seats level: it stops on a rigid shoulder and is keyed to the thread. Render 12 shows it tilted, which is an AI error.
+
+The Y in renders 17 and 18 is a generic sans-serif Y. Production uses the Y from the YOJO wordmark: see `../logo/y-mark/`.
 
 ## Palette (screen targets sampled from the renders)
 
@@ -72,3 +80,7 @@ The pastels are chalky: slightly gray, powdery, velvety matte. Cobalt is the one
 | 12-head-side-metal-on-metal | 786a7a92-d4d7-41c5-a8de-7e9b3465a76c |
 | 13-head-top-metal-on-metal | f3647ddc-66fc-480e-916f-7463062eae03 |
 | 14-all-metal-grail | dd3ba176-763d-408b-b402-e7517e035d74 |
+| 15-head-level-front | 732d41ff-01ac-427c-96b6-21b1a9037b87 |
+| 16-head-level-above | ccb51504-f775-4c04-957c-76d9358e81bd |
+| 17-head-top-y | 62fc45d1-dace-4a71-8355-07199db9763c |
+| 18-head-y-plus-side-band | 030f7550-41aa-4ed3-9c40-e29872450c4e |
