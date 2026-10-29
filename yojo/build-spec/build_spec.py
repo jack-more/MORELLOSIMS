@@ -198,11 +198,11 @@ f3.append('<text x="566" y="150" class="ann">rocks back</text>')
 f3.append('</svg>')
 FIG3 = "\n".join(f3)
 
-HTML = f"""<title>YOJO Wobble Build Spec</title>
+HTML = f"""<title>YOJO Vessel Build Spec</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,700;125,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: an engineering drawing sheet. Title block, then figures with captions, then tables a factory can quote from. */
 :root {{
@@ -220,7 +220,7 @@ HTML = f"""<title>YOJO Wobble Build Spec</title>
   --piston: #6e7f90;
   --cream: #bfe0f6;
   --signal: #d9407a;
-  --display: "Archivo", "Arial Black", system-ui, sans-serif;
+  --display: "IBM Plex Sans", system-ui, sans-serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }}
@@ -264,7 +264,13 @@ figure {{ margin: 0; background: var(--sheet); border: 1px solid var(--rule); pa
 .dwg .dimt {{ font: 500 12px var(--mono); fill: var(--mute); }}
 figcaption {{ font-size: 14px; color: var(--mute); max-width: 75ch; }}
 figcaption b {{ color: var(--ink); font-weight: 600; }}
-.photos {{ display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }}
+.photos {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+.states {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }}
+.states figure {{ padding: 0; overflow: hidden; background: #000; }}
+.states figcaption {{ padding: 0 12px 12px; color: #c9d6e2; }}
+.states figcaption b {{ color: #fff; }}
+video {{ display: block; width: 100%; height: auto; background: #000; }}
+.vids {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
 .photos figure {{ padding: 0; overflow: hidden; }}
 .photos img {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
 .photos figcaption {{ padding: 0 14px 14px; }}
@@ -283,48 +289,49 @@ td.num, td .num {{ font-family: var(--mono); font-variant-numeric: tabular-nums;
 .tag.wet {{ border-color: var(--signal); color: var(--signal); }}
 .note {{ border-left: 3px solid var(--signal); padding: 4px 0 4px 14px; max-width: 70ch; }}
 .note p + p {{ margin-top: 8px; }}
-@media (max-width: 640px) {{ .photos {{ grid-template-columns: 1fr; }} }}
+@media (max-width: 640px) {{ .photos, .vids {{ grid-template-columns: 1fr; }} .states {{ grid-template-columns: 1fr; }} }}
 </style>
 
 <div class="wrap">
   <header>
-    <span class="eyebrow">YOJO · GHK-Cu copper peptide cream</span>
-    <h1>Wobble build spec</h1>
-    <p class="lede">How the egg bottle goes together: a weighted silicone egg with a knurled silver press head that screws down to lock and an airless refill cup inside.</p>
+    <span class="eyebrow">YOJO · GHK-Cu copper peptide cream · 30 ml</span>
+    <h1>Vessel build spec</h1>
+    <p class="lede">A weighted silicone egg with a knurled head that twists up to open and twists down to lock flush. Inside, a threaded cartridge carries an airless pump and a 30 ml refill cup. Every image here is rendered from one 3D model, built to the numbers below.</p>
     <dl class="tb">
-      <div><dt>Part</dt><dd>YOJO Wobble 30 ml</dd></div>
-      <div><dt>Rev</dt><dd class="mono">A · concept</dd></div>
+      <div><dt>Part</dt><dd>YOJO GHK-Cu vessel</dd></div>
+      <div><dt>Rev</dt><dd class="mono">B · twist-down lock</dd></div>
       <div><dt>Units</dt><dd class="mono">mm · g · ml</dd></div>
       <div><dt>Status</dt><dd>For first samples</dd></div>
     </dl>
   </header>
 
   <div class="photos">
-    <figure><img src="img/carton.jpg" alt="Six YOJO egg bottles in two pinks, two sky blues, cobalt and green standing in an open brushed-aluminum egg-carton tin.">
-      <figcaption><b>Six-pack carton.</b> The look we are building toward.</figcaption></figure>
-    <figure><img src="img/press.jpg" alt="A finger presses the knurled silver head of a YOJO egg and a ribbon of pale blue cream comes out of the slot on the side of the head onto a fingertip.">
-      <figcaption><b>Press to dispense.</b> Cream leaves through the slot on the side of the head.</figcaption></figure>
+    <figure><img src="img/ext-locked.jpg" alt="The YOJO vessel locked: sky-blue silicone egg with the knurled chrome head sitting flush on top, YOJO over GHK-CU debossed on the front.">
+      <figcaption><b>Locked.</b> The head sits flush on the egg. Pressing does nothing.</figcaption></figure>
+    <figure><img src="img/ext-open.jpg" alt="The YOJO vessel open: the knurled head raised 9 mm on chrome threads, ready to press.">
+      <figcaption><b>Open.</b> One full turn raises the head 9 mm on the threads. Now it presses.</figcaption></figure>
   </div>
 
   <section>
-    <span class="eyebrow">Fig. 1 · section, unlocked · 4 px = 1 mm</span>
-    <h2>What's inside</h2>
-    <figure><div class="scroll">{FIG1}</div>
-      <figcaption><b>Everything that touches cream is plastic.</b> The refill cup, piston, pump and the channel through the head are PP or PE. The silver disc and collar are metallized plastic and sit outside the fluid path. Copper peptide reacts with bare aluminum and steel, so every wet part stays PP or PE. This is a hard rule for the factory.</figcaption>
-    </figure>
-  </section>
-
-  <section>
-    <span class="eyebrow">Fig. 2 · head detail</span>
-    <h2>How the twist lock works</h2>
-    <figure><div class="scroll">{FIG2}</div>
-      <figcaption><b>You never press down to lock.</b> Two small lugs hang from the underside of the head. The collar rim has two notches. Unlocked, the lugs sit over the notches, so a press lets the head travel 4 mm and dispense. Turn the head a quarter turn clockwise and the lugs ride past a small bump onto the solid rim with a click. Now the head can't move down at all, so nothing comes out in a bag and no cream is wasted. Turn it back a quarter turn to unlock.</figcaption>
-    </figure>
-    <figure style="padding:0;overflow:hidden"><img src="img/lock-steps.jpg" alt="Step 1: fingers turn the knurled head a quarter turn clockwise on a sky-blue egg. Step 2: the head at the same height, turned to the locked mark, with a padlock icon.">
-      <figcaption style="padding:0 14px 14px"><b>For the product page.</b> Step 1 turn a quarter turn, step 2 locked. The head stays at the same height.</figcaption></figure>
+    <span class="eyebrow">Mechanism · quarter section</span>
+    <h2>How it works</h2>
+    <div class="states">
+      <figure><img src="img/cut-locked.jpg" alt="Quarter-section of the vessel, locked: head flush on the egg, cartridge down.">
+        <figcaption><b>1 · Locked.</b> The head's underside sits on the rigid stop, the top face of the fixed collar under the skin lip. There is no gap for the head to move into, so it can't be pressed. Safe in a bag.</figcaption></figure>
+      <figure><img src="img/cut-open.jpg" alt="Quarter-section, open: head and the whole cartridge raised 9 mm.">
+        <figcaption><b>2 · Twist up.</b> One full turn counter-clockwise. The head is keyed to the threaded sleeve by splines, so turning the head turns the sleeve. A 3-start thread with a 9 mm lead lifts the sleeve, pump and refill cup 9 mm in one turn.</figcaption></figure>
+      <figure><img src="img/cut-pressed.jpg" alt="Quarter-section, pressed: head pushed 4 mm down onto the pump, cream leaving the side slot.">
+        <figcaption><b>3 · Press.</b> The head slides 4 mm down the splines and works the airless pump. About 0.2 ml leaves the side slot. The pump spring pushes the head back up.</figcaption></figure>
+    </div>
+    <div class="vids">
+      <figure style="padding:0;overflow:hidden;background:#000"><video src="video/mechanism.mp4" controls muted loop playsinline preload="metadata" poster="img/cut-open.jpg"></video>
+        <figcaption style="padding:0 14px 14px;color:#c9d6e2"><b style="color:#fff">Mechanism, sectioned.</b> Twist up, press, twist down.</figcaption></figure>
+      <figure style="padding:0;overflow:hidden;background:#000"><video src="video/exterior.mp4" controls muted loop playsinline preload="metadata" poster="img/ext-open.jpg"></video>
+        <figcaption style="padding:0 14px 14px;color:#c9d6e2"><b style="color:#fff">Same motion, outside.</b> What the customer sees.</figcaption></figure>
+    </div>
     <div class="note">
-      <p><b>This is a stock mechanism.</b> Many airless and lotion pumps already lock this way. Ask for it with a click detent so customers feel it lock, and a small engraved dot on the disc that points to a lock mark on the collar.</p>
-      <p>Optional upgrade: the same quarter turn swings the side slot behind a small lip on the collar, so the outlet can't drip or pick up lint.</p>
+      <p><b>Locking is twisting down, nothing else.</b> No push-and-turn, no lugs. One turn clockwise until the head seats flush with a click. One turn counter-clockwise to open, with a light detent at the open height.</p>
+      <p><b>Everything that touches cream is plastic.</b> The refill cup, piston, pump, its spring and the outlet channel in the head are PP, PE or POM. Copper peptide reacts with bare aluminium and steel, so the pump spring must be metal-free. The silver parts are metallized plastic and sit outside the fluid path. This is a hard rule for the factory.</p>
     </div>
   </section>
 
@@ -332,10 +339,10 @@ td.num, td .num {{ font-family: var(--mono); font-variant-numeric: tabular-nums;
     <span class="eyebrow">Use</span>
     <h2>Four things a customer does</h2>
     <div class="steps">
-      <div class="step"><h3>Press</h3><p>Press the silver disc. About 0.2 ml leaves the side slot. A 30 ml cup gives roughly 150 presses.</p></div>
-      <div class="step"><h3>Lock</h3><p>Turn the head a quarter turn clockwise until it clicks. It stays up and can't be pressed. Safe for a bag.</p></div>
-      <div class="step"><h3>Unlock</h3><p>Turn it a quarter turn back. It's ready to press.</p></div>
-      <div class="step"><h3>Refill</h3><p>Grip the collar band and unscrew the pump. Lift out the empty cup, peel the foil on a new one, drop it in and screw the pump back. Press 3 to 5 times to prime.</p></div>
+      <div class="step"><h3>Open</h3><p>Twist the head one turn counter-clockwise. It rises 9 mm on the threads.</p></div>
+      <div class="step"><h3>Press</h3><p>Press the head. About 0.2 ml leaves the side slot. A 30 ml cup gives roughly 150 presses.</p></div>
+      <div class="step"><h3>Lock</h3><p>Twist one turn clockwise until it clicks flush. It can't be pressed. Safe for a bag.</p></div>
+      <div class="step"><h3>Refill</h3><p>From open, keep turning past the detent until the cartridge unthreads. Lift it out, pull the empty cup off the pump, push on a new one, drop it back and twist down. Press 3 to 5 times to prime.</p></div>
     </div>
   </section>
 
@@ -345,19 +352,20 @@ td.num, td .num {{ font-family: var(--mono); font-variant-numeric: tabular-nums;
     <div class="tablewrap"><table>
       <thead><tr><th>Part</th><th>Material</th><th>How it's made</th><th>Source</th><th>Touches cream</th></tr></thead>
       <tbody>
-        <tr><td>Press disc</td><td>ABS, satin silver PVD, UV hardcoat</td><td>Injection molded with the knurl and side slot in the tool, then vacuum metallized and topcoated</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
-        <tr><td>Actuator insert</td><td>PP</td><td>Injection molded. Carries the outlet channel to the slot and the two lock lugs. The disc snaps over it.</td><td><span class="tag">Modified stock</span></td><td><span class="tag wet">Yes</span></td></tr>
-        <tr><td>Collar</td><td>PP, satin silver PVD, UV hardcoat</td><td>Two lock notches and a click bump on the rim. Screws onto the shell neck below.</td><td><span class="tag">Modified stock</span></td><td>No</td></tr>
-        <tr><td>Airless pump</td><td>PP/PE, metal-free fluid path</td><td>Stock airless pump with a quarter-turn up-lock, 0.2 ml dose, return spring</td><td><span class="tag">Stock</span></td><td><span class="tag wet">Yes</span></td></tr>
-        <tr><td>Refill cup</td><td>PP cup, PE follower piston, foil seal</td><td>Stock refillable airless cup, 30 ml. This is the repeat purchase.</td><td><span class="tag">Stock</span></td><td><span class="tag wet">Yes</span></td></tr>
-        <tr><td>Inner shell</td><td>PP or ABS, 1.5 mm wall</td><td>Injection molded egg with threaded neck and a weight pocket</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
-        <tr><td>Weight</td><td>Steel or zinc alloy, 50–80 g</td><td>Turned or die-cast, pressed into the shell pocket. Tune the mass on prototypes.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
-        <tr><td>Silicone skin</td><td>Platinum-cure LSR, Shore 30–40A, soft-touch</td><td>LSR injection molded, YOJO and GHK-CU debossed in the tool. Stretches over the shell and comes off to wash.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
+        <tr><td>Head</td><td>ABS, satin silver PVD, UV hardcoat</td><td>Ø36 × 9. Diamond knurl (140 around) and the side slot molded in. Y from the wordmark engraved 0.15 mm on top with a frosted floor. A 5.5 mm deep bore underneath slides on the sleeve.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
+        <tr><td>Actuator insert</td><td>PP</td><td>Sits inside the head. Carries the outlet channel from the pump stem to the slot, and the splines that key the head to the sleeve.</td><td><span class="tag custom">Custom</span></td><td><span class="tag wet">Yes</span></td></tr>
+        <tr><td>Threaded sleeve</td><td>ABS, silver PVD on the visible band only</td><td>3-start thread, 9 mm lead, 3 mm pitch, OD 30. Holds the pump. Rises 9 mm when opened.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
+        <tr><td>Fixed collar</td><td>POM or PBT</td><td>Internal 3-start thread for the sleeve. Its top face is the rigid stop the head locks against. Click detents at locked and open. Snaps into the shell neck.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
+        <tr><td>Airless pump</td><td>PP/PE, plastic spring</td><td>0.2 ml dose, 4 mm stroke. Fully metal-free fluid path.</td><td><span class="tag">Stock, modified</span></td><td><span class="tag wet">Yes</span></td></tr>
+        <tr><td>Refill cup</td><td>PP cup, PE follower piston, foil seal</td><td>Ø37 × 37, 31 ml fill for 30 ml nominal. Pushes onto the pump. This is the repeat purchase.</td><td><span class="tag">Stock or custom size</span></td><td><span class="tag wet">Yes</span></td></tr>
+        <tr><td>Inner shell</td><td>PP, about 1.6 mm wall</td><td>Injection molded egg. The neck holds the collar. The cavity clears the cup through its 9 mm of travel.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
+        <tr><td>Weight</td><td>Steel, or zinc alloy</td><td>Slug shaped to the shell floor, Ø45 × 8. 68 g in steel, 57 g in zinc alloy. Keeps the centre of mass low.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
+        <tr><td>Silicone skin</td><td>Platinum-cure LSR, Shore 30–40A, soft-touch</td><td>3.5 mm wall, about 60 g. YOJO and GHK-CU debossed 0.5 mm in the tool. The lip wraps into the opening over the collar. Comes off to wash and to swap colours.</td><td><span class="tag custom">Custom</span></td><td>No</td></tr>
       </tbody>
     </table></div>
     <div class="note">
-      <p><b>Why plated plastic instead of real metal.</b> Almost every silver cap in a beauty store is molded plastic with a thin metal coating. It costs a fraction of machined aluminum, the knurl is molded in for free, and it is lighter, so the steel weight keeps the balance point low. The egg still feels heavy and solid because of that weight.</p>
-      <p>The trade-off is the knurled edge, where fingers rub. A UV hardcoat stops the silver from wearing through, and a satin finish hides wear better than mirror chrome. If samples wear too fast, upgrade to electroplated ABS, which has a thicker, tougher layer. Keep the weight real steel or zinc: that's the one place metal earns its cost.</p>
+      <p><b>Plated plastic, real steel weight.</b> The silver parts are molded plastic with a thin metal coating: a fraction of the cost of machined metal, and lighter, so the steel weight keeps the balance low. The egg still feels heavy and solid.</p>
+      <p><b>Don't plate the threads.</b> Threads rub every time the head turns, and plating there will wear through. Mold the sleeve in silver-pigmented ABS or POM so the threads look metal without a coating, and plate only the visible band if needed. Make the collar from POM so the thread runs smooth and quiet.</p>
     </div>
   </section>
 
@@ -367,24 +375,24 @@ td.num, td .num {{ font-family: var(--mono); font-variant-numeric: tabular-nums;
     <div class="tablewrap"><table>
       <thead><tr><th>Item</th><th>Target</th><th>Why</th></tr></thead>
       <tbody>
-        <tr><td>Overall size</td><td class="num">Ø 68 × 110</td><td>Fits a hand and the carton cups</td></tr>
-        <tr><td>Press disc</td><td class="num">Ø 36 × 5.5</td><td>Wide enough to grip the knurl when turning</td></tr>
-        <tr><td>Pump stroke</td><td class="num">4</td><td>Head travel when unlocked</td></tr>
-        <tr><td>Lock turn</td><td class="num">¼ turn, click detent</td><td>One motion, and you feel it lock</td></tr>
+        <tr><td>Body</td><td class="num">Ø 68 × 70.5</td><td>Traced from the approved hero render</td></tr>
+        <tr><td>Overall height</td><td class="num">79.5 locked · 88.5 open</td><td>Head 9 mm tall, lifts 9 mm</td></tr>
+        <tr><td>Head</td><td class="num">Ø 36 × 9</td><td>Wide enough to grip and twist</td></tr>
+        <tr><td>Thread</td><td class="num">3-start, lead 9, pitch 3, OD 30</td><td>One full turn opens or locks</td></tr>
+        <tr><td>Pump stroke · dose</td><td class="num">4 · 0.2 ml</td><td>About 150 presses per cup</td></tr>
+        <tr><td>Refill cup</td><td class="num">Ø 37 × 37 · 31 ml</td><td>30 ml nominal with headroom</td></tr>
         <tr><td>Skin wall</td><td class="num">3.5</td><td>Soft feel without losing the egg shape</td></tr>
-        <tr><td>Bottom curve radius</td><td class="num">≥ 40</td><td>A flatter bottom makes self-righting much easier (Fig. 3)</td></tr>
-        <tr><td>Weight</td><td class="num">50–80 g</td><td>Most of the mass, as low as possible</td></tr>
-        <tr><td>Fill · dose</td><td class="num">30 ml · 0.2 ml</td><td>About 150 presses per cup</td></tr>
-        <tr><td>Total mass</td><td class="num">≈ 200–240 g</td><td>Feels solid and premium in the hand</td></tr>
+        <tr><td>Weight</td><td class="num">68 g steel</td><td>Most of the mass, as low as possible</td></tr>
+        <tr><td>Total mass</td><td class="num">≈ 220 g</td><td>Feels solid and premium in the hand</td></tr>
       </tbody>
     </table></div>
   </section>
 
   <section>
-    <span class="eyebrow">Fig. 3 · self-righting</span>
-    <h2>Why it wobbles and stands back up</h2>
+    <span class="eyebrow">Fig. · self-righting</span>
+    <h2>Why it stands back up</h2>
     <figure><div class="scroll">{FIG3}</div>
-      <figcaption><b>The balance point G has to sit below C, the center of the curved bottom.</b> When the egg tips, G swings out to the side and gravity pulls it back under C, so it rocks upright. The skin and refill sit high and pull G up. The steel weight pulls it down. A flatter bottom moves C higher, which gives you more room. Tune this with a 3D-printed shell and a few steel slugs before cutting molds.</figcaption>
+      <figcaption><b>The balance point G has to sit below C, the centre of the curved bottom.</b> When the egg tips, G swings out to the side and gravity pulls it back under C. The steel weight pulls G down; the skin and the raised cartridge pull it up. The approved shape has a small flat land at the base, so it stands steady and rocks back gently. Check this on a 3D-printed shell with steel slugs before cutting molds.</figcaption>
     </figure>
   </section>
 
@@ -392,12 +400,13 @@ td.num, td .num {{ font-family: var(--mono); font-variant-numeric: tabular-nums;
     <span class="eyebrow">Build order</span>
     <h2>Assembly</h2>
     <ol class="seq">
-      <li>Press the weight into the pocket at the bottom of the inner shell.</li>
-      <li>Stretch the silicone skin over the shell until the lip seats on the neck.</li>
-      <li>Fill and foil-seal the refill cup, then drop it into the shell.</li>
-      <li>Screw the collar and pump onto the shell neck. The pump seals the cup.</li>
-      <li>Snap the silver disc onto the actuator so its slot lines up with the outlet channel.</li>
-      <li>Prime with a few presses, then lock the head for shipping.</li>
+      <li>Press the steel weight onto the floor of the inner shell.</li>
+      <li>Snap the collar into the shell neck.</li>
+      <li>Stretch the silicone skin over the shell until its lip wraps into the opening over the collar.</li>
+      <li>Fill and foil-seal the refill cup and push it onto the pump in the sleeve.</li>
+      <li>Thread the sleeve into the collar.</li>
+      <li>Press the head onto the sleeve splines and the pump stem, with the slot lined up with the outlet.</li>
+      <li>Prime with a few presses, then twist down to lock for shipping.</li>
     </ol>
   </section>
 
@@ -405,13 +414,13 @@ td.num, td .num {{ font-family: var(--mono); font-variant-numeric: tabular-nums;
     <span class="eyebrow">For the RFQ</span>
     <h2>Questions to send the factory</h2>
     <ol class="seq">
-      <li>Do you have an airless pump with a quarter-turn up-lock and a click detent? Which dose sizes?</li>
-      <li>Can the actuator outlet run to a slot on the side of a snap-on metallized overcap?</li>
-      <li>Do you offer a refillable airless system where the pump stays and only a 30 ml cup with piston is replaced?</li>
+      <li>Can you mold a 3-start, 9 mm lead thread on an OD 30 sleeve in silver-pigmented ABS or POM, running in a POM collar, with click detents at locked and open?</li>
+      <li>Can the head slide 4 mm on splines with no wobble, returned by the pump spring?</li>
+      <li>Do you have an airless pump with a plastic spring, 0.2 ml dose and 4 mm stroke, where the pump stays and only a 30 ml cup with piston is replaced?</li>
       <li>Is the whole fluid path metal-free, spring included? Please confirm in writing.</li>
-      <li>Run a 12-week stability test at 40 °C with our GHK-Cu cream in every wet part and report any color change.</li>
-      <li>LSR skin: tooling cost, MOQ per color, soft-touch coating options and deboss depth.</li>
-      <li>Quote the inner shell, the weight, and the PVD disc and collar at 3,000 and 10,000 units. Add electroplated ABS as an option.</li>
+      <li>Run a 12-week stability test at 40 °C with our GHK-Cu cream in every wet part and report any colour change.</li>
+      <li>LSR skin: tooling cost, MOQ per colour, soft-touch coating options and deboss depth.</li>
+      <li>Quote the inner shell, weight, collar, sleeve and PVD head at 3,000 and 10,000 units.</li>
     </ol>
   </section>
 </div>
