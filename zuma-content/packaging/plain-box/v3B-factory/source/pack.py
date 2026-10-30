@@ -92,6 +92,7 @@ if __name__ == '__main__':
     for p in PRODUCTS: open(PK + f'/svg/plainB-art-{slug(p)}.svg', 'w').write(art(p))
     for a in AREAS: open(PK + f'/svg/plainB-inside-{a}.svg', 'w').write(inside(a))
     open(PK + '/look-B.html', 'w').write(G['look']('B')); open(PK + '/flat-B.html', 'w').write(G['flat']('B'))
-    json.dump([dict(name=p[0], dose=p[1], area=AREAS[p[2]][0], hex=AREAS[p[2]][1], full=p[3], file=f'plainB-art-{slug(p)}.svg') for p in PRODUCTS],
+    QTY = {'RT-3': 300}   # first run: 3x for RT-3 (30 of 130 vials in order #1), 100 for every other version
+    json.dump([dict(name=p[0], dose=p[1], area=AREAS[p[2]][0], hex=AREAS[p[2]][1], full=p[3], qty=QTY.get(p[0], 100), file=f'plainB-art-{slug(p)}.svg') for p in PRODUCTS],
               open(PK + '/versions.json', 'w'), indent=1)
     print('ok', len(PRODUCTS), 'versions')
