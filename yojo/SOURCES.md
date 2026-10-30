@@ -257,3 +257,36 @@ Rules: you are the "responsible person" (product listing, safety records, advers
 | Quarter-turn lock steps | 42baa01b-7dd2-47a6-9487-46b3a496d358 |
 
 Build spec: `yojo/build-spec/index.html` (open in a browser). It still describes the quarter-turn lock; the newer nail-head twist-down lock is the current direction.
+
+---
+
+## 9. China factories for the rev B vessel (researched 2026-10-30)
+
+These are matched to the build in `build-spec/`. Most evidence comes from the suppliers' own sites and B2B listings. None of it has been audited. [U] marks a claim that couldn't be verified.
+
+**Contact first**
+1. **Topfeel Pack (Bao'an, Shenzhen).** info@topfeelpack.com. The only supplier found with all three in one place: a metal-free airless pump, refill pods, and in-house metallizing.
+   - **PA184** airless: POK plastic spring, sold as "100% metal-free", 0.23 ml dose. https://www.topfeelpack.com/metal-free-airless-pump-bottle-product
+   - **PJ90/PA137 and PJ95** refillable jars, where the cup is swapped and the pump stays. https://topfeelpack.com/pj95-customized-refillable-airless-cosmetic-jar-for-skincare-brands-product
+   - In-house metallizing per a 2018 trade report: https://www.beautypackaging.com/contents/view_breaking-news/2018-11-20/cosmetics-packaging-solutions-featured-at-topfeelpack/
+   - MOQ 5k–10k. [U] US office.
+2. **Ningbo Songmile Packaging (Ningbo, with a pump plant in Yuyao).** Sells an airless bottle with a replaceable inner bottle (25SM-AB-03). Calls itself "trading and manufacturing". Metal-free spring not confirmed. https://www.songmile.com/?p=11349
+3. **Rilong Precision Mold (Shenzhen office, Dongguan LSR plant).** For the silicone skin: LSR overmolding and insert molding, ISO9001/14001. sales1@rilong-mold.com, +86 755-89526305. https://rilong-mold.com/capabilities/lsr-and-rubber-product/
+4. **Dongguan Guanchengxin Metal Products.** Zamac die-cast caps and weights for perfume and cosmetics. Client claims [U]. https://gdgcx.blogspot.com/2026/03/how-to-help-customers-choose-high.html
+5. **BeyondBasix Cosmetics (Baiyun, Guangzhou).** Its white paper shows a documented GHK-Cu + SNAP-8 cream and serum. MOQ 500. Test it alongside Xiran. https://static.gooeyun.com/upload/file/GY448006579259/beyond-basix-white-paper-for-skincare-products-oem.pdf
+
+**Backups by part**
+- **Airless/turnkey:** Shanghai Rainbow Industrial (Yuyao factory) https://rainbowpackage.en.alibaba.com/en_US/company_profile.html · Zhejiang UKPACK (listed as a *trading company* on Made-in-China) · APC Packaging EAPP all-plastic pump (US company, makes in Asia) https://www.personalcareinsights.com/news/apc-packaging-rolls-out-airless-skin-care-pump-by-eliminating-metal-springs.html
+- **Metal-free pump:** Ningbo Shiny Packaging, POK-spring listing [U]
+- **Refill jars:** Jarsking, Guangzhou (address is an office tower, factory status [U]) https://www.jarsking.com/?p=102490
+- **LSR:** Derui Silicone, Guangzhou (listing dates conflict) · Xiamen Newtop Silicone https://www.accio.com/business/newtop-silicone · Xiamen Better Silicone Rubber
+- **Metallizing + UV:** Guangzhou Jingchuang Packaging https://jncpack.m.en.alibaba.com/ · Shangyu Sunrise Packaging · Shaoxing Dalica
+- **Weights:** Dongguan Mingyi Hardware (zinc counterweight blocks) · Dynacast Dongguan https://www.dynacast.com/locations/dynacast-dongguan
+- **GHK-Cu OEM:** Guangzhou Xiran (known) · Guangzhou Xinpeptide [U] · LetsCharm [U]
+
+**Ask every supplier**
+- A full BOM of every part that touches cream, valve and piston included, confirming metal-free.
+- A tape adhesion test report on the PVD, and confirmation it isn't subcontracted.
+- HPLC purity and cream-in-PP/PE stability data for the GHK-Cu.
+
+Under MoCRA, YOJO, as the US responsible person, registers the facility and lists the product. None of these suppliers documents doing it. No tooling prices were published. Ballpark: $3k for a prototype tool up to $100k+ for production multi-cavity tools.
