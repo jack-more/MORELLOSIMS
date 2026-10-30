@@ -16,11 +16,11 @@ pg('What it is 产品概述', f'''<div class="two"><img src="{b64('look-B.png')}
 <tr><td>Board 纸</td><td>400 gsm SBS white 白卡纸</td></tr>
 <tr><td>Structure 结构</td><td>tuck top, 10 mm tongue, 1 mm friction-lock nicks 插舌顶+防松卡口; auto-lock bottom, pre-glued 自动锁底预糊. Same die as our window carton Rev F, without the window 与开窗盒Rev F同刀模（无窗）</td></tr>
 <tr><td>Outside 外面</td><td>CMYK 4-colour + Oxblood #6E1C2A (spot or matched CMYK), matte aqueous or soft-touch film 哑光水油或触感膜</td></tr>
-<tr><td>Top flap 顶盖</td><td>area colour flood + crest 9 mm Oxblood matte hot foil + deboss, one hit 区域色满版+9mm花徽酒红哑光烫金压凹一次成型</td></tr>
+<tr><td>Top flap 顶盖</td><td>area colour flood, crest 9 mm knocked out to the white board (no ink, no foil) 区域色满版，9mm花徽留白（不印刷、不烫金）</td></tr>
 <tr><td>Inside 内面</td><td>100% flood, area colour (6 PMS) 内面满版区域专色</td></tr>
 <tr><td>Versions 版本</td><td>12 outside versions (one per product) on ONE die; 6 inside colours 外面12版（每品一版），内面6色</td></tr></table></div></div>'''),
 pg('Panels 展开图 (example RT-3 10 mg)', f'''<img src="{b64('plainB-art-rt-3-10-mg.png')}" style="height:150mm;display:block;margin:0 auto">
-<p class="cap">Outside print, 1:1 file 外面印刷1:1文件: svg/plainB-art-*.svg. Layers 图层: PRINT_CMYK, HOT_FOIL, DEBOSS, CUT, CREASE, NOTES (do not print 不印). All type is outlined 文字已转曲. Bleed 1 mm past every outside cut 外切线出血1mm. The top-flap art is rotated 180° so it reads upright from the front when closed 顶盖图案旋转180°，合盖后从正面看为正向.</p>'''),
+<p class="cap">Outside print, 1:1 file 外面印刷1:1文件: svg/plainB-art-*.svg. Layers 图层: PRINT_CMYK, CUT, CREASE, NOTES (do not print 不印). All type is outlined 文字已转曲. Bleed 1 mm past every outside cut 外切线出血1mm. The top-flap art is rotated 180° so it reads upright from the front when closed 顶盖图案旋转180°，合盖后从正面看为正向.</p>'''),
 pg('Band and wordmark 色带与字标', f'''<div class="two"><img src="{b64('flat-B.png')}" style="width:100%">
 <div><p class="big">The Oxblood band is 6 mm tall and wraps all four sides and the glue flap, bleeding 1 mm past the bottom crease. Front: ZUMA wordmark in white (Snow #FCFBF8), <b>13 mm wide × 3.1 mm tall</b>, centred, top at 0.75 mm inside the band; under it "FOR LABORATORY RESEARCH USE ONLY".</p>
 <p class="zh">酒红色带高6mm，环绕四个面及糊口，出血至底部压痕外1mm。正面：白色ZUMA字标，<b>宽13mm × 高3.1mm</b>，居中；下方"FOR LABORATORY RESEARCH USE ONLY"。</p>
@@ -28,7 +28,7 @@ pg('Band and wordmark 色带与字标', f'''<div class="two"><img src="{b64('fla
 pg('Dieline 刀模 + inside 内面', f'''<div class="two"><div><img src="{b64('plainB-dieline-master.png')}" style="width:100%"><p class="cap">Master dieline 刀模: svg/plainB-dieline-master.svg (CUT, CREASE, NOTES). Auto-lock drawn schematically: use your standard crash-lock die for a 20 × 20 base 锁底为示意，请用标准扣底刀模.</p></div>
 <div><img src="{b64('plainB-inside-metabolic.png')}" style="width:100%"><p class="cap">Inside 内面 (mirrored 镜像), example Metabolic: svg/plainB-inside-*.svg, 6 colours. 100% flood, bleed past every cut 满版出血. Knock out on glue areas if your glue needs it 如需要糊盒位留白.</p></div></div>'''),
 pg('Versions 版本清单 (12)', f'''<table class="v"><tr><th>#</th><th>Name 品名</th><th>Size 规格</th><th>Full name 全称</th><th>Area / inside colour 区域/内面色</th><th>Qty 数量</th><th>Outside file 外面文件</th></tr>{rows}<tr><td></td><td><b>TOTAL 合计</b></td><td></td><td></td><td></td><td><b>{TOT}</b></td><td>one run, versions mixed 一次生产混单</td></tr></table>
-<p class="big" style="margin-top:6mm">All versions share ONE die, ONE foil/deboss plate and the same back panel (QR → https://zumatides.com/lots). Only the outside print and the inside colour change. 所有版本共用一套刀模、一块烫金压凹版、相同背面（二维码）。只有外面印刷和内面颜色不同。</p>'''),
+<p class="big" style="margin-top:6mm">All versions share ONE die (no foil, no emboss) and the same back panel (QR → https://zumatides.com/lots). Only the outside print and the inside colour change. 所有版本共用一套刀模、一块烫金压凹版、相同背面（二维码）。只有外面印刷和内面颜色不同。</p>'''),
 ]
 CSS = '''@page{size:297mm 210mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Helvetica,Arial,"WenQuanYi Zen Hei Mono",sans-serif;color:#1a1012}
 .pg{width:297mm;height:210mm;padding:12mm 14mm;position:relative;page-break-after:always;overflow:hidden;background:#fff}

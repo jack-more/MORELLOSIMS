@@ -12,6 +12,8 @@ from outline import text_path
 # v3 art, with three changes: ZUMA-only wordmark, outlined type, bigger wordmark in the band
 src = open(V3 + '/base.py').read() + open(V3 + '/gen.py').read().split("exec(open(os.path.join(HERE, 'base.py')).read())")[1]
 src = src.split("jobs = {")[0]
+src = src.replace("'Top flap · Oxblood foil crest'", "'Top flap · crest knocked out to white'")
+src = src.replace("with the Oxblood foil crest", "with the crest knocked out to white")
 # match order #1 stock: Tirzepatide is the 15 mg vial; the GHK blend is KLOW 80 mg (GHK-Cu + BPC + TB + KPV)
 src = src.replace("('TZ-2', '30 mg', 'metabolic', 'Tirzepatide')", "('TZ-2', '15 mg', 'metabolic', 'Tirzepatide')")
 src = src.replace("('GHK+BT', '70 mg', 'dermal', 'GHK-Cu + BPC + TB')", "('KLOW', '80 mg', 'dermal', 'GHK-Cu + BPC + TB + KPV')")
@@ -28,6 +30,7 @@ def t_out(x, y, s, txt, fam='Figtree', w=500, fill='#2A1A1C', anchor='start', ls
     return text_path(x, y, s, txt, fam, w, fill, anchor, ls, rot)
 G['t'] = t_out
 front, right, left, back, crest, AREAS, PRODUCTS, OX, SNOW = (G[k] for k in ('front', 'right', 'left', 'back', 'crest', 'AREAS', 'PRODUCTS', 'OX', 'SNOW'))
+G['top'] = lambda p: f'<rect width="20" height="20" fill="{AREAS[p[2]][1]}"/>' + crest(5.5, 5.7, 9, SNOW)
 G['DIRS'] = {'B': G['mk']('B')}
 
 # die geometry: identical to window Rev F (window/final-F/src/gen.py) minus the window
@@ -53,16 +56,15 @@ def art(p):
           f'<rect x="9" y="74" width="8" height="7" fill="{OX}"/>',
           f'<rect x="76" y="9" width="22" height="31" fill="{col}"/>']                        # top flap + tongue flood, 1 mm bleed
     # top flap reads upright from the front once folded: rotate its art 180 about the flap centre
-    foil = f'<g transform="rotate(180 87 30)">{crest(87 - 4.5, 30 - 4.5 * 0.96, 9, OX)}</g>'
-    deb = f'<g transform="rotate(180 87 30)">{crest(87 - 4.5, 30 - 4.5 * 0.96, 9, "none")}</g>'.replace('<g fill="none">', '<g fill="none" stroke="#7A3EB0" stroke-width="0.8" stroke-dasharray="3 2">')
+    # top crest (option B): knocked out of the area-colour flood to the white board, no ink, no foil
+    ko = f'<g transform="rotate(180 87 30)">{crest(87 - 4.5, 30 - 4.5 * 0.96, 9, SNOW)}</g>'
+    pr.append(ko)
     notes = (f'<g font-family="Helvetica, Arial" font-size="1.6" fill="#555">'
              f'<text x="10" y="6">ZUMA plain carton v3 B · {name} {dose} · {AREAS[area][0]} · outside print 外面印刷 · 1:1 mm · bleed 出血 1 mm</text>'
-             f'<text x="10" y="100">CMYK 4c + Oxblood #6E1C2A (match) · top crest: Oxblood matte hot foil + deboss 顶盖花徽酒红烫金压凹 · all type outlined 文字已转曲</text></g>')
+             f'<text x="10" y="100">CMYK 4c + Oxblood #6E1C2A (match) · top crest knocked out to white board, no foil 顶盖花徽留白（不印、不烫） · all type outlined 文字已转曲</text></g>')
     return (f'<svg {NS} viewBox="{VB}" width="107mm" height="104mm">'
             + layer('PRINT_CMYK', 'PRINT 印刷 (CMYK + Oxblood)', ''.join(pr))
-            + layer('HOT_FOIL', 'HOT_FOIL 烫金 · top crest 9 mm, Oxblood matte foil', foil)
-            + layer('DEBOSS', 'DEBOSS 压凹 · same outline as the foil crest, one hit', deb)
-            + cut() + crease() + layer('NOTES', 'NOTES 说明 (do not print 不印)', notes) + '</svg>')
+                        + cut() + crease() + layer('NOTES', 'NOTES 说明 (do not print 不印)', notes) + '</svg>')
 
 def master():
     lab = [(27, 60, 'P1 LEFT 左侧'), (47, 60, 'P2 FRONT 正面'), (67, 60, 'P3 RIGHT 右侧'), (87, 60, 'P4 BACK 背面'), (13.5, 60, 'GLUE 糊口'),
