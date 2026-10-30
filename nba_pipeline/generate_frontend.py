@@ -2672,6 +2672,12 @@ def _compute_full_strength_moji(roster_df):
 # so the slope is taken a little flatter.
 ROSTER_NRTG = (-0.5, 1.1)
 ROOKIE_IMPACT = -1.0        # per 100, a player with no RAPM / LEBRON yet
+# How much of the returning share's prior is last season's team rating; the rest is the
+# roster rating. Hoop Impact Bench v1.1 (2020-21 to 2025-26, 7,230 games, game-margin R²):
+# player ratings .170 (LOKI) / .162 (OpenRAPM); 25% last season's team .171 / .160; 50% .162 /
+# .149; returning players at last season's team (the old prior, weight 1) .122 / .124, no
+# better than rating everyone 0 (.125), and worst on rebuilt rosters.
+LAST_TEAM_W = 0.25
 _ROSTER_CACHE = {}
 
 
@@ -2708,8 +2714,8 @@ def _roster_nrtg(team_row, minutes):
     tonight's role he played for this team last season: his minutes there over
     tonight's minutes x the team's games, capped at 1). A mid-season arrival
     who played 15 games counts for ~15/82 of himself. The prior is
-    returning x last season's NRtg + (1 - returning) x the roster rating, and
-    this season's games weigh in as gp / (gp + TEAM_PRIOR_GAMES).
+    w x last season's NRtg + (1 - w) x the roster rating, w = LAST_TEAM_W x
+    returning, and this season's games weigh in as gp / (gp + TEAM_PRIOR_GAMES).
     Returns (net, returning, roster rating, full-strength share), the last being
     how much of net is a full-roster rating that injury attrition still applies to."""
     imp, played, games = _roster_inputs()
@@ -2720,14 +2726,15 @@ def _roster_nrtg(team_row, minutes):
     ret = sum(m / total * min(1.0, played.get((tid, p), 0.0) / (m * g))
               for p, m in minutes.items() if m > 0) if g else 0.0
     prev = team_row.get("net_rating_prev")
-    prior = roster if prev is None or pd.isna(prev) else ret * prev + (1 - ret) * roster
+    w = 0.0 if prev is None or pd.isna(prev) else LAST_TEAM_W * ret
+    prior = roster if w == 0 else w * prev + (1 - w) * roster
     gp = float(team_row.get("gp") or 0)
     cur = team_row.get("net_rating_cur")
     if gp and cur is not None and pd.notna(cur):
         net = (gp * cur + TEAM_PRIOR_GAMES * prior) / (gp + TEAM_PRIOR_GAMES)
     else:
         gp, net = 0.0, prior
-    return net, ret, roster, (gp + TEAM_PRIOR_GAMES * ret) / (gp + TEAM_PRIOR_GAMES)
+    return net, ret, roster, (gp + TEAM_PRIOR_GAMES * w) / (gp + TEAM_PRIOR_GAMES)
 
 
 def get_trailing_nrtg(team_id, n_games=10):
