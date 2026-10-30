@@ -6,7 +6,8 @@ def b64(f): return 'data:image/png;base64,' + base64.b64encode(open(PK + '/previ
 def pg(title, body):
     return (f'<section class="pg"><header><div class="k">ZUMA · PLAIN CARTON v3 B 无窗彩盒 · PRODUCTION SPEC 生产规格书 · REV 1 (FOR QUOTE 报价)</div><h2>{title}</h2></header>{body}'
             '<footer>Chinese terms for reference; confirm with supplier. 中文术语仅供参考，请与供应商确认。 · zumatides.com</footer></section>')
-rows = ''.join(f'<tr><td>{i+1}</td><td><b>{v["name"]}</b></td><td>{v["dose"]}</td><td>{v["full"]}</td><td><span class="chip" style="background:{v["hex"]}"></span>{v["area"]}</td><td class="m">{v["file"]}</td></tr>' for i, v in enumerate(V))
+TOT = sum(v.get('qty', 0) for v in V)
+rows = ''.join(f'<tr><td>{i+1}</td><td><b>{v["name"]}</b></td><td>{v["dose"]}</td><td>{v["full"]}</td><td><span class="chip" style="background:{v["hex"]}"></span>{v["area"]}</td><td><b>{v.get("qty", "")}</b></td><td class="m">{v["file"]}</td></tr>' for i, v in enumerate(V))
 P = [
 pg('What it is 产品概述', f'''<div class="two"><img src="{b64('look-B.png')}" style="width:100%">
 <div><p class="big">A small white tuck-top carton with an auto-lock bottom, ONE sheet of 400 gsm board. <b>No window.</b> The outside is printed: a grid of flat panels in tonal steps of the product's area colour, the crest reversed out in white, the product name, and an Oxblood band round the bottom with the ZUMA wordmark. The inside is flooded in the area colour.</p>
@@ -26,7 +27,7 @@ pg('Band and wordmark 色带与字标', f'''<div class="two"><img src="{b64('fla
 <p class="big">Colours 颜色: Oxblood #6E1C2A · Snow #FCFBF8 · area colours: Metabolic #1F4FD0 (PMS 2728 C), Tissue #0E9A58 (PMS 340 C), Dermal #FF5A1F (PMS Orange 021 C), Endocrine #D08000 (PMS 1385 C), Neuro #6E3FD8 (PMS 2665 C), Lab supplies #4E6077 (PMS 7545 C). Panel tints are printed as CMYK screens of the area colour 色块深浅为区域色CMYK网点.</p></div></div>'''),
 pg('Dieline 刀模 + inside 内面', f'''<div class="two"><div><img src="{b64('plainB-dieline-master.png')}" style="width:100%"><p class="cap">Master dieline 刀模: svg/plainB-dieline-master.svg (CUT, CREASE, NOTES). Auto-lock drawn schematically: use your standard crash-lock die for a 20 × 20 base 锁底为示意，请用标准扣底刀模.</p></div>
 <div><img src="{b64('plainB-inside-metabolic.png')}" style="width:100%"><p class="cap">Inside 内面 (mirrored 镜像), example Metabolic: svg/plainB-inside-*.svg, 6 colours. 100% flood, bleed past every cut 满版出血. Knock out on glue areas if your glue needs it 如需要糊盒位留白.</p></div></div>'''),
-pg('Versions 版本清单 (12)', f'''<table class="v"><tr><th>#</th><th>Name 品名</th><th>Size 规格</th><th>Full name 全称</th><th>Area / inside colour 区域/内面色</th><th>Outside file 外面文件</th></tr>{rows}</table>
+pg('Versions 版本清单 (12)', f'''<table class="v"><tr><th>#</th><th>Name 品名</th><th>Size 规格</th><th>Full name 全称</th><th>Area / inside colour 区域/内面色</th><th>Qty 数量</th><th>Outside file 外面文件</th></tr>{rows}<tr><td></td><td><b>TOTAL 合计</b></td><td></td><td></td><td></td><td><b>{TOT}</b></td><td>one run, versions mixed 一次生产混单</td></tr></table>
 <p class="big" style="margin-top:6mm">All versions share ONE die, ONE foil/deboss plate and the same back panel (QR → https://zumatides.com/lots). Only the outside print and the inside colour change. 所有版本共用一套刀模、一块烫金压凹版、相同背面（二维码）。只有外面印刷和内面颜色不同。</p>'''),
 ]
 CSS = '''@page{size:297mm 210mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Helvetica,Arial,"WenQuanYi Zen Hei Mono",sans-serif;color:#1a1012}

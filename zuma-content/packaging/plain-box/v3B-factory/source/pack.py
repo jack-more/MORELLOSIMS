@@ -12,6 +12,10 @@ from outline import text_path
 # v3 art, with three changes: ZUMA-only wordmark, outlined type, bigger wordmark in the band
 src = open(V3 + '/base.py').read() + open(V3 + '/gen.py').read().split("exec(open(os.path.join(HERE, 'base.py')).read())")[1]
 src = src.split("jobs = {")[0]
+# match order #1 stock: Tirzepatide is the 15 mg vial; the GHK blend is KLOW 80 mg (GHK-Cu + BPC + TB + KPV)
+src = src.replace("('TZ-2', '30 mg', 'metabolic', 'Tirzepatide')", "('TZ-2', '15 mg', 'metabolic', 'Tirzepatide')")
+src = src.replace("('GHK+BT', '70 mg', 'dermal', 'GHK-Cu + BPC + TB')", "('KLOW', '80 mg', 'dermal', 'GHK-Cu + BPC + TB + KPV')")
+assert "'15 mg', 'metabolic', 'Tirzepatide'" in src and "'KLOW', '80 mg'" in src
 src = src.replace("wordmark(W / 2 - 4.2, 35.2, 8.4, SNOW)", "wordmark(W / 2 - 6.5, 34.75, 13.0, SNOW)")
 src = src.replace("t(W / 2, 39.05, 2.0 * PT, 'FOR LABORATORY RESEARCH USE ONLY'", "t(W / 2, 39.2, 2.0 * PT, 'FOR LABORATORY RESEARCH USE ONLY'")
 src = src.replace("with the zuma tides wordmark in Snow", "with the ZUMA wordmark in Snow")
@@ -50,7 +54,7 @@ def art(p):
           f'<rect x="76" y="9" width="22" height="31" fill="{col}"/>']                        # top flap + tongue flood, 1 mm bleed
     # top flap reads upright from the front once folded: rotate its art 180 about the flap centre
     foil = f'<g transform="rotate(180 87 30)">{crest(87 - 4.5, 30 - 4.5 * 0.96, 9, OX)}</g>'
-    deb = f'<g transform="rotate(180 87 30)">{crest(87 - 4.5, 30 - 4.5 * 0.96, 9, "none")}</g>'.replace('<g fill="none">', '<g fill="none" stroke="#7A3EB0" stroke-width="2.5">')
+    deb = f'<g transform="rotate(180 87 30)">{crest(87 - 4.5, 30 - 4.5 * 0.96, 9, "none")}</g>'.replace('<g fill="none">', '<g fill="none" stroke="#7A3EB0" stroke-width="0.8" stroke-dasharray="3 2">')
     notes = (f'<g font-family="Helvetica, Arial" font-size="1.6" fill="#555">'
              f'<text x="10" y="6">ZUMA plain carton v3 B · {name} {dose} · {AREAS[area][0]} · outside print 外面印刷 · 1:1 mm · bleed 出血 1 mm</text>'
              f'<text x="10" y="100">CMYK 4c + Oxblood #6E1C2A (match) · top crest: Oxblood matte hot foil + deboss 顶盖花徽酒红烫金压凹 · all type outlined 文字已转曲</text></g>')
