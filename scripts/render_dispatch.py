@@ -207,6 +207,8 @@ def render_pick_row(p, sport):
     detail = ""
     if p.get("result"):
         detail = p["result"]
+    if p.get("live"):    # owner /live pick: graded at the live line
+        detail = f'{detail} · LIVE at {p["live"]}' if detail else f'LIVE at {p["live"]}'
     if p.get("sim_projection"):
         detail = f'{detail} · SIM: {p["sim_projection"]} (edge {p.get("sim_edge", "")})' if detail else f'SIM: {p["sim_projection"]} (edge {p.get("sim_edge", "")})'
 

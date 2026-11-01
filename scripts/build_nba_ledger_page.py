@@ -85,6 +85,7 @@ def build():
             "result": r["result"], "stake_u": round(risk / UNIT, 2), "units": round(profit / UNIT, 2),
             "final": final, "logged": _et(r.get("captured_at")),
             "late": (r.get("void_reason") or "").startswith("REINSTATED"),
+            "live": (r.get("live") or "").strip() or None,   # owner /live: score and clock when taken
             "conf": lg.get("conf_1_10"),
             # sim margin for the picked side = edge - line (verified on every
             # logged pick: NYK +5.0 with 6.0 edge -> sim NYK by 1.0)

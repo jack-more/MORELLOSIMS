@@ -4,6 +4,8 @@
   /card               tonight's card: every logged pick with the latest sim and book, and what's sent
   /game ATL           one game: the sim's line, the book, the edge, the model's side, tip
   /pick ATL -1.5 2u   log an owner pick (units to win at -110) and send it to members
+  /live MEM +14.5 1u  a game already on: log it at the live line with the score and clock,
+                      send it to members, grade it at that number (up to 3h after tip)
   /stake ATL 0.5u     change a pick's stake before tip (members get one stake-change email)
   /pull ATL           take a pick off before tip (off the members page, members told; it won't count)
   /resim              re-run the model now (the NBA pipeline); new numbers in about 6 minutes
@@ -23,7 +25,8 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -34,7 +37,7 @@ for p in (HERE, NBA, os.path.join(NBA, "scripts")):
 
 import picks_store  # noqa: E402
 
-ET = timezone(timedelta(hours=-4))
+ET = ZoneInfo("America/New_York")   # was a fixed -4: an hour off from November to March
 DAILY = os.path.join(NBA, "data", "daily_picks.json")
 PICKS_CSV = os.path.join(NBA, "data", "picks.csv")
 PICK_LOG = os.path.join(NBA, "data", "pick_log.json")
@@ -50,6 +53,7 @@ HELP = (
     "/card: tonight's picks with the latest numbers\n"
     "/game ATL: one game, sim vs book\n"
     "/pick ATL -1.5 2u: log your pick (units to win) and send it to members\n"
+    "/live MEM +14.5 1u: a game already on, at the live line (graded at that number)\n"
     "/stake ATL 0.5u: change a pick's stake before tip\n"
     "/pull ATL: take a pick off before tip\n"
     "/resim: re-run the model now (about 6 minutes)\n"
@@ -346,7 +350,7 @@ def pick(team_word, line_word, units_word):
     risk = to_win_risk(units)
     same = [r for r in _today_rows(code) if r["side"] == side and not r["result"]]
     if same and _row_tip_passed(same[0]):
-        return f"Too late: {matchup} has tipped."
+        return f"Too late: {matchup} has tipped. At the live line: /live {code} <line> <units>."
     if same:
         p0 = _pick_for(same[0])
         st0 = pick_alerts.load(pick_alerts.STATE, {})
@@ -361,7 +365,8 @@ def pick(team_word, line_word, units_word):
         row = next(r for r in reversed(_rows()) if r["date"] == today() and r["matchup"] == matchup and r["side"] == side)
         if row["result"] == "V":
             _finish("TG bot — owner pick logged (after tip: void)")
-            return f"Too late: {matchup} had tipped, so it's recorded as void and won't count."
+            return (f"Too late: {matchup} had tipped, so it's recorded as void and won't count. "
+                    f"For a game that's on, use the live line: /live {code} <line> <units>.")
     _resync()
     p = _pick_for(row)
     if p is None:
@@ -371,6 +376,62 @@ def pick(team_word, line_word, units_word):
     note = pick_alerts.decide(p["id"], True)
     _finish("TG bot — owner pick logged and sent")
     return f"{side} · {_units_txt(units)} to win (risk {risk / UNIT:g}u) · logged. {note}"
+
+
+def live(team_word, line_word, units_word):
+    """An owner pick on a game in progress, at the live line. The ledger keeps the score
+    and clock at capture (picks.csv `live`) and grades it at that line; members get it now."""
+    import pick_alerts
+    from collectors.games_espn import fetch_espn_events
+    from utils.ledger import LIVE_WINDOW
+    code = team_code(team_word)
+    units = parse_units(units_word)
+    try:
+        line = float(str(line_word).replace("pk", "0").replace("PK", "0"))
+    except ValueError:
+        line = None
+    if not code or line is None or units is None:
+        return "Format: /live MEM +14.5 1u (team, the live spread, units to win)."
+    git_sync()
+    events = fetch_espn_events(datetime.now(ET))
+    if events is None:
+        return "ESPN didn't answer, so there's no score to log it against. Try again in a minute."
+    ev = next((e for e in events if code in (e["away_abbr"], e["home_abbr"])), None)
+    if ev is None:
+        return f"{code} doesn't play today."
+    a, h = ev["away_abbr"], ev["home_abbr"]
+    if ev["state"] == "pre":
+        return f"{a} @ {h} hasn't tipped. Before tip it's /pick {code} <line> <units>."
+    if ev["state"] == "post" or ev["completed"]:
+        return f"{a} @ {h} is over ({a} {ev['away_score']}-{ev['home_score']} {h})."
+    tip = picks_store.parse_ts(ev.get("tip_utc"))
+    if tip is not None and datetime.now(timezone.utc) > tip + LIVE_WINDOW:
+        return f"{a} @ {h} tipped more than {LIVE_WINDOW.seconds // 3600}h ago; a live pick has to be inside that."
+    _, games = snapshot()
+    g = find_game(code, games)
+    matchup = g["matchup"] if g else f"{a} @ {h}"
+    state = f"{ev.get('detail') or 'in progress'}, {a} {ev['away_score']}-{ev['home_score']} {h}"
+    side = f"{code} {line:+.1f}"
+    risk = to_win_risk(units)
+    if any(r["side"] == side for r in _today_rows(code)):
+        return f"{side} is already on today's ledger. A different number is fine (/live {code} <line> <units>)."
+    import inject_pick
+    if not inject_pick.inject(matchup, side, risk=risk, date_str=today(), force=True, live=state):
+        return "The ledger didn't take it (see the bot log)."
+    row = next(r for r in reversed(_rows()) if r["date"] == today() and r["matchup"] == matchup and r["side"] == side)
+    if row["result"] == "V":
+        _finish("TG bot — owner live pick logged (void)")
+        return f"Recorded as void, it won't count: {row.get('void_reason')}"
+    _resync()
+    p = _pick_for(row)
+    if p is None:
+        git("checkout", "--", *LEDGER_FILES[:3])
+        return "It didn't reach picks.json, so nothing was logged; check the bot log."
+    _check_or_revert()                       # the Send is recorded only for a pick the ledger took
+    note = pick_alerts.decide(p["id"], True)
+    _finish("TG bot — owner live pick logged and sent")
+    return (f"🔴 LIVE {side} · {_units_txt(units)} to win (risk {risk / UNIT:g}u) · at {state}. "
+            f"Graded at {side}. {note}")
 
 
 def stake(team_word, units_word):
@@ -468,6 +529,8 @@ def handle(text):
             return game(args[0]) if args else "Format: /game ATL"
         if cmd == "/pick":
             return pick(*args[:3]) if len(args) >= 3 else "Format: /pick ATL -1.5 2u"
+        if cmd == "/live":
+            return live(*args[:3]) if len(args) >= 3 else "Format: /live MEM +14.5 1u"
         if cmd == "/stake":
             return stake(*args[:2]) if len(args) >= 2 else "Format: /stake ATL 0.5u"
         if cmd == "/pull":

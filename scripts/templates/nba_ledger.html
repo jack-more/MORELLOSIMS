@@ -356,7 +356,8 @@ function init() {
     `<button class="mtab" data-m="${m}" aria-pressed="${m === month}">${m === "ALL" ? "All" : mname(m) + " " + fmtU(mt(m))}</button>`).join("");
   document.querySelectorAll(".mtab").forEach(el => el.onclick = () => setMonth(el.dataset.m));
   $("note").innerHTML = `1u = ${D.unit_pp} $PP; plays are sized in units. Spreads graded at the posted price, −110 unless another price was logged. ` +
-    `Only finished games appear. Picks without a pregame timestamp are marked “logged late” on their day. ` +
+    `Only finished games appear. Picks without a pregame timestamp are marked “logged late” on their day; ` +
+    `picks taken during a game are marked “live” and graded at the live line, with the score and clock when they were taken. ` +
     (D.summary.first ? `Before ${pretty(D.summary.first)} the season was tracked as totals only, so those days aren’t itemized. ` : "") +
     `Updated ${D.generated}. Simulations, not guarantees · 21+ · 1-800-GAMBLER`;
   render(); chart();
@@ -385,7 +386,7 @@ function render() {
   $("listk").textContent = `${ps.length} picks`;
   $("list").innerHTML = shown.map(p => { const side = p.pick.split(" ")[0], T = TEAMS[side];
     return `<button class="lr" data-d="${p.date}" style="--tc:${T ? T[2] : "#88918C"}">${T ? `<img src="${logo(side)}" alt="">` : "<span></span>"}
-    <span><span class="p">${esc(pk(p.pick))}</span>${tierChip(p.conf)}${p.late ? `<span class="late">logged late</span>` : ""}<span class="m">${esc(p.away)} @ ${esc(p.home)} · ${pretty(p.date, true)}${p.final ? " · " + esc(p.final) : ""}</span></span>
+    <span><span class="p">${esc(pk(p.pick))}</span>${tierChip(p.conf)}${p.late ? `<span class="late">logged late</span>` : ""}${p.live ? `<span class="late" title="${esc(p.live)}">live</span>` : ""}<span class="m">${esc(p.away)} @ ${esc(p.home)} · ${pretty(p.date, true)}${p.final ? " · " + esc(p.final) : ""}</span></span>
     <span class="res ${p.result}">${p.result}</span><span class="uu ${cls(p.units)}">${fmtU(p.units, 2)}</span></button>`; }).join("")
     + (ps.length > shown.length ? `<button class="more" id="more">Show all ${ps.length} picks</button>` : "");
   document.querySelectorAll(".lr").forEach(b => b.onclick = () => openDay(b.dataset.d));
@@ -448,7 +449,7 @@ function noteOf(p, no) {
     <div class="mn-ros2"><i></i><div><b>${stake}</b><small>STAKE</small></div></div>
     <div class="mn-data">
       <div class="mn-row"><div><span class="mn-k">Book</span><b>${esc(abbr)} ${line}</b></div><div><span class="mn-k">Sim</span><b>${esc(simTxt)}</b></div><div class="e"><span class="mn-k">Edge</span><b>${p.edge != null ? (+p.edge).toFixed(1) + " pts" : "—"}</b></div><div><span class="mn-k">Result</span><b class="${cls(p.units)}">${fmtU(p.units, 2)}</b></div></div>
-      <div class="mn-fin"><span>Final · ${esc(p.final || "—")}</span><span class="mn-log">${p.late ? "Logged late" : p.logged ? "Logged " + esc(p.logged) : ""}</span></div>
+      <div class="mn-fin"><span>Final · ${esc(p.final || "—")}</span><span class="mn-log">${p.late ? "Logged late" : p.live ? "Taken live at " + esc(p.live) : p.logged ? "Logged " + esc(p.logged) : ""}</span></div>
     </div>
     <div class="mn-stamp ${p.result}"><svg width="300" height="300" viewBox="0 0 300 300"><circle cx="150" cy="150" r="142" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="150" cy="150" r="129" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="150" cy="150" r="92" fill="none" stroke="currentColor" stroke-width="2.5"/><path id="${id}a" d="M 39,150 A 111,111 0 0 1 261,150" fill="none"/><path id="${id}b" d="M 32,150 A 118,118 0 0 0 268,150" fill="none"/><text font-family="IBM Plex Mono" font-size="17" font-weight="500" letter-spacing="4" fill="currentColor"><textPath href="#${id}a" startOffset="50%" text-anchor="middle">GRADED IN PUBLIC</textPath></text><text font-family="IBM Plex Mono" font-size="15" font-weight="500" letter-spacing="3" fill="currentColor"><textPath href="#${id}b" startOffset="50%" text-anchor="middle">${stampDate} · No. ${String(no).padStart(4, "0")}</textPath></text></svg><div><b>${word}</b><span>${fmtU(p.units, 2).toUpperCase()}</span></div></div>
   </div></div></div>`;

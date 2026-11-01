@@ -30,10 +30,11 @@ import hmac
 import os
 import re
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import tg_members
 
-ET = timezone(timedelta(hours=-4))
+ET = ZoneInfo("America/New_York")   # was a fixed -4: an hour off from November to March
 RESEND_URL = "https://api.resend.com/emails/batch"
 RESEND_ONE = "https://api.resend.com/emails"      # single sends carry the note as an inline image
 NOTE_CID = "pick-note"
@@ -115,7 +116,7 @@ def publish(p, when_label, dry=False):
         "pick_text": p.get("pick_text"), "odds": _odds(p), "units": _u(p), "to_win": _stake(p)[1],
         "conf": p.get("conf"), "sim_projection": p.get("sim_projection"),
         "game_time": when_label, "start": p.get("start") or p.get("tip_at"),
-        "captured_at": p.get("captured_at"),
+        "captured_at": p.get("captured_at"), "live": p.get("live"),
     }
     if dry:
         print(f"  [dry] member page: {p.get('matchup')} ({p.get('date')})")
@@ -264,7 +265,10 @@ def message(p, when_label, with_note=False, update=None):
              _stake_txt(p) if update else f"{_stake_txt(p)} · confidence {p.get('conf')}/10"]
     if sim and not update:          # a stake change carries its own reason; the morning's sim is stale
         lines.append(f"The sim: {sim}")
-    lines.append(f"{'Updated' if update else 'Logged'} {logged}. The public card stays sealed until {UNLOCK_WORD.get(p.get('sport'), 'tip')}.")
+    if p.get("live") and not update:   # owner's /live pick: taken in-game at the live line
+        lines.append(f"Taken live {logged} at {p['live']}. Graded at this number.")
+    else:
+        lines.append(f"{'Updated' if update else 'Logged'} {logged}. The public card stays sealed until {UNLOCK_WORD.get(p.get('sport'), 'tip')}.")
     text = "\n".join(lines) + f"\n\nTonight's picks: {MEMBERS_URL}\nEvery pick, graded: https://morellosims.com/ledger/nba/\n"
     note = (f'<img src="cid:{NOTE_CID}" width="520" alt="{p.get("pick_text")} {_odds(p)}, confidence {p.get("conf")}" '
             'style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:18px;margin:0 0 20px">') if with_note else ""
@@ -276,7 +280,8 @@ def message(p, when_label, with_note=False, update=None):
         f'<div style="font-size:30px;font-weight:700;margin:14px 0 4px">{p.get("pick_text")} {_odds(p)}</div>'
         f'<div style="font-size:16px">{p.get("matchup")}' + (f' · {when_label}' if when_label else '') + '</div>'
         f'<div style="font:15px/1.6 Arial,sans-serif;margin-top:12px">{_stake_txt(p)}' + ('' if update else f' · confidence {p.get("conf")}/10')
-        + (f'<br>The sim: {sim}' if sim and not update else '') + f'<br>{"Updated" if update else "Logged"} {logged}.</div>'
+        + (f'<br>The sim: {sim}' if sim and not update else '') + (f'<br>Taken live {logged} at {p["live"]}. Graded at this number.' if p.get("live") and not update
+           else f'<br>{"Updated" if update else "Logged"} {logged}.') + '</div>'
         f'<a href="{MEMBERS_URL}" style="display:inline-block;margin-top:20px;background:#14743C;color:#fff;'
         'padding:12px 20px;text-decoration:none;font:600 15px Arial,sans-serif">Open tonight\'s picks</a>'
         '<div style="font:12px/1.5 Arial,sans-serif;color:#5E6B66;margin-top:24px">Every pick is graded in public at '

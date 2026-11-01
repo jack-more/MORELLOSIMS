@@ -8,20 +8,25 @@ Rules (brand promise: nothing is deleted, nothing is restated after the fact):
     inject_pick.py and is never recomputed from confidence later.
   * A pick counts only if `captured_at` is before tip-off. Grading voids any
     pick whose capture time is missing or not before tip.
+  * Live picks (2026-11-01, owner's /live): a pick on a game already in
+    progress, logged at the live line with the game state at capture in the
+    `live` column ("Q1 9:41, MEM 4-9 MIN"). It counts if it was captured after
+    tip and within LIVE_WINDOW of it, and is graded at that live line.
 """
 
 import csv
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 CSV_FIELDS = [
     "date", "matchup", "side", "type", "risk", "result", "profit", "odds",
     "home_score", "away_score", "closing_line", "closing_odds",
-    "captured_at", "tip_at", "void_reason",
+    "captured_at", "tip_at", "void_reason", "live",
 ]
 
 VOID = "V"
 SETTLED = ("W", "L", "P")
+LIVE_WINDOW = timedelta(hours=3)   # a live pick is logged within this long after tip
 
 
 # Seal mode (scripts/picks_store.py): a pending row whose game has not tipped
@@ -119,11 +124,20 @@ def latest_safe_tip(date_iso: str) -> datetime:
 
 
 def capture_check(row: dict, tip_utc: str | None = None) -> str | None:
-    """None if the pick was captured before tip-off, else the void reason."""
+    """None if the pick was captured before tip-off (a live pick: after tip,
+    within LIVE_WINDOW of it), else the void reason."""
     cap = parse_ts(row.get("captured_at"))
     if cap is None:
         return "no pregame capture record (captured_at missing)"
     tip = parse_ts(tip_utc) or parse_ts(row.get("tip_at"))
+    if (row.get("live") or "").strip():
+        if tip is None:
+            return "live pick without a tip time"
+        if cap < tip:
+            return f"live pick captured_at {row['captured_at']} before tip {tip.isoformat()}"
+        if cap > tip + LIVE_WINDOW:
+            return f"live pick captured_at {row['captured_at']} more than {LIVE_WINDOW} after tip {tip.isoformat()}"
+        return None
     if tip is None:
         tip = latest_safe_tip(row["date"])
         if cap >= tip:

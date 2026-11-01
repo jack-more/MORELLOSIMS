@@ -115,8 +115,11 @@ def grade_pick(side_text, pick_type, matchup, home_score, away_score, ml_odds=No
             return "P", 0.0
 
 
-def inject(matchup, side_text, risk=50, date_str=None, ml_odds=None, force=False):
-    """Inject a pick into picks.csv, auto-grading if game is final."""
+def inject(matchup, side_text, risk=50, date_str=None, ml_odds=None, force=False, live=None):
+    """Inject a pick into picks.csv, auto-grading if game is final.
+
+    live: the game state at capture ("Q1 9:41, MEM 4-9 MIN") for a pick taken
+    on a game in progress at the live line (utils.ledger.capture_check)."""
     if date_str is None:
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -186,7 +189,7 @@ def inject(matchup, side_text, risk=50, date_str=None, ml_odds=None, force=False
         "date": date_str, "matchup": matchup, "side": side, "type": pick_type,
         "risk": risk, "result": result, "profit": profit, "odds": odds_val,
         "home_score": home_score, "away_score": away_score,
-        "captured_at": captured_at, "tip_at": tip_at,
+        "captured_at": captured_at, "tip_at": tip_at, "live": live or "",
     }
     void_reason = capture_check(row, tip_at or None)
     if (score_data or {}).get("status") == "final" and not void_reason:

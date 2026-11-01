@@ -30,6 +30,7 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -43,13 +44,17 @@ LEGACY = os.path.join(REPO, "mlbsim", "posted_cards.json")
 # owner stake changes after a pick went out: [{"ref": state_ref, "was": "2u to win", "why": ..., "done": ...}]
 RESTAKE = os.path.join(REPO, "ops", "state", "restake.json")
 OUT = os.path.join(REPO, "posters", "v2")
-ET = timezone(timedelta(hours=-4))
+ET = ZoneInfo("America/New_York")   # was a fixed -4: wrong by an hour from November to March
 MIN_CONF = 6   # same floor as capture_picks.MIN_TRACKED_CONF_GRADE
 # The owner is the guard (2026-10-22): from this date a pick reaches members (page,
 # email, premium channel) only after Jack taps Send on its DM. One he holds, or never
 # sends before tip, is voided at grading (nba_pipeline/scripts/grade_picks.release_check).
 GATE_FROM = "2026-10-23"
 UNLOCK_WORD = {"nba": "tip", "nfl": "kickoff"}
+# The owner's /live picks (2026-11-01): taken on a game in progress at the live line, sent
+# by the command itself, delivered to members up to this long after tip
+# (nba_pipeline/utils/ledger.LIVE_WINDOW, the window grading accepts).
+LIVE_WINDOW = timedelta(hours=3)
 PREMIUM = os.environ.get("TELEGRAM_PREMIUM_CHANNEL_ID", "").strip()
 
 
@@ -123,6 +128,25 @@ def gap(p):
         return None
 
 
+def is_live(p):
+    """An owner /live pick: taken in-game at the live line (p["live"] is the game state then)."""
+    return bool(str(p.get("live") or "").strip())
+
+
+def when_label(p):
+    """'7:30 PM ET' for a pregame pick; 'LIVE · Q1 9:41, MEM 4-9 MIN' for a live one."""
+    return f"LIVE · {p['live']}" if is_live(p) else picks_store.start_label(p)
+
+
+def deliverable(p, now=None):
+    """Members may still get this pick: before tip, or inside the live window for a live pick."""
+    start = picks_store.start_time(p)
+    now = now or datetime.now(timezone.utc)
+    if start is None or now < start:
+        return True
+    return is_live(p) and now < start + LIVE_WINDOW
+
+
 def gated(p):
     return p.get("sport") == "nba" and (p.get("date") or "") >= GATE_FROM
 
@@ -135,6 +159,11 @@ def released(st, p):
 def dm_text(p):
     sim = p.get("sim_projection") or ""
     g = gap(p)
+    if is_live(p):
+        return (f"🔴 LIVE {p['sport'].upper()} PICK · {p['live']}\n"
+                f"{p['pick_text']} {odds_str(p)} · {p.get('matchup')}\n"
+                f"Risk {p.get('units')} $PP ({float(p.get('units') or 0) / 25:g}u)\n"
+                "Sent with /live: members have it (page, email, channel). It's graded at this live number.")
     head = (f"🚨 NEW {p['sport'].upper()} PICK · C{p.get('conf')}\n"
             f"{p['pick_text']} {odds_str(p)} · {p.get('matchup')} · {p.get('game_time') or ''}\n"
             f"Risk {p.get('units')} $PP ({float(p.get('units') or 0) / 25:g}u)" + (f" · Sim {sim}" if sim else "")
@@ -155,9 +184,14 @@ def decide(ref, send):
     p.setdefault("sport", "nba")
     name = f"{p.get('pick_text') or 'the pick'} ({p.get('matchup')})"
     start = picks_store.start_time(p)
-    if start is not None and datetime.now(timezone.utc) >= start:
-        return f"Too late: {name} has tipped. It stays off the members page and won't count."
     st = load(STATE, {})
+    if is_live(p):
+        if not send and released(st, p):
+            return f"{name} went out live; members have it, so it stays on the ledger."
+        if not deliverable(p):
+            return f"Too late: {name} is past the live window. It won't count."
+    elif start is not None and datetime.now(timezone.utc) >= start:
+        return f"Too late: {name} has tipped. It stays off the members page and won't count."
     key = "approved" if send else "held"
     st.setdefault(key, []).append(f"{picks_store.state_ref(p['id'])}|{datetime.now(timezone.utc).isoformat()}")
     if send:   # a Hold after a Send takes it back off the list, and the other way round
@@ -175,6 +209,11 @@ def decide(ref, send):
 def premium_text(p):
     """Member post. First line carries no side (dry runs print it to public logs)."""
     sim = p.get("sim_projection") or ""
+    if is_live(p):
+        return (f"MEMBERS · {p['sport'].upper()} · {p.get('matchup')} · LIVE\n"
+                f"{p['pick_text']} {odds_str(p)} · {float(p.get('units') or 0) / 25:g}u\n"
+                f"Taken live {datetime.now(ET).strftime('%-I:%M %p ET')} at {p['live']}. "
+                "Graded at this number.")
     when = p.get("game_time") or picks_store.start_label(p)
     return (f"MEMBERS · {p['sport'].upper()} · {p.get('matchup')}" + (f" · {when}" if when else "") + "\n"
             f"{p['pick_text']} {odds_str(p)} · {float(p.get('units') or 0) / 25:g}u\n"
@@ -229,7 +268,7 @@ def run(dry=False):
         ref = picks_store.state_ref(pid)  # NBA ids name the side: hashed in committed state under seal mode
         if readable and not picks_store.ref_in(st["dm"], pid):
             button = [[("📣 Post to X unblurred", f"xopen:{pid}")]]
-            if gated(p):
+            if gated(p) and not is_live(p):   # /live sent it already
                 button = [[("✅ Send to members", f"send:{ref}"), ("❌ Hold", f"hold:{ref}")]] + button
             ok = False
             try:
@@ -255,7 +294,7 @@ def run(dry=False):
         # the members page first, then the inbox: the email links to the page
         if readable and ok_members and member_delivery.enabled() and not picks_store.ref_in(st["site"], pid):
             try:
-                if member_delivery.publish(p, picks_store.start_label(p), dry=dry):
+                if member_delivery.publish(p, when_label(p), dry=dry):
                     st["site"].append(ref)
             except Exception as e:
                 # Google's reason (role missing, API disabled, no database) and
@@ -267,20 +306,20 @@ def run(dry=False):
                     print(f"  WARN member page: service account {who} (project {proj}) needs "
                           f"Cloud Datastore User on the Firestore project")
         # every member gets each pick once, including members who join after
-        # it first went out, until the game starts (email_to: "ref|recipient")
-        start = picks_store.start_time(p)
-        live = start is None or datetime.now(timezone.utc) < start
-        if readable and live and member_delivery.email_enabled() and picks_store.ref_in(st["site"], pid):
+        # it first went out, until the game starts (a live pick: through the
+        # live window) (email_to: "ref|recipient")
+        if readable and deliverable(p) and member_delivery.email_enabled() and picks_store.ref_in(st["site"], pid):
             try:
                 had = [e.split("|", 1)[1] for e in st["email_to"] if e.split("|", 1)[0] == ref]
-                sent = member_delivery.email(p, picks_store.start_label(p), dry=dry, skip=had)
+                sent = member_delivery.email(p, when_label(p), dry=dry, skip=had)
                 if sent is not None:
                     st["email_to"] += [f"{ref}|{k}" for k in sent]
                     if not picks_store.ref_in(st["email"], pid):
                         st["email"].append(ref)
             except Exception as e:
                 print(f"  WARN member email {p.get('matchup')}: {type(e).__name__}")
-        if not picks_store.ref_in(st["x_sealed"], pid) and not picks_store.ref_in(st["x_open"], pid):
+        # a sealed card reads "logged before the game": none for a live pick
+        if not is_live(p) and not picks_store.ref_in(st["x_sealed"], pid) and not picks_store.ref_in(st["x_open"], pid):
             try:
                 path = card_path(p, sealed=True)
                 if post_to_x(x_caption(p), Path(path), dry_run=dry):
@@ -353,7 +392,8 @@ def open_on_x(pid, dry=False):
         return "pick not found"
     from post_social_daily import post_to_x
     cap = (f"{p['pick_text']} {odds_str(p)} · C{p.get('conf')} · {p.get('matchup')}\n"
-           f"Logged before the game. Every pick → morellosims.com")
+           + (f"Taken live at {p['live']}. " if is_live(p) else "Logged before the game. ")
+           + "Every pick → morellosims.com")
     try:
         images = [Path(card_path(p))]
     except (Exception, SystemExit) as e:

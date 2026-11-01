@@ -237,6 +237,10 @@ def csv_row_to_pick(row: dict, meta_idx: dict) -> dict | None:
         "pl": pl,
         "captured_at": (row.get("captured_at") or "").strip() or None,
         "void_reason": (row.get("void_reason") or "").strip() or None,
+        # owner's /live pick: game state when it was taken at the live line
+        "live": (row.get("live") or "").strip() or None,
+        # and its tip (it's never sealed, so it has no unlocks_at): pick_alerts' live window
+        **({"tip_at": (row.get("tip_at") or "").strip() or None} if (row.get("live") or "").strip() else {}),
         # in-memory only (picks_store strips "_" keys): tip time, so seal
         # mode knows when this pick unlocks
         "_starts_at": (row.get("tip_at") or "").strip() or None,
