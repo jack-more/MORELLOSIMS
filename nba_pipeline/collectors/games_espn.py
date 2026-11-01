@@ -104,7 +104,7 @@ def fetch_espn_events(date: datetime) -> list[dict] | None:
     Returns None when ESPN could not be reached (callers fall back to the DB),
     else a list of dicts with keys: event_id, competition_type, game_date,
     home_abbr, away_abbr, home_score, away_score, completed, state,
-    season_type, tip_utc (ISO UTC).
+    detail (ESPN's short clock text), season_type, tip_utc (ISO UTC).
     """
     data = espn_get_json(f"{SCOREBOARD_URL}?dates={date.strftime('%Y%m%d')}")
     if data is None:
@@ -157,6 +157,7 @@ def fetch_espn_events(date: datetime) -> list[dict] | None:
             "away_score": away_score,
             "completed": bool(status.get("completed", False)),
             "state": status.get("state", ""),
+            "detail": status.get("shortDetail", "") or "",   # "Q2 5:12", "Halftime", "Final"
             "season_type": int(season_type) if season_type is not None else None,
             "tip_utc": tip_utc,
         })

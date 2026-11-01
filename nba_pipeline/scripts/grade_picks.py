@@ -35,7 +35,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from config import STARTING_BANKROLL
 from collectors.games_espn import fetch_scores_for_grading, score_key
 from utils.ledger import (
-    CSV_FIELDS, VOID, SETTLED, read_rows, write_rows, capture_check,
+    CSV_FIELDS, LIVE_WINDOW, VOID, SETTLED, read_rows, write_rows, capture_check,
     compute_profit, parse_ts, row_odds,
 )
 
@@ -163,6 +163,8 @@ def attach_closing_line(pick, closing):
     snapshot. Spread lines are stored from the picked side's perspective
     so CLV is simply pick line minus closing line.
     """
+    if (pick.get("live") or "").strip():
+        return   # taken in-game at the live line: the pregame close says nothing about it
     row = closing.get((pick.get("date"), pick.get("matchup")))
     if not row:
         return
@@ -211,12 +213,17 @@ def release_check(pick):
     pid = _IDS.get((pick["date"], pick["matchup"], pick["side"], pick.get("type") or "spread")) or \
         f"{pick['date']}-nba-{away}-{home}-{pick.get('type') or 'spread'}-{pick['side'].split()[0]}".lower()
     tip = parse_ts(pick.get("tip_at"))
+    # a live pick (owner's /live) is sent in-game, inside the same window it was logged in
+    live = bool((pick.get("live") or "").strip())
+    by = tip + LIVE_WINDOW if live and tip is not None else tip
     st = pick_alerts.load(pick_alerts.STATE, {})
     for e in st.get("approved", []):
         ref, _, at = e.partition("|")
         sent = parse_ts(at)
-        if picks_store.ref_matches(ref, pid) and (tip is None or (sent is not None and sent < tip)):
+        if picks_store.ref_matches(ref, pid) and (by is None or (sent is not None and sent < by)):
             return None
+    if live:
+        return "NOT RELEASED: the owner didn't send this live pick to members"
     return "NOT RELEASED: the owner didn't send it to members before tip"
 
 
