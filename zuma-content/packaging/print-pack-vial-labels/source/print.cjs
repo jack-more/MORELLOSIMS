@@ -4,7 +4,7 @@ const { chromium } = require('playwright'); const fs = require('fs'); const path
 const OUT = path.join(__dirname, '..', 'printpack');
 const P = [['01','metabolic','RT-3','Retatrutide','10 mg','RT3'],['02','metabolic','TZ-2','Tirzepatide','15 mg','TZ2'],['04','endocrine','TESAMORELIN','Tesamorelin','10 mg','TES'],
  ['05','dermal','GHK-Cu','Copper peptide GHK-Cu','50 mg','GHK'],['06','metabolic','MOTS-c','MOTS-c','10 mg','MOT'],['07','endocrine','CJC+IPA','CJC-1295 + Ipamorelin','10 mg','CJI'],
- ['08','metabolic','NAD+','NAD+','500 mg','NAD'],['09','tissue','BPC+TB','BPC-157 + TB-500','10 mg','BPT'],['10','dermal','GHK+BT','GHK-Cu + BPC + TB','70 mg','GBT'],
+ ['08','metabolic','NAD+','NAD+','500 mg','NAD'],['09','tissue','BPC+TB','BPC-157 + TB-500','10 mg','BPT'],['10','dermal','KLOW','GHK-Cu + BPC + TB + KPV','80 mg','KLW'],
  ['11','neuro','SELANK','Selank','10 mg','SEL'],['12','neuro','SEMAX','Semax','10 mg','SMX']];
 const only = process.argv.slice(2);
 (async () => {

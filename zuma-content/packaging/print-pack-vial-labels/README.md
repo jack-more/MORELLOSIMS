@@ -2,7 +2,7 @@
 
 Plain clear 3 mL vial, Oxblood flip-off cap, tricolour wrap label. Eleven SKUs.
 
-**Send to the printer:** `ZUMA-vial-label-print-spec-Rev1.pdf` plus everything in `print/`.
+**Send to the printer:** `ZUMA-vial-label-print-spec-Rev2.pdf` plus everything in `print/`.
 
 - `print/zuma-label-NN-print.pdf`: one per SKU. Page 46 × 23 mm = 43 × 20 mm trim + 1.5 mm bleed. No crop marks.
 - `art/zuma-label-NN-art.png`: the same art as PNG, 3080 × 1540 px (1702 dpi), for printers that want images.
