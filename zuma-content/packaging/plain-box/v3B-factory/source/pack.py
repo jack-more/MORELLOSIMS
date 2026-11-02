@@ -22,6 +22,12 @@ src = src.replace("wordmark(W / 2 - 4.2, 35.2, 8.4, SNOW)", "wordmark(W / 2 - 6.
 src = src.replace("t(W / 2, 39.05, 2.0 * PT, 'FOR LABORATORY RESEARCH USE ONLY'", "t(W / 2, 39.2, 2.0 * PT, 'FOR LABORATORY RESEARCH USE ONLY'")
 src = src.replace("with the zuma tides wordmark in Snow", "with the ZUMA wordmark in Snow")
 src = src.replace("OUT = S + '/plainbox/v3'", "OUT = '" + PK + "'")
+# no dose on the box: the dose lives on the vial label, so one box serves every size of a compound
+src = src.replace("    g.append(t(cx, y + h - 2.2, 3.1 * PT, dose.upper(), 'IBM Plex Mono', 600, SNOW, anchor='middle', ls=0.06))\n", "")
+src = src.replace("f'{name}  ·  {dose}'", "f'{name}'").replace("f'{name} · {dose}'", "f'{name}'")
+src = src.replace("{title.upper()} · {p[0]} {p[1].upper()} ·", "{title.upper()} · {p[0]} ·")
+src = src.replace("g.append(t(cx, y + h - 4.1, s * PT, name,", "g.append(t(cx, y + h - 2.6, s * PT, name,")   # the name drops into the space the dose left
+assert 'dose.upper()' not in src and "{dose}'" not in src
 G = {'__name__': 'plainart'}
 exec(compile(src, 'plainart', 'exec'), G)
 WMJ = json.load(open('/home/user/MORELLOSIMS/zuma-content/brand/wordmark/tides.json'))
@@ -32,10 +38,12 @@ G['t'] = t_out
 front, right, left, back, crest, AREAS, PRODUCTS, OX, SNOW = (G[k] for k in ('front', 'right', 'left', 'back', 'crest', 'AREAS', 'PRODUCTS', 'OX', 'SNOW'))
 G['top'] = lambda p: f'<rect width="20" height="20" fill="{AREAS[p[2]][1]}"/>' + crest(5.5, 5.7, 9, SNOW)
 G['DIRS'] = {'B': G['mk']('B')}
+# BAC water's 10 mL vial (about 24 mm wide) does not fit the 20 mm box: it is not boxed
+BOX = [p for p in PRODUCTS if p[0] != 'BAC WATER']
 
-# die geometry: identical to window Rev F (window/final-F/src/gen.py) minus the window
-FG = open(S + '/window/final-F/src/gen.py').read()
-BOT = re.search(r"BOT = \((.*?)\)\n", FG, re.S).group(1); BOT = ''.join(re.findall(r"'([^']*)'", BOT))
+# die geometry: identical to window Rev F minus the window. Auto-lock bottom (schematic), as in the Rev F generator
+BOT = ('M17,80 L17,90 L21,94 L37,94 L37,80 L39,88 L43,88 L43,91 L51,91 L51,88 L55,88 L57,80 '
+       'L57,90 L61,94 L77,94 L77,80 L79,88 L83,88 L83,91 L91,91 L91,88 L95,88 L97,80')
 CUTP = ('M17,40 L10,42 L10,78 L17,80 M17,40 L18.5,31 L35.5,31 L37,40 M57,40 L58.5,31 L75.5,31 L77,40 M37,40 L57,40 '
         'M77,40 L77,20 L78,20 Q78,10 81,10 L93,10 Q96,10 96,20 L97,20 L97,40 L97,80 ' + BOT)
 CREASEL = [(17,40,17,80),(37,40,37,80),(57,40,57,80),(77,40,77,80),(17,40,37,40),(57,40,77,40),(77,40,97,40),(77,20,97,20),
@@ -46,7 +54,7 @@ def layer(i, label, inner): return f'<g id="{i}" inkscape:label="{label}" inksca
 def cut(): return layer('CUT', 'CUT 裁切', f'<path d="{CUTP}" fill="none" stroke="#000" stroke-width="0.25"/>')
 def crease(): return layer('CREASE', 'CREASE 压痕', ''.join(f'<line x1="{a}" y1="{b}" x2="{c}" y2="{d}" stroke="{CRED}" stroke-width="0.25" stroke-dasharray="1.2 0.8"/>' for a, b, c, d in CREASEL))
 def panel(fn, p, x): return f'<svg x="{x}" y="40" width="20" height="40" viewBox="0 0 20 40" overflow="visible">{fn(p, "B")}</svg>'
-def slug(p): return re.sub(r'[^a-z0-9]+', '-', (p[0] + '-' + p[1]).lower()).strip('-')
+def slug(p): return re.sub(r'[^a-z0-9]+', '-', p[0].lower()).strip('-')
 
 def art(p):
     name, dose, area, full = p; col = AREAS[area][1]
@@ -60,7 +68,7 @@ def art(p):
     ko = f'<g transform="rotate(180 87 30)">{crest(87 - 4.5, 30 - 4.5 * 0.96, 9, SNOW)}</g>'
     pr.append(ko)
     notes = (f'<g font-family="Helvetica, Arial" font-size="1.6" fill="#555">'
-             f'<text x="10" y="6">ZUMA plain carton v3 B · {name} {dose} · {AREAS[area][0]} · outside print 外面印刷 · 1:1 mm · bleed 出血 1 mm</text>'
+             f'<text x="10" y="6">ZUMA plain carton v3 B · {name} · {AREAS[area][0]} · no dose on the box 盒上不印规格 · outside print 外面印刷 · 1:1 mm · bleed 出血 1 mm</text>'
              f'<text x="10" y="100">CMYK 4c + Oxblood #6E1C2A (match) · top crest knocked out to white board, no foil 顶盖花徽留白（不印、不烫） · all type outlined 文字已转曲</text></g>')
     return (f'<svg {NS} viewBox="{VB}" width="107mm" height="104mm">'
             + layer('PRINT_CMYK', 'PRINT 印刷 (CMYK + Oxblood)', ''.join(pr))
@@ -89,10 +97,10 @@ def inside(area):
 if __name__ == '__main__':
     os.makedirs(PK + '/svg', exist_ok=True)
     open(PK + '/svg/plainB-dieline-master.svg', 'w').write(master())
-    for p in PRODUCTS: open(PK + f'/svg/plainB-art-{slug(p)}.svg', 'w').write(art(p))
-    for a in AREAS: open(PK + f'/svg/plainB-inside-{a}.svg', 'w').write(inside(a))
+    for p in BOX: open(PK + f'/svg/plainB-art-{slug(p)}.svg', 'w').write(art(p))
+    for a in sorted({p[2] for p in BOX}): open(PK + f'/svg/plainB-inside-{a}.svg', 'w').write(inside(a))
     open(PK + '/look-B.html', 'w').write(G['look']('B')); open(PK + '/flat-B.html', 'w').write(G['flat']('B'))
     QTY = {'RT-3': 300}   # first run: 3x for RT-3 (30 of 130 vials in order #1), 100 for every other version
-    json.dump([dict(name=p[0], dose=p[1], area=AREAS[p[2]][0], hex=AREAS[p[2]][1], full=p[3], qty=QTY.get(p[0], 100), file=f'plainB-art-{slug(p)}.svg') for p in PRODUCTS],
+    json.dump([dict(name=p[0], area=AREAS[p[2]][0], hex=AREAS[p[2]][1], full=p[3], qty=QTY.get(p[0], 100), file=f'plainB-art-{slug(p)}.svg') for p in BOX],
               open(PK + '/versions.json', 'w'), indent=1)
-    print('ok', len(PRODUCTS), 'versions')
+    print('ok', len(BOX), 'versions')
