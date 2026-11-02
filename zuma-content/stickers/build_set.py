@@ -35,7 +35,7 @@ cards.append(('family', 'The family · all six areas', frame('family', f'<div cl
 
 css = f'''body{{margin:0;background:#E3DACD;font-family:Outfit,sans-serif}} .grid{{display:flex;flex-wrap:wrap;gap:70px 60px;padding:70px}}
 figure{{margin:0}} figcaption{{font:600 20px 'IBM Plex Mono';color:#7A5A60;margin-top:18px;letter-spacing:.06em;text-transform:uppercase}}
-.cut{{background:#fff;padding:22px;border-radius:72px;box-shadow:0 26px 50px rgba(60,30,20,.22)}}
+.cut{{border-radius:50px;box-shadow:0 26px 50px rgba(60,30,20,.22)}}
 .st{{position:relative;width:700px;height:1000px;border-radius:50px;overflow:hidden;background:{STUCCO}}}
 .win{{position:absolute;left:0;top:0;width:100%;height:100%}} .win canvas{{width:100%;height:100%;display:block}}
 .fam{{display:flex;gap:0}} .strip{{flex:1;height:100%}}
