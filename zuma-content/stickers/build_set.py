@@ -5,6 +5,7 @@ import json, os, base64
 H = os.path.dirname(os.path.abspath(__file__))
 defs = open('/home/user/MORELLOSIMS/zuma-content/brand/logo-defs.svg').read()
 qr = json.load(open(os.path.join(H, 'qr.json')))
+WM = json.load(open('/home/user/MORELLOSIMS/zuma-content/brand/wordmark/tides.json'))   # the custom ZUMA wordmark, 418 x 100
 OX, STUCCO = '#6E1C2A', '#EFE4D2'
 AREAS = [  # key, area, vial render, plant behind, seeds
     ('metabolic', 'Metabolic research', '01', 'palm', 3, 5), ('dermal', 'Dermal research', '05', 'bamboo', 11, 4),
@@ -18,8 +19,9 @@ def qrsvg(size):
 
 def frame(key, window):
     return (f'<div class="cut" data-key="{key}"><div class="st">{window}'
-            f'<div class="band"><svg class="logo"><use href="#zuma-logo"/></svg><div class="url">zumatides.com</div>'
-            f'<div class="qr">{qrsvg(132)}</div></div></div></div>')
+            f'<div class="qr">{qrsvg(118)}</div>'
+            f'<div class="band"><svg class="wm" viewBox="0 0 {WM["zuma_w"]} 100" preserveAspectRatio="none"><path fill="#FCFBF8" fill-rule="evenodd" d="{WM["zuma"]}"/></svg>'
+            f'<div class="url"><span>ZUMATIDES.COM</span></div></div></div></div>')
 
 cards = []
 for key, name, vial, behind, seed, bseed in AREAS:
@@ -38,10 +40,10 @@ figure{{margin:0}} figcaption{{font:600 20px 'IBM Plex Mono';color:#7A5A60;margi
 .win{{position:absolute;left:0;top:0;width:100%;height:100%}} .win canvas{{width:100%;height:100%;display:block}}
 .fam{{display:flex;gap:0}} .strip{{flex:1;height:100%}}
 .vial{{position:absolute;width:620px;left:80px;top:40px;transform:rotate(6deg);filter:drop-shadow(-22px 34px 30px rgba(30,10,10,.38))}}
-.band{{position:absolute;left:0;right:0;bottom:0;height:226px;background:{OX};padding:40px 0 0 54px;color:#FCFBF8}}
-.band .logo{{display:block;width:250px;height:64px;color:#FCFBF8}}
-.band .url{{font:900 54px/1 Outfit;letter-spacing:-.03em;margin-top:24px}}
-.band .qr{{position:absolute;right:42px;top:38px;background:#FCFBF8;border-radius:14px;padding:12px}}
+.band{{position:absolute;left:0;right:0;bottom:0;height:262px;background:{OX};padding:42px 46px 0}}
+.band .wm{{display:block;width:608px;height:145.5px}}
+.band .url{{margin-top:20px;font:800 27px/1 Outfit;color:#E9C9CE;letter-spacing:1.17em;white-space:nowrap;margin-right:-1.17em}}
+.qr{{position:absolute;right:0;top:0;background:#FCFBF8;padding:16px 16px 14px 18px;border-bottom-left-radius:4px;box-shadow:-6px 8px 18px rgba(40,10,10,.18)}}
 body.export{{background:transparent}} body.export .grid{{padding:0;gap:0}} body.export figcaption{{display:none}} body.export .cut{{box-shadow:none}}'''
 html = f'''<!doctype html><html><head><meta charset="utf-8"><title>ZUMA stickers · Post Spanish set</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@900&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
