@@ -136,6 +136,42 @@ There's no presenter in the first round, just voice-over or supers.
 
 **Needs:** a working prototype to prove it really self-rights. Test before scripting.
 
+
+### G · The Grove (the world, animated, flagship series)
+**The lore.** YOJO doesn't come from a factory in this world. The pods grow on trees.
+- Soft, chalk-colored, egg-shaped pods hang in a floating orchard, blank and unfinished.
+- A pod only becomes YOJO when someone plucks it and drives the chrome nail (the knurled head) into it.
+- Applying it keeps you looking fresh, which is what lets you stay in the game season after season.
+
+**Why it's ours:**
+- It turns the product's real gesture (head in, twist, press) into the core game action.
+- It turns skins into seasonal drops that fit a battle-pass structure.
+- It gives every future product a place in the world: new trees, new pods, new seasons.
+
+**Beats** (the 30–45 s pilot):
+1. **The Grove:** a wide shot of the orchard at golden hour. Pods ripen and glow from inside.
+2. **Pluck:** an original hero character climbs and picks a ripe Chalk Sky pod.
+3. **The nail:** a low hero angle. They drive the chrome head into the pod with a burst of blue light, and the blank pod becomes the finished vessel with YOJO over GHK-CU pressed in.
+4. **Twist and press:** the real gesture, one turn up, cream onto a fingertip.
+5. **Apply:** a dab on the cheekbone and a soft glow, like equipping a new skin.
+6. **The season tease:** another tree in the distance ripens in a new color. This is the next drop.
+
+**Characters.** Original only: our own cast in a stylized battle-royale look. No Fortnite characters, likenesses, weapons, emotes or logos; that's Epic's intellectual property. One way in later, if you want it: a licensed Fortnite collaboration, as a business deal with Epic.
+- Cast three or four heroes with distinct silhouettes.
+- Each hero "mains" one skin color, so the characters double as the colorway story.
+
+**Make:**
+- **The pilot:** a stylized 3D animation studio. Our product model drops straight in as the hero asset, so the vessel stays exact.
+- **The world look:** AI concept frames for lookdev only, because the product must come from the model.
+- **Cutdowns:** 6 s character loops for social, plus stills of each hero holding their pod.
+
+**Claims.** Keep "stay young" in the lore as game language, like staying in the game. On screen and in captions it's cosmetic only: fresh-looking, glowing, smoother-looking skin. Never "reverse aging" or "younger skin" as a product promise.
+
+**What it unlocks:**
+- seasonal drops told as harvests
+- collectible character and skin pairs
+- a reason to come back every season
+
 ## 5. Image library (season 1)
 
 | Set | Count | Ratios | Source |
