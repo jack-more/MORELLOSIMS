@@ -17,7 +17,7 @@ P = [
   rule(470, 680, 160),
   rule(470, 1840, 830, 3),
   t(470, 1866, 'For laboratory research use only.<br>Not for human or veterinary use.', 23),
-  t(470, 1950, 'ZUMA vacuum pack, 70 x 105 mm', 23),
+  t(470, 1950, 'ZUMA vacuum pack, 100 x 150 mm', 23),
   t(1010, 1866, 'Lot', 23), rule(1060, 1890, 240, 3),
   t(1010, 1912, 'Packed', 23), rule(1100, 1936, 200, 3),
 ]
