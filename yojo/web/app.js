@@ -80,7 +80,7 @@ const slotM = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.4 }
 const loading = document.getElementById('loading'); const bar = document.getElementById('loadbar');
 const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
 let headrig, cartridge, vessel;
-loader.load('assets/model/yojo.glb', (gltf) => {
+loader.load(canvas.dataset.model || 'assets/model/yojo.glb', (gltf) => {
   vessel = gltf.scene;
   vessel.traverse((o) => {
     if (!o.isMesh) return;
