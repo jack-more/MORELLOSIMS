@@ -97,10 +97,12 @@
     // the Oxblood band: the research-use sentence once, whole, centred on the front and clear of the cut at both ends
     T(x, 'FOR LABORATORY RESEARCH USE ONLY  \u00b7  NOT FOR HUMAN OR VETERINARY USE', FC, 1257,
       { size: 62, weight: 600, family: "'IBM Plex Mono', ui-monospace, monospace", fill: SNOW, align: 'center', ls: 5, maxW: 2640 });
-    // left side panel: a box left clear for the filler's inkjet (the lot number), and the code to the product's lot reports
+    // left side panel: a box left clear for the filler's inkjet (the lot number)
     x.fillStyle = SNOW; x.fillRect(290, 78, 760, 228); x.strokeStyle = OX; x.lineWidth = 5; x.strokeRect(290, 78, 760, 228);
     T(x, 'LOT', 318, 214, { size: 64, weight: 800, fill: OX, ls: 4 });
-    qr(x, p.url, 300, 404, 640, OX);
+    // the ZUMA star where the QR code was (the box and the bag carry the link to the lot reports)
+    { const m = document.createElement('canvas').getContext('2d'), h = 430, w = logo(m, 0, 0, h, OX, OX, 'zuma-mark');
+      logo(x, 620 - w / 2, 500, h, OX, OX, 'zuma-mark'); }
     // right side panel: the crest, the founding year, the form and how to keep it
     { const m = document.createElement('canvas').getContext('2d'), h = 430, w = logo(m, 0, 0, h, OX, OX, 'zuma-mark');
       logo(x, 2560 - w / 2, 380, h, OX, OX, 'zuma-mark'); }
