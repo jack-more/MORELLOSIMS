@@ -13,7 +13,7 @@ def seam(x1, y1, x2, y2, w=13, c=OX):
     return f'<div style="position:absolute;left:{x1}px;top:{y1 - w/2}px;width:{L:.0f}px;height:{w}px;background:{c};transform-origin:0 50%;transform:rotate({ang:.2f}deg)"></div>'
 def SEAMS(h): return f'<div class="fill" style="clip-path:polygon(222px 0,600px 0,600px 838px,222px 838px)">{h}</div>'
 def front(field, wmc=OX, line='RESEARCH, REFINED', extra=''):
-    return f'{field}{extra}{wm(730, wmc, TALL)}{side(line, wmc) if line else ""}{crest(96, wmc, CST)}{RUO(wmc if wmc == OX else "rgba(252,251,248,.85)")}'
+    return f'{field}{extra}{wm(730, wmc, TALL)}{side(line, wmc) if line else ""}{crest(96, wmc, CST)}{RUO(wmc)}'
 F = []
 # A · Two-faced: dermal on the front, metabolic on the back, same layout on both
 F.append(bag(front(f'<div class="fill">{lb("dermal", bars=0)}</div>' + bars('dermal')), 'A · Two-faced · front', 'One area on the front...'))
@@ -34,6 +34,6 @@ F.append(bag(front(C, OX, None), 'C · Patchwork', 'All six areas as cut panels;
 C2 = clip('metabolic', '0 0,600px 0,600px 300px,0 300px') + clip('dermal', '0 300px,600px 300px,600px 600px,0 600px') + clip('tissue', '0 600px,600px 600px,600px 900px,0 900px') + SEAMS(seam(0, 300, 600, 300) + seam(0, 600, 600, 600))
 F.append(bag(front(C2, OX, None), 'C · Bands', 'Calmer: three areas stacked, bars as the seams. Any three per order.'))
 html = f'''<!doctype html><html><head><meta charset="utf-8"><title>ZUMA mixed bag</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;800&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet"><style>{css4}</style></head><body>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;800&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet"><style>{css4}</style></head><body>
 <section><h2>POUCH · STYLE 10 · THE MIXED BAG</h2><div class="row">{''.join(F)}</div></section><script src="ombre.js"></script></body></html>'''
 open(os.path.join(H, 'bags5.html'), 'w').write(html); print('ok', len(F))
