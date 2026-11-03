@@ -39,3 +39,30 @@ for k, body in C.items():
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;800&display=swap" rel="stylesheet"><style>{CSS}</style></head>
 <body><script>if(location.search.includes('mask'))document.body.className='mask'</script><div class="pg">{body}</div><script src="ombre.js"></script></body></html>''')
 print('ok', list(C))
+
+# ---- four more ----
+import base64 as _b
+SEAL = 'data:image/png;base64,' + _b.b64encode(open('/home/user/MORELLOSIMS/zuma-content/stickers/print/zuma-sticker-seal-metabolic.png', 'rb').read()).decode()
+D = {}
+# 4 · Tinted film: the whole bag in translucent area colour (no underlay), the vial seen through it; wordmark and crest solid Oxblood
+D['tint'] = (f'<div class="ink" style="inset:0;background:#36B3E8;opacity:.42"></div>' + wm(440, 300, 520, OX) + crest(650, 160, 100, OX)
+             + sticker(440, 1650) + ruo(0, 1930, OX, 'center', 1400))
+# 5 · The window: the Lightbox printed solid all over, one clear window cut round the vial (a Lightbox tile with the glass left out)
+WIN = 'M470 760 H930 V1620 H470 Z'
+D['window'] = (f'<div class="base" style="inset:0;clip-path:path(evenodd,\'M0 0H1400V2100H0Z {WIN}\')"><canvas data-lb="metabolic" data-seed="3" data-cols="3" data-rows="5" data-bars="0" data-behind="palm" data-bseed="5" data-scale="2"></canvas></div>'
+               + f'<div class="ink" style="left:470px;top:760px;width:460px;height:860px;box-shadow:0 0 0 14px {OX}"></div>'
+               + wm(330, 330, 740, OX) + crest(1170, 150, 120, SNOW) + sticker(440, 1690) + ruo(0, 1950, OX, 'center', 1400))
+# 6 · Stickers only (after Hello Star): an unprinted clear bag; the round area seal and the compound tag do all the work; one line printed
+D['stickers'] = (f'<img class="base" src="{SEAL}" style="left:150px;top:330px;width:520px;height:520px;transform:rotate(-8deg);border-radius:50%">'
+                 + sticker(760, 1450).replace('class="base stk"', 'class="base stk" data-r="1"').replace('style="left:760px;top:1450px"', 'style="left:760px;top:1450px;transform:rotate(6deg)"')
+                 + ruo(0, 1930, OX, 'center', 1400))
+# 7 · The panel (after Maxema): a solid Lightbox panel nearly the size of the bag, the vial pressed into it, the wordmark stacked in Oxblood
+rows = ''.join(wm(160, 120 + i * 300, 900, OX) for i in range(5))
+D['panel'] = (f'<div class="base" style="left:90px;top:200px;width:1220px;height:1760px"><canvas data-lb="metabolic" data-seed="3" data-cols="3" data-rows="5" data-bars="0" data-behind="palm" data-bseed="5" data-scale="2"></canvas></div>'
+              + f'<div class="ink" style="left:90px;top:200px;width:1220px;height:1760px;opacity:.86">{rows}</div>'
+              + crest(1170, 240, 100, SNOW) + sticker(440, 1740) + ruo(0, 1990, OX, 'center', 1400))
+for k, body in D.items():
+    open(os.path.join(H, f'c-{k}.html'), 'w').write(f'''<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;800&display=swap" rel="stylesheet"><style>{CSS} img.base{{position:absolute}}</style></head>
+<body><script>if(location.search.includes('mask'))document.body.className='mask'</script><div class="pg">{body}</div><script src="ombre.js"></script></body></html>''')
+print('more', list(D))
