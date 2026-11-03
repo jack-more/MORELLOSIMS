@@ -187,6 +187,9 @@ def _caption(p):
     elif st == "loss":
         head = f"❌ {p['pick_text']} {pick_alerts.odds_str(p)} · {final}"
         tail = "Losses stay on the ledger too → morellosims.com"
+    elif st == "push":   # graded at the line: stake back (PHX +3 lost by 3, Nov 2)
+        head = f"➖ PUSH · {p['pick_text']} {pick_alerts.odds_str(p)} · {final}"
+        tail = "Pushes stay on the ledger too → morellosims.com"
     else:
         head = f"{p['pick_text']} {pick_alerts.odds_str(p)} · C{p.get('conf')} · {p.get('matchup')}"
         tail = "My slip. Every pick, wins and losses → morellosims.com"
