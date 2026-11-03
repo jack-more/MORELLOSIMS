@@ -62,10 +62,10 @@ _y0, _y1 = -L / 2 - VY, L / 2 - VY          # base end, cap end of the vial alon
 CRE = []
 for sx in (-1, 1):
     for sy, yy in ((-1, _y0), (1, _y1)):
-        for k in range(2):
-            ang = math.radians(_cr.uniform(25, 65)); dx, dy = sx * math.cos(ang), sy * math.sin(ang)
-            CRE.append((VX + sx * RAD * 0.9, yy, dx, dy, _cr.uniform(1.4, 2.8), _cr.uniform(0.06, 0.12)))
-    for k in range(2):   # along the long sides, out toward the seal
+        for k in range(1):
+            ang = math.radians(_cr.uniform(30, 60)); dx, dy = sx * math.cos(ang), sy * math.sin(ang)
+            CRE.append((VX + sx * RAD * 0.9, yy, dx, dy, _cr.uniform(1.0, 2.0) * (0.7 if RAD > 1 else 1), _cr.uniform(0.05, 0.09)))
+    for k in range(1):   # along the long sides, out toward the seal
         yy = _cr.uniform(_y0 + 0.6, _y1 - 0.6); ang = math.radians(_cr.uniform(-20, 20))
         CRE.append((VX + sx * RAD, yy, sx * math.cos(ang), math.sin(ang), _cr.uniform(1.0, 2.0), _cr.uniform(0.05, 0.08)))
 CW = float(os.environ.get('CW', '0.07'))
