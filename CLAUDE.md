@@ -2,6 +2,14 @@
 
 Read this before any ZUMA design, packaging, site or writing work.
 
+## Packaging decision (3 Nov 2026): ONE bag, ONE box, ONE colour
+
+- The founders want no colour SKUs in packaging. There is one vacuum bag and one box for every vial, both in the ZUMA grey.
+- **ZUMA grey is the ZUMA shop / family colour:** the grey Lightbox, light #E3E8ED, mid #9AA8B6, deep #3D4956, panel #4E6077. It was "Lab supplies · Stone"; there is no Lab supplies research area any more.
+- **Research colours are five:** Metabolic, Dermal, Endocrine, Tissue, Neuro. They live on the vial labels and the site, not on the packaging.
+- **The compound name goes on a sticker** (Snow, name in Oxblood) on the box front and on the bag. The box carries no compound name and no area line. Box: `zuma-content/packaging/one-box/`.
+- **The bag is "Lane" in grey:** clear vacuum film, the grey Lightbox as a solid strip down the left under the tall wordmark, and the crest, bar and type in Oxblood printed on clear film. Concepts: `zuma-content/packaging/vacuum-bag/clear-concepts/`.
+
 ## Approved and loved (do not drift from these)
 
 - **The plain box (carton v3 B).** The founders call these renders beautiful. They are the reference for every box image and every packaging decision.
