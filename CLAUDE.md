@@ -8,11 +8,12 @@ Read this before any ZUMA design, packaging, site or writing work.
 - **ZUMA grey is the ZUMA shop / family colour:** the grey Lightbox, light #E3E8ED, mid #9AA8B6, deep #3D4956, panel #4E6077. It was "Lab supplies · Stone"; there is no Lab supplies research area any more.
 - **Research colours are five:** Metabolic, Dermal, Endocrine, Tissue, Neuro. They live on the vial labels and the site, not on the packaging.
 - **The compound name goes on a sticker** (Snow, name in Oxblood) on the box front and on the bag. The box carries no compound name and no area line. Box: `zuma-content/packaging/one-box/`.
-- **The bag (current direction, 3 Nov 2026): the tinted bag, big ZUMA, in up to three tints: red, blue and grey.** The founders love it ("it's fire"). It replaces the grey "Lane" bag.
-  - Front sheet: clear film tinted in one colour over the whole front, semi-see-through so the vial shows. Printed solid in Snow on a white underlay: the tall ZUMA up the left, the crest and zumatides.com top right, "Research peptides, tested by lot", the leaflet copy on its side down the right edge, the research-use line, Lot and Packed lines. No compound sticker on the bag.
-  - Back sheet: one neutral Lightbox for every tint (the tiles boosted, the palm shadow over them). The tint gives it its colour, so changing colour only changes the front plate.
-  - Renders, flats and the rail shot: `zuma-content/packaging/vacuum-bag/tinted/`. Source: `tinted/source/` (`art_big.py` for the front art, `bag3.py` builds the film without a cloth sim, so it stays crisp; `hang.py` is the rail scene).
-  - Open: the 10 mL vials (BAC water, NAD+) are 64 mm tall in the 105 mm bag and run into the print. Supplier plates are not built yet.
+- **The bag: APPROVED 4 Nov 2026 ("this is perfect"). The tinted bag, big ZUMA, split layers, 100 x 150 mm, holds two vials, in three tints: red, blue and grey.** This replaces the colour-free one-bag rule above for the bag; the box rule is unchanged. Reference render: `zuma-content/packaging/vacuum-bag/tinted/split-red-blue-grey-two-vials.jpg`.
+  - Size: 100 x 150 mm outside, 5 mm seals (the supplier, Alibaba listing 1600480585221, makes custom sizes). The same 2:3 shape as the old 70 x 105 bag, so the art scales without a redesign. It holds two 3 mL vials, or a 3 mL and a 10 mL, or two 10 mL (tight: the 10 mL pair touches the copy).
+  - Front sheet: clear film printed with that tint's own Lightbox as see-through ink (the tiles and the darker pools sit on the front; red = the Oxblood field, blue = Metabolic, grey = ZUMA grey). Printed solid in Snow on a white underlay: the tall ZUMA up the left, the crest and zumatides.com top right, "Research peptides, tested by lot", the leaflet copy on its side down the right edge, the research-use line, Lot and Packed lines, "ZUMA vacuum pack, 100 x 150 mm". No compound sticker on the bag.
+  - Back sheet: the palm shadow only, on light neutral, the same for every tint.
+  - Plates in `tinted/source/`: `front-tint-red|blue|grey.png` (the Lightbox ink), `back-sheet-shadow.png`, the Snow art from `art_big.py`. Renders: `bag4.py` (several vials, no cloth sim, crisp film), `hang.py` (rail scene).
+  - Clear option still open: fully clear with Oxblood print looked strongest (`tinted/clear-three-versions.jpg`). Supplier print plates are not built yet.
 
 ## Approved and loved (do not drift from these)
 
