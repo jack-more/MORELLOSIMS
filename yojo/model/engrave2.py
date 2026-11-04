@@ -5,7 +5,7 @@ import math, os, numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 rng = np.random.default_rng(5)
 PX, SS = 40, 2; Wmm, Hmm = 113.1, 7.8; W, H = int(Wmm * PX), int(Hmm * PX); S = PX * SS
-B = 1.15; yc = Hmm / 2
+B = float(os.environ.get('SB', '1.7')); yc = Hmm / 2
 N = int(os.environ.get('SN', '6')); U = Wmm / N
 SLOT_X = 0.75 * Wmm; SLOT_Y = (9 - 0.6) - 9 * 0.42
 shape = Image.new('L', (W * SS, H * SS), 0); ds = ImageDraw.Draw(shape)      # raised metal
@@ -82,18 +82,35 @@ dome = np.asarray(Image.fromarray((shape * 255).astype(np.uint8)).filter(ImageFi
 relief = shape * (0.55 + 0.45 * np.clip(dome * 1.4, 0, 1))
 relief = relief - 0.4 * cuts * shape
 y = (np.arange(H)[:, None] + 0.5) / PX; x = (np.arange(W)[None, :] + 0.5) / PX
-ground = 0.05 + 0.1 * rng.random((H, W)).astype(np.float32)
-a = np.where(shape > 0.5, relief, np.maximum(relief, ground))
+gn = rng.random((H, W)).astype(np.float32)
+gn = np.asarray(Image.fromarray((gn * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.6)), np.float32) / 255
+ground = float(os.environ.get('GROUND', '0.7')) + 0.06 * (gn - 0.5)          # matte metal, finely punched
+a = np.where(shape > 0.5, np.maximum(relief, ground + 0.05), ground)
+sb = np.asarray(Image.fromarray((shape * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.6)), np.float32) / 255
+edge = (sb > 0.2) & (sb < 0.8)
+a = np.where(edge, 0.12, a)                                                  # engraved outline round every shape
 # feather-cut borders: faceted chevrons whose sloped faces catch light
 def feather(y0, y1, flip):
     ins = (y >= y0) & (y < y1); v = (y - y0) / (y1 - y0)
-    p = 0.6; u = (x / p + flip * v * 0.9) % 1.0
-    h = 0.45 + 0.55 * np.abs(2 * u - 1)          # V facets
+    p = 0.75; u = (x / p + flip * v * 1.6) % 1.0
+    strand = np.sqrt(np.clip(1 - (2 * u - 1) ** 2, 0, 1)); cord = np.sqrt(np.clip(1 - (2 * v - 1) ** 2, 0, 1))
+    h = 0.35 + 0.65 * strand * (0.55 + 0.45 * cord)
     return ins, h
 for y0, y1, f in ((0.0, B, 1), (Hmm - B, Hmm, -1)):
     ins, h = feather(y0, y1, f); a = np.where(ins, h, a)
 a = np.where((np.abs(y - B) < 0.07) | (np.abs(y - (Hmm - B)) < 0.07), 0.0, a)
-e = np.hypot((x - SLOT_X) / 2.5, (y - SLOT_Y) / 1.3)
-a = np.where(e < 1.0, 1.0, a); a = np.where((e >= 1.0) & (e < 1.1), 0.0, a)
+# spout cartouche: mirror plaque, cut line, twisted-rope oval frame, cut line
+PA, PB = 2.2, 0.95
+dx, dy = (x - SLOT_X), (y - SLOT_Y)
+e = np.hypot(dx / PA, dy / PB); phi = np.arctan2(dy / PB, dx / PA)
+RW = 0.55                                       # rope frame width, in units of the plaque ellipse
+in_rope = (e >= 1.08) & (e < 1.08 + RW)
+w = np.clip((e - 1.08) / RW, 0, 1)
+u = (phi / (2 * np.pi) * 34 + w * 1.4) % 1.0
+rope = 0.35 + 0.65 * np.sqrt(np.clip(1 - (2 * u - 1) ** 2, 0, 1)) * (0.55 + 0.45 * np.sqrt(np.clip(1 - (2 * w - 1) ** 2, 0, 1)))
+a = np.where(e < 1.0, 1.0, a)
+a = np.where((e >= 1.0) & (e < 1.08), 0.05, a)
+a = np.where(in_rope, rope, a)
+a = np.where((e >= 1.08 + RW) & (e < 1.16 + RW), 0.05, a)
 Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.45)).save('am-band-scroll2.png')
 print('ok')
