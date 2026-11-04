@@ -15,4 +15,5 @@ Supplier: Alibaba listing 1600480585221 (QD XTD Plastic Products). This replaces
 - `ZUMA-bag-front-white-ink-plate.ai`: the white plate only (black = white ink), all vector.
 - `ZUMA-bag-back.ai`: the white flood plus the shadow as a 600 dpi image.
 - Every letter is converted to outlines (no fonts in the files). The .ai files are PDF-based: Illustrator opens them directly, and the parts come in as groups (Dieline, White ink, Colour) rather than named layers.
-- Rebuild: `source/extract.cjs` (reads the glyph positions from the artwork in Chrome), `source/build_ai.py` (outlines with the Outfit font), `source/topdf.cjs`.
+- Page exactly 106 x 156 mm with a TrimBox at the 100 x 150 mm cut.
+- Rebuild: `source/extract.cjs` (reads the glyph positions from the artwork in Chrome), then `source/build_bag_pdf.py` writes the PDFs directly with `source/pdfw.py` (outlines from the Outfit TTFs).
