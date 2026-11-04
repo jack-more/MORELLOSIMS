@@ -15,7 +15,8 @@ CLIP = float(E('CLIP', '1'))
 STATE = E('STATE', 'open')
 CAM_TH = math.radians(float(E('CAM_TH', '-125')))
 TEXT_TH = math.radians(float(E('TEXT_TH', '-62')))
-SLOT_TH = math.radians(float(E('SLOT_TH', '-62')))
+Y_STEM_TH = math.radians(-90.0)      # head-mask.png: stem points to -Y
+SLOT_TH = Y_STEM_TH                  # the spout always sits under the stem of the Y
 MM = 0.001
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -182,6 +183,7 @@ inner_path = resample(inner_path, 0.4)
 if inner_path[-1, 0] > 0.35: inner_path = np.vstack([inner_path, [[0.3, inner_path[-1, 1]]]])
 Ri = np.repeat(inner_path[:, 0:1], C_EGG, 1); Zi = np.repeat(inner_path[:, 1:2], C_EGG, 1)
 egg = lathe('skin', np.vstack([Ro, Ri]), np.vstack([Zo, Zi]), C_EGG, bottom_center=0.0, top_center=inner_path[-1, 1], mats=[skin])
+egg.data.attributes.new('carve', 'FLOAT', 'POINT').data.foreach_set('value', np.concatenate([mk.ravel(), np.zeros(Ri.size + 2)]).astype(np.float32))
 
 # ---------------- inner shell (rigid PP) ----------------
 so = np.stack([pr - (WALL + 0.06) * nr, pz - (WALL + 0.06) * nzn], 1); si = np.stack([pr - (WALL + 1.7) * nr, pz - (WALL + 1.7) * nzn], 1)
@@ -246,23 +248,36 @@ weight = solid('weight', wpath, 240, [weight_m], ds=0.4, split=30)
 C_H = int(E('C_H', '760')); HR = 18.0; HH = 9.0; BORE_R, BORE_D = 15.4, 5.5
 z0 = HB0; z1 = HB0 + HH
 thh = np.linspace(0, 2 * np.pi, C_H, endpoint=False)
-rr_, zz_, mm_ = [], [], []
-def row(r, z, m):
+rr_, zz_, mm_, cv_ = [], [], [], []
+HEADSTYLE = E('HEADSTYLE', 'knurl')
+def row(r, z, m, cv=0.0):
     rr_.append(np.broadcast_to(np.asarray(r, float), (C_H,)).copy()); zz_.append(np.broadcast_to(np.asarray(z, float), (C_H,)).copy()); mm_.append(m)
+    cv_.append(np.broadcast_to(np.asarray(cv, float), (C_H,)).copy())
 for r in np.linspace(1.0, BORE_R, 5): row(r, z0 + BORE_D, 0)          # bore ceiling
 for z in np.linspace(z0 + BORE_D, z0, 4)[1:]: row(BORE_R, z, 0)        # bore wall
 row(HR - 0.7, z0, 0); row(HR - 0.35, z0 + 0.12, 0)
 NP = 140; kp = 2 * np.pi * HR / NP
 def tri(x): return 1 - 2 * np.abs((x % 1.0) - 0.5)
-for z in np.linspace(z0 + 0.6, z1 - 0.6, 64):
-    u = thh * HR; h = np.minimum(tri((u + (z - z0)) / kp), tri((u - (z - z0)) / kp)); row(HR - 0.38 + 0.38 * h, z, 0)
+if HEADSTYLE == 'yknurl':
+    ykm = load_mask(os.path.join(HERE, 'head-yknurl.png'), 0)
+    for z in np.linspace(z0 + 0.6, z1 - 0.6, int(E('YK_ROWS', '240'))):
+        # u runs so the Y's read upright from outside; image top = top of the band
+        h = bilinear(ykm, (thh % (2 * np.pi)) / (2 * np.pi) * (ykm.shape[1] - 1), (z1 - 0.6 - z) / 7.8 * (ykm.shape[0] - 1))
+        row(HR - 0.32 + 0.32 * h, z, 0, 1 - h)
+else:
+    for z in np.linspace(z0 + 0.6, z1 - 0.6, 64):
+        u = thh * HR; h = np.minimum(tri((u + (z - z0)) / kp), tri((u - (z - z0)) / kp)); row(HR - 0.38 + 0.38 * h, z, 0)
 row(HR - 0.35, z1 - 0.12, 0); row(HR - 0.7, z1, 1)
-hmask = load_mask(os.path.join(HERE, 'head-mask.png'), 1.2)
+hmask = load_mask(os.path.join(HERE, 'head-top-y.png' if HEADSTYLE == 'yknurl' else 'head-mask.png'), 1.2)
 for r in np.linspace(HR - 0.9, 0.06, int(E('HEAD_RINGS', '300'))):
     xx = r * np.cos(thh); yy = r * np.sin(thh)
     # Y reads upright from the front (-Y)
-    mk2 = bilinear(hmask, (xx + 20) * 40, (20 - yy) * 40); row(r, z1 - 0.15 * mk2, mk2)
+    mk2 = bilinear(hmask, (xx + 20) * 40, (20 - yy) * 40)
+    if HEADSTYLE == 'yknurl': row(r, z1 - 0.3 * (1 - mk2), mk2, 1 - mk2)     # Y and rim proud, field cut
+    else: row(r, z1 - 0.15 * mk2, mk2)
 head = lathe('head', np.array(rr_), np.array(zz_), C_H, bottom_center=z0 + BORE_D, top_center=z1, mats=[chrome_h, brushed, engrave])
+_cv = np.concatenate([np.concatenate(cv_), [0.0, 0.0]]).astype(np.float32)
+head.data.attributes.new('carve', 'FLOAT', 'POINT').data.foreach_set('value', _cv)
 mi = []
 for a, b in zip(mm_[:-1], mm_[1:]):
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):

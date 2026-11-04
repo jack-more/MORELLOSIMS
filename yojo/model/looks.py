@@ -38,6 +38,21 @@ world = bpy.data.worlds.new('w'); scene.world = world; world.use_nodes = True; w
 bg = wn['Background']
 G = lambda k, d: float(E(k, d))
 
+def sterling(name, base=(0.93, 0.93, 0.94, 1), ox=(0.018, 0.018, 0.02, 1), oxr=0.62):
+    # polished silver; anything cut (attribute 'carve') goes blackened and duller, like oxidised sterling
+    m, b = nm(name, **{'Base Color': base, 'Metallic': 1.0, 'Roughness': 0.1})
+    t = m.node_tree; at = t.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'carve'
+    cr = t.nodes.new('ShaderNodeMapRange'); t.links.new(at.outputs['Fac'], cr.inputs['Value']); cr.inputs['From Min'].default_value = 0.25; cr.inputs['From Max'].default_value = 0.6
+    mc = t.nodes.new('ShaderNodeMix'); mc.data_type = 'RGBA'; t.links.new(cr.outputs['Result'], mc.inputs['Factor'])
+    mc.inputs[6].default_value = base; mc.inputs[7].default_value = ox; t.links.new(mc.outputs[2], b.inputs['Base Color'])
+    mr = t.nodes.new('ShaderNodeMapRange'); t.links.new(cr.outputs['Result'], mr.inputs['Value']); mr.inputs['To Min'].default_value = 0.1; mr.inputs['To Max'].default_value = oxr
+    t.links.new(mr.outputs['Result'], b.inputs['Roughness'])
+    return m
+TIER = E('TIER', '')
+if TIER in ('epic', 'legendary'):
+    st = sterling('sterling_head'); set_mats(head, [st, st, st])
+if TIER == 'legendary':
+    set_mats(egg, [sterling('sterling_body', ox=(0.32, 0.32, 0.34, 1), oxr=0.4)])   # lettering: smoky satin, still a deboss
 if LOOK == 'studio':
     BGC = srgb_to_lin(E('BG', '#A9D6F2'))
     sweep(BGC)
@@ -122,11 +137,13 @@ elif LOOK == 'fortnite':
         mp = wn.new('ShaderNodeMapping'); wl.new(tc.outputs['Window'], mp.inputs['Vector']); mp.inputs['Scale'].default_value = (sx * RX / RY, 1, 1)
         mp.inputs['Location'].default_value = (off, 0, 0)
         vo = wn.new('ShaderNodeTexVoronoi'); vo.inputs['Scale'].default_value = scale; vo.inputs['Randomness'].default_value = 0.8; wl.new(mp.outputs[0], vo.inputs['Vector'])
-        mr = wn.new('ShaderNodeMapRange'); wl.new(vo.outputs['Distance'], mr.inputs['Value']); mr.inputs['From Min'].default_value = rad; mr.inputs['From Max'].default_value = rad - 0.02
+        yk = wn.new('ShaderNodeMath'); yk.operation = 'MULTIPLY'; yk.inputs[1].default_value = G('CLK', '2.2'); wl.new(sep.outputs['Y'], yk.inputs[0])
+        dd = wn.new('ShaderNodeMath'); dd.operation = 'ADD'; wl.new(vo.outputs['Distance'], dd.inputs[0]); wl.new(yk.outputs[0], dd.inputs[1])
+        mr = wn.new('ShaderNodeMapRange'); wl.new(dd.outputs[0], mr.inputs['Value']); mr.inputs['From Min'].default_value = rad; mr.inputs['From Max'].default_value = rad - 0.02
         return mr
-    p1 = puffs(3.2, 1.0, float(E('CLX', '0.3')), 0.40); p2 = puffs(5.5, 1.0, float(E('CLX', '0.3')) + 0.17, 0.38)
+    p1 = puffs(3.2, 1.0, float(E('CLX', '0.3')), G('PR', '0.40')); p2 = puffs(5.5, 1.0, float(E('CLX', '0.3')) + 0.17, G('PR', '0.40') - 0.02)
     mxp = wn.new('ShaderNodeMath'); mxp.operation = 'MAXIMUM'; wl.new(p1.outputs['Result'], mxp.inputs[0]); wl.new(p2.outputs['Result'], mxp.inputs[1])
-    yb = wn.new('ShaderNodeMapRange'); wl.new(sep.outputs['Y'], yb.inputs['Value']); yb.inputs['From Min'].default_value = float(E('CLY', '0.24')); yb.inputs['From Max'].default_value = float(E('CLY', '0.24')) - 0.015
+    yb = wn.new('ShaderNodeMapRange'); wl.new(sep.outputs['Y'], yb.inputs['Value']); yb.inputs['From Min'].default_value = 1.0; yb.inputs['From Max'].default_value = 0.99
     cm = wn.new('ShaderNodeMath'); cm.operation = 'MULTIPLY'; wl.new(mxp.outputs[0], cm.inputs[0]); wl.new(yb.outputs['Result'], cm.inputs[1])
     base = wn.new('ShaderNodeMapRange'); wl.new(sep.outputs['Y'], base.inputs['Value']); base.inputs['From Min'].default_value = float(E('CLB', '0.1')); base.inputs['From Max'].default_value = float(E('CLB', '0.1')) - 0.005
     cmb = wn.new('ShaderNodeMath'); cmb.operation = 'MAXIMUM'; wl.new(cm.outputs[0], cmb.inputs[0]); wl.new(base.outputs['Result'], cmb.inputs[1]); cm = cmb
