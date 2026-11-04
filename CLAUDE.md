@@ -28,6 +28,8 @@ Read this before any ZUMA design, packaging, site or writing work.
   - Contents: white lyophilized powder, except GHK-Cu (blue powder) and BAC water (clear liquid).
   - Site renderer: `zuma/render/vial.py`, which uses `render/tex/rev2/`.
 - **Stickers:** `zuma-content/stickers/`. No borders.
+- **Bubble mailer B (approved 4 Nov 2026, "I fucking love it"):** white film, one spot ink (ZUMA Oxblood). Back (side A): the tall ZUMA, crest, "Tested by lot", palm shadow, all below the 44 mm flap line. Front (side B): ZUMA, crest, 4 x 6 in label outline, bamboo down both edges. Shadows are the same ink as a tint (max 28%), 2 mm clear of type. The mailer never says "peptides". Pack: `zuma-content/packaging/mailer-factory-B/` (replaces `mailer-factory/`).
+- **Vector files:** labels, bag and mailer all have `.ai` files (PDF-based, type as outlines, exact page and TrimBox) written by `pdfw.py`; see each pack's `vector/` and `source/`.
 
 ## Rules the founders have set
 
