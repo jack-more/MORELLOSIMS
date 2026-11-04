@@ -259,21 +259,21 @@ row(HR - 0.7, z0, 0); row(HR - 0.35, z0 + 0.12, 0)
 NP = 140; kp = 2 * np.pi * HR / NP
 def tri(x): return 1 - 2 * np.abs((x % 1.0) - 0.5)
 if HEADSTYLE == 'yknurl':
-    ykm = load_mask(os.path.join(HERE, 'head-yknurl.png'), 0)
+    ykm = load_mask(os.path.join(HERE, E('BANDMASK', 'head-yknurl.png')), 0); BD = float(E('BAND_DEPTH', '0.32'))
     for z in np.linspace(z0 + 0.6, z1 - 0.6, int(E('YK_ROWS', '240'))):
         # u runs so the Y's read upright from outside; image top = top of the band
         h = bilinear(ykm, (thh % (2 * np.pi)) / (2 * np.pi) * (ykm.shape[1] - 1), (z1 - 0.6 - z) / 7.8 * (ykm.shape[0] - 1))
-        row(HR - 0.32 + 0.32 * h, z, 0, 1 - h)
+        row(HR - BD + BD * h, z, 0, 1 - h)
 else:
     for z in np.linspace(z0 + 0.6, z1 - 0.6, 64):
         u = thh * HR; h = np.minimum(tri((u + (z - z0)) / kp), tri((u - (z - z0)) / kp)); row(HR - 0.38 + 0.38 * h, z, 0)
 row(HR - 0.35, z1 - 0.12, 0); row(HR - 0.7, z1, 1)
-hmask = load_mask(os.path.join(HERE, 'head-top-y.png' if HEADSTYLE == 'yknurl' else 'head-mask.png'), 1.2)
+hmask = load_mask(os.path.join(HERE, E('TOPMASK', 'head-top-y.png') if HEADSTYLE == 'yknurl' else 'head-mask.png'), 1.2); TD = float(E('TOP_DEPTH', '0.3'))
 for r in np.linspace(HR - 0.9, 0.06, int(E('HEAD_RINGS', '300'))):
     xx = r * np.cos(thh); yy = r * np.sin(thh)
     # Y reads upright from the front (-Y)
     mk2 = bilinear(hmask, (xx + 20) * 40, (20 - yy) * 40)
-    if HEADSTYLE == 'yknurl': row(r, z1 - 0.3 * (1 - mk2), mk2, 1 - mk2)     # Y and rim proud, field cut
+    if HEADSTYLE == 'yknurl': row(r, z1 - TD * (1 - mk2), mk2, 1 - mk2)     # Y and rim proud, field cut
     else: row(r, z1 - 0.15 * mk2, mk2)
 head = lathe('head', np.array(rr_), np.array(zz_), C_H, bottom_center=z0 + BORE_D, top_center=z1, mats=[chrome_h, brushed, engrave])
 _cv = np.concatenate([np.concatenate(cv_), [0.0, 0.0]]).astype(np.float32)

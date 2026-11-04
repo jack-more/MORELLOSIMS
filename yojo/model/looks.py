@@ -38,7 +38,7 @@ world = bpy.data.worlds.new('w'); scene.world = world; world.use_nodes = True; w
 bg = wn['Background']
 G = lambda k, d: float(E(k, d))
 
-def sterling(name, base=(0.93, 0.93, 0.94, 1), ox=(0.018, 0.018, 0.02, 1), oxr=0.62):
+def sterling(name, base=tuple(map(float, E('SILVER', '0.93,0.93,0.94').split(','))) + (1,), ox=(0.018, 0.018, 0.02, 1), oxr=0.62):
     # polished silver; anything cut (attribute 'carve') goes blackened and duller, like oxidised sterling
     m, b = nm(name, **{'Base Color': base, 'Metallic': 1.0, 'Roughness': 0.1})
     t = m.node_tree; at = t.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'carve'
