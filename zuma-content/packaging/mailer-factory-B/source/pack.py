@@ -28,7 +28,7 @@ def vector(face):
         o.append(f'q {rot(v["rot"])} {M([sx, 0, 0, sy, v["x"] - vx * sx, v["y"] - vy * sy])} {svgpath(v["d"])} ' + ('f*' if v['rule'] == 'evenodd' else 'f') + ' Q')
     o.append('Q')
     if face:   # the 4 x 6 in label area: a 0.3 mm outline, 1.5 mm corners
-        x, y, w, h, r = BL + 102 * SX, BL + 240 * SY, 101.6, 152.4, 1.5; k = 0.5523 * r
+        x, y, w, h, r = BL + 102 * SX, BL + 252 * SY, 101.6, 152.4, 1.5; k = 0.5523 * r
         o.append(f'/CS0 CS 1 SCN 0.3 w {x + r} {y} m {x + w - r} {y} l {x + w - r + k} {y} {x + w} {y + r - k} {x + w} {y + r} c {x + w} {y + h - r} l '
                  f'{x + w} {y + h - r + k} {x + w - r + k} {y + h} {x + w - r} {y + h} c {x + r} {y + h} l {x + r - k} {y + h} {x} {y + h - r + k} {x} {y + h - r} c '
                  f'{x} {y + r} l {x} {y + r - k} {x + r - k} {y} {x + r} {y} c h S')
