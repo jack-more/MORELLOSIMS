@@ -20,7 +20,7 @@ for sh, fx, fy in ((palm, 0.6, 0.3), (bamboo, 0.5, 0.4)):
     d = halftone(a); faces.append(PAPER * (1 - d[..., None]) + OX * d[..., None])
 img = Image.fromarray(np.concatenate(faces, 1).astype('uint8')).convert('RGBA'); img.alpha_composite(T); img.convert('RGB').save(S + '/mailer/B-print.png')
 f = ImageFont.truetype(S + '/font/Outfit-600.ttf', 26); sm = lambda im: im.resize((im.width * 900 // im.height, 900))
-z = img.crop((fw + 120, 330, fw + 620, 830)).convert('RGB')
+z = img.crop((fw + 430, 950, fw + 930, 1450)).convert('RGB')
 rgb = img.convert('RGB'); sp = Image.new('RGB', (W + 60, H), '#E7E3DC'); sp.paste(rgb.crop((0, 0, fw, H)), (0, 0)); sp.paste(rgb.crop((fw, 0, W, H)), (fw + 60, 0)); a1 = sm(sp)
 board = Image.new('RGB', (a1.width + 560, 990), '#E7E3DC'); board.paste(a1, (20, 60)); board.paste(z, (a1.width + 40, 60)); dr = ImageDraw.Draw(board)
 dr.text((20, 16), 'Flap side: palm shadow', fill='#6E1C2A', font=f); dr.text((20 + a1.width // 2 + 10, 16), 'Label side: bamboo shadow', fill='#6E1C2A', font=f)
