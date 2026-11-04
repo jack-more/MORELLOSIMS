@@ -1,6 +1,6 @@
 # ZUMA tinted vacuum bag: supplier pack (approved 4 Nov 2026)
 
-Send `ZUMA-vacuum-bag-tinted-supplier-pack.zip` with the text in `MESSAGE-TO-SUPPLIER.txt` (fill in the target price in the chat, not in this repo).
+Send `ZUMA-vacuum-bag-tinted-supplier-pack.zip` (5 MB: the .ai files, the spec, the die line and the proofs) with the text in `MESSAGE-TO-SUPPLIER.txt` (fill in the target price in the chat, not in this repo). The 600 dpi raster plates in `print/` are the backup set.
 Supplier: Alibaba listing 1600480585221 (QD XTD Plastic Products). This replaces the older fully printed pack in `../` and `../clear-concepts/`: do not send those.
 
 - 100 x 150 mm flat vacuum pouch, 3-side seal, open top, 5 mm seals, tear notches 18 mm from the top.

@@ -29,8 +29,8 @@ DIE = re.search(r'<svg[^>]*>(.*)</svg>', open(S + '/pack/dieline.html').read(), 
 DIE = re.sub(r'<text.*?</text>', '', DIE, flags=re.S)
 def die(): return f'<g id="Dieline_do_not_print">{DIE}</g>'
 def img(arr, mode='RGB'):
-    b = io.BytesIO(); Image.fromarray(arr).convert(mode).save(b, 'PNG', optimize=True)
-    return f'<image x="0" y="0" width="106" height="156" preserveAspectRatio="none" href="data:image/png;base64,{base64.b64encode(b.getvalue()).decode()}"/>'
+    b = io.BytesIO(); Image.fromarray(arr).convert(mode).save(b, 'JPEG', quality=93, subsampling=0)   # soft fields: JPEG keeps them small; the type is vector on top
+    return f'<image x="0" y="0" width="106" height="156" preserveAspectRatio="none" href="data:image/jpeg;base64,{base64.b64encode(b.getvalue()).decode()}"/>'
 DPI = 600; MM = DPI / 25.4; W, H = round(106 * MM), round(156 * MM); B = round(3 * MM)
 a = np.array(Image.open(V + '/ca-big-hi.png').convert('RGBA').resize((W - 2 * B, H - 2 * B), Image.LANCZOS))[..., 3].astype(float) / 255
 ko = np.zeros((H, W)); ko[B:H - B, B:W - B] = a
