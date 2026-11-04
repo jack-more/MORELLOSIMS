@@ -62,6 +62,13 @@ if LOOK == 'studio':
     area('top', (0.0, 0.0, 0.75), 0.6, 0.6, G('TOP', '12'))
     area('back', (0.0, 0.45, 0.35), 0.5, 0.3, G('BACK', '6'))
     flag((0.0, 0.32, 0.30), 0.7, 0.35)
+    if G('RAKE', '0') > 0:
+        # small hard lights grazing the head top: turned rings throw a radial sheen like a record
+        hc_ = bpy.data.collections.new('head_only'); hc_.objects.link(head)
+        for nm_, loc_ in (('rake_L', (-0.16, 0.10, 0.11)), ('rake_R', (0.17, 0.02, 0.10))):
+            ld = bpy.data.lights.new(nm_, 'SPOT'); ld.energy = G('RAKE', '0'); ld.shadow_soft_size = G('RAKE_SIZE', '0.004'); ld.spot_size = math.radians(18)
+            ob = bpy.data.objects.new(nm_, ld); bpy.context.collection.objects.link(ob); v = rot @ mathutils.Vector(loc_); ob.location = v
+            ob.rotation_euler = (mathutils.Vector((0, 0, 0.0795)) - v).to_track_quat('-Z', 'Y').to_euler(); ob.light_linking.receiver_collection = hc_
     area('strip_head', (0.0, 0.30, 0.26), 0.40, 0.02, G('STRIP', '1.2'), tgt=(0, 0, 0.08))
 
 elif LOOK == 'fortnite':
