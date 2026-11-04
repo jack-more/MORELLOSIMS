@@ -118,7 +118,7 @@ skin, skin_b = principled('skin', **{'Base Color': SKY, 'Roughness': 0.62, 'Shee
 nt = skin.node_tree
 nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 2500.0; nz.inputs['Detail'].default_value = 2.0
 tcn = nt.nodes.new('ShaderNodeTexCoord'); nt.links.new(tcn.outputs['Object'], nz.inputs['Vector'])
-bump = nt.nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.06; bump.inputs['Distance'].default_value = 0.00005
+bump = nt.nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = float(E('BUMP', '0.06')); bump.inputs['Distance'].default_value = 0.00005
 nt.links.new(nz.outputs['Fac'], bump.inputs['Height']); nt.links.new(bump.outputs['Normal'], skin_b.inputs['Normal'])
 shell_m, _ = principled('shell_pp', **{'Base Color': (0.82, 0.83, 0.84, 1), 'Roughness': 0.45})
 weight_m, _ = principled('steel_weight', **{'Base Color': (0.55, 0.56, 0.58, 1), 'Metallic': 1.0, 'Roughness': 0.3})
@@ -151,19 +151,26 @@ su = np.arange(0, s[-1], 0.1); Pu = np.stack([np.interp(su, s, P[:, 0]), np.inte
 k = np.exp(-0.5 * (np.arange(-40, 41) / 12.0) ** 2); k /= k.sum()
 pad = np.pad(Pu, ((40, 40), (0, 0)), mode='edge')
 P = np.stack([np.convolve(pad[:, i], k, mode='valid') for i in range(2)], 1); P[:3] = Pu[:3]; P[-3:] = Pu[-3:]
+# shape study: EH stretches height, ER scales width, TAPER narrows the upper half toward the head (opening kept)
+EH, ER, TAPER = float(E('EH', '1')), float(E('ER', '1')), float(E('TAPER', '0'))
+H0 = P[:, 1].max()
+_u = np.clip((P[:, 1] / H0 - 0.45) / 0.55, 0, 1); _sm = _u * _u * (3 - 2 * _u)
+P = np.stack([15.9 + (P[:, 0] * ER - 15.9) * (1 - TAPER * _sm), P[:, 1] * EH], 1)
+P[:, 0] = np.maximum(P[:, 0], 0.3 * (P[:, 0] > 0))
+DZ = P[:, 1].max() - 70.55
 seg = np.linalg.norm(np.diff(P, axis=0), axis=1); s = np.concatenate([[0], np.cumsum(seg)])
 tg_ = [0.0]
 while tg_[-1] < s[-1]:
-    zc = np.interp(tg_[-1], s, P[:, 1]); tg_.append(tg_[-1] + (1 / 8.0 if 14 < zc < 40 else 1 / 2.2))
+    zc = np.interp(tg_[-1], s, P[:, 1]); tg_.append(tg_[-1] + (1 / float(E('ROWS_TEXT', '8')) if 14 < zc < 40 else 1 / float(E('ROWS_BODY', '2.2'))))
 tg_ = np.array(tg_[:-1] + [s[-1]])
 pr = np.interp(tg_, s, P[:, 0]); pz = np.interp(tg_, s, P[:, 1])
 dr = np.gradient(pr); dzz = np.gradient(pz); L = np.hypot(dr, dzz) + 1e-12; nr, nzn = dzz / L, -dr / L
 C_EGG = int(E('C_EGG', '1400'))
 th = np.linspace(0, 2 * np.pi, C_EGG, endpoint=False)
 Ro = np.repeat(pr[:, None], C_EGG, 1); Zo = np.repeat(pz[:, None], C_EGG, 1)
-emask = load_mask(os.path.join(HERE, 'egg-mask.png'), 1.4)
+emask = load_mask(os.path.join(HERE, E('MASK', 'egg-mask.png')), float(E('TEXT_BLUR', '1.4')))
 dth = (th[None, :] - TEXT_TH + np.pi) % (2 * np.pi) - np.pi
-xs = dth * Ro; mk = np.where(np.abs(xs) < 59, bilinear(emask, (xs + 60) * 20, (92 - Zo) * 20), 0.0)
+xs = dth * Ro; mk = np.where(np.abs(xs) < 59, bilinear(emask, (xs + 60) * 20, (92 - Zo / EH) * 20), 0.0)
 Ro = Ro - 0.5 * mk * nr[:, None]; Zo = Zo - 0.5 * mk * nzn[:, None]
 WALL = 3.5
 # inner surface: offset of the outer, below the shoulder, then the lip that wraps into the opening
@@ -186,7 +193,7 @@ shell = solid('shell', shell_path, 360, [shell_m], ds=0.5, split=0)
 collar = solid('collar', [(15.05, 60.5), (17.3, 60.5), (17.3, 66.3), (15.05, 66.3)], 360, [chrome_in], closed=True)
 
 # ---------------- moving cartridge: threaded sleeve + pump + refill cup ----------------
-HB0 = 70.55                      # head underside when locked (sits on the rigid stop)
+HB0 = 70.55 + DZ                 # head underside when locked (sits on the rigid stop)
 S0, S1 = 52.0, HB0 + 1.0         # sleeve bottom/top when locked
 cart = bpy.data.objects.new('cartridge', None); bpy.context.collection.objects.link(cart)
 def link(ob, parent):
@@ -236,7 +243,7 @@ wpath = np.vstack([[[0.0, bowl[0, 1]]], bowl, [[bowl[-1, 0], WTOP]], [[0.0, WTOP
 weight = solid('weight', wpath, 240, [weight_m], ds=0.4, split=30)
 
 # ---------------- head (knurled, Y engraved, bore underneath, side slot) ----------------
-C_H = 760; HR = 18.0; HH = 9.0; BORE_R, BORE_D = 15.4, 5.5
+C_H = int(E('C_H', '760')); HR = 18.0; HH = 9.0; BORE_R, BORE_D = 15.4, 5.5
 z0 = HB0; z1 = HB0 + HH
 thh = np.linspace(0, 2 * np.pi, C_H, endpoint=False)
 rr_, zz_, mm_ = [], [], []
@@ -251,7 +258,7 @@ for z in np.linspace(z0 + 0.6, z1 - 0.6, 64):
     u = thh * HR; h = np.minimum(tri((u + (z - z0)) / kp), tri((u - (z - z0)) / kp)); row(HR - 0.38 + 0.38 * h, z, 0)
 row(HR - 0.35, z1 - 0.12, 0); row(HR - 0.7, z1, 1)
 hmask = load_mask(os.path.join(HERE, 'head-mask.png'), 1.2)
-for r in np.linspace(HR - 0.9, 0.06, 300):
+for r in np.linspace(HR - 0.9, 0.06, int(E('HEAD_RINGS', '300'))):
     xx = r * np.cos(thh); yy = r * np.sin(thh)
     # Y reads upright from the front (-Y)
     mk2 = bilinear(hmask, (xx + 20) * 40, (20 - yy) * 40); row(r, z1 - 0.15 * mk2, mk2)
@@ -316,6 +323,23 @@ else:
     if E('FRAME_START'): scene.frame_start = int(E('FRAME_START'))
     if E('FRAME_END'): scene.frame_end = int(E('FRAME_END'))
 
+# ---------------- web export ----------------
+if E('EXPORT'):
+    keep = {'skin', 'head', 'slot', 'thread', 'sleeve_core'}
+    for o in list(bpy.data.objects):
+        if o.type == 'MESH' and o.name not in keep: bpy.data.objects.remove(o)
+        elif o.type == 'CURVE': bpy.data.objects.remove(o)
+    for o in bpy.data.objects:
+        if o.type == 'MESH':
+            o.select_set(True); bpy.context.view_layer.objects.active = o
+            for m in list(o.modifiers): bpy.ops.object.modifier_apply(modifier=m.name)
+    bpy.ops.export_scene.gltf(filepath=E('EXPORT'), export_format='GLB', use_selection=False, export_apply=True,
+        export_materials='PLACEHOLDER', export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=7,
+        export_draco_position_quantization=16, export_draco_normal_quantization=12, export_yup=True)
+    print('exported', E('EXPORT')); sys.exit(0)
+
+if E('LOOK'):
+    exec(open(os.path.join(HERE, 'looks.py')).read()); sys.exit(0)
 # ---------------- floor, lights, camera ----------------
 bpy.ops.mesh.primitive_plane_add(size=3); fl = bpy.context.active_object; fl.data.materials.append(floor_m)
 world = bpy.data.worlds.new('w'); scene.world = world; world.use_nodes = True
