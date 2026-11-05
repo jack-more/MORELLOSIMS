@@ -348,6 +348,16 @@ else:
     if E('FRAME_START'): scene.frame_start = int(E('FRAME_START'))
     if E('FRAME_END'): scene.frame_end = int(E('FRAME_END'))
 
+# ---------------- blend export (keeps the carve attribute) ----------------
+if E('EXPORT_BLEND'):
+    keep = {'skin', 'head', 'slot'}
+    for o in list(bpy.data.objects):
+        if o.name not in keep: bpy.data.objects.remove(o)
+    for o in bpy.data.objects:
+        bpy.context.view_layer.objects.active = o; o.select_set(True)
+        for md in list(o.modifiers): bpy.ops.object.modifier_apply(modifier=md.name)
+        o.parent = None
+    bpy.ops.wm.save_as_mainfile(filepath=E('EXPORT_BLEND')); print('saved', E('EXPORT_BLEND')); sys.exit(0)
 # ---------------- web export ----------------
 if E('EXPORT'):
     keep = {'skin', 'head', 'slot', 'thread', 'sleeve_core'}

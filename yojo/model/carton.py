@@ -78,29 +78,34 @@ lid.rotation_mode = 'XYZ'
 bpy.context.view_layer.update()
 lid.location = (0, (TD / 2 + 1) * MM + math.cos(math.radians(72)) * (TD / 2) * MM, math.sin(math.radians(72)) * (TD / 2) * MM)
 
-# ---------- six eggs ----------
-order = ['sky', 'rose', 'cobalt', 'sage', 'cloud', 'sky']
-spin = [8, -14, 20, -6, 12, -18]                 # each egg turned a little differently, like a real carton
-def assign(o, skinm):
-    if o.type != 'MESH': return
-    n = o.name.split('.')[0]
-    o.data.materials.clear()
-    if n.startswith('skin'): o.data.materials.append(skinm)
-    elif n.startswith('head'): [o.data.materials.append(m) for m in (chrome, brushed, engrave)]
-    elif n.startswith('thread') or n.startswith('sleeve'): o.data.materials.append(chrome)
-    else: o.data.materials.append(blackm)
-SEAT = TH - CUP_D + 7.5          # the egg settles into the cup
+# ---------- six eggs: one shared mesh, material per object ----------
+with bpy.data.libraries.load(os.path.join(HERE, 'mk', 'egg_c.blend')) as (src, dst):
+    dst.objects = [n for n in src.objects if n in ('skin', 'head', 'slot')]
+lib = {o.name: o for o in dst.objects}
+def sterling(name):
+    m, b = mat(name, **{'Base Color': (0.96, 0.92, 0.86, 1), 'Metallic': 1.0, 'Roughness': 0.1})
+    t = m.node_tree; at = t.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'carve'
+    cr = t.nodes.new('ShaderNodeMapRange'); t.links.new(at.outputs['Fac'], cr.inputs['Value']); cr.inputs['From Min'].default_value = 0.25; cr.inputs['From Max'].default_value = 0.6
+    mc = t.nodes.new('ShaderNodeMix'); mc.data_type = 'RGBA'; t.links.new(cr.outputs['Result'], mc.inputs['Factor'])
+    mc.inputs[6].default_value = (0.96, 0.92, 0.86, 1); mc.inputs[7].default_value = (0.018, 0.018, 0.02, 1); t.links.new(mc.outputs[2], b.inputs['Base Color'])
+    mr = t.nodes.new('ShaderNodeMapRange'); t.links.new(cr.outputs['Result'], mr.inputs['Value']); mr.inputs['To Min'].default_value = 0.1; mr.inputs['To Max'].default_value = 0.62
+    t.links.new(mr.outputs['Result'], b.inputs['Roughness'])
+    return m
+head_m = sterling('head_sterling'); body_st = sterling('body_sterling')
+bt = body_st.node_tree; [n for n in bt.nodes if n.type == 'MIX'][0].inputs[7].default_value = (0.32, 0.32, 0.34, 1)
+order = E('ORDER', 'sky,rose,sterling,sage,cloud,cobalt').split(',')
+spin = [8, -14, 20, -6, 12, -18]
+SEAT = TH - CUP_D + 7.5
+def put(ob, mat_, k):
+    o = ob.copy(); bpy.context.collection.objects.link(o)          # shares mesh data
+    for sl in o.material_slots: sl.link = 'OBJECT'; sl.material = mat_
+    return o
 for k, (cx, cy) in enumerate(cups):
-    before = set(bpy.data.objects)
-    bpy.ops.import_scene.gltf(filepath=os.path.join(HERE, 'mk', 'egg_hi.glb'))
-    new_objs = [o for o in bpy.data.objects if o not in before]
     root = bpy.data.objects.new(f'egg_{k}', None); bpy.context.collection.objects.link(root)
-    for o in new_objs:
-        if o.parent is None: o.parent = root
+    body = body_st if order[k] == 'sterling' else skinmat(f'skin_{k}', SK[order[k]])
+    for nm_, mt in (('skin', body), ('head', head_m), ('slot', blackm)):
+        put(lib[nm_], mt, k).parent = root
     root.location = (cx * MM, cy * MM, SEAT * MM); root.rotation_euler = (0, 0, math.radians(spin[k]))
-    sm = skinmat(f'skin_{k}', SK[order[k]])
-    for o in new_objs: assign(o, sm)
-
 # ---------- studio: tone-on-tone sky sweep, soft daylight ----------
 BG = s2l(E('BG', '#BFE3FA'))
 bgm, _ = mat('backdrop', **{'Base Color': BG, 'Roughness': 0.95, 'Specular IOR Level': 0.2})
