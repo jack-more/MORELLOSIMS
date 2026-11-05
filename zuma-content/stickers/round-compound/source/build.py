@@ -9,6 +9,7 @@ S = '/tmp/claude-0/-home-user-MORELLOSIMS/28fcdcb0-1e78-54f5-bf93-2db9041de387/s
 P = json.load(open(S + '/rs/products.json'))
 D, BL = 16.0, 1.0; PG = D + 2 * BL; C = PG / 2; R = D / 2
 f = TTFont(S + '/font/Outfit-800.ttf'); gs = f.getGlyphSet(); cmap = f.getBestCmap(); hm = f['hmtx']
+f6 = TTFont(S + '/font/Outfit-600.ttf'); gs6 = f6.getGlyphSet(); cmap6 = f6.getBestCmap(); hm6 = f6['hmtx']; GLY6 = {}
 CD = re.search(r' d="([^"]+)"', open('/home/user/MORELLOSIMS/zuma-content/packaging/capsule-case/zuma-crest-stamp.svg').read()).group(1)
 OXR = '0.4314 0.1098 0.1647'
 M = lambda a: ' '.join(f'{v:.6f}' for v in a) + ' cm'
@@ -26,6 +27,17 @@ def arc_text(s, size, r, track=0.04):
         px, py = C + r * math.sin(th), C - r * math.cos(th); w = hm[cmap[ord(c)]][0]
         o.append(f'q {M([1, 0, 0, 1, px, py])} {M([math.cos(th), math.sin(th), -math.sin(th), math.cos(th), 0, 0])} '
                  f'{M([size / 1000, 0, 0, -size / 1000, -w * size / 2000, 0])} {gpath(c)} f Q')
+    return '\n'.join(o), math.degrees(tot / r)
+def arc_bottom(s, size, r, track=0.05):
+    """letters round the bottom edge, upright, reading left to right; baseline on radius r, letters standing toward the centre"""
+    adv = [hm6[cmap6[ord(c)]][0] * size / 1000 + track * size for c in s]; tot = sum(adv) - track * size
+    a0 = -tot / (2 * r); x = 0; o = []
+    for c, a in zip(s, adv):
+        al = a0 + (x + (a - track * size) / 2) / r; x += a
+        if c not in GLY6: p = PDFPen(gs6); gs6[cmap6[ord(c)]].draw(p); GLY6[c] = ' '.join(p.o)
+        px, py = C + r * math.sin(al), C + r * math.cos(al); w = hm6[cmap6[ord(c)]][0]
+        o.append(f'q {M([1, 0, 0, 1, px, py])} {M([math.cos(-al), math.sin(-al), -math.sin(-al), math.cos(-al), 0, 0])} '
+                 f'{M([size / 1000, 0, 0, -size / 1000, -w * size / 2000, 0])} {GLY6[c]} f Q')
     return '\n'.join(o), math.degrees(tot / r)
 def write(path, content, img, iw, ih):
     W = mm(PG); objs = []; add = lambda x: objs.append(x) or len(objs)
@@ -53,7 +65,8 @@ for no, name, area in P:
     crest = f'q {OXR} rg {M([cs, 0, 0, cs, C - cw / 2 + 0, C - 100 * cs / 2 + 0.55])} {svgpath(CD)} f* Q'
     size = min(2.3, 2.3 * 9.0 / max(len(name), 6))                                  # longer names set a little smaller
     txt, deg = arc_text(name, size, R - 0.75 - 0.72 * size)
-    body = [G, f'q {PG} 0 0 {-PG} 0 {PG} cm /Im0 Do Q', crest, f'{OXR} rg', txt, f'/Cut CS 1 SCN 0.25 w {circle(R)} S']
+    url, udeg = arc_bottom('zumatides.com', 1.45, R - 0.9)                         # the address round the bottom edge, upright
+    body = [G, f'q {PG} 0 0 {-PG} 0 {PG} cm /Im0 Do Q', crest, f'{OXR} rg', txt, url, f'/Cut CS 1 SCN 0.25 w {circle(R)} S']
     slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
     write(f'{OUT}/zuma-round-{no}-{slug}.pdf', '\n'.join(body), b.getvalue(), px, px); report.append((no, name, round(deg)))
 print(report)
