@@ -137,7 +137,7 @@ tg = brushed.node_tree.nodes.new('ShaderNodeTangent'); tg.direction_type = 'RADI
 brushed.node_tree.links.new(tg.outputs['Tangent'], br_b.inputs['Tangent'])
 engrave, _ = principled('engrave', clip=False, **{'Base Color': (0.5, 0.52, 0.55, 1), 'Metallic': 1.0, 'Roughness': 0.5})
 slot_m, _ = principled('slot', clip=False, **{'Base Color': (0.01, 0.01, 0.012, 1), 'Roughness': 0.35})
-ribbon_m, _ = principled('cream_ribbon', clip=False, **{'Base Color': srgb_to_lin('#9CCFF0'), 'Roughness': 0.25,
+ribbon_m, _ = principled('cream_ribbon', clip=False, **{'Base Color': srgb_to_lin(E('CREAM', '#3D86D6')), 'Roughness': 0.18,
                          'Subsurface Weight': 0.4, 'Subsurface Scale': 0.003, 'Coat Weight': 0.35})
 floor_m, _ = principled('floor', clip=False, **{'Base Color': (0, 0, 0, 1), 'Roughness': 0.06, 'Specular IOR Level': 0.5})
 
@@ -300,9 +300,9 @@ stem = solid('stem', [(0, P1 - 0.5), (2.0, P1 - 0.5), (2.0, z0 + BORE_D), (0, z0
 headrig = bpy.data.objects.new('headrig', None); bpy.context.collection.objects.link(headrig)
 for o in (head, slot, stem): o.parent = headrig
 # cream ribbon out of the slot
-cu = bpy.data.curves.new('ribbon', 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = 1.35 * MM; cu.bevel_resolution = 6
+cu = bpy.data.curves.new('ribbon', 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = float(E('RIB_R', '1.35')) * MM; cu.bevel_resolution = 8
 cu.use_fill_caps = True; cu.resolution_u = 24
-spl = cu.splines.new('BEZIER'); pts = [(18.4, 0.0), (23.5, -1.2), (28.0, -4.6), (30.0, -9.5)]
+spl = cu.splines.new('BEZIER'); pts = [(18.4, 0.0), (23.5, -1.2), (28.0, -4.6), (30.0, -9.5)] if not E('CURL') else [(17.8, 0.0), (21.2, -0.2), (23.6, -1.6), (24.6, -3.8), (24.2, -5.6)]
 spl.bezier_points.add(len(pts) - 1)
 zc = z0 + HH * 0.42
 for bp, (r, dz_) in zip(spl.bezier_points, pts):
