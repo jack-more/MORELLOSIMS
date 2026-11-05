@@ -91,6 +91,8 @@ FW = 0.5; inr = (e >= 1.08) & (e < 1.08 + FW); ww = np.clip((e - 1.08) / FW, 0, 
 uu = (phi / (2 * np.pi) * 32 + ww * 1.4) % 1.0
 fr = 0.4 + 0.6 * np.sqrt(np.clip(1 - (2 * uu - 1) ** 2, 0, 1)) * (0.5 + 0.5 * np.sqrt(np.clip(1 - (2 * ww - 1) ** 2, 0, 1)))
 a = np.where(e < 1.0, 1.0, a); a = np.where((e >= 1.0) & (e < 1.08), 0.05, a)
-a = np.where(inr, fr, a); a = np.where((e >= 1.08 + FW) & (e < 1.16 + FW), 0.05, a)
+a = np.where(inr, fr, a); a = np.where((e >= 1.08 + FW) & (e < 1.14 + FW), 0.05, a)
+# thin polished ring that separates the cartouche from the snake rope
+a = np.where((e >= 1.14 + FW) & (e < 1.30 + FW), 1.0, a); a = np.where((e >= 1.30 + FW) & (e < 1.36 + FW), 0.05, a)
 Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.45)).save('am-band-snake.png')
 print('ok', 'A', round(A, 2))
