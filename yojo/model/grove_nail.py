@@ -34,19 +34,23 @@ def load(fn, names):
     for n, o in zip(want, dst.objects):
         bpy.context.collection.objects.link(o); out[n] = o
     return out
-branded = load('egg_c.blend', ('skin', 'head', 'slot'))
+branded = load('egg_c.blend', ('skin',))
+nailp = load('egg_open.blend', ('head', 'slot', 'thread', 'sleeve_core'))
+branded.update(nailp)
 blank = load('pod_blank.blend', ('skin',))
 for o in (branded['skin'], blank['skin']):
     o.data.materials.clear(); o.data.materials.append(skin)
 branded['head'].data.materials.clear(); [branded['head'].data.materials.append(head_m) for _ in range(3)]
 branded['slot'].data.materials.clear(); branded['slot'].data.materials.append(black)
+threadm, _ = mat('thread', **{'Base Color': (0.80, 0.78, 0.75, 1), 'Metallic': 1.0, 'Roughness': 0.32})
+for n_ in ('thread', 'sleeve_core'): branded[n_].data.materials.clear(); branded[n_].data.materials.append(threadm)
 # the nail: head + slot move together on an empty at the axis
 nail = bpy.data.objects.new('nail', None); bpy.context.collection.objects.link(nail)
-for o in (branded['head'], branded['slot']): o.parent = nail
+for o in (branded['head'], branded['slot'], branded['thread'], branded['sleeve_core']): o.parent = nail
 F0, FC, F1 = 1, 34, 84            # start, contact, end
 def key(f, z, turns):
     nail.location = (0, 0, z * MM); nail.rotation_euler = (0, 0, -2 * math.pi * turns); nail.keyframe_insert('location', frame=f); nail.keyframe_insert('rotation_euler', frame=f)
-key(F0, 70, 2.0); key(FC - 6, 6, 0.25); key(FC, 0, 0.0); key(F1, 0, 0.0)
+key(F0, G('Z0', '95'), 3.0); key(FC - 10, 6, 0.6); key(FC, -9, 0.0); key(F1, -9, 0.0)
 for fc in nail.animation_data.action.fcurves if hasattr(nail.animation_data.action, 'fcurves') else []:
     for kp in fc.keyframe_points: kp.interpolation = 'BEZIER'
 # blank -> branded swap under the flash
@@ -87,7 +91,7 @@ area('top', (0, -0.05, 0.4), 0.3, 1.5, (1, 1, 1), tgt=(0, 0, 0.09))
 # low hero angle, slow push in
 cd = bpy.data.cameras.new('cam'); cd.lens = G('LENS', '60'); cd.sensor_fit = 'HORIZONTAL'; cd.sensor_width = 36
 cam = bpy.data.objects.new('cam', cd); bpy.context.collection.objects.link(cam); scene.camera = cam
-for f, d, tz in ((F0, G('D0', '0.50'), 0.080), (F1, G('D1', '0.40'), 0.058)):
+for f, d, tz in ((F0, G('D0', '0.62'), 0.100), (F1, G('D1', '0.40'), 0.058)):
     th = math.radians(-100); el = math.radians(6); tg = mathutils.Vector((0, 0, tz))
     cam.location = tg + mathutils.Vector((d * math.cos(el) * math.cos(th), d * math.cos(el) * math.sin(th), d * math.sin(el)))
     cam.rotation_euler = (tg - cam.location).to_track_quat('-Z', 'Y').to_euler(); cam.keyframe_insert('location', frame=f); cam.keyframe_insert('rotation_euler', frame=f)
