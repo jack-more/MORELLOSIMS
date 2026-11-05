@@ -36,10 +36,11 @@ def carved_metal(name, base, ox, rough, aniso=0.0):
 head_m = carved_metal('head', (0.96, 0.92, 0.86, 1), (0.018, 0.018, 0.02, 1), 0.1)
 body_brushed = carved_metal('body_brushed', (0.93, 0.92, 0.9, 1), (0.3, 0.3, 0.32, 1), G('BRUSH_R', '0.24'), G('ANISO', '0.9'))
 blackm, _ = mat('slot', **{'Base Color': (0.01, 0.01, 0.01, 1), 'Roughness': 0.4})
+threadm, _ = mat('thread', **{'Base Color': (0.80, 0.78, 0.75, 1), 'Metallic': 1.0, 'Roughness': 0.32})
 
 # ---------------- egg geometry from the model, and where it seats ----------------
-with bpy.data.libraries.load(os.path.join(HERE, 'mk', 'egg_c.blend')) as (src, dst):
-    dst.objects = [n for n in src.objects if n in ('skin', 'head', 'slot')]
+with bpy.data.libraries.load(os.path.join(HERE, 'mk', E('EGGFILE', 'egg_c.blend'))) as (src, dst):
+    dst.objects = [n for n in src.objects if n in ('skin', 'head', 'slot', 'thread', 'sleeve_core', 'collar')]
 lib = {o.name: o for o in dst.objects}
 sv = np.empty(len(lib['skin'].data.vertices) * 3, np.float32); lib['skin'].data.vertices.foreach_get('co', sv); sv = sv.reshape(-1, 3) / MM
 er = np.hypot(sv[:, 0], sv[:, 1]); ez = sv[:, 2]
@@ -145,7 +146,8 @@ spin = [6, -10, 4, -8, 10, -4]
 for k, (cx, cy) in enumerate(cells):
     root = bpy.data.objects.new(f'egg_{k}', None); bpy.context.collection.objects.link(root)
     body = body_brushed if order[k] == 'brushed' else skinmat(f'skin_{k}', SK[order[k]])
-    for nm_, mt in (('skin', body), ('head', head_m), ('slot', blackm)):
+    for nm_, mt in (('skin', body), ('head', head_m), ('slot', blackm), ('thread', threadm), ('sleeve_core', threadm), ('collar', threadm)):
+        if nm_ not in lib: continue
         o = lib[nm_].copy(); bpy.context.collection.objects.link(o)
         for sl in o.material_slots: sl.link = 'OBJECT'; sl.material = mt
         o.parent = root

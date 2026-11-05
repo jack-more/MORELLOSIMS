@@ -350,13 +350,15 @@ else:
 
 # ---------------- blend export (keeps the carve attribute) ----------------
 if E('EXPORT_BLEND'):
-    keep = {'skin', 'head', 'slot'}
+    keep = {'skin', 'head', 'slot', 'thread', 'sleeve_core', 'collar'}
+    bpy.context.view_layer.update()
+    mws = {o.name: o.matrix_world.copy() for o in bpy.data.objects}
     for o in list(bpy.data.objects):
         if o.name not in keep: bpy.data.objects.remove(o)
     for o in bpy.data.objects:
         bpy.context.view_layer.objects.active = o; o.select_set(True)
         for md in list(o.modifiers): bpy.ops.object.modifier_apply(modifier=md.name)
-        o.parent = None
+        o.parent = None; o.matrix_world = mws[o.name]
     bpy.ops.wm.save_as_mainfile(filepath=E('EXPORT_BLEND')); print('saved', E('EXPORT_BLEND')); sys.exit(0)
 # ---------------- web export ----------------
 if E('EXPORT'):

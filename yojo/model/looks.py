@@ -49,6 +49,13 @@ def sterling(name, base=tuple(map(float, E('SILVER', '0.93,0.93,0.94').split(','
     t.links.new(mr.outputs['Result'], b.inputs['Roughness'])
     return m
 TIER = E('TIER', '')
+# exposed thread and sleeve: solid satin silver (silver-pigmented POM/ABS, as specced), nothing see-through inside
+for mname, kw in (('chrome_in', {'Base Color': (0.80, 0.78, 0.75, 1), 'Metallic': 1.0, 'Roughness': G('THREAD_R', '0.32'), 'Anisotropic': 0.0}),
+                  ('cup_pp', {'Transmission Weight': 0.0}), ('pump_pp', {'Transmission Weight': 0.0})):
+    mm_ = bpy.data.materials.get(mname)
+    if mm_:
+        bb_ = mm_.node_tree.nodes.get('Principled BSDF')
+        for k, v in kw.items(): bb_.inputs[k].default_value = v
 if TIER in ('epic', 'legendary'):
     st = sterling('sterling_head'); set_mats(head, [st, st, st])
 if TIER == 'soft':
