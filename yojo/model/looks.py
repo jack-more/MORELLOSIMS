@@ -51,6 +51,15 @@ def sterling(name, base=tuple(map(float, E('SILVER', '0.93,0.93,0.94').split(','
 TIER = E('TIER', '')
 if TIER in ('epic', 'legendary'):
     st = sterling('sterling_head'); set_mats(head, [st, st, st])
+if TIER == 'soft':
+    # silicone-covered head on a rigid core: same skin as the egg, the Y and cuts a shade deeper
+    sl_ = (tuple(map(float, E('SKIN_LIN').split(','))) + (1.0,)) if E('SKIN_LIN') else srgb_to_lin('#62B0E4')
+    hs, hsb = nm('head_soft', **{'Base Color': sl_, 'Roughness': 0.62, 'Sheen Weight': 0.55, 'Sheen Roughness': 0.35, 'Sheen Tint': (1, 1, 1, 1),
+                                  'Subsurface Weight': 0.06, 'Subsurface Scale': 0.002, 'Specular IOR Level': 0.35})
+    t = hs.node_tree; at = t.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'carve'
+    mc = t.nodes.new('ShaderNodeMix'); mc.data_type = 'RGBA'; t.links.new(at.outputs['Fac'], mc.inputs['Factor'])
+    mc.inputs[6].default_value = sl_; mc.inputs[7].default_value = tuple(c * 0.6 for c in sl_[:3]) + (1,); t.links.new(mc.outputs[2], hsb.inputs['Base Color'])
+    set_mats(head, [hs, hs, hs])
 if TIER == 'legendary':
     set_mats(egg, [sterling('sterling_body', ox=(0.32, 0.32, 0.34, 1), oxr=0.4)])   # lettering: smoky satin, still a deboss
 if LOOK == 'studio':
@@ -195,6 +204,7 @@ elif LOOK == 'invert':
     area('front', (0.0, -0.6, 0.12), 1.2, 0.5, G('FRONT', '4'), tgt=(0, 0, 0.05))
 
 cam_d = bpy.data.cameras.new('cam'); cam_d.lens = G('LENS', '100'); cam_d.sensor_fit = 'VERTICAL'; cam_d.sensor_height = 36
+if E('ORTHO'): cam_d.type = 'ORTHO'; cam_d.ortho_scale = G('ORTHO', '0.05')      # frame height in metres
 cam = bpy.data.objects.new('cam', cam_d); bpy.context.collection.objects.link(cam); scene.camera = cam
 tgt = mathutils.Vector((0, 0, G('CAM_Z', '0.046'))); elev = math.radians(G('CAM_EL', '14')); dist = G('CAM_D', '0.46')
 cam.location = tgt + mathutils.Vector((dist * math.cos(elev) * math.cos(CAM_TH), dist * math.cos(elev) * math.sin(CAM_TH), dist * math.sin(elev)))

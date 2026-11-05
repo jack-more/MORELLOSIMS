@@ -278,6 +278,16 @@ for r in np.linspace(HR - 0.9, 0.06, int(E('HEAD_RINGS', '300'))):
 head = lathe('head', np.array(rr_), np.array(zz_), C_H, bottom_center=z0 + BORE_D, top_center=z1, mats=[chrome_h, brushed, engrave])
 _cv = np.concatenate([np.concatenate(cv_), [0.0, 0.0]]).astype(np.float32)
 head.data.attributes.new('carve', 'FLOAT', 'POINT').data.foreach_set('value', _cv)
+if HEADSTYLE == 'yknurl' and not E('LOOK'):
+    # engraved sterling head for the sectioned views: polished high points, oxidised cuts
+    stm, stb = principled('sterling_cut', clip=False, **{'Base Color': (0.96, 0.92, 0.86, 1), 'Metallic': 1.0, 'Roughness': 0.1})
+    t_ = stm.node_tree; at_ = t_.nodes.new('ShaderNodeAttribute'); at_.attribute_name = 'carve'
+    cr_ = t_.nodes.new('ShaderNodeMapRange'); t_.links.new(at_.outputs['Fac'], cr_.inputs['Value']); cr_.inputs['From Min'].default_value = 0.25; cr_.inputs['From Max'].default_value = 0.6
+    mc_ = t_.nodes.new('ShaderNodeMix'); mc_.data_type = 'RGBA'; t_.links.new(cr_.outputs['Result'], mc_.inputs['Factor'])
+    mc_.inputs[6].default_value = (0.96, 0.92, 0.86, 1); mc_.inputs[7].default_value = (0.018, 0.018, 0.02, 1); t_.links.new(mc_.outputs[2], stb.inputs['Base Color'])
+    mr_ = t_.nodes.new('ShaderNodeMapRange'); t_.links.new(cr_.outputs['Result'], mr_.inputs['Value']); mr_.inputs['To Min'].default_value = 0.1; mr_.inputs['To Max'].default_value = 0.62
+    t_.links.new(mr_.outputs['Result'], stb.inputs['Roughness'])
+    head.data.materials.clear(); [head.data.materials.append(stm) for _ in range(3)]
 mi = []
 for a, b in zip(mm_[:-1], mm_[1:]):
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
