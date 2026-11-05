@@ -61,8 +61,8 @@ report = []
 for no, name, area in P:
     px = round(PG / 25.4 * 600); lb = Image.open(f'{S}/rs/lb-{no}.png').convert('RGB').resize((px, px), Image.LANCZOS)
     b = io.BytesIO(); lb.save(b, 'JPEG', quality=94, subsampling=0)
-    cw = 7.4; cs = cw / 104.26                                                     # the crest, 7.4 mm wide
-    crest = f'q {OXR} rg {M([cs, 0, 0, cs, C - cw / 2 + 0, C - 100 * cs / 2 + 0.55])} {svgpath(CD)} f* Q'
+    cw = 7.4; cs = cw / 104.26                                                     # the crest, 7.4 mm wide, dead centre
+    crest = f'q {OXR} rg {M([cs, 0, 0, cs, C - cw / 2 + 0, C - 100 * cs / 2])} {svgpath(CD)} f* Q'
     size = min(2.3, 2.3 * 9.0 / max(len(name), 6))                                  # longer names set a little smaller
     txt, deg = arc_text(name, size, R - 0.75 - 0.72 * size)
     url, udeg = arc_bottom('zumatides.com', 1.45, R - 0.9)                         # the address round the bottom edge, upright
