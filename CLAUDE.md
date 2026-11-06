@@ -47,3 +47,7 @@ Read this before any ZUMA design, packaging, site or writing work.
 - The live site only deploys when a founder says the word "deploy".
 - Keep personal contact details and supplier prices out of the repo.
 - Commit and push work to the session's branch; scratch space can be wiped.
+
+## Tools and stack
+
+- **Generative media (images and video):** Krea and Fal, accessed through Nous Portal, on a custom generative-media plugin in Hermes Desktop. (Noted 6 Nov 2026.)
