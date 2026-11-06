@@ -15,6 +15,7 @@ Read this before any ZUMA design, packaging, site or writing work.
   - Front sheet: clear film printed with that tint's own Lightbox as see-through ink (the tiles and the darker pools sit on the front; red = the Oxblood field, blue = Metabolic, grey = ZUMA grey). Printed solid in Snow on a white underlay: the tall ZUMA up the left, the crest and zumatides.com top right, "Research peptides, tested by lot", the leaflet copy on its side down the right edge, the research-use line, Lot and Packed lines, "ZUMA vacuum pack, 100 x 150 mm". No compound sticker on the bag.
   - Back sheet: the palm shadow only, on light neutral, the same for every tint.
   - Plates in `tinted/source/`: `front-tint-red|blue|grey.png` (the Lightbox ink), `back-sheet-shadow.png`, the Snow art from `art_big.py`. Renders: `bag4.py` (several vials, no cloth sim, crisp film), `hang.py` (rail scene).
+  - **First order (6 Nov 2026): blue only, 10,000 bags, one design, 4 plates** (front: see-through blue + white on the type; back: white flood + black palm shadow). Order pack: `zuma-content/packaging/vacuum-bag/supplier-pack-blue/`; the full set carries blue only. Red and grey stay in `supplier-pack-tinted/` for later.
   - Clear option still open: fully clear with Oxblood print looked strongest (`tinted/clear-three-versions.jpg`). Supplier print plates are not built yet.
 
 ## Approved and loved (do not drift from these)
