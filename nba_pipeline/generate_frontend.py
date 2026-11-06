@@ -2780,6 +2780,77 @@ def get_trailing_nrtg(team_id, n_games=10):
     return (weighted_sum / total_weight if total_weight > 0 else 0.0), len(df)
 
 
+def _absence_already_priced(team_id, out_ids, roster_df, n_recent=10):
+    """How much of tonight's injury attrition the team's own results still lack.
+
+    Returns (season_share, recent_share): the minutes-weighted fraction of the
+    team's games this season (and of its last n_recent) that tonight's OUT
+    players actually played. A player who has missed every game is already
+    absent from those results: his share is 0 and his absence is not charged
+    again. (Nov 2-5: OKC without Holmgren went 5-2 and the attrition was taken
+    off that form a second time; two C10s on CLE lost.)"""
+    if not out_ids:
+        return 1.0, 1.0
+    games = read_query(
+        "SELECT game_id FROM espn_team_games WHERE team_id = ? AND season_id = ? AND counts_regular = 1 "
+        "ORDER BY game_date DESC", DB_PATH, [team_id, CURRENT_SEASON])["game_id"].tolist()
+    if not games:
+        return 1.0, 1.0
+    recent = set(games[:n_recent])
+    played = read_query(
+        f"SELECT player_id, game_id FROM espn_player_games WHERE team_id = ? AND season_id = ? "
+        f"AND dnp = 0 AND sec > 0 AND player_id IN ({','.join('?' * len(out_ids))})",
+        DB_PATH, [team_id, CURRENT_SEASON, *[int(p) for p in out_ids]])
+    mpg = {int(r["player_id"]): float(r["minutes_per_game"] or 0) for _, r in roster_df.iterrows()}
+    tot = sum(mpg.get(int(p), 0.0) for p in out_ids) or float(len(out_ids))
+    season = rec = 0.0
+    for p in out_ids:
+        w = (mpg.get(int(p), 0.0) or (tot / len(out_ids))) / tot
+        g = set(played.loc[played["player_id"] == int(p), "game_id"])
+        season += w * len(g & set(games)) / len(games)
+        rec += w * len(g & recent) / len(recent)
+    return season, rec
+
+
+STEPUP_K_POSS = float(os.environ.get("STEPUP_K_POSS", 1000))      # possessions of evidence for half weight on the observed drop
+STEPUP_MIN_POSS = 300.0     # each side (with / without) needs this much to count
+STEPUP_PRIOR_SEASON_W = 0.5  # last season's stints count half
+
+
+def _observed_absence_drop(team_id, out_ids):
+    """What this team has actually done without tonight's OUT players.
+
+    From the five-man stints (espn_lineup_games, this season at full weight and
+    last season at STEPUP_PRIOR_SEASON_W, this team only): net rating per 100 in
+    stints with at least one OUT player on the floor minus net rating in stints
+    with none of them. That is the drop the team really shows when they sit,
+    with whoever steps up into the minutes, instead of the drop the player
+    ratings imply from averaging the bench at its normal role.
+    Returns (drop, weight in [0, 1)) or (None, 0.0) without enough of both."""
+    if not out_ids:
+        return None, 0.0
+    emap = {str(e): int(p) for e, p in read_query("SELECT espn_id, player_id FROM espn_player_map", DB_PATH).values}
+    out = {int(p) for p in out_ids}
+    acc = {"with": [0.0, 0.0, 0.0, 0.0], "without": [0.0, 0.0, 0.0, 0.0]}  # pts, poss, opp_pts, opp_poss
+    for season, sw in ((CURRENT_SEASON, 1.0), (previous_season(CURRENT_SEASON), STEPUP_PRIOR_SEASON_W)):
+        rows = read_query(
+            "SELECT l.e1, l.e2, l.e3, l.e4, l.e5, l.pts, l.poss, l.opp_pts, l.opp_poss FROM espn_lineup_games l "
+            "JOIN espn_team_games g ON g.game_id = l.game_id AND g.team_id = l.team_id "
+            "WHERE l.team_id = ? AND g.season_id = ? AND g.counts_regular = 1 AND l.poss > 0 AND l.opp_poss > 0",
+            DB_PATH, [team_id, season])
+        for r in rows.itertuples(index=False):
+            on = {emap.get(str(e)) for e in r[:5]}
+            k = "with" if on & out else "without"
+            a = acc[k]
+            a[0] += sw * (r.pts or 0); a[1] += sw * r.poss; a[2] += sw * (r.opp_pts or 0); a[3] += sw * r.opp_poss
+    w_, wo = acc["with"], acc["without"]
+    if min(w_[1], wo[1]) < STEPUP_MIN_POSS:
+        return None, 0.0
+    net = lambda a: 100.0 * (a[0] / a[1] - a[2] / a[3])
+    n = min(w_[1], wo[1])
+    return net(w_) - net(wo), n / (n + STEPUP_K_POSS)
+
+
 def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     """Full MOJI spread model.
 
@@ -2833,6 +2904,26 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     home_full_moji = _compute_full_strength_moji(home_roster)
     away_full_moji = _compute_full_strength_moji(away_roster)
 
+    # ── Players who step up: the drop the team really shows without them ──
+    # The ratings drop (full MOJI - tonight's MOJI) averages the bench at its
+    # normal role. Where the team has played enough without tonight's OUT
+    # players, it is blended toward the net-rating drop those stints show
+    # (_observed_absence_drop), so the players who take the minutes are read
+    # from how the team actually plays with them.
+    home_obs_drop, home_obs_w = _observed_absence_drop(home_tid, home_out_ids)
+    away_obs_drop, away_obs_w = _observed_absence_drop(away_tid, away_out_ids)
+    # A MOJI point reaches the line at about MOJI_WEIGHT x MOJO_SCALE plus its
+    # NRtg attrition in the two NRtg terms: the observed drop (spread points)
+    # is put in MOJI units by that factor before blending.
+    _per_moji = K["MOJI_WEIGHT"] * K["MOJO_SCALE"] + K["NRTG_MOJO_ATTRITION"] * (
+        K["NRTG_SEASON_WEIGHT"] + K["NRTG_RECENT_WEIGHT"])
+    home_model_drop = home_full_moji - home_moji
+    away_model_drop = away_full_moji - away_moji
+    if home_obs_drop is not None:
+        home_moji = home_full_moji - (home_obs_w * home_obs_drop / _per_moji + (1 - home_obs_w) * home_model_drop)
+    if away_obs_drop is not None:
+        away_moji = away_full_moji - (away_obs_w * away_obs_drop / _per_moji + (1 - away_obs_w) * away_model_drop)
+
     # ── Compute lineup quality (informational) ──
     home_avail_ids = [int(r["player_id"]) for _, r in home_roster.iterrows()
                       if r["player_id"] not in home_out_ids]
@@ -2859,15 +2950,28 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     # (2026-09-29 audit N5; backtest in the commit message).
     # The roster-priced part of the season NRtg already leaves the injured out;
     # attrition applies to the full-roster part only.
-    home_adj_nrtg = h_net - home_nrtg_attrition * home_full_share
-    away_adj_nrtg = a_net - away_nrtg_attrition * away_full_share
+    # This season's games already carry the absence for the games the OUT
+    # players missed: attrition is charged on those terms only for the share
+    # of games they actually played (_absence_already_priced). The last-season
+    # prior inside full_share still gets it in full.
+    home_season_sh, home_recent_sh = _absence_already_priced(home_tid, home_out_ids, home_roster)
+    away_season_sh, away_recent_sh = _absence_already_priced(away_tid, away_out_ids, away_roster)
+
+    def _season_attr_share(team_row, full_share, season_sh):
+        gp = float(team_row.get("gp") or 0)
+        cur = team_row.get("net_rating_cur")
+        cur_part = gp / (gp + TEAM_PRIOR_GAMES) if gp and cur is not None and pd.notna(cur) else 0.0
+        return max(0.0, full_share - cur_part) + cur_part * season_sh
+
+    home_adj_nrtg = h_net - home_nrtg_attrition * _season_attr_share(home_data, home_full_share, home_season_sh)
+    away_adj_nrtg = a_net - away_nrtg_attrition * _season_attr_share(away_data, away_full_share, away_season_sh)
     season_nrtg_diff = home_adj_nrtg - away_adj_nrtg
 
     # ── Trailing 10-game NRtg (captures momentum / hot teams) ──
     home_recent_nrtg, home_recent_n = get_trailing_nrtg(home_tid, n_games=10)
     away_recent_nrtg, away_recent_n = get_trailing_nrtg(away_tid, n_games=10)
-    home_adj_recent = home_recent_nrtg - home_nrtg_attrition
-    away_adj_recent = away_recent_nrtg - away_nrtg_attrition
+    home_adj_recent = home_recent_nrtg - home_nrtg_attrition * home_recent_sh
+    away_adj_recent = away_recent_nrtg - away_nrtg_attrition * away_recent_sh
     recent_nrtg_diff = home_adj_recent - away_adj_recent
 
     situational_pts = K["HCA_MEASURED"]
@@ -3001,6 +3105,12 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
         "away_nrtg": round(away_adj_nrtg, 1),
         "home_nrtg_attrition": round(home_nrtg_attrition, 1),
         "away_nrtg_attrition": round(away_nrtg_attrition, 1),
+        "home_stepup": [round(home_model_drop, 1), None if home_obs_drop is None else round(home_obs_drop, 1),
+                        round(home_obs_w, 2)],
+        "away_stepup": [round(away_model_drop, 1), None if away_obs_drop is None else round(away_obs_drop, 1),
+                        round(away_obs_w, 2)],
+        "home_absence_unpriced": [round(home_season_sh, 2), round(home_recent_sh, 2)],
+        "away_absence_unpriced": [round(away_season_sh, 2), round(away_recent_sh, 2)],
         "home_season_nrtg": round(h_net, 1),
         "away_season_nrtg": round(a_net, 1),
         "home_returning": round(home_ret, 2),
