@@ -972,10 +972,15 @@ def compute_mojo_range(score, player_id=None):
 # Model constants
 _MOJI_CONSTANTS = {
     "MOJO_SCALE":     1.0,    # 1pt MOJO gap → 1.0 points on spread scale
-    "MOJI_WEIGHT":   0.40,   # MOJI share in final blend (down from 0.45 — too sticky)
-    "NRTG_SEASON_WEIGHT": 0.10,  # season-long NRtg (stabilizer)
-    "NRTG_RECENT_WEIGHT": 0.30,  # trailing 10-game NRtg (up from 0.25 — momentum matters)
-    "SYN_WEIGHT":   0.20,   # lineup synergy share in final blend (SYN v2, unproven — modifier only)
+    # Blend re-weighted 2026-11-10 from 40/10/30/20. On 83 games (Oct 30 - Nov 9, each priced
+    # on that morning's DB with who actually sat) the MOJI term tracked results worst (r 0.37;
+    # the roster-priced season NRtg 0.58) and drove the model's disagreements with the book
+    # (r 0.53). At 10/60/25/5: RMSE vs the final margin 14.96 -> 14.08, sides 3-6 points off
+    # the close 9-14 -> 14-8, better in both halves of the sample.
+    "MOJI_WEIGHT":   0.10,   # MOJI share in final blend
+    "NRTG_SEASON_WEIGHT": 0.60,  # season NRtg priced on tonight's rotation (_roster_nrtg)
+    "NRTG_RECENT_WEIGHT": 0.25,  # trailing 10-game NRtg
+    "SYN_WEIGHT":   0.05,   # lineup synergy share in final blend
     "SYN_SCALE":    0.15,   # (home_syn - away_syn) × SCALE = spread points
     "HCA":          1.8,    # SIM tab (interactive court sim) only — not used by the pick model
     # Pick model: home court added once after the blend, measured from
@@ -2862,7 +2867,7 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     4. Compute adjusted MOJOs (MOJI) with archetype-aware usage redistribution
     5. Compare home net rating vs away net rating (injury attrition)
     6. Compute lineup synergy adjusted by opponent coaching scheme
-    7. Blend 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN,
+    7. Blend 10% MOJI + 60% Season NRtg + 25% Trailing 10-Game NRtg + 5% SYN,
        then add home court (measured) and back-to-back penalties once
 
     Returns (spread, total, breakdown).
@@ -3061,7 +3066,7 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     syn_diff = home_syn - away_syn
     synergy_as_points = syn_diff * K["SYN_SCALE"]
 
-    # ── Final blend: 40% MOJI + 10% season NRtg + 30% recent NRtg + 20% SYN ──
+    # ── Final blend: 10% MOJI + 60% season NRtg + 25% recent NRtg + 5% SYN ──
     moji_diff = home_moji - away_moji
     moji_as_points = moji_diff * K["MOJO_SCALE"]
 
@@ -3977,7 +3982,7 @@ def _seal_daily_snapshot(snapshot, slate_iso):
 # publish_member_dashboard.py wires up [data-tip]; the wording lives here with the markup.
 BOARD_TIPS = {
     "moji": "MOJI, 0 to 99: tonight's lineup quality. Each player's MOJO weighted by projected minutes, "
-            "with fatigue and injuries priced in. 40% of the sim's line.",
+            "with fatigue and injuries priced in. 10% of the sim's line.",
     "nrtg": "Net rating: points scored minus points allowed per 100 possessions, this season "
             "(last season until games are played). 10% of the line.",
     "l10": "Net rating over the last 10 games. It counts for more as games are played, up to 30% of the line.",
@@ -6706,7 +6711,7 @@ def render_info_page():
                 <div class="formula-row"><span>Step 5</span><span>Apply stocks penalty for missing defensive players</span></div>
                 <div class="formula-row"><span>Step 6</span><span>Compute adjusted NRtg: season-long + trailing 10-game</span></div>
                 <div class="formula-row"><span>Step 7</span><span>Compute lineup synergy adjusted by opponent defensive scheme</span></div>
-                <div class="formula-row"><span>Step 8</span><span>Blend: 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN, then + HCA 1.7, B2B −2.0 home / −2.5 road = raw power</span></div>
+                <div class="formula-row"><span>Step 8</span><span>Blend: 10% MOJI + 60% Season NRtg + 25% Trailing 10-Game NRtg + 5% SYN, then + HCA 1.7, B2B −2.0 home / −2.5 road = raw power</span></div>
                 <div class="formula-row"><span>Step 9</span><span>Proj. Spread = −(raw power), rounded to 0.5</span></div>
             </div>
             <div class="info-formula" style="margin-top:12px">
