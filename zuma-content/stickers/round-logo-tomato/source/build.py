@@ -1,4 +1,4 @@
-# Round logo sticker (default Tomato Study green; args: out name field-hex art-hex): 2 in (50.8 mm), no border.
+# Round logo sticker (default Tomato Study green; args: out name field-hex art-hex [lightbox.png]): 2 in (50.8 mm), no border.
 # Green flood, the crest and the ZUMA wordmark in cream, zumatides.com round the bottom edge in cream.
 # Vector PDF/.ai: every shape as outlines, page = sticker + 1.5 mm bleed, TrimBox = the sticker, die cut as a CutContour spot stroke.
 import math, re, sys, zlib
@@ -34,13 +34,16 @@ def circle(r):
     return (f'{c + r} {c} m {c + r} {c + k} {c + k} {c + r} {c} {c + r} c {c - k} {c + r} {c - r} {c + k} {c - r} {c} c '
             f'{c - r} {c - k} {c - k} {c - r} {c} {c - r} c {c + k} {c - r} {c + r} {c - k} {c + r} {c} c h')
 
-def write(path, content):
+def write(path, content, img=None, ipx=0):
     W = mm(PG); B = mm(BL); objs = []; add = lambda x: objs.append(x) or len(objs)
     fn = add(b'<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 0 0] /N 1 >>')
     cs = add(b'[/Separation /CutContour /DeviceCMYK %d 0 R]' % fn)
+    xo = ''
+    if img:
+        im = add(b'<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n' % (ipx, ipx, len(img)) + img + b'\nendstream'); xo = f' /XObject << /Im0 {im} 0 R >>'
     st = zlib.compress(content.encode('latin-1')); c = add(b'<< /Length %d /Filter /FlateDecode >>\nstream\n' % len(st) + st + b'\nendstream')
     pages = len(objs) + 2
-    pg = add(f'<< /Type /Page /Parent {pages} 0 R /MediaBox [0 0 {W:.3f} {W:.3f}] /TrimBox [{B:.3f} {B:.3f} {W - B:.3f} {W - B:.3f}] /Resources << /ColorSpace << /Cut {cs} 0 R >> >> /Contents {c} 0 R >>'.encode())
+    pg = add(f'<< /Type /Page /Parent {pages} 0 R /MediaBox [0 0 {W:.3f} {W:.3f}] /TrimBox [{B:.3f} {B:.3f} {W - B:.3f} {W - B:.3f}] /Resources << /ColorSpace << /Cut {cs} 0 R >>{xo} >> /Contents {c} 0 R >>'.encode())
     add(f'<< /Type /Pages /Kids [{pg} 0 R] /Count 1 >>'.encode()); cat = add(f'<< /Type /Catalog /Pages {pages} 0 R >>'.encode())
     out = b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n'; offs = []
     for i, o in enumerate(objs, 1): offs.append(len(out)); out += b'%d 0 obj\n' % i + o + b'\nendobj\n'
@@ -54,6 +57,14 @@ gap = 3.2; top = C - (ch + gap + wh) / 2 - 2.0                   # the pair sits
 crest = f'q {M([cs, 0, 0, cs, C - cw / 2, top])} {svgpath(CD)} f* Q'
 word = f'q {M([ws, 0, 0, ws, C - ww / 2, top + ch + gap])} {svgpath(WD)} f* Q'
 url = arc_bottom('zumatides.com', 3.6, R - 3.4)
-body = [G, f'{GREEN} rg 0 0 {PG} {PG} re f', f'{CREAM} rg', crest, word, url, f'/Cut CS 1 SCN 0.25 w {circle(R)} S']
-write(OUT + f'/zuma-round-logo-{NAME}-2in.pdf', '\n'.join(body))
+LB = sys.argv[5] if len(sys.argv) > 5 else None                 # optional Lightbox field image, 600 dpi, full bleed
+img = None; ipx = 0
+if LB:
+    import io
+    from PIL import Image
+    ipx = round(PG / 25.4 * 600); b = io.BytesIO()
+    Image.open(LB).convert('RGB').resize((ipx, ipx), Image.LANCZOS).save(b, 'JPEG', quality=94, subsampling=0); img = b.getvalue()
+field = f'q {PG} 0 0 {-PG} 0 {PG} cm /Im0 Do Q' if LB else f'{GREEN} rg 0 0 {PG} {PG} re f'
+body = [G, field, f'{CREAM} rg', crest, word, url, f'/Cut CS 1 SCN 0.25 w {circle(R)} S']
+write(OUT + f'/zuma-round-logo-{NAME}-2in.pdf', '\n'.join(body), img, ipx)
 print('ok', round(top, 2), round(top + ch + gap + wh, 2))

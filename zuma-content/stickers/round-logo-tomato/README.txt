@@ -7,3 +7,7 @@ Each: the crest, the ZUMA wordmark and zumatides.com round the bottom edge, all 
   blue-white         field #1E74A8, art #FFFFFF
 Die cut: the magenta "CutContour" spot circle (do not print).
 Rebuild: python source/build.py vector <name> <field-hex> <art-hex>
+
+Lightbox versions (zuma-round-logo-lightbox-*): the same art on a Lightbox field (ombre.js: Tissue for the green, the Oxblood field for both
+Oxblood versions, Metabolic for the blue), toned to the sticker's colour so the panels and light show and the logo stays legible.
+The field is a 600 dpi image under vector art. Rebuild: python source/build.py vector <name> <field-hex> <art-hex> <lightbox.png>
