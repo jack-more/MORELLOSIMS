@@ -22,7 +22,7 @@
 <div class="ui" id="ui"></div>
 <script src="ombre.js"></script>
 <script>
-// Motion on top of the real Lightbox: a gentle shimmer in the glass, a slow drift, and a soft pool of light that follows the pointer or finger.
+// The real Lightbox, shown exactly as painted, with a soft pool of light that follows the pointer or finger.
 const NAMES = { tissue: 'Tissue', metabolic: 'Metabolic', dermal: 'Dermal', endocrine: 'Endocrine', neuro: 'Neuro', supplies: 'ZUMA grey' };
 const Q = new URLSearchParams(location.search);
 let area = Q.get('area') || 'tissue'; if (area === 'zuma') area = 'supplies'; if (!NAMES[area]) area = 'tissue';
@@ -35,17 +35,13 @@ vec2 g2(vec2 p){float a=h21(p)*6.2831853;return vec2(cos(a),sin(a));}
 float gn(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);
   return .5+.5*mix(mix(dot(g2(i),f),dot(g2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(g2(i+vec2(0,1)),f-vec2(0,1)),dot(g2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
 const mat2 R=mat2(.8,.6,-.6,.8);
-float glass(vec2 p){return gn(R*p*22.+vec2(t*.05,0.))*.7+gn(R*R*p*9.-vec2(0.,t*.03))*.3;}   // a slow, soft ripple in the glass
 void main(){
   vec2 asp=vec2(res.x/res.y,1.); vec2 p=uv*asp;
-  float e=.002, h=glass(p); vec2 n=vec2(h-glass(p+vec2(e,0.)),h-glass(p+vec2(0.,e)))/e;
-  vec2 drift=vec2(sin(t*.11),cos(t*.09))*.004;                        // the whole field breathes a little
-  vec2 su=uv+n*.00012+drift;   // a shimmer of a pixel or two, never a warp su=clamp(su,.002,.998);
+  vec2 su=uv;   // the Lightbox is shown exactly as painted: no warp, no drift, so the bars stay straight and sharp
   vec3 col=texture2D(lb,vec2(su.x,1.-su.y)).rgb;
   float ld=distance(uv*asp,light*asp);
   float pool=exp(-ld*ld*4.); col=1.-(1.-col)*(1.-vec3(.30)*pool);      // screen-blend a soft light pool: brightens, never washes out
-  col+=vec3(.05)*smoothstep(.62,.9,h)*pool;                           // a faint glint on the ripple, only where the light is
-  col*=1.-.10*pow(length(uv-.5)*1.3,2.);                              // the lightest vignette
+    col*=1.-.10*pow(length(uv-.5)*1.3,2.);                              // the lightest vignette
   gl_FragColor=vec4(col,1.);}`;
 function sh(type, s) { const o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }
 const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr); gl.useProgram(pr);
