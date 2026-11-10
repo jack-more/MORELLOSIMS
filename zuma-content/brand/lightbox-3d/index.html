@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ZUMA Lightbox 3D</title>
+<style>
+  :root{--ink:#16181C;--snow:#FCFBF8}
+  html,body{margin:0;height:100%;background:#0b0c0d;overflow:hidden;font-family:system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+  canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .ui{position:fixed;left:16px;right:16px;bottom:max(16px,env(safe-area-inset-bottom));display:flex;gap:8px;flex-wrap:wrap;justify-content:center;pointer-events:none}
+  .ui button{pointer-events:auto;border:0;border-radius:999px;padding:9px 14px;font-size:14px;font-weight:600;color:var(--ink);background:rgba(252,251,248,.82);backdrop-filter:blur(8px);cursor:pointer}
+  .ui button[aria-pressed="true"]{background:var(--ink);color:var(--snow)}
+  .mark{position:fixed;top:max(16px,env(safe-area-inset-top));left:16px;color:rgba(252,251,248,.9);font-weight:800;letter-spacing:.02em;font-size:15px;text-shadow:0 1px 8px rgba(0,0,0,.35)}
+</style></head>
+<body>
+<canvas id="gl"></canvas>
+<div class="mark">ZUMA Lightbox</div>
+<div class="ui" id="ui"></div>
+<script>
+// ZUMA Lightbox, live: hammered privacy glass in front of swaying palm and bamboo, light pooling through, the Lightbox tile joints as the frame.
+// Plain WebGL (no libraries). The leaves are drawn on a 2D canvas each frame and refracted through a procedural glass in a fragment shader.
+const AREAS = {
+  tissue:    { name:'Tissue',    light:'#D5F3BC', mid:'#6CC93A', deep:'#2F6E14' },
+  metabolic: { name:'Metabolic', light:'#BFE8FB', mid:'#36B3E8', deep:'#0E5A8C' },
+  dermal:    { name:'Dermal',    light:'#FFC9BE', mid:'#FF6A55', deep:'#A8281F' },
+  endocrine: { name:'Endocrine', light:'#FBF1A6', mid:'#F4D63A', deep:'#9A7A06' },
+  neuro:     { name:'Neuro',     light:'#E4D8FF', mid:'#A57BF0', deep:'#4B2A9A' },
+  zuma:      { name:'ZUMA grey', light:'#E3E8ED', mid:'#9AA8B6', deep:'#3D4956' }
+};
+const hex = h => [1,3,5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+let area = (new URLSearchParams(location.search).get('area') || 'tissue'); if (!AREAS[area]) area = 'tissue';
+
+// ---------- the leaves behind the glass (2D canvas, redrawn every frame so they sway) ----------
+const LW = 512, LH = 512, lc = document.createElement('canvas'); lc.width = LW; lc.height = LH; const lx = lc.getContext('2d');
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const leaves = [];
+for (let i = 0; i < 140; i++) leaves.push({ kind: rnd() < 0.35 ? 'palm' : 'blob', x: rnd() * 1.1 - 0.05, y: rnd() * 1.1 - 0.05, s: 0.035 + rnd() * 0.09, a: rnd() * 6.28,
+  d: rnd(), ph: rnd() * 6.28, sp: 0.4 + rnd() * 0.8 });
+leaves.sort((a, b) => a.d - b.d);
+const stalks = [0.12, 0.31, 0.83].map(x => ({ x, ph: rnd() * 6.28 }));
+function drawLeaves(t) {
+  const A = AREAS[area];
+  const g = lx.createLinearGradient(0, 0, LW, LH); g.addColorStop(0, A.light); g.addColorStop(0.55, A.mid); g.addColorStop(1, A.deep);
+  lx.fillStyle = g; lx.fillRect(0, 0, LW, LH);
+  lx.save(); lx.globalAlpha = 0.55; lx.strokeStyle = A.deep;                         // bamboo stalks, far back
+  for (const s of stalks) { lx.lineWidth = 9; const sw = Math.sin(t * 0.35 + s.ph) * 6;
+    lx.beginPath(); lx.moveTo(s.x * LW + sw, -10); lx.lineTo(s.x * LW - sw, LH + 10); lx.stroke();
+    for (let k = 0; k < 6; k++) { lx.lineWidth = 2; lx.beginPath(); const y = (k + 0.3) * LH / 6; lx.moveTo(s.x * LW - 7, y); lx.lineTo(s.x * LW + 7, y); lx.stroke(); } }
+  lx.restore();
+  for (const L of leaves) {
+    const sway = Math.sin(t * L.sp + L.ph) * (0.25 + L.d * 0.5), x = L.x * LW + Math.sin(t * 0.5 * L.sp + L.ph) * 8 * L.d, y = L.y * LH;
+    const c = L.d < 0.33 ? A.deep : L.d < 0.8 ? A.mid : A.light; lx.save(); lx.translate(x, y); lx.rotate(L.a + sway * 0.4); lx.globalAlpha = 0.55 + L.d * 0.4;
+    if (L.kind === 'palm') {                                                         // a frond: a stem with leaflets
+      const len = L.s * LW * 1.6; lx.strokeStyle = c; lx.fillStyle = c; lx.lineWidth = 2;
+      lx.beginPath(); lx.moveTo(0, 0); lx.lineTo(len, 0); lx.stroke();
+      for (let k = 1; k < 11; k++) { const px = len * k / 11, w = len * 0.28 * Math.sin(Math.PI * k / 11);
+        for (const sg of [-1, 1]) { lx.beginPath(); lx.ellipse(px + w * 0.25, sg * w * 0.55, w * 0.62, w * 0.12, sg * 0.55, 0, 6.28); lx.fill(); } }
+    } else {   // a broad leaf: a pointed oval with a lighter edge on the lit side
+      const w = L.s * LW * 0.6, h2 = L.s * LW * 0.34; lx.fillStyle = c; lx.beginPath(); lx.moveTo(-w, 0); lx.quadraticCurveTo(0, -h2 * 1.4, w, 0); lx.quadraticCurveTo(0, h2 * 1.4, -w, 0); lx.fill();
+      lx.globalAlpha *= 0.6; lx.strokeStyle = A.light; lx.lineWidth = 1.5; lx.beginPath(); lx.moveTo(-w, 0); lx.quadraticCurveTo(0, -h2 * 1.4, w, 0); lx.stroke();
+      lx.strokeStyle = A.deep; lx.lineWidth = 1; lx.beginPath(); lx.moveTo(-w * 0.9, 0); lx.lineTo(w * 0.9, 0); lx.stroke(); }
+    lx.restore();
+  }
+}
+
+// ---------- WebGL ----------
+const cv = document.getElementById('gl'), gl = cv.getContext('webgl', { antialias: false, premultipliedAlpha: false });
+const VS = 'attribute vec2 p;varying vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0.,1.);}';
+const FS = `precision highp float;varying vec2 uv;uniform sampler2D leaves;uniform vec2 res;uniform float t;uniform vec2 light;uniform vec3 tint;uniform vec3 deep;
+float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
+vec2 g2(vec2 p){float a=h21(p)*6.2831853;return vec2(cos(a),sin(a));}
+float gnoise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);   // gradient noise: round features, no squares
+  return .5+.5*mix(mix(dot(g2(i),f),dot(g2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(g2(i+vec2(0,1)),f-vec2(0,1)),dot(g2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
+const mat2 R=mat2(.80,.60,-.60,.80);
+float glass(vec2 p){ // hammered privacy glass: round pebbles at three rotated scales, so no grid shows
+  return gnoise(R*p*95.)*.55+gnoise(R*R*p*41.+3.7)*.35+gnoise(p*13.)*.10;}
+vec4 blur(vec2 u,float r){vec4 s=vec4(0.);float w=0.;for(int i=0;i<12;i++){float a=float(i)*2.39996;float rr=r*sqrt(float(i)/12.);vec2 o=vec2(cos(a),sin(a))*rr;s+=texture2D(leaves,u+o);w+=1.;}return s/w;}
+void main(){
+  vec2 asp=vec2(res.x/res.y,1.); vec2 p=uv*asp;
+  float e=1./1400.; float h=glass(p), hx=glass(p+vec2(e,0.)), hy=glass(p+vec2(0.,e));
+  vec2 n=vec2(h-hx,h-hy)/e*.00055;                                       // the glass normal bends the view
+  // the Lightbox joints: big tiles of glass in a fine metal grid (wired glass)
+  vec2 tile=vec2(3.,5.); vec2 tp=fract(vec2(uv.x,uv.y)*tile); vec2 jd=min(tp,1.-tp)/tile*vec2(res.x/res.y,1.);
+  float joint=1.-smoothstep(.0,.0022,min(jd.x,jd.y));
+  vec2 wg=fract(p*46.); float wire=1.-smoothstep(.0,.045,min(min(wg.x,1.-wg.x),min(wg.y,1.-wg.y)));
+  vec2 lu=uv+n+vec2(sin(t*.07)*.01,0.);
+  vec3 col=blur(lu,.006+.004*h).rgb;                                   // frosted: always a little soft
+  col=mix(col,blur(lu,.022).rgb,.3);
+  // light pooling through the glass from the light's position, warm-white, with bloom
+  float ld=distance(uv*asp,light*asp); float pool=exp(-ld*ld*5.); float core=exp(-ld*ld*26.);
+  col=mix(col,vec3(.98,.99,.96),clamp(pool*.62+core*.33,0.,.92));
+  col*=.95+.10*h; col+=vec3(.08)*smoothstep(.6,.85,h)*(.3+pool);                // glints on the dimples near the light
+  col=mix(col,col*tint*1.15,.18);
+  col=mix(col,deep*.6,wire*.12);                                      // the fine wire mesh
+  col=mix(col,deep*.4,joint*.55);                                     // the tile joints
+  col*=1.-.38*pow(length(uv-.5)*1.25,2.2);                            // a soft vignette
+  gl_FragColor=vec4(col,1.);}`;
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr); gl.useProgram(pr);
+const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const pl = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(pl); gl.vertexAttribPointer(pl, 2, gl.FLOAT, false, 0, 0);
+const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+const U = n => gl.getUniformLocation(pr, n), uRes = U('res'), uT = U('t'), uL = U('light'), uTint = U('tint'), uDeep = U('deep');
+let L = [0.22, 0.84], LT = [0.22, 0.84];
+const move = e => { const r = cv.getBoundingClientRect(), pt = e.touches ? e.touches[0] : e; LT = [(pt.clientX - r.left) / r.width, 1 - (pt.clientY - r.top) / r.height]; };
+addEventListener('pointermove', move); addEventListener('touchmove', move, { passive: true });
+function resize() { const d = Math.min(devicePixelRatio || 1, 2); cv.width = innerWidth * d; cv.height = innerHeight * d; gl.viewport(0, 0, cv.width, cv.height); }
+addEventListener('resize', resize); resize();
+const still = new URLSearchParams(location.search).has('t'), T0 = +(new URLSearchParams(location.search).get('t') || 0);
+function frame(ms) {
+  const t = still ? T0 : ms / 1000; L[0] += (LT[0] - L[0]) * 0.06; L[1] += (LT[1] - L[1]) * 0.06;
+  if (!still && !matchMedia('(prefers-reduced-motion: reduce)').matches) { LT[0] += Math.sin(t * 0.21) * 0.0008; LT[1] += Math.cos(t * 0.17) * 0.0006; }
+  drawLeaves(t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, lc);
+  const A = AREAS[area]; gl.uniform2f(uRes, cv.width, cv.height); gl.uniform1f(uT, t); gl.uniform2f(uL, L[0], L[1]);
+  gl.uniform3fv(uTint, hex(A.mid)); gl.uniform3fv(uDeep, hex(A.deep)); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  if (!still) requestAnimationFrame(frame);
+}
+const ui = document.getElementById('ui');
+for (const k of Object.keys(AREAS)) { const bt = document.createElement('button'); bt.textContent = AREAS[k].name; bt.setAttribute('aria-pressed', String(k === area));
+  bt.onclick = () => { area = k; for (const x of ui.children) x.setAttribute('aria-pressed', String(x === bt)); if (still) requestAnimationFrame(frame); }; ui.appendChild(bt); }
+requestAnimationFrame(frame);
+</script>
+</body></html>
