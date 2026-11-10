@@ -115,7 +115,7 @@ elif SCENE == 'skins':
         root.location = ((i - 2) * 0.085, 0, 0)
     area('key', (-0.8, -1.0, 1.0), 1.4, G('KEY', '14'), tgt=(0, 0, 0.04)); area('fill', (1.0, -0.8, 0.4), 1.2, G('FILL', '4'), tgt=(0, 0, 0.04))
     area('top', (0, -0.1, 1.2), 0.8, G('TOP', '6'), tgt=(0, 0, 0.05))
-    camera((0.0, -0.95, 0.24), (0, 0, 0.045), G('LENS', '50'))
+    camera((0.0, -0.95, 0.16), (0, 0, 0.042), G('LENS', '85'))
 elif SCENE == 'front':
     FW, FH = 6.0, 4.2
     WX0, WX1, WZ0, WZ1 = -0.6, 1.9, 0.75, 2.75          # window opening
@@ -128,7 +128,7 @@ elif SCENE == 'front':
     skyp, _ = mat('frame', **{'Base Color': SKY, 'Roughness': 0.35, 'Coat Weight': 0.6, 'Coat Roughness': 0.1})
     fw = 0.09
     def frame(x0, x1, z0, z1, depth=0.12):
-        for (cx, cz, sx, sz) in (((x0 + x1) / 2, z1 - fw / 2, x1 - x0, fw), ((x0 + x1) / 2, z0 + fw / 2, x1 - x0, fw), (x0 + fw / 2, (z0 + z1) / 2, fw, z1 - z0), (x1 - fw / 2, (z0 + z1) / 2, fw, z1 - z0)):
+        for (cx, cz, sx, sz) in (((x0 + x1) / 2, z1 - fw / 2, x1 - x0, fw), ((x0 + x1) / 2, z0 + fw / 2, x1 - x0, fw), (x0 + fw / 2, (z0 + z1) / 2, fw, z1 - z0 - 2 * fw - 0.002), (x1 - fw / 2, (z0 + z1) / 2, fw, z1 - z0 - 2 * fw - 0.002)):
             box('fr', (sx, depth, sz), (cx, -0.02, cz), skyp)
     frame(WX0, WX1, WZ0, WZ1); frame(DX0, DX1, 0, DZ1)
     box('kick', (WX1 - WX0 + 0.06, 0.08, WZ0), ((WX0 + WX1) / 2, -0.06, WZ0 / 2), skyp, bevel=0.004)
