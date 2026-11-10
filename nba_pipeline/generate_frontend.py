@@ -2812,6 +2812,7 @@ def _absence_already_priced(team_id, out_ids, roster_df, n_recent=10):
     return season, rec
 
 
+MARKET_CONFLICT_PTS = 6.0   # model this far from the book: treated as model error, not logged
 STEPUP_K_POSS = float(os.environ.get("STEPUP_K_POSS", 1000))      # possessions of evidence for half weight on the observed drop
 STEPUP_MIN_POSS = 300.0     # each side (with / without) needs this much to count
 STEPUP_PRIOR_SEASON_W = 0.5  # last season's stints count half
@@ -3699,6 +3700,12 @@ def get_matchups():
             # Confidence based on true edge magnitude (not raw power gap)
             if not spread_is_projected:
                 confidence = min(96, max(35, 50 + abs(spread_edge) * 5.0))
+                # A disagreement this large with the book is the model's own
+                # error far more often than an edge: no pick. Nov 2-9 the C10s
+                # (6+ off) went 0-8; on 2025-26 (1,150 games, fit on one half,
+                # tested on the other) sides 4+ off the line hit 46-50%.
+                if abs(spread_edge) >= MARKET_CONFLICT_PTS:
+                    confidence = 50.0
             else:
                 confidence = min(96, max(35, 50 + abs(raw_edge) * 2.5))
 
