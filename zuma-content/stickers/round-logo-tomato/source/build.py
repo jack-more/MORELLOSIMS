@@ -1,4 +1,4 @@
-# Round logo sticker in Tomato Study green: 2 in (50.8 mm), no border.
+# Round logo sticker (default Tomato Study green; args: out name field-hex art-hex): 2 in (50.8 mm), no border.
 # Green flood, the crest and the ZUMA wordmark in cream, zumatides.com round the bottom edge in cream.
 # Vector PDF/.ai: every shape as outlines, page = sticker + 1.5 mm bleed, TrimBox = the sticker, die cut as a CutContour spot stroke.
 import math, re, sys, zlib
@@ -7,9 +7,11 @@ sys.path.insert(0, S + '/lv')
 from pdfw import PDFPen, svgpath, mm
 from fontTools.ttLib import TTFont
 OUT = sys.argv[1]
+hx = lambda h: ' '.join(f'{int(h[i:i+2],16)/255:.4f}' for i in (1,3,5))
+NAME = sys.argv[2] if len(sys.argv) > 2 else 'tomato-green'
 D, BL = 50.8, 1.5; PG = D + 2 * BL; C = PG / 2; R = D / 2
-GREEN = '0.0549 0.6039 0.3569'      # #0E9A5B
-CREAM = '0.9843 0.9804 0.9647'      # #FBFAF6
+GREEN = hx(sys.argv[3]) if len(sys.argv) > 3 else '0.0549 0.6039 0.3569'      # field, default Tomato green #0E9A5B
+CREAM = hx(sys.argv[4]) if len(sys.argv) > 4 else '0.9843 0.9804 0.9647'      # art, default cream #FBFAF6
 M = lambda a: ' '.join(f'{v:.6f}' for v in a) + ' cm'
 f6 = TTFont(S + '/font/Outfit-600.ttf'); gs6 = f6.getGlyphSet(); cmap6 = f6.getBestCmap(); hm6 = f6['hmtx']; GLY6 = {}
 CD = re.search(r' d="([^"]+)"', open('/home/user/MORELLOSIMS/zuma-content/packaging/capsule-case/zuma-crest-stamp.svg').read()).group(1)
@@ -53,5 +55,5 @@ crest = f'q {M([cs, 0, 0, cs, C - cw / 2, top])} {svgpath(CD)} f* Q'
 word = f'q {M([ws, 0, 0, ws, C - ww / 2, top + ch + gap])} {svgpath(WD)} f* Q'
 url = arc_bottom('zumatides.com', 3.6, R - 3.4)
 body = [G, f'{GREEN} rg 0 0 {PG} {PG} re f', f'{CREAM} rg', crest, word, url, f'/Cut CS 1 SCN 0.25 w {circle(R)} S']
-write(OUT + '/zuma-round-logo-tomato-green-2in.pdf', '\n'.join(body))
+write(OUT + f'/zuma-round-logo-{NAME}-2in.pdf', '\n'.join(body))
 print('ok', round(top, 2), round(top + ch + gap + wh, 2))
