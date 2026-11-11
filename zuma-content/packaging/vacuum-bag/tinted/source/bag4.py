@@ -243,12 +243,33 @@ if os.environ.get('BACKART'):   # the back sheet printed solid (seen through the
     _t2 = _bm.node_tree.nodes.new('ShaderNodeBsdfTransparent'); _sh = _bm.node_tree.nodes.new('ShaderNodeMixShader')
     _bm.node_tree.links.new(_sp.outputs['Blue'], _sh.inputs['Fac']); _bm.node_tree.links.new(_t2.outputs[0], _sh.inputs[1]); _bm.node_tree.links.new(_pb.outputs[0], _sh.inputs[2])
     _bm.node_tree.links.new(_sh.outputs[0], _bm.node_tree.nodes['Material Output'].inputs['Surface'])
+    if os.environ.get('SEETHRU'):   # no white flood: clear film with only the black leaf-shadow ink, the world shows through
+        _nt2 = _bm.node_tree; _N2 = _nt2.nodes; _L2 = _nt2.links
+        _bw = _N2.new('ShaderNodeRGBToBW'); _L2.new(_tx.outputs['Color'], _bw.inputs['Color'])
+        _iv = _N2.new('ShaderNodeMath'); _iv.operation = 'SUBTRACT'; _iv.inputs[0].default_value = float(os.environ.get('INKFLOOR', '0.9')); _L2.new(_bw.outputs[0], _iv.inputs[1])
+        _k = _N2.new('ShaderNodeMath'); _k.operation = 'MULTIPLY'; _k.use_clamp = True; _k.inputs[1].default_value = float(os.environ.get('INK', '1.6')); _L2.new(_iv.outputs[0], _k.inputs[0])
+        _ik = _N2.new('ShaderNodeBsdfPrincipled'); _ik.inputs['Base Color'].default_value = (0.02, 0.02, 0.025, 1); _ik.inputs['Roughness'].default_value = 0.5
+        _cl = _N2.new('ShaderNodeBsdfTransparent')
+        _ink = _N2.new('ShaderNodeMixShader'); _L2.new(_k.outputs[0], _ink.inputs['Fac']); _L2.new(_cl.outputs[0], _ink.inputs[1]); _L2.new(_ik.outputs[0], _ink.inputs[2])
+        _L2.new(_ink.outputs[0], _sh.inputs[2])
 # ---------- set: a matte sweep, soft box, strip, studio HDRI ----------
 world = bpy.data.worlds.new('w'); sc.world = world; world.use_nodes = True; wn = world.node_tree
 env = wn.nodes.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(os.path.join(TEX, 'studio.hdr'))
 bg = wn.nodes['Background']; bg.inputs['Strength'].default_value = 0.55; wn.links.new(env.outputs['Color'], bg.inputs['Color'])
 bpy.ops.mesh.primitive_plane_add(size=80, location=(0, 0, -0.25)); gnd = bpy.context.active_object
 gm, gb = mat('ground', **{'Base Color': lin(GROUND), 'Roughness': 0.85}); gnd.data.materials.append(gm)
+if os.environ.get('BACKDROP'):   # an image behind the bag (so the see-through film reads), self-lit, spanning BDW x BDH cm
+    gnd.location.z = -float(os.environ.get('BDZ', '0.25'))
+    _gt = gm.node_tree; _gn = _gt.nodes; _gl2 = _gt.links
+    for _n in list(_gn):
+        if _n.type != 'OUTPUT_MATERIAL': _gn.remove(_n)
+    _bw_, _bh_ = float(os.environ.get('BDW', '30')), float(os.environ.get('BDH', '45'))
+    _uv = _gn.new('ShaderNodeTexCoord'); _mp = _gn.new('ShaderNodeMapping')
+    _mp.inputs['Scale'].default_value = (80 / _bw_, 80 / _bh_, 1); _mp.inputs['Location'].default_value = (0.5 - 0.5 * 80 / _bw_, 0.5 - 0.5 * 80 / _bh_, 0)
+    _gl2.new(_uv.outputs['UV'], _mp.inputs['Vector'])
+    _im = _gn.new('ShaderNodeTexImage'); _im.image = bpy.data.images.load(os.environ['BACKDROP']); _im.extension = 'EXTEND'; _gl2.new(_mp.outputs['Vector'], _im.inputs['Vector'])
+    _em = _gn.new('ShaderNodeEmission'); _em.inputs['Strength'].default_value = float(os.environ.get('BDSTR', '1.0')); _gl2.new(_im.outputs['Color'], _em.inputs['Color'])
+    _gl2.new(_em.outputs[0], _gn['Material Output'].inputs['Surface'])
 def area(name, size, loc, power, sy=None):
     ld = bpy.data.lights.new(name, 'AREA'); ld.energy = power; ld.shape = 'RECTANGLE'; ld.size = size; ld.size_y = sy or size
     o = bpy.data.objects.new(name, ld); sc.collection.objects.link(o); o.location = loc
