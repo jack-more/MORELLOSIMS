@@ -270,9 +270,11 @@ cam.sensor_fit = 'VERTICAL'; cam.sensor_height = 36 * 0.75
 sc.cycles.device = 'CPU'; sc.cycles.samples = SAMPLES; sc.cycles.use_denoising = True
 sc.cycles.max_bounces = 16; sc.cycles.transmission_bounces = 16; sc.cycles.glossy_bounces = 8; sc.cycles.transparent_max_bounces = 32
 sc.cycles.caustics_reflective = False; sc.cycles.caustics_refractive = False
-sc.view_settings.view_transform = 'AgX'
-try: sc.view_settings.look = 'AgX - Medium High Contrast'
-except Exception: pass
+sc.view_settings.view_transform = os.environ.get('VIEW', 'AgX')   # VIEW=Standard keeps the print colours (AgX mutes saturated blues)
+sc.view_settings.exposure = float(os.environ.get('EXPOSURE', '0'))
+if sc.view_settings.view_transform == 'AgX':
+    try: sc.view_settings.look = 'AgX - Medium High Contrast'
+    except Exception: pass
 r.image_settings.file_format = 'PNG'; r.image_settings.color_mode = 'RGB'; r.filepath = OUT
 if os.environ.get('SAVEBLEND'):
     bpy.ops.file.pack_all(); bpy.ops.wm.save_as_mainfile(filepath=os.environ['SAVEBLEND'])
