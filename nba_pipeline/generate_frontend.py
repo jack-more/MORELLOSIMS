@@ -2820,7 +2820,6 @@ def _absence_already_priced(team_id, out_ids, roster_df, n_recent=10):
     return season, rec
 
 
-MARKET_CONFLICT_PTS = 6.0   # model this far from the book: treated as model error, not logged
 STEPUP_K_POSS = float(os.environ.get("STEPUP_K_POSS", 1000))      # possessions of evidence for half weight on the observed drop
 STEPUP_MIN_POSS = 300.0     # each side (with / without) needs this much to count
 STEPUP_PRIOR_SEASON_W = 0.5  # last season's stints count half
@@ -3708,12 +3707,6 @@ def get_matchups():
             # Confidence based on true edge magnitude (not raw power gap)
             if not spread_is_projected:
                 confidence = min(96, max(35, 50 + abs(spread_edge) * 5.0))
-                # A disagreement this large with the book is the model's own
-                # error far more often than an edge: no pick. Nov 2-9 the C10s
-                # (6+ off) went 0-8; on 2025-26 (1,150 games, fit on one half,
-                # tested on the other) sides 4+ off the line hit 46-50%.
-                if abs(spread_edge) >= MARKET_CONFLICT_PTS:
-                    confidence = 50.0
             else:
                 confidence = min(96, max(35, 50 + abs(raw_edge) * 2.5))
 
@@ -3986,13 +3979,17 @@ def _seal_daily_snapshot(snapshot, slate_iso):
 BOARD_TIPS = {
     "moji": "MOJI, 0 to 99: tonight's lineup quality. Each player's MOJO weighted by projected minutes, "
             "with fatigue and injuries priced in. Shown for reference; the line is the season rating for tonight's rotation.",
-    "nrtg": "Net rating: points scored minus points allowed per 100 possessions, this season "
-            "(last season until games are played). 10% of the line.",
-    "l10": "Net rating over the last 10 games. It counts for more as games are played, up to 30% of the line.",
+    "nrtg": "Rotation rating: how many points per 100 possessions better than an average team the players "
+            "expected to play tonight are. Built from this season's results and each player's measured "
+            "impact (how the team does with him on the floor), weighted by tonight's minutes. It sets the line.",
+    "out": "Points taken off for players ruled out tonight. A player who has already missed games is "
+           "only charged for the games he played, because the team's results without him already count.",
+    "l10": "Net rating over the last 10 games. Shown for reference; not in the line.",
     "syn": "Synergy, 0 to 99: how tonight's lineup has played together, from 2- to 5-man on/off data. "
-           "20% of the line.",
+           "Shown for reference; not in the line.",
     "book": "The sportsbook spread for each team. Minus is the favorite: -1.5 means win by 2 or more.",
-    "sim": "Who the sim has winning, and by how much, from the four columns plus home court and rest.",
+    "sim": "Who the sim has winning, and by how much: the rotation rating, less players out, "
+           "plus home court and rest.",
     # no team in the example: "LAC +9.5" here matched that night's sealed pick and
     # check_seal_guardrail.py blocked every commit until tip
     "side": "The bet: the team the sim takes at the book's number. +9.5 means that team gets 9.5 points; "
@@ -6142,6 +6139,11 @@ def render_matchup_card(m, idx, team_map, logged=False):
     nrtg_weighted = w_nrtg * nrtg_diff + recent_w * recent_nrtg_diff
     syn_weighted = w_syn * syn_pts
     proj_spread_val = m.get("proj_spread", 0)
+    # the rotation rating before players out, and what tonight's absences take off it
+    home_rot = bd.get("home_season_nrtg", home_nrtg)
+    away_rot = bd.get("away_season_nrtg", away_nrtg)
+    home_out_cost = max(0.0, home_rot - home_nrtg)
+    away_out_cost = max(0.0, away_rot - away_nrtg)
 
     # ── The card: the original matchup card, rebuilt to read faster. Logo against
     # logo with the sim's line in the middle, the tug of war, the schemes, then one
@@ -6194,20 +6196,31 @@ def render_matchup_card(m, idx, team_map, logged=False):
                        f"and this one is at {lean:.0f}%, so it isn't a pick.")
         else:
             verdict = f"C{conf_10} clears the C{floor} bar: a logged pick."
+        how = (f"How it gets there: {aa}'s rotation tonight rates {away_rot:+.1f} points per 100 possessions "
+               f"against an average team and {ha}'s {home_rot:+.1f}")
+        outs = [f"{t} loses {c:.1f} for players out" for t, c in ((aa, away_out_cost), (ha, home_out_cost)) if c >= 0.05]
+        how += ("; " + " and ".join(outs) if outs else "") + f"; home court and rest are worth {abs(situational_pts):.1f} to " \
+               f"{ha if situational_pts >= 0 else aa}."
         why_html = (f"The book has {pick_text}. {sim_says} "
-                    f"That's {edge_abs:.1f} points of value on {pick_team}. " + verdict)
+                    f"That's {edge_abs:.1f} points of value on {pick_team}. {how} " + verdict)
 
 
     # What built the line: each input's pull in points (+ toward home), as the blend weighs it
     PULL_FULL = 6.0                                       # points that fill half the bar
-    factors = [
-        ("MOJI", BOARD_TIPS["moji"], f"{w_moji:.0%}", f"{away_moji:.1f}", f"{home_moji:.1f}", moji_weighted),
-        ("NRtg", BOARD_TIPS["nrtg"], f"{w_nrtg:.0%}", f"{away_nrtg:+.1f}", f"{home_nrtg:+.1f}", w_nrtg * nrtg_diff),
-        ("Last 10", BOARD_TIPS["l10"], f"{recent_w:.0%}", f"{away_recent_nrtg:+.1f}", f"{home_recent_nrtg:+.1f}",
-         recent_w * recent_nrtg_diff),
-        ("Synergy", BOARD_TIPS["syn"], f"{w_syn:.0%}", f"{away_syn:.1f}", f"{home_syn:.1f}", syn_weighted),
-        ("Court + rest", BOARD_TIPS["hca"], "", "", "", situational_pts),
-    ]
+    factors = [("Rotation rating", BOARD_TIPS["nrtg"], "", f"{away_rot:+.1f}", f"{home_rot:+.1f}",
+                w_nrtg * (home_rot - away_rot))]
+    if away_out_cost >= 0.05 or home_out_cost >= 0.05:
+        factors.append(("Players out", BOARD_TIPS["out"], "", f"{-away_out_cost:+.1f}" if away_out_cost >= 0.05 else "0",
+                        f"{-home_out_cost:+.1f}" if home_out_cost >= 0.05 else "0",
+                        w_nrtg * (away_out_cost - home_out_cost)))
+    if w_moji > 0:
+        factors.append(("MOJI", BOARD_TIPS["moji"], f"{w_moji:.0%}", f"{away_moji:.1f}", f"{home_moji:.1f}", moji_weighted))
+    if recent_w > 0:
+        factors.append(("Last 10", BOARD_TIPS["l10"], f"{recent_w:.0%}", f"{away_recent_nrtg:+.1f}",
+                        f"{home_recent_nrtg:+.1f}", recent_w * recent_nrtg_diff))
+    if w_syn > 0:
+        factors.append(("Synergy", BOARD_TIPS["syn"], f"{w_syn:.0%}", f"{away_syn:.1f}", f"{home_syn:.1f}", syn_weighted))
+    factors.append(("Court + rest", BOARD_TIPS["hca"], "", "", "", situational_pts))
 
     def _pull(pts):
         if abs(pts) < 0.05:
@@ -6303,7 +6316,7 @@ def render_matchup_card(m, idx, team_map, logged=False):
             {_team(ha, h_name, h_logo, m['h_wins'], m['h_losses'], m['h_mojo_rank'], right=True)}
         </div>
         <div class="vs-tow ma-premium"><i class="a" style="width:{100 - home_share:.1f}%"></i><i class="h" style="width:{home_share:.1f}%"></i><b></b></div>
-        <div class="vs-towl ma-premium"><span>{aa} MOJI {away_moji:.1f}</span><span class="vs-towsim">{sim_short}</span><span>{ha} MOJI {home_moji:.1f}</span></div>
+        <div class="vs-towl ma-premium"><span>{aa} rating {away_nrtg:+.1f}</span><span class="vs-towsim">{sim_short}</span><span>{ha} rating {home_nrtg:+.1f}</span></div>
         <div class="vs-schemes"><span class="vs-sg">{_chips(a_off, a_def, ac)}</span><em>vs</em><span class="vs-sg">{_chips(h_off, h_def, hc)}</span></div>
         <div class="vs-factors ma-premium">
             <div class="vs-fhead"><span>Inputs</span><span>{aa}</span><span></span><span>{ha}</span><span>Pull</span></div>
