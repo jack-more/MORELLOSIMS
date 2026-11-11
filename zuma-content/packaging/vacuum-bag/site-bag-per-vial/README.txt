@@ -6,3 +6,7 @@ Fix: a denser ink texture (tinted/source/front-tint-blue-dense.png = the blue Li
 tinted/source/grade.py raw.png out.png 1.45 0.147, which moves only blue film pixels to the plate's hue, saturation and lightness.
 Render: tinted/source/bag4.py with EXPOSURE=0.3 PW=10 PH=15 CLENS=70 SPACING=0.035 TENT=1.0 FREE=0.6 TPOW=2.4 CW=0.16 GLINT=0.35
 TINTFROST=0.08 COAT=0.15 VY=1.0 VIALS=NN@1.1, TINTART = front-tint-blue-dense.png, BACKART = palm shadow, 720 x 960, 40 samples.
+
+Palm back plate (11 Nov 2026): the back sheet's palm shadow was too faint to read through the blue. Renders now use
+tinted/source/back-sheet-shadow-dense.png (the palm plate ^1.8, darkest 16% instead of 37%) and tinted/source/grade.py, which recolours the
+blue film to the plate blue at each pixel's own brightness, so the palm stays dark, glints stay white and the white ink is untouched.
