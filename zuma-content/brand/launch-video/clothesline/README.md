@@ -9,3 +9,6 @@
 ## Reshoot with the lineup (10 Nov 2026): zuma-clothesline-lineup.mp4
 - Six bags, each with a different product: RT-3, GHK-Cu, Tesamorelin, BPC+TB, Selank, NAD+ (reference `lineup-reference.png`, from the site bag renders).
 - Two hands: one squeezes the peg open, the other slides the BPC+TB bag free. Same end card.
+
+## No-hands cut: zuma-clothesline-nohands.mp4
+- The lineup film cut at 6.4 s, before the hands come in, crossfading into the end card. About 10 s. No new render.
