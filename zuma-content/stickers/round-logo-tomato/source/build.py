@@ -1,7 +1,7 @@
 # Round logo sticker (default Tomato Study green; args: out name field-hex art-hex [lightbox.png]): 2 in (50.8 mm), no border.
 # Green flood, the crest and the ZUMA wordmark in cream, zumatides.com round the bottom edge in cream.
 # Vector PDF/.ai: every shape as outlines, page = sticker + 1.5 mm bleed, TrimBox = the sticker, die cut as a CutContour spot stroke.
-import math, re, sys, zlib
+import math, os, re, sys, zlib
 S = '/tmp/claude-0/-home-user-MORELLOSIMS/28fcdcb0-1e78-54f5-bf93-2db9041de387/scratchpad'
 sys.path.insert(0, S + '/lv')
 from pdfw import PDFPen, svgpath, mm
@@ -51,12 +51,12 @@ def write(path, content, img=None, ipx=0):
     out += b'trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n' % (len(objs) + 1, cat, x); open(path, 'wb').write(out)
 
 G = f'{mm(1):.8f} 0 0 {-mm(1):.8f} 0 {mm(PG):.4f} cm'
-cw = 17.0; cs = cw / 104.26; ch = 100 * cs                       # crest 17 mm wide
-ww = 26.0; ws = ww / 267.52; wh = 64.0 * ws                      # wordmark 26 mm wide
-gap = 3.2; top = C - (ch + gap + wh) / 2 - 2.0                   # the pair sits a touch above centre, clear of the address
+cw = float(os.environ.get('CREST_W', '17.0')); cs = cw / 104.26; ch = 100 * cs                       # crest 17 mm wide
+ww = float(os.environ.get('WORD_W', '26.0')); ws = ww / 267.52; wh = 64.0 * ws                      # wordmark 26 mm wide
+gap = float(os.environ.get('GAP', '3.2')); top = C - (ch + gap + wh) / 2 - float(os.environ.get('LIFT', '2.0'))                   # the pair sits a touch above centre, clear of the address
 crest = f'q {M([cs, 0, 0, cs, C - cw / 2, top])} {svgpath(CD)} f* Q'
 word = f'q {M([ws, 0, 0, ws, C - ww / 2, top + ch + gap])} {svgpath(WD)} f* Q'
-url = arc_bottom('zumatides.com', 3.6, R - 3.4)
+url = '' if os.environ.get('NOURL') else arc_bottom('zumatides.com', 3.6, R - 3.4)
 LB = sys.argv[5] if len(sys.argv) > 5 else None                 # optional Lightbox field image, 600 dpi, full bleed
 img = None; ipx = 0
 if LB:
