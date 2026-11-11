@@ -12,3 +12,6 @@
 
 ## No-hands cut: zuma-clothesline-nohands.mp4
 - The lineup film cut at 6.4 s, before the hands come in, crossfading into the end card. About 10 s. No new render.
+
+## Final: zuma-clothesline-final.mp4 (12 s)
+- The lineup (before the hands) slowed to 0.75x with motion interpolation, a 1.6 s dissolve into the end card, the end card drifting in slowly, the gulls and breeze carried under it and faded out. No new render.
