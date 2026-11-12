@@ -14,3 +14,7 @@ Seven references, each named in the prompt: 1-2 mood only; 3 the 3D see-through 
 5 the crest + "zumatides.com" close-up; 6 the RT-3 vial render; 7 the Rev 4 RT-3 label art. Every word spelled out in the prompt.
 Result: "zumatides.com", "Research peptides, tested by lot", and the vial label (ZUMA, METABOLIC RESEARCH, RT-3, 10 MG, RETATRUTIDE) now read correctly.
 Still off: the tiny bottom band on the vial label is slightly garbled, and the bag's fine print is still placeholder texture.
+
+## v3 (see-through bag references, 12 Nov 2026)
+Bag refs: C (3D on white), H (over the lab), I (over stripes), J (over Provence), all dense ink, which the founders love. Prompt names the bag see-through and points at H/I/J.
+Result: the bag blue and palm now match our renders; 02-v3 is the pick. 03-v3 came back with a heavy dark vignette.
