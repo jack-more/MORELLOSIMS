@@ -47,6 +47,7 @@ Read this before any ZUMA design, packaging, site or writing work.
 - No dosing advice or human-use claims anywhere. Keep "For laboratory research use only. Not for human or veterinary use." on every product surface.
 - No dose on the boxes.
 - The live site only deploys when a founder says the word "deploy".
+- **Never spend Higgsfield credits without explicit permission from a founder for that specific generation (set 12 Nov 2026).**
 - Keep personal contact details and supplier prices out of the repo.
 - Commit and push work to the session's branch; scratch space can be wiped.
 
