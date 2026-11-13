@@ -1,4 +1,4 @@
-# YOJO brand system
+# YOJO brand guide
 
 Version 3 · 2026-11-13 · yojo.skin
 
@@ -91,7 +91,7 @@ Real eggs are stamped at the farm. Ours are too.
 - **Layout:** every stamp is level and centred. YOJO over the batch code (B0001). No tilted or scattered stamps.
 - **The odd egg:** one egg-white egg per grid carries the full batch block in copper ink: YOJO / GHK-CU / BATCH 0001 / date.
 - **Format:** `BATCH 0001` and `YYYY.MM.DD`, the production date of the GHK-Cu batch. 0001 and the current date are placeholders until production gives real numbers.
-- **Where it goes:** the base of each egg, the carton lid, the hang tag, and the batch content. The front of the egg stays molded type only.
+- **Where it goes:** the front of the egg (the batch grid), the carton lid, the hang tag.
 
 ## 8. Packaging
 
@@ -101,7 +101,6 @@ Real eggs are stamped at the farm. Ours are too.
 
 ## 9. Photography and image
 
-- Every product image comes from the 3D model or a physical prototype. **No AI-generated product, ever.** AI is for environments, textures and characters only.
 - **Catalog:** the product on a warm white or warm grey sweep, with soft daylight and a short shadow.
 - **Tone on tone:** each skin on a backdrop in its own colour.
 - **Batch grid:** a 4 × 4 grid of eggs, straight on, on batch green with fine film grain. One egg-white egg in copper.
@@ -131,10 +130,8 @@ Real eggs are stamped at the farm. Ours are too.
 ## 13. Don'ts
 
 - No Asian characters.
-- No ink printing on the front of the egg; the front is molded type only.
 - No tilted or scattered stamps.
 - No single ring around the Y.
 - No mirror-chrome threads.
-- No AI-generated product.
 - No Fortnite, Chrome Hearts or other brands' characters, marks or ornaments. Take the craft (silversmithing, rope, bright-cut engraving), never the motifs.
 - Don't show internals, specs, factories or unannounced formulas in marketing.
