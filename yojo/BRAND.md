@@ -131,7 +131,3 @@ Real eggs are stamped at the farm. Ours are too.
 
 - No Asian characters.
 - No tilted or scattered stamps.
-- No single ring around the Y.
-- No mirror-chrome threads.
-- No Fortnite, Chrome Hearts or other brands' characters, marks or ornaments. Take the craft (silversmithing, rope, bright-cut engraving), never the motifs.
-- Don't show internals, specs, factories or unannounced formulas in marketing.
