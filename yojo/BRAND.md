@@ -110,7 +110,7 @@ Real eggs are stamped at the farm. Ours are too.
 
 - **Wordmark:** YOJO only, never retyped.
 - **Stamp:** YOJO Batch (section 7).
-- **Site and supers:** Instrument Serif italic for names, Inter for everything else. This is in use on the site now. The final display face is still open.
+- **Site and supers:** the display face is being chosen. Not Instrument Serif.
 
 ## 11. Words
 
@@ -131,3 +131,4 @@ Real eggs are stamped at the farm. Ours are too.
 
 - No Asian characters.
 - No tilted or scattered stamps.
+- No Instrument Serif.
