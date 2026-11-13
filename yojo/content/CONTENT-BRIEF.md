@@ -38,7 +38,7 @@ Nothing is shot until this is signed off. Every series name below is a working l
 **The product is always right:**
 - The head sits level; the head is never tilted.
 - The Y on top is correct, and so is the wordmark on the front: YOJO over GHK-CU, debossed, never printed.
-- Colors are the calibrated skins: Chalk Sky, Chalk Rose, Chalk Sage, Chalk Cloud, Cobalt.
+- Colors are the calibrated skins: Ice, Bubblegum, Matcha, Oat, Cobalt.
 - **No AI-generated product in motion.** The AI tests proved it: the product warps and looks pasted on. The product in motion is either our 3D model or a real physical prototype.
 
 **Copy:** no taglines until YOJO writes or approves them. Supers carry facts only: GHK-CU · 30 ML · AIRLESS · TWIST TO OPEN.
@@ -114,7 +114,7 @@ There's no presenter in the first round, just voice-over or supers.
 **What it is.** Each skin color dropped like a fashion release: an editorial still set, one six-second motion piece and a 3D turntable.
 
 **Styling:**
-- Wardrobe in tonal family with the skin, for example Chalk Rose on a dusty-rose knit set.
+- Wardrobe in tonal family with the skin, for example Bubblegum on a dusty-rose knit set.
 - Hair and makeup glowy and minimal. The product is the jewelry.
 
 **Sets:** tone-on-tone paper sweeps matched to each skin, plus one black-void hero per drop.
@@ -139,7 +139,7 @@ There's no presenter in the first round, just voice-over or supers.
 
 ### G · The Grove (the world, animated, flagship series)
 **The lore.** YOJO doesn't come from a factory in this world. The pods grow on trees.
-- Soft, chalk-colored, egg-shaped pods hang in a floating orchard, blank and unfinished.
+- Soft, pastel, egg-shaped pods hang in a floating orchard, blank and unfinished.
 - A pod only becomes YOJO when someone plucks it and drives the chrome nail (the knurled head) into it.
 - Applying it keeps you looking fresh, which is what lets you stay in the game season after season.
 
@@ -150,7 +150,7 @@ There's no presenter in the first round, just voice-over or supers.
 
 **Beats** (the 30–45 s pilot):
 1. **The Grove:** a wide shot of the orchard at golden hour. Pods ripen and glow from inside.
-2. **Pluck:** an original hero character climbs and picks a ripe Chalk Sky pod.
+2. **Pluck:** an original hero character climbs and picks a ripe Ice pod.
 3. **The nail:** a low hero angle. They drive the chrome head into the pod with a burst of blue light, and the blank pod becomes the finished vessel with YOJO over GHK-CU pressed in.
 4. **Twist and press:** the real gesture, one turn up, cream onto a fingertip.
 5. **Apply:** a dab on the cheekbone and a soft glow, like equipping a new skin.
@@ -210,7 +210,7 @@ There's no presenter in the first round, just voice-over or supers.
 
 | Week | Out |
 |---|---|
-| 1 | The Twist ep 1 (Chalk Sky), hero stills, carton still |
+| 1 | The Twist ep 1 (Ice), hero stills, carton still |
 | 2 | Why It's Blue ep 1, The Twist ep 2 |
 | 3 | Skins drop 1 teaser and reveal |
 | 4 | The Order ep 1 (needs the prototype), Why It's Blue ep 2 |

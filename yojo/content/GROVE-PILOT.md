@@ -20,9 +20,9 @@ Each hero mains one skin color, so the cast doubles as the colorway story.
 
 | Hero | Mains | Silhouette | Vibe |
 |---|---|---|---|
-| **Sky** | Chalk Sky | Tall, long coat, swept hair | The leader. Calm, always first up the tree. |
-| **Rosa** | Chalk Rose | Compact, big hoodie, cropped hair | Fast, cheeky, plucks mid-jump. |
-| **Sage** | Chalk Sage | Broad, utility vest, braids | The strong one. Shakes the whole tree. |
+| **Sky** | Ice | Tall, long coat, swept hair | The leader. Calm, always first up the tree. |
+| **Rosa** | Bubblegum | Compact, big hoodie, cropped hair | Fast, cheeky, plucks mid-jump. |
+| **Sage** | Matcha | Broad, utility vest, braids | The strong one. Shakes the whole tree. |
 | **Cobalt** | Cobalt | Lean, visor, gloves | The collector. Hunts the rare pods. |
 
 Ages read 20s to 40s. Mixed skin tones. Each hero has a signature outfit color that matches their skin.
@@ -31,8 +31,8 @@ Ages read 20s to 40s. Mixed skin tones. Each hero has a signature outfit color t
 
 | # | Time | Shot | Source | Sound |
 |---|---|---|---|---|
-| 1 | 0–4 s | **The Grove.** Wide, golden hour. A floating orchard on islands of grass above clouds. Soft chalk-colored pods hang from the branches and glow from inside as they ripen. | AI | Wind, a low warm pad |
-| 2 | 4–8 s | **Pluck.** Sky climbs a branch, reaches and plucks a ripe Chalk Sky pod. It's blank: no head, no wordmark. | AI | Branch creak, a soft snap |
+| 1 | 0–4 s | **The Grove.** Wide, golden hour. A floating orchard on islands of grass above clouds. Soft pastel pods hang from the branches and glow from inside as they ripen. | AI | Wind, a low warm pad |
+| 2 | 4–8 s | **Pluck.** Sky climbs a branch, reaches and plucks a ripe Ice pod. It's blank: no head, no wordmark. | AI | Branch creak, a soft snap |
 | 3 | 8–12 s | **The nail.** Low hero angle. Sky raises the chrome nail and drives it into the top of the pod. A ring of blue light bursts out. | AI to the moment of contact, then Blender | Metallic rasp, a deep thunk |
 | 4 | 12–16 s | **It becomes YOJO.** The pod turns: YOJO over GHK-CU presses into the skin, the snake-rope head seats flush, and the Y catches the light. | Blender insert | Click, shimmer |
 | 5 | 16–21 s | **Twist and press.** One turn up on the threads, one press, a ribbon of blue cream onto a fingertip. | Blender insert, hand cut in from AI | Knurl rasp, three clicks, pump exhale |

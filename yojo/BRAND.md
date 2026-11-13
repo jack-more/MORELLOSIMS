@@ -68,10 +68,10 @@ The formula is identical at every tier. Only the outside changes.
 
 | Name | Hex | Use |
 |---|---|---|
-| Chalk Sky | #60B0E0 | The hero skin |
-| Chalk Rose | #CF788F | Skin |
-| Chalk Sage | #8AB469 | Skin |
-| Chalk Cloud | #D7D1C6 | Skin; the eggs in the batch grid |
+| Ice | #60B0E0 | The hero skin |
+| Bubblegum | #CF788F | Skin |
+| Matcha | #8AB469 | Skin |
+| Oat | #D7D1C6 | Skin; the eggs in the batch grid |
 | Cobalt | #1A5FD6 | Skin; the one saturated colour |
 | Egg white | #FBFAF6 | The odd egg in a batch grid |
 | Copper ink | #F06A12 | The batch message. GHK-Cu is copper. |
@@ -80,7 +80,7 @@ The formula is identical at every tier. Only the outside changes.
 | Silver | | Every metal part. Always the only shiny thing. |
 
 - Skin values are calibrated render targets. Match physical parts to Pantone chips before tooling.
-- Pastels stay chalky: a little grey, powdery, matte.
+- Pastels stay soft and matte.
 
 ## 7. The batch stamp
 
@@ -95,7 +95,7 @@ Real eggs are stamped at the farm. Ours are too.
 
 ## 8. Packaging
 
-- **The carton:** molded pulp, six cups, cone posts, a domed lid with a flat label strip, and a latch tab. Natural off-white, or dyed Chalk Sky.
+- **The carton:** molded pulp, six cups, cone posts, a domed lid with a flat label strip, and a latch tab. Natural off-white, or dyed Ice.
 - **The hang tag:** a white card with silver foil (YOJO, GHK-CU, copper peptide cream, 30 ml airless, twist to open), a sky card behind, a sky cord, and a strap with the Twist, Press and Lock icons.
 - **The sign:** sky acrylic, four silver standoffs, YOJO / GHK-CU / TWIST / PRESS / LOCK in silver foil.
 
