@@ -70,33 +70,49 @@ def load_egg(skin_col, metal='sterling'):
     return root
 
 if SCENE == 'hero':
-    # limestone wall, travertine plinth, low warm sun through window slats
-    wall = plaster('wall', s2l('#E6DCCD')); box((3.0, 0.05, 2.0), (0, 0.45, 0.6), wall); box((3.0, 1.6, 0.02), (0, -0.3, -0.31), wall)
-    trav = stone('trav', s2l('#E7DCCB'), s2l('#D3C3AA'))
-    box((0.30, 0.30, 0.30), (0, 0.05, -0.15), trav, bevel=0.002)
-    egg = load_egg(lin('sky')); egg.location = (0, 0.05, 0.0); egg.rotation_euler = (0, 0, math.radians(-10))
-    for i in range(9):   # blinds: thin slats between the sun and the wall
-        box((1.4, 0.004, 0.022), (-0.9, -0.55, 0.25 + i * 0.05), wall).visible_camera = False
-    s = sun((math.radians(62), 0, math.radians(-128)), G('SUN', '5.5'))
-    area('fill', (0.6, -1.0, 0.4), 1.2, G('FILL', '12'), tgt=(0, 0, 0.05), col=(0.9, 0.93, 1.0))
-    camera((0.16, -0.95, 0.10), (0.02, 0.05, 0.035), G('LENS', '50'), dof=G('FSTOP', '5.6'))
+    wall = plaster('wall', s2l('#E6DCCD'))
+    room = [box((3.0, 0.05, 2.0), (0, 0.32, 0.6), wall), box((3.0, 1.6, 0.02), (0, -0.3, -0.31), wall)]
+    trav = stone('trav', s2l('#E9DFCE'), s2l('#D5C6AE'))
+    room.append(box((0.26, 0.26, 0.30), (0, 0.03, -0.15), trav, bevel=0.002))
+    egg = load_egg(lin('sky')); egg.location = (0, 0.03, 0.0); egg.rotation_euler = (0, 0, math.radians(-12))
+    egg_objs = [o for o in egg.children]
+    d = mathutils.Vector((G('SDX', '0.55'), G('SDY', '0.75'), G('SDZ', '-0.42'))).normalized()
+    slats = []
+    for i in range(16):
+        p = mathutils.Vector((0.05, 0.32, -0.05 + G('SLZ', '0') + i * G('SLP', '0.045'))) - d * 0.9
+        sl = box((1.2, 0.002, 0.026), tuple(p), wall); sl.visible_camera = False; slats.append(sl)
+    def coll(name, objs):
+        c = bpy.data.collections.new(name); [c.objects.link(o) for o in objs]; return c
+    c_room, c_egg, c_block = coll('room', room), coll('eggc', egg_objs), coll('block', slats + egg_objs)
+    sa = sun(d.to_track_quat('-Z', 'Y').to_euler(), G('SUN', '2.0'))                 # through the blinds: room only
+    sa.light_linking.receiver_collection = c_room; sa.light_linking.blocker_collection = c_block
+    sb = sun(d.to_track_quat('-Z', 'Y').to_euler(), G('SUN', '2.0') * G('EGGSUN', '0.85'))   # clean sun: the egg only
+    sb.light_linking.receiver_collection = c_egg; sb.light_linking.blocker_collection = c_egg
+    area('fill', (0.5, -0.9, 0.3), 1.2, G('FILL', '6'), tgt=(0, 0, 0.05), col=(0.9, 0.93, 1.0))
+    camera((0.10, -0.55, 0.075), (0.0, 0.03, 0.04), G('LENS', '55'), dof=G('FSTOP', '6'))
 elif SCENE == 'cream':
-    # a swirl of blue copper-peptide cream on a glass slab, from above
-    glass, _ = mat('glass', **{'Base Color': (0.95, 0.97, 0.98, 1), 'Roughness': 0.05, 'Transmission Weight': 1.0, 'IOR': 1.5})
-    box((0.5, 0.5, 0.01), (0, 0, -0.005), glass); box((2, 2, 0.01), (0, 0, -0.03), plaster('under', s2l('#EDE7DC')))
-    cu = bpy.data.curves.new('swirl', 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = 0.006; cu.bevel_resolution = 10; cu.use_fill_caps = True
-    sp = cu.splines.new('NURBS'); pts = []
-    for k in range(60):
-        t = k / 59; a = t * 4.6 * math.pi; r = 0.05 * (1 - 0.82 * t) + 0.004
-        pts.append((r * math.cos(a), r * math.sin(a), 0.004 + 0.012 * t ** 2))
-    sp.points.add(len(pts) - 1)
-    for p, c in zip(sp.points, pts): p.co = (*c, 1)
-    sp.use_endpoint_u = True; sp.order_u = 4
-    ob = bpy.data.objects.new('swirl', cu); C.objects.link(ob); ob.scale = (1, 1, 0.55)
-    cm, _ = mat('cream', **{'Base Color': s2l('#3D86D6'), 'Roughness': 0.22, 'Subsurface Weight': 0.5, 'Subsurface Scale': 0.004, 'Coat Weight': 0.4, 'Coat Roughness': 0.12})
-    cu.materials.append(cm)
-    area('key', (-0.25, -0.2, 0.5), 0.5, G('KEY', '30'), tgt=(0, 0, 0)); area('rim', (0.3, 0.25, 0.25), 0.15, G('RIM', '18'), tgt=(0, 0, 0))
-    camera((0.02, -0.06, 0.32), (0, 0, 0.005), G('LENS', '65'), dof=G('FSTOP', '4'))
+    box((2, 2, 0.01), (0, 0, -0.006), stone('under', s2l('#ECE6DC'), s2l('#DED4C4'), scale=2, rough=0.6))
+    n_u, n_v = 400, 80; L_, W_ = 0.16, 0.034
+    vs = []; fs = []
+    rng = np.random.default_rng(3); ridge_ph = rng.uniform(0, 6.28, 6); ridge_k = rng.uniform(20, 60, 6)
+    for i in range(n_u):
+        u = i / (n_u - 1); x = (u - 0.5) * L_
+        taper = np.sin(np.pi * min(1, u * 1.15)) ** 0.6 * (1 - 0.5 * u)               # thick at the start of the stroke, feathering out
+        for j in range(n_v):
+            v = j / (n_v - 1); yv = (v - 0.5) * W_ * (0.9 + 0.2 * np.sin(u * 7))
+            prof = np.sqrt(max(0.0, 1 - (2 * v - 1) ** 2)) ** 0.6
+            ridges = sum(0.12 * np.sin(k * v * 6.28 + p + u * 3) for k, p in zip(ridge_k / 10, ridge_ph)) * 0.15
+            z = 0.0045 * taper * prof * (1 + ridges)
+            vs.append((x, yv + 0.004 * np.sin(u * 5), z))
+    for i in range(n_u - 1):
+        for j in range(n_v - 1):
+            a0 = i * n_v + j; fs.append((a0, a0 + n_v, a0 + n_v + 1, a0 + 1))
+    me = bpy.data.meshes.new('smear'); me.from_pydata(vs, [], fs); me.update(); me.shade_smooth()
+    ob = bpy.data.objects.new('smear', me); C.objects.link(ob); ob.rotation_euler = (0, 0, math.radians(-28))
+    cm, _ = mat('cream', **{'Base Color': s2l(E('CREAM', '#3E86D4')), 'Roughness': 0.28, 'Subsurface Weight': 0.25, 'Subsurface Scale': 0.0015, 'Coat Weight': 0.5, 'Coat Roughness': 0.15})
+    me.materials.append(cm)
+    area('key', (-0.25, -0.15, 0.35), 0.35, G('KEY', '22'), tgt=(0, 0, 0)); area('rim', (0.3, 0.2, 0.12), 0.12, G('RIM', '10'), tgt=(0, 0, 0))
+    camera((0.03, -0.2, 0.30), (0, 0, 0.0), G('LENS', '60'), dof=G('FSTOP', '5'))
 elif SCENE == 'water':
     # still water, one ring of ripples, warm light
     me = bpy.data.meshes.new('w'); bpy.ops.mesh.primitive_grid_add(x_subdivisions=400, y_subdivisions=400, size=0.6); o = bpy.context.active_object
@@ -125,6 +141,6 @@ elif SCENE == 'light':
     camera((0, -1.0, 0), (0, 0, 0), G('LENS', '50'))
 scene.render.engine = 'CYCLES'; scene.cycles.device = 'CPU'; scene.cycles.samples = SAMPLES; scene.cycles.use_denoising = True
 scene.cycles.use_adaptive_sampling = True; scene.render.resolution_x = RX; scene.render.resolution_y = RY
-scene.view_settings.view_transform = E('VT', 'AgX'); scene.view_settings.look = E('VLOOK', 'AgX - Base Contrast') if E('VT', 'AgX') == 'AgX' else 'None'
+scene.view_settings.view_transform = E('VT', 'Standard'); scene.view_settings.look = E('VLOOK', 'AgX - Base Contrast') if E('VT', 'Standard') == 'AgX' else 'None'
 scene.view_settings.exposure = G('EXPO', '0')
 scene.render.filepath = OUT; bpy.ops.render.render(write_still=True); print('done', OUT)
