@@ -6272,12 +6272,18 @@ def render_matchup_card(m, idx, team_map, logged=False):
                '<span class="vs-pill wait">Waiting on a book line</span>')
     else:
         is_pick = logged or (conf_10 >= floor and max(conf_pct, 100 - conf_pct) > _CAPTURE_LEAN)
-        mid = (f'<span class="vs-k tip" data-tip="{BOARD_TIPS["side"]}">{"Our pick" if is_pick else "Sim lean"}</span>'
+        # all three numbers for the same team, the one on the pick line: book IND +8.5, sim IND +8.0
+        side_sim = _line(proj_spread_val if pick_team == ha else -proj_spread_val)
+        # the pick big, then three labelled numbers: what the book offers, what the sim
+        # says, and the gap (owner, 2026-11-13: "the book line and the pick should be way more clear")
+        mid = (f'<span class="vs-k tip" data-tip="{BOARD_TIPS["side"]}">{"Our pick" if is_pick else "Sim lean (not a pick)"}</span>'
                f'<b class="vs-line vs-bet{" pick" if is_pick else ""} {edge_cls}">{pick_text}</b>'
-               f'<span class="vs-book"><span class="tip" data-tip="{BOARD_TIPS["sim"]}">{sim_short}</span> · '
-               f'<span class="tip" data-tip="{BOARD_TIPS["book"]}">Book</span> {book_line}</span>'
-               f'<span class="vs-pill{" pick" if is_pick else ""}"><span class="tip" data-tip="{BOARD_TIPS["edge"]}">'
-               f'{edge_abs:.1f} pts of edge</span> · <span class="tip" data-tip="{BOARD_TIPS["grade"]}">C{conf_10}</span></span>')
+               '<span class="vs-nums">'
+               f'<span class="vs-num"><i class="tip" data-tip="{BOARD_TIPS["book"]}">Book line</i><b>{pick_text}</b></span>'
+               f'<span class="vs-num"><i class="tip" data-tip="{BOARD_TIPS["sim"]}">Sim line</i><b>{pick_team} {side_sim}</b></span>'
+               f'<span class="vs-num edge{" pick" if is_pick else ""}"><i class="tip" data-tip="{BOARD_TIPS["edge"]}">Edge</i>'
+               f'<b>{edge_abs:.1f} pts · <span class="tip" data-tip="{BOARD_TIPS["grade"]}">C{conf_10}</span></b></span>'
+               '</span>')
 
     tip_txt = _tip_et(m.get("tip_at"))
     ou_txt = f"O/U {total:.1f}" + (f" · sim {proj_total:.1f}" if proj_total else "")
@@ -6327,13 +6333,6 @@ def render_matchup_card(m, idx, team_map, logged=False):
         <div class="vs-tow ma-premium"><i class="a" style="width:{100 - home_share:.1f}%"></i><i class="h" style="width:{home_share:.1f}%"></i><b></b></div>
         <div class="vs-towl ma-premium"><span>{aa} rating {away_nrtg:+.1f}</span><span class="vs-towsim">{sim_short}</span><span>{ha} rating {home_nrtg:+.1f}</span></div>
         <div class="vs-schemes"><span class="vs-sg">{_chips(a_off, a_def, ac)}</span><em>vs</em><span class="vs-sg">{_chips(h_off, h_def, hc)}</span></div>
-        <div class="vs-factors ma-premium">
-            <div class="vs-fhead"><span>Inputs</span><span>{aa}</span><span></span><span>{ha}</span><span>Pull</span></div>
-            {factor_rows}
-        </div>
-        <div class="gc-call vs-call ma-premium"><span class="gc-notes">{" · ".join(notes)}</span><p class="gc-why">{why_html}</p></div>
-        <div class="gc-books"><span class="gc-k">Bet it</span>{books_html}</div>
-
         <!-- Expand button -->
         <button class="expand-btn" onclick="toggleExpand(this)">
             <span>▼ VIEW LINEUPS</span>
@@ -6350,6 +6349,12 @@ def render_matchup_card(m, idx, team_map, logged=False):
                 {home_players_html}
             </div>
         </div>
+        <div class="vs-factors ma-premium">
+            <div class="vs-fhead"><span>Inputs</span><span>{aa}</span><span></span><span>{ha}</span><span>Pull</span></div>
+            {factor_rows}
+        </div>
+        <div class="gc-call vs-call ma-premium"><span class="gc-notes">{" · ".join(notes)}</span><p class="gc-why">{why_html}</p></div>
+        <div class="gc-books"><span class="gc-k">Bet it</span>{books_html}</div>
     </div>"""
 
 
