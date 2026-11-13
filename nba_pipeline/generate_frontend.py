@@ -3707,6 +3707,15 @@ def get_matchups():
             # Confidence based on true edge magnitude (not raw power gap)
             if not spread_is_projected:
                 confidence = min(96, max(35, 50 + abs(spread_edge) * 5.0))
+                # A book line with the wrong sign (Nov 12: the 9:49 AM feed had WAS -10.5 for a
+                # game DET was favoured in by 10.5; corrected an hour later) reads as a huge
+                # edge and logged a C10 at a number nobody could bet. Its signature: the sim is
+                # far from the line as given and close to the same line with the sign flipped.
+                # No grade on it; the next run prices the corrected line.
+                if abs(spread_edge) >= 12 and abs(proj_spread + spread) <= 5:
+                    logger.warning("Book line for %s@%s looks sign-flipped (book home %+.1f, sim %+.1f): no pick",
+                                   away_abbr, home_abbr, spread, proj_spread)
+                    confidence = 50.0
             else:
                 confidence = min(96, max(35, 50 + abs(raw_edge) * 2.5))
 
