@@ -194,7 +194,9 @@ footer small { flex-basis: 100%; color: #8fa0b2; font-size: 12px; }
   .ritual header, .skins header { flex-direction: column; align-items: start; }
   .rail { grid-auto-columns: 78%; }
   .sticky { display: flex; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 40; justify-content: space-between; align-items: center; gap: 10px;
-    background: var(--ink); color: #fff; border-radius: 999px; padding: 8px 8px 8px 20px; box-shadow: 0 10px 30px rgba(15,32,51,.3); font: 800 20px/1 var(--disp); text-transform: uppercase; }
+    background: var(--ink); color: #fff; border-radius: 999px; padding: 8px 8px 8px 20px; box-shadow: 0 10px 30px rgba(15,32,51,.3); font: 800 20px/1 var(--disp); text-transform: uppercase;
+    transform: translateY(140%); transition: transform .3s; }
+  .sticky.on { transform: none; }
   .sticky .btn { height: 42px; font-size: 17px; padding: 0 18px; }
   footer .in { padding-bottom: 90px; }
 }
@@ -342,9 +344,14 @@ footer small { flex-basis: 100%; color: #8fa0b2; font-size: 12px; }
   <small>Cosmetic. Not intended to diagnose, treat, cure or prevent any disease. © 2026 YOJO</small>
 </div></footer>
 
-<div class="sticky" aria-hidden="false"><span>Young forever</span><a class="btn copper" href="#waitlist">Join</a></div>
+<div class="sticky"><span>Young forever</span><a class="btn copper" href="#waitlist">Join</a></div>
 
 <script>
+// phone bar: appears once the hero has scrolled away, hides at the waitlist itself
+const bar = document.querySelector('.sticky'), heroEl = document.querySelector('.hero'), wl = document.getElementById('waitlist');
+let past = false, atWl = false;
+new IntersectionObserver(([e]) => { past = !e.isIntersecting; bar.classList.toggle('on', past && !atWl); }).observe(heroEl);
+new IntersectionObserver(([e]) => { atWl = e.isIntersecting; bar.classList.toggle('on', past && !atWl); }).observe(wl);
 // Waitlist: posts to Netlify Forms; nothing else is sent anywhere.
 const form = document.getElementById('form'), msg = document.getElementById('msg');
 form.setAttribute('name', 'waitlist'); form.setAttribute('data-netlify', 'true');
