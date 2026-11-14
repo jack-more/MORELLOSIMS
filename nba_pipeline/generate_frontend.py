@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate the NBA SIM frontend HTML — mobile-first redesign with all features."""
 
+import html
 import logging
 import sqlite3
 import sys
@@ -1900,7 +1901,82 @@ def _rotation_minutes(roster_df, out_player_ids, lineup_info):
     return {int(p): float(m) for p, m in rotation(roster_df, out, starters).items()}
 
 
-def compute_adjusted_mojo(roster_df, out_player_ids, projected_minutes):
+PLAYER_STEPUP_K_MIN = float(os.environ.get("PLAYER_STEPUP_K_MIN", 300))  # minutes without the OUT group for half weight
+PLAYER_STEPUP_MIN_WITHOUT = 60.0   # minutes he needs without them before it counts
+PLAYER_STEPUP_MIN_WITH = 200.0     # and with them, for the baseline
+
+
+def _player_stepup(team_id, out_ids, out_mpg):
+    """How each teammate has actually played when tonight's OUT players sat.
+
+    From espn_player_games for this team (this season at full weight, last
+    season at STEPUP_PRIOR_SEASON_W, and last season only for OUT players who
+    were on this team then): a game counts as "without" when the OUT players
+    missing it carry at least half of the group's minutes. For every teammate
+    who played, his per-minute points/assists/rebounds/steals/blocks, true
+    shooting, on-court usage share and on-court net rating are split into
+    with / without, and the difference is returned with a weight
+    minutes_without / (minutes_without + PLAYER_STEPUP_K_MIN).
+    Returns {player_id: {"w": weight, "d": {stat: delta}, "min_without": m}}."""
+    if not out_ids or team_id is None:
+        return {}
+    out = {int(p) for p in out_ids}
+    tot_mpg = sum(out_mpg.get(p, 0) or 0 for p in out) or float(len(out))
+    acc = {}
+    for season, sw in ((CURRENT_SEASON, 1.0), (previous_season(CURRENT_SEASON), STEPUP_PRIOR_SEASON_W)):
+        df = read_query(
+            "SELECT game_id, player_id, sec, pts, fga, fta, tov, ast, reb, stl, blk, "
+            "on_pts, on_opp_pts, on_fga, on_fta, on_tov, off_poss, def_poss, dnp "
+            "FROM espn_player_games WHERE team_id = ? AND season_id = ? AND counts_regular = 1",
+            DB_PATH, [int(team_id), season])
+        if df.empty:
+            continue
+        played = df[(df["dnp"].fillna(0) == 0) & (df["sec"].fillna(0) > 0)]
+        on_team = set(df["player_id"].astype(int))
+        outs_here = out & on_team if season != CURRENT_SEASON else out
+        if not outs_here:
+            continue
+        by_game = played.groupby("game_id")["player_id"].apply(lambda x: set(x.astype(int)))
+        for r in played.itertuples(index=False):
+            pid = int(r.player_id)
+            if pid in out:
+                continue
+            here = by_game.get(r.game_id, set())
+            missing = sum(out_mpg.get(p, 0) or 1 for p in outs_here if p not in here)
+            k = "without" if missing >= 0.5 * tot_mpg else "with"
+            a = acc.setdefault(pid, {"with": [0.0] * 14, "without": [0.0] * 14})[k]
+            vals = (r.sec / 60.0, r.pts, r.ast, r.reb, r.stl, r.blk, r.fga, r.fta, r.tov,
+                    r.on_fga, r.on_fta, r.on_tov)
+            for i, v in enumerate(vals):
+                a[i] += sw * (v or 0)
+            # on-court net rating, pooled: point margin over average possessions
+            a[12] += sw * ((r.on_pts or 0) - (r.on_opp_pts or 0))
+            a[13] += sw * (((r.off_poss or 0) + (r.def_poss or 0)) / 2.0)
+    res = {}
+    for pid, sides in acc.items():
+        wi, wo = sides["with"], sides["without"]
+        if wo[0] < PLAYER_STEPUP_MIN_WITHOUT or wi[0] < PLAYER_STEPUP_MIN_WITH:
+            continue
+
+        def rates(a):
+            m = a[0]
+            fga, fta, tov = a[6], a[7], a[8]
+            ts = a[1] / (2 * (fga + 0.44 * fta)) if fga + 0.44 * fta > 0 else None
+            team_used = a[9] + 0.44 * a[10] + a[11]
+            usg = (fga + 0.44 * fta + tov) / team_used if team_used > 0 else None
+            net = 100.0 * a[12] / a[13] if a[13] > 0 else None
+            return {"pts": a[1] / m, "ast": a[2] / m, "reb": a[3] / m, "stl": a[4] / m, "blk": a[5] / m,
+                    "ts": ts, "usg": usg, "net": net}
+        r_wi, r_wo = rates(wi), rates(wo)
+        d = {k: (r_wo[k] - r_wi[k]) if r_wo[k] is not None and r_wi[k] is not None else 0.0 for k in r_wi}
+        d["ts"] = max(-0.08, min(0.08, d["ts"]))
+        d["usg"] = max(-0.08, min(0.12, d["usg"]))
+        d["net"] = max(-15.0, min(15.0, d["net"]))
+        res[pid] = {"w": wo[0] / (wo[0] + PLAYER_STEPUP_K_MIN), "d": d, "min_without": wo[0]}
+    return res
+
+
+def compute_adjusted_mojo(roster_df, out_player_ids, projected_minutes, team_id=None):
     """Compute MOJI: MOJOs adjusted for who's actually playing.
 
     Uses archetypes to route usage from missing players to remaining ones.
@@ -1970,6 +2046,11 @@ def compute_adjusted_mojo(roster_df, out_player_ids, projected_minutes):
     missing_is_guard = any(p in _GUARD_POSITIONS for p in missing_positions)
     missing_is_wing = any(p in _WING_POSITIONS for p in missing_positions)
     missing_is_bigpos = any(p in _BIG_POSITIONS for p in missing_positions)
+
+    # What each teammate has actually done without these OUT players
+    # (_player_stepup): blended into his MOJO by sample size below.
+    out_mpg = {int(r["player_id"]): (r.get("minutes_per_game", 0) or 0) for _, r in out_players.iterrows()}
+    stepup = _player_stepup(team_id, out_player_ids, out_mpg) if not out_players.empty else {}
 
     # Compute adjusted MOJO for each available player
     player_mojo = {}
@@ -2117,6 +2198,35 @@ def compute_adjusted_mojo(roster_df, out_player_ids, projected_minutes):
                 # 1.0 MOJO penalty per missing shooter (weighted by their minutes)
                 gravity_penalty = missing_shooter_gravity * 1.0
                 ds = max(33, int(ds - gravity_penalty))
+
+        # ── Step 4: what he has actually done without them ──
+        # The steps above hand out the missing usage by a fixed formula. Where
+        # this player has real minutes without tonight's OUT players, his MOJO
+        # is also scored on that line (per-minute production, shooting, usage
+        # share and on-court net rating moved by what he showed) and blended
+        # in by sample size, so a player who really steps up is read as one.
+        su = stepup.get(int(pid))
+        if su:
+            d = su["d"]
+            base_min = row.get("minutes_per_game", 0) or 0
+            obs = dict(row)
+            obs["minutes_per_game"] = proj_min
+            for col, key in (("pts_pg", "pts"), ("ast_pg", "ast"), ("reb_pg", "reb"),
+                             ("stl_pg", "stl"), ("blk_pg", "blk")):
+                per_min = (row.get(col, 0) or 0) / base_min if base_min > 0 else 0.0
+                obs[col] = max(0.0, per_min + d[key]) * proj_min
+            obs["ts_pct"] = (row.get("ts_pct", 0) or 0) + d["ts"]
+            obs["usg_pct"] = max(0.05, base_usg + d["usg"])
+            obs["net_rating"] = (row.get("net_rating", 0) or 0) + d["net"]
+            ds_obs, _ = compute_mojo_score(obs)
+            ds_formula = ds
+            ds = int(round((1 - su["w"]) * ds_formula + su["w"] * ds_obs))
+            ds = max(33, min(99, ds))
+            notes.append({"player_id": int(pid), "name": row.get("full_name", ""),
+                          "formula": ds_formula, "observed": ds_obs, "final": ds,
+                          "w": round(su["w"], 2), "min_without": round(su["min_without"]),
+                          "usg_delta": round(d["usg"], 3), "pts36_delta": round(d["pts"] * 36, 1),
+                          "net_delta": round(d["net"], 1)})
 
         player_mojo[pid] = ds
         total_weighted_mojo += ds * proj_min
@@ -2900,8 +3010,8 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
         away_data, _rotation_minutes(away_roster, away_out_ids, away_lineup))
 
     # ── Compute MOJI ──
-    home_moji, home_player_mojo, _ = compute_adjusted_mojo(home_roster, home_out_ids, home_proj_min)
-    away_moji, away_player_mojo, _ = compute_adjusted_mojo(away_roster, away_out_ids, away_proj_min)
+    home_moji, home_player_mojo, home_stepups = compute_adjusted_mojo(home_roster, home_out_ids, home_proj_min, home_tid)
+    away_moji, away_player_mojo, away_stepups = compute_adjusted_mojo(away_roster, away_out_ids, away_proj_min, away_tid)
 
     # ── Full-strength MOJI for NRtg attrition ──
     home_full_moji = _compute_full_strength_moji(home_roster)
@@ -3112,6 +3222,8 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
                         round(home_obs_w, 2)],
         "away_stepup": [round(away_model_drop, 1), None if away_obs_drop is None else round(away_obs_drop, 1),
                         round(away_obs_w, 2)],
+        "home_stepups": home_stepups,
+        "away_stepups": away_stepups,
         "home_absence_unpriced": [round(home_season_sh, 2), round(home_recent_sh, 2)],
         "away_absence_unpriced": [round(away_season_sh, 2), round(away_recent_sh, 2)],
         "home_season_nrtg": round(h_net, 1),
@@ -3988,6 +4100,9 @@ BOARD_TIPS = {
             "impact (how the team does with him on the floor), weighted by tonight's minutes. 10% of the line.",
     "out": "Points taken off for players ruled out tonight. A player who has already missed games is "
            "only charged for the games he played, because the team's results without him already count.",
+    "step": "Teammates rated on what they've actually done in past games without tonight's OUT players: "
+            "their scoring, shooting, usage and how the team plays with them on the floor. The more minutes "
+            "they've played that way, the more it counts. The arrow is how far that moves his rating in the sim.",
     "l10": "Net rating over the last 10 games. It counts for more as games are played, up to 30% of the line.",
     "syn": "Synergy, 0 to 99: how tonight's lineup has played together, from 2- to 5-man on/off data. "
            "20% of the line.",
@@ -6239,6 +6354,20 @@ def render_matchup_card(m, idx, team_map, logged=False):
         w_html = f"<i>{weight}</i>" if weight else ""
         factor_rows += (f'<div class="vs-f"><span class="vs-fk"><span class="tip" data-tip="{tip}">{label}</span>{w_html}</span>'
                         f'<span class="vs-fa">{av}</span>{bar}<span class="vs-fh">{hv}</span>{val}</div>')
+    # Who steps up: teammates whose rating moved on what they've actually done
+    # without tonight's OUT players (compute_adjusted_mojo step 4)
+    step_bits = []
+    for abbr, key in ((aa, "away_stepups"), (ha, "home_stepups")):
+        moved = [n for n in (bd.get(key) or []) if abs(n["final"] - n["formula"]) >= 3]
+        moved.sort(key=lambda n: -abs(n["final"] - n["formula"]))
+        if moved:
+            names = ", ".join(f'{html.escape(str(n["name"]).split(" ")[-1])} '
+                              f'{"▲" if n["final"] > n["formula"] else "▼"}{abs(n["final"] - n["formula"])}'
+                              for n in moved[:3])
+            step_bits.append(f"<b>{abbr}</b> {names}")
+    if step_bits:
+        factor_rows += (f'<div class="vs-step"><span class="tip" data-tip="{BOARD_TIPS["step"]}">Without tonight\'s outs</span> '
+                        + " · ".join(step_bits) + '</div>')
     bar, _ = _pull(-proj_spread_val)
     factor_rows += (f'<div class="vs-f vs-fsum"><span class="vs-fk">Sim line</span><span class="vs-fa"></span>{bar}'
                     f'<span class="vs-fh"></span><span class="vs-fp sum">{sim_line}</span></div>')
