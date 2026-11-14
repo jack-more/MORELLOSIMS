@@ -972,18 +972,13 @@ def compute_mojo_range(score, player_id=None):
 # Model constants
 _MOJI_CONSTANTS = {
     "MOJO_SCALE":     1.0,    # 1pt MOJO gap → 1.0 points on spread scale
-    # The line is the season rating for tonight's rotation (_roster_nrtg: this season's real
-    # games against a prior priced from each player's measured impact x tonight's minutes),
-    # plus home court and rest (owner's call 2026-11-10). On 83 games (Oct 30 - Nov 9, each
-    # priced on that morning's DB with who actually sat), RMSE vs the final margin:
-    # 40/10/30/20 14.95, 10/60/25/5 14.11, this 13.77 (the closing line 13.91); sides 3-6
-    # points off the close 9-15, 12-9, 14-10. MOJI tracked results worst (r 0.37 vs 0.58)
-    # and drove the disagreements with the book. MOJI and SYN are still computed for display
-    # and for the injury attrition, at zero weight in the line.
-    "MOJI_WEIGHT":   0.00,   # MOJI share in final blend
-    "NRTG_SEASON_WEIGHT": 1.00,  # season NRtg priced on tonight's rotation (_roster_nrtg)
-    "NRTG_RECENT_WEIGHT": 0.00,  # trailing 10-game NRtg
-    "SYN_WEIGHT":   0.00,   # lineup synergy share in final blend
+    # Blend 40/10/30/20: the weights behind 2025-26's 122-93-1. Nov 10-11 the line was moved to
+    # 10/60/25/5 and then to the rotation-priced season rating alone, on 83 games of evidence;
+    # the picks that followed went 0-7 (Nov 11-13) and the weights were put back (2026-11-14).
+    "MOJI_WEIGHT":   0.40,   # MOJI share in final blend
+    "NRTG_SEASON_WEIGHT": 0.10,  # season NRtg priced on tonight's rotation (_roster_nrtg)
+    "NRTG_RECENT_WEIGHT": 0.30,  # trailing 10-game NRtg
+    "SYN_WEIGHT":   0.20,   # lineup synergy share in final blend
     "SYN_SCALE":    0.15,   # (home_syn - away_syn) × SCALE = spread points
     "HCA":          1.8,    # SIM tab (interactive court sim) only — not used by the pick model
     # Pick model: home court added once after the blend, measured from
@@ -2869,7 +2864,7 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     4. Compute adjusted MOJOs (MOJI) with archetype-aware usage redistribution
     5. Compare home net rating vs away net rating (injury attrition)
     6. Compute lineup synergy adjusted by opponent coaching scheme
-    7. Season NRtg for tonight's rotation (MOJI, trailing NRtg and SYN shown, zero weight),
+    7. Blend 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN,
        then add home court (measured) and back-to-back penalties once
 
     Returns (spread, total, breakdown).
@@ -3068,7 +3063,7 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     syn_diff = home_syn - away_syn
     synergy_as_points = syn_diff * K["SYN_SCALE"]
 
-    # ── Final line: season NRtg for tonight's rotation (other terms at zero weight) ──
+    # ── Final blend: 40% MOJI + 10% season NRtg + 30% recent NRtg + 20% SYN ──
     moji_diff = home_moji - away_moji
     moji_as_points = moji_diff * K["MOJO_SCALE"]
 
@@ -3987,18 +3982,17 @@ def _seal_daily_snapshot(snapshot, slate_iso):
 # publish_member_dashboard.py wires up [data-tip]; the wording lives here with the markup.
 BOARD_TIPS = {
     "moji": "MOJI, 0 to 99: tonight's lineup quality. Each player's MOJO weighted by projected minutes, "
-            "with fatigue and injuries priced in. Shown for reference; the line is the season rating for tonight's rotation.",
+            "with fatigue and injuries priced in. 40% of the sim's line.",
     "nrtg": "Rotation rating: how many points per 100 possessions better than an average team the players "
             "expected to play tonight are. Built from this season's results and each player's measured "
-            "impact (how the team does with him on the floor), weighted by tonight's minutes. It sets the line.",
+            "impact (how the team does with him on the floor), weighted by tonight's minutes. 10% of the line.",
     "out": "Points taken off for players ruled out tonight. A player who has already missed games is "
            "only charged for the games he played, because the team's results without him already count.",
-    "l10": "Net rating over the last 10 games. Shown for reference; not in the line.",
+    "l10": "Net rating over the last 10 games. It counts for more as games are played, up to 30% of the line.",
     "syn": "Synergy, 0 to 99: how tonight's lineup has played together, from 2- to 5-man on/off data. "
-           "Shown for reference; not in the line.",
+           "20% of the line.",
     "book": "The sportsbook spread for each team. Minus is the favorite: -1.5 means win by 2 or more.",
-    "sim": "Who the sim has winning, and by how much: the rotation rating, less players out, "
-           "plus home court and rest.",
+    "sim": "Who the sim has winning, and by how much, from the inputs below plus home court and rest.",
     # no team in the example: "LAC +9.5" here matched that night's sealed pick and
     # check_seal_guardrail.py blocked every commit until tip
     "side": "The bet: the team the sim takes at the book's number. +9.5 means that team gets 9.5 points; "
@@ -6205,25 +6199,25 @@ def render_matchup_card(m, idx, team_map, logged=False):
                        f"and this one is at {lean:.0f}%, so it isn't a pick.")
         else:
             verdict = f"C{conf_10} clears the C{floor} bar: a logged pick."
-        how = (f"How it gets there: {aa}'s rotation tonight rates {away_rot:+.1f} points per 100 possessions "
-               f"against an average team and {ha}'s {home_rot:+.1f}")
-        outs = [f"{t} loses {c:.1f} for players out" for t, c in ((aa, away_out_cost), (ha, home_out_cost)) if c >= 0.05]
-        how += ("; " + " and ".join(outs) if outs else "") + f"; home court and rest are worth {abs(situational_pts):.1f} to " \
-               f"{ha if situational_pts >= 0 else aa}."
+        def _toward(pts):
+            return "even" if abs(pts) < 0.05 else f"{ha if pts > 0 else aa} +{abs(pts):.1f}"
+        how = (f"How it gets there, in points: lineup quality (MOJI) {_toward(moji_weighted)}, season rating "
+               f"{_toward(w_nrtg * nrtg_diff)}, last 10 games {_toward(recent_w * recent_nrtg_diff)}, synergy "
+               f"{_toward(syn_weighted)}, home court and rest {_toward(situational_pts)}.")
         why_html = (f"The book has {pick_text}. {sim_says} "
                     f"That's {edge_abs:.1f} points of value on {pick_team}. {how} " + verdict)
 
 
     # What built the line: each input's pull in points (+ toward home), as the blend weighs it
     PULL_FULL = 6.0                                       # points that fill half the bar
-    factors = [("Rotation rating", BOARD_TIPS["nrtg"], "", f"{away_rot:+.1f}", f"{home_rot:+.1f}",
+    factors = [("Season rating", BOARD_TIPS["nrtg"], f"{w_nrtg:.0%}", f"{away_rot:+.1f}", f"{home_rot:+.1f}",
                 w_nrtg * (home_rot - away_rot))]
     if away_out_cost >= 0.05 or home_out_cost >= 0.05:
         factors.append(("Players out", BOARD_TIPS["out"], "", f"{-away_out_cost:+.1f}" if away_out_cost >= 0.05 else "0",
                         f"{-home_out_cost:+.1f}" if home_out_cost >= 0.05 else "0",
                         w_nrtg * (away_out_cost - home_out_cost)))
     if w_moji > 0:
-        factors.append(("MOJI", BOARD_TIPS["moji"], f"{w_moji:.0%}", f"{away_moji:.1f}", f"{home_moji:.1f}", moji_weighted))
+        factors.insert(0, ("MOJI", BOARD_TIPS["moji"], f"{w_moji:.0%}", f"{away_moji:.1f}", f"{home_moji:.1f}", moji_weighted))
     if recent_w > 0:
         factors.append(("Last 10", BOARD_TIPS["l10"], f"{recent_w:.0%}", f"{away_recent_nrtg:+.1f}",
                         f"{home_recent_nrtg:+.1f}", recent_w * recent_nrtg_diff))
@@ -6331,7 +6325,7 @@ def render_matchup_card(m, idx, team_map, logged=False):
             {_team(ha, h_name, h_logo, m['h_wins'], m['h_losses'], m['h_mojo_rank'], right=True)}
         </div>
         <div class="vs-tow ma-premium"><i class="a" style="width:{100 - home_share:.1f}%"></i><i class="h" style="width:{home_share:.1f}%"></i><b></b></div>
-        <div class="vs-towl ma-premium"><span>{aa} rating {away_nrtg:+.1f}</span><span class="vs-towsim">{sim_short}</span><span>{ha} rating {home_nrtg:+.1f}</span></div>
+        <div class="vs-towl ma-premium"><span>{aa} MOJI {away_moji:.1f}</span><span class="vs-towsim">{sim_short}</span><span>{ha} MOJI {home_moji:.1f}</span></div>
         <div class="vs-schemes"><span class="vs-sg">{_chips(a_off, a_def, ac)}</span><em>vs</em><span class="vs-sg">{_chips(h_off, h_def, hc)}</span></div>
         <!-- Expand button -->
         <button class="expand-btn" onclick="toggleExpand(this)">
@@ -6741,7 +6735,7 @@ def render_info_page():
                 <div class="formula-row"><span>Step 5</span><span>Apply stocks penalty for missing defensive players</span></div>
                 <div class="formula-row"><span>Step 6</span><span>Compute adjusted NRtg: season-long + trailing 10-game</span></div>
                 <div class="formula-row"><span>Step 7</span><span>Compute lineup synergy adjusted by opponent defensive scheme</span></div>
-                <div class="formula-row"><span>Step 8</span><span>Line: Season NRtg for tonight's rotation, then + HCA 1.7, B2B −2.0 home / −2.5 road = raw power</span></div>
+                <div class="formula-row"><span>Step 8</span><span>Blend: 40% MOJI + 10% Season NRtg + 30% Trailing 10-Game NRtg + 20% SYN, then + HCA 1.7, B2B −2.0 home / −2.5 road = raw power</span></div>
                 <div class="formula-row"><span>Step 9</span><span>Proj. Spread = −(raw power), rounded to 0.5</span></div>
             </div>
             <div class="info-formula" style="margin-top:12px">
