@@ -4102,7 +4102,7 @@ BOARD_TIPS = {
            "only charged for the games he played, because the team's results without him already count.",
     "step": "Teammates rated on what they've actually done in past games without tonight's OUT players: "
             "their scoring, shooting, usage and how the team plays with them on the floor. The more minutes "
-            "they've played that way, the more it counts. The arrow shows the move from the standard formula.",
+            "they've played that way, the more it counts. The arrow is how far that moves his rating in the sim.",
     "l10": "Net rating over the last 10 games. It counts for more as games are played, up to 30% of the line.",
     "syn": "Synergy, 0 to 99: how tonight's lineup has played together, from 2- to 5-man on/off data. "
            "20% of the line.",
@@ -6361,8 +6361,9 @@ def render_matchup_card(m, idx, team_map, logged=False):
         moved = [n for n in (bd.get(key) or []) if abs(n["final"] - n["formula"]) >= 3]
         moved.sort(key=lambda n: -abs(n["final"] - n["formula"]))
         if moved:
-            names = ", ".join(f'{html.escape(str(n["name"]).split(" ")[-1])} {n["final"]} '
-                              f'{"▲" if n["final"] > n["formula"] else "▼"} from {n["formula"]}' for n in moved[:3])
+            names = ", ".join(f'{html.escape(str(n["name"]).split(" ")[-1])} '
+                              f'{"▲" if n["final"] > n["formula"] else "▼"}{abs(n["final"] - n["formula"])}'
+                              for n in moved[:3])
             step_bits.append(f"<b>{abbr}</b> {names}")
     if step_bits:
         factor_rows += (f'<div class="vs-step"><span class="tip" data-tip="{BOARD_TIPS["step"]}">Without tonight\'s outs</span> '
