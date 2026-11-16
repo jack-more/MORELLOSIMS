@@ -255,6 +255,10 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
 .sheet .btn{width:100%}
 .sheet small{display:block;margin-top:14px;color:var(--ink-3);font-size:12.5px}
 .sheet .x{position:absolute;right:20px;top:24px;font:600 14px var(--font);color:var(--ink-3)}
+.sheet .code{display:flex;justify-content:space-between;gap:10px;margin:0 0 6px;font:700 13px var(--font);color:var(--ink)}
+.sheet .code span{font-weight:600;color:var(--green,#14743C)}
+.sheet .code-in{width:100%;box-sizing:border-box;margin:0 0 16px;padding:12px 14px;border:1.5px solid rgba(11,15,13,.18);border-radius:10px;font:700 16px var(--font);letter-spacing:.08em;text-transform:uppercase}
+.sheet .code-in:focus{outline:none;border-color:var(--green,#14743C)}
 @media(min-width:700px){.sheet{align-items:center}.sheet .box{border-radius:16px}}
 
 @media(max-width:1020px){
@@ -473,6 +477,8 @@ footer .fine{flex-basis:100%;padding-top:18px;border-top:1px solid rgba(255,255,
     <button class="x" id="sheet-x">Close</button>
     <h3 id="sheet-h">—</h3>
     <ul id="sheet-list"></ul>
+    <label class="code" for="ref-code">Friend’s code <span>25% off your first pass</span></label>
+    <input id="ref-code" class="code-in" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="Optional">
     <button class="btn green" id="buy">—</button>
     <small>One payment, nothing renews. Simulations, not guarantees. 21+ · 1-800-GAMBLER.</small>
   </div>
@@ -502,6 +508,7 @@ document.querySelectorAll("[data-plan]").forEach(b => b.addEventListener("click"
   $("sheet-h").textContent = plan.title;
   $("sheet-list").innerHTML = plan.list.map(t => `<li>${t}</li>`).join("");
   $("buy").textContent = plan.buy;
+  if (!$("ref-code").value && window.morelloAuth && morelloAuth.getStoredRefCode) $("ref-code").value = morelloAuth.getStoredRefCode();
   $("sheet").classList.add("on"); track("pass_select", {pass: b.dataset.plan});
 }));
 const closeSheet = () => $("sheet").classList.remove("on");
@@ -509,12 +516,12 @@ $("sheet-x").addEventListener("click", closeSheet);
 $("sheet").addEventListener("click", e => { if (e.target === $("sheet")) closeSheet(); });
 $("buy").addEventListener("click", () => {
   const a = window.morelloAuth; if (!a || !plan) return;
-  const product = plan.product, signedIn = !!a.getCurrentUser();
-  track("pass_checkout", {product}); closeSheet();
-  a.checkout(product);
+  const product = plan.product, signedIn = !!a.getCurrentUser(), code = $("ref-code").value.trim();
+  track("pass_checkout", {product, code: code ? 1 : 0}); closeSheet();
+  a.checkout(product, code);
   // not signed in: checkout() opens "create account"; continue to payment as soon as the account exists
   if (!signedIn) { let n = 0; const w = setInterval(() => { n++;
-    if (a.getCurrentUser()) { clearInterval(w); a.closeModal(); a.checkout(product); }
+    if (a.getCurrentUser()) { clearInterval(w); a.closeModal(); a.checkout(product, code); }
     if (n > 300) clearInterval(w); }, 1000); }
 });
 // members see their pass, not the price list (same rule as hasActiveAccess in functions/index.js)
@@ -612,6 +619,6 @@ fetch("/ledger/nba/2025-26.json", {cache: "no-cache"}).then(r => r.json()).then(
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="/morello-auth.js?v=20261020-brand"></script>
+<script src="/morello-auth.js?v=20261025-refs"></script>
 </body>
 </html>

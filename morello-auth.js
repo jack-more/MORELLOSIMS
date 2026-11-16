@@ -735,8 +735,10 @@
     openModal(currentUser ? 'pricing' : 'signup');
   }
 
-  async function checkout(product) {
+  // code: a friend's referral code (25% off a first pass); defaults to one from a ?ref= link
+  async function checkout(product, code) {
     trackEvent('package_cta_click', productAnalyticsParams(product));
+    const refCode = String(code === undefined ? getStoredRefCode() : code || '').trim().toUpperCase();
 
     if (!currentUser) {
       trackEvent('checkout_auth_required', productAnalyticsParams(product));
@@ -754,10 +756,15 @@
           uid: currentUser.uid,
           email: currentUser.email,
           successUrl: window.location.origin + '/members/?paid=1',
-          cancelUrl: window.location.href
+          cancelUrl: window.location.href,
+          code: refCode
         })
       });
       const data = await resp.json();
+      if (refCode && data.code && data.code !== 'applied' &&
+          !window.confirm(data.code + ' Continue at the full price?')) {
+        return;
+      }
       if (data.url) {
         trackEvent('checkout_redirect', productAnalyticsParams(product));
         window.location.href = data.url;
@@ -1367,6 +1374,21 @@
     }
   }
 
+  // Referral program: this account's code and books (functions/index.js affiliate).
+  // arg: the new code for 'set_code', or {payout} for 'set_payout'
+  async function affiliate(action, arg) {
+    if (!currentUser) throw new Error('Sign in first');
+    const token = await currentUser.getIdToken();
+    const resp = await fetch(FUNCTIONS_BASE + '/affiliate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(Object.assign({ action: action || 'me' }, arg && typeof arg === 'object' ? arg : { code: arg || '' }))
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Could not load your code');
+    return data;
+  }
+
   function clearStoredRefCode() {
     try {
       window.localStorage.removeItem(REF_STORAGE_KEY);
@@ -1724,7 +1746,9 @@
     joinTelegram,
     emailCapture: submitEmailCapture,
     getStreak: () => currentStreak,
-    getRefCode: () => currentRefCode
+    getRefCode: () => currentRefCode,
+    getStoredRefCode,
+    affiliate
   };
 
   // ── Auto-init ──
