@@ -2930,7 +2930,10 @@ STEPUP_MIN_POSS = 300.0     # each side (with / without) needs this much to coun
 STEPUP_PRIOR_SEASON_W = 0.5  # last season's stints count half
 
 
-def _observed_absence_drop(team_id, out_ids):
+STEPUP_CORE_ON = int(os.environ.get("STEPUP_CORE_ON", 3))  # of tonight's top-5 healthy players, how many must be on the floor
+
+
+def _observed_absence_drop(team_id, out_ids, core_ids=None):
     """What this team has actually done without tonight's OUT players.
 
     From the five-man stints (espn_lineup_games, this season at full weight and
@@ -2939,11 +2942,17 @@ def _observed_absence_drop(team_id, out_ids):
     with none of them. That is the drop the team really shows when they sit,
     with whoever steps up into the minutes, instead of the drop the player
     ratings imply from averaging the bench at its normal role.
+    Both sides only count stints with at least STEPUP_CORE_ON of tonight's
+    top-5 healthy players (core_ids) on the floor. Without that filter the
+    "none of them on" side is mostly bench units and garbage time, and a team
+    missing two starters reads like its second unit (OKC Nov 15: -11 per 100
+    without Holmgren/Wallace/J. Williams/Sorber; it won by 22 at SAC).
     Returns (drop, weight in [0, 1)) or (None, 0.0) without enough of both."""
     if not out_ids:
         return None, 0.0
     emap = {str(e): int(p) for e, p in read_query("SELECT espn_id, player_id FROM espn_player_map", DB_PATH).values}
     out = {int(p) for p in out_ids}
+    core = {int(p) for p in (core_ids or [])}
     acc = {"with": [0.0, 0.0, 0.0, 0.0], "without": [0.0, 0.0, 0.0, 0.0]}  # pts, poss, opp_pts, opp_poss
     for season, sw in ((CURRENT_SEASON, 1.0), (previous_season(CURRENT_SEASON), STEPUP_PRIOR_SEASON_W)):
         rows = read_query(
@@ -2953,6 +2962,8 @@ def _observed_absence_drop(team_id, out_ids):
             DB_PATH, [team_id, season])
         for r in rows.itertuples(index=False):
             on = {emap.get(str(e)) for e in r[:5]}
+            if core and len(on & core) < STEPUP_CORE_ON:
+                continue
             k = "with" if on & out else "without"
             a = acc[k]
             a[0] += sw * (r.pts or 0); a[1] += sw * r.poss; a[2] += sw * (r.opp_pts or 0); a[3] += sw * r.opp_poss
@@ -3023,8 +3034,12 @@ def compute_moji_spread(home_data, away_data, rw_lineups, team_map):
     # players, it is blended toward the net-rating drop those stints show
     # (_observed_absence_drop), so the players who take the minutes are read
     # from how the team actually plays with them.
-    home_obs_drop, home_obs_w = _observed_absence_drop(home_tid, home_out_ids)
-    away_obs_drop, away_obs_w = _observed_absence_drop(away_tid, away_out_ids)
+    def _core(proj, outs):
+        outs = {int(p) for p in outs}
+        healthy = [(int(p), m) for p, m in proj.items() if int(p) not in outs and (m or 0) > 0]
+        return [p for p, _ in sorted(healthy, key=lambda kv: -kv[1])[:5]]
+    home_obs_drop, home_obs_w = _observed_absence_drop(home_tid, home_out_ids, _core(home_proj_min, home_out_ids))
+    away_obs_drop, away_obs_w = _observed_absence_drop(away_tid, away_out_ids, _core(away_proj_min, away_out_ids))
     # A MOJI point reaches the line at about MOJI_WEIGHT x MOJO_SCALE plus its
     # NRtg attrition in the two NRtg terms: the observed drop (spread points)
     # is put in MOJI units by that factor before blending.
