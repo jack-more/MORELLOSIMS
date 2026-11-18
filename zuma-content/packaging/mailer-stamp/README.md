@@ -1,4 +1,7 @@
-# ZUMA mailer stamp (18 Nov 2026): three directions, not chosen yet
+# ZUMA mailer stamp (18 Nov 2026): C, crest only, CHOSEN
+
+The founders picked C ("Def C is the way"). Factory files: `factory-C/` (PDF, SVG, 1200 dpi PNG and the message for the stamp maker).
+A and B stay here as options that weren't chosen.
 
 For the brown kraft bubble mailers. One ink: ZUMA Oxblood #6E1C2A. 2 in (50.8 mm). It never says "peptides" (same rule as mailer B).
 
