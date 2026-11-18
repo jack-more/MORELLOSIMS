@@ -54,23 +54,56 @@ def svg(w, h, body, name):
 def crest(x, y, width): s = width / CW; return f'<path fill="#000" fill-rule="evenodd" transform="translate({x:.3f} {y:.3f}) scale({s:.5f})" d="{CD}"/>'
 def word(x, y, width): s = width / WW; return f'<path fill="#000" fill-rule="evenodd" transform="translate({x:.3f} {y:.3f}) scale({s:.5f})" d="{WD}"/>'
 
-# A: round seal, 50.8 mm. Outer ring 1.1 mm, a hairline-free inner ring 0.45 mm (anything under 0.3 mm fills in on rubber).
-c = D / 2; cw = 18.0; chh = CH * cw / CW; ww = 25.0; wh = WH * ww / WW; gap = 2.6
-top = c - (chh + gap + wh) / 2 - 2.2
+# A: round seal, 50.8 mm, laid out by measured clearances (not by eye):
+#   one 1.0 mm ring; zumatides.com round the bottom with its baseline 2.2 mm inside the ring;
+#   the crest + wordmark group sits with the SAME gap above it (to the ring) and below it (to the top of the address's lowercase).
+c = D / 2; RING = 1.0; Ri = c - RING                     # inside edge of the ring
+US = 4.2; XH = 0.483 * US; RB = Ri - 2.2                 # address size, x-height, baseline radius
+u_top = c + RB - XH                                      # top of the address's lowercase, at the bottom centre
+cw = 22.0; chh = CH * cw / CW; ww = 28.0; wh = WH * ww / WW; gap = 3.0
+hg = chh + gap + wh
+TRK = 0.07
+def url_top_under_word(word_bottom):
+    """smallest vertical gap from the wordmark's bottom edge to any address letter under it (the arc rises at its ends)"""
+    advs = [adv(ch, US) + TRK * US for ch in 'zumatides.com']; tot = sum(advs) - TRK * US; x = 0; best = 1e9
+    for ch, a in zip('zumatides.com', advs):
+        al = -tot / (2 * RB) + (x + (a - TRK * US) / 2) / RB; x += a; w = adv(ch, US)
+        for dx in (-w / 2, w / 2):                       # the two top corners of the letter's x-height box
+            for dy in (0, XH):
+                # glyph box point (dx right, dy up toward the centre), turned by -al like the letter itself
+                px = c + RB * math.sin(al) + math.cos(al) * dx - math.sin(al) * dy
+                py = c + RB * math.cos(al) - math.sin(al) * dx - math.cos(al) * dy
+                if abs(px - c) <= ww / 2 + 1.5: best = min(best, py - word_bottom)
+    return best
+# the gap under the wordmark falls one for one as the group moves down, so: top - RING == clearance(top)
+K = url_top_under_word(hg)                               # clearance with the group's top at y = 0
+top = (K + RING) / 2
+print(f'A: ring inside edge {Ri:.2f} mm; gap ring->crest {top - RING:.2f} mm; tightest gap wordmark->address {url_top_under_word(top + hg):.2f} mm; '
+      f'ring->address baseline {Ri - RB:.2f} mm; wordmark corner to ring {Ri - math.hypot(ww / 2, top + hg - c):.2f} mm')
 A = '\n'.join([
-    f'<circle cx="{c}" cy="{c}" r="{c - 0.55 - 0.05:.3f}" fill="none" stroke="#000" stroke-width="1.1"/>',
-    f'<circle cx="{c}" cy="{c}" r="{c - 2.3:.3f}" fill="none" stroke="#000" stroke-width="0.45"/>',
+    f'<circle cx="{c}" cy="{c}" r="{c - RING / 2:.3f}" fill="none" stroke="#000" stroke-width="{RING}"/>',
     crest(c - cw / 2, top, cw), word(c - ww / 2, top + chh + gap, ww),
-    f'<path fill="#000" d="{arc_bottom("zumatides.com", 3.9, c - 3.9, c, c)}"/>'])
+    f'<path fill="#000" d="{arc_bottom("zumatides.com", US, RB, c, c, 0.07)}"/>'])
 svg(D, D, A, 'A-round-seal')
 
 # B: block, 50.8 x 26 mm. Rounded frame 0.9 mm; crest left; wordmark top right; zumatides.com under it.
-H = 26.0; cw = 14.5; chh = CH * cw / CW; ww = 25.6; wh = WH * ww / WW
+# Laid out by measurement: the crest + text block is centred in the frame, so the left and right margins are equal,
+# and the text block (wordmark over the address) is centred vertically, like the crest.
+FR = 0.9; MG = 4.0                                     # frame weight, and the same 4 mm margin on all four sides
+cw = 13.5; chh = CH * cw / CW; ww = 24.0; wh = WH * ww / WW; g = 3.5
+H = round(chh + 2 * MG + 2 * FR, 2)                      # the crest is the tallest thing, so it sets the height
+US_B = 3.3; TRK_B = 0.03; uw = sum(adv(ch, US_B) + TRK_B * US_B for ch in 'zumatides.com') - TRK_B * US_B
+lsb = 24 / 1000 * US_B                                   # the address's first letter side bearing, so its ink lines up with the wordmark
+tw = max(ww, uw - lsb); M = (D - 2 * FR - (cw + g + tw)) / 2
+asc = 0.723 * US_B; g2 = 2.4; th = wh + g2 + asc; ty = (H - th) / 2
+x_c = FR + M; x_t = x_c + cw + g
+print(f'B: {D} x {H} mm; margin left = right {M:.2f} mm; crest top = bottom {(H - chh) / 2 - FR:.2f} mm; '
+      f'text block {tw:.2f} x {th:.2f} mm, centred (top = bottom {ty - FR:.2f} mm)')
 B = '\n'.join([
-    f'<rect x="0.45" y="0.45" width="{D - 0.9}" height="{H - 0.9}" rx="3.2" fill="none" stroke="#000" stroke-width="0.9"/>',
-    crest(4.6, (H - chh) / 2, cw),
-    word(22.4, 6.9, ww),
-    f'<path fill="#000" d="{text_line("zumatides.com", 3.7, 22.6, 6.9 + wh + 5.0, 0.03)}"/>'])
+    f'<rect x="{FR / 2}" y="{FR / 2}" width="{D - FR}" height="{H - FR}" rx="3.2" fill="none" stroke="#000" stroke-width="{FR}"/>',
+    crest(x_c, (H - chh) / 2, cw),
+    word(x_t, ty, ww),
+    f'<path fill="#000" d="{text_line("zumatides.com", US_B, x_t - lsb, ty + wh + g2 + asc, TRK_B)}"/>'])
 svg(D, H, B, 'B-block')
 
 # C: crest only, 50.8 mm wide.
